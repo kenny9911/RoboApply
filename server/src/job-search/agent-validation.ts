@@ -1,5 +1,7 @@
 import type { AgentSearchInput, DatePosted, EmploymentType } from './types.js';
 import { JobSearchValidationError, parseSearchInput } from './validation.js';
+// The one rule for "this phrase states a requirement, it is not a topic": the feed's own (a pure function).
+import { isConstraintPhrase } from '../features/feed/filterDiff.js';
 
 const FILTER_KEYS = ['country', 'location', 'remote', 'datePosted', 'employmentTypes', 'providers', 'limit'] as const;
 const INPUT_KEYS = new Set<string>(['request', 'locale', 'linkedinOnly', ...FILTER_KEYS]);
@@ -43,17 +45,120 @@ export interface AgentPlan {
   employmentTypes?: EmploymentType[];
   unverifiedPreferences: string[];
   linkedinOnly?: boolean;
+  /**
+   * Topics of the request that are not filters and that a result list may be
+   * ORDERED by ("climate startups", "Rust"): never a filter, never a checked
+   * fact about a job, and never a requirement (parseAgentPlan moves those to
+   * `unverifiedPreferences`). Absent when the planner names none.
+   */
+  relevanceTerms?: string[];
 }
 
-/** Strict schema validation: no executable instructions, extra tools, or API URLs. */
-export function parseAgentPlan(raw: unknown): AgentPlan {
+/** Most topics a plan is ranked by, and the shortest and longest one. */
+export const RELEVANCE_MAX_TERMS = 5;
+export const RELEVANCE_TERM_MIN_CHARS = 2;
+export const RELEVANCE_TERM_MAX_CHARS = 60;
+/**
+ * The terms joined by a space are the text a search is ordered by, and the
+ * feed accepts at most this many characters of it (features/feed/contract.ts
+ * `FEED_RELEVANCE_MAX_CHARS`; agent-validation.test.ts holds the two equal).
+ * A term that no longer fits is dropped, so every term a plan keeps is used.
+ */
+export const RELEVANCE_MAX_CHARS = 240;
+
+/**
+ * A phrase that states a requirement of a job (pay, visa or work
+ * authorization, benefits, hours, time zone, commute) and is therefore never
+ * a thing to rank by. Default: the feed's `isConstraintPhrase`, so the app and
+ * the API hold one rule.
+ */
+export type ConditionRule = (phrase: string) => boolean;
+
+/** Most requirement phrases moved out of `relevanceTerms` in one plan (the size of the preference list itself). */
+export const RELEVANCE_MOVED_MAX = 12;
+
+/**
+ * The usable strings of the planner's `relevanceTerms`, once each (whatever
+ * the letter case), in the planner's order: 2 to 60 characters, no control
+ * character, no URL. Anything else is dropped, never fatal.
+ */
+function usableTerms(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const term = item.trim();
+    if (term.length < RELEVANCE_TERM_MIN_CHARS || term.length > RELEVANCE_TERM_MAX_CHARS) continue;
+    if (/[\u0000-\u001f\u007f]/.test(term) || /(?:https?:)?\/\/|\bwww\./i.test(term)) continue;
+    const key = term.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(term);
+  }
+  return out;
+}
+
+/** At most 5 terms, and together (joined by a space) at most the feed's relevance text: a term that no longer fits is dropped. */
+function withinLimits(terms: readonly string[]): string[] {
+  const out: string[] = [];
+  let joined = 0;
+  for (const term of terms) {
+    const length = joined + (out.length ? 1 : 0) + term.length;
+    if (length > RELEVANCE_MAX_CHARS) continue;
+    out.push(term);
+    joined = length;
+    if (out.length === RELEVANCE_MAX_TERMS) break;
+  }
+  return out;
+}
+
+/**
+ * The planner's `relevanceTerms`, kept lenient on purpose: they only order a
+ * list, so a bad value is DROPPED and the plan stays usable (a strict failure
+ * would turn a model's sloppy extra into a failed search). Kept: strings of
+ * 2 to 60 characters with no control character and no URL, once each
+ * (whatever the letter case), at most 5, in the planner's order.
+ */
+export function parseRelevanceTerms(raw: unknown): string[] {
+  return withinLimits(usableTerms(raw));
+}
+
+/**
+ * The planner's terms, told apart: `topics` may order a list (the limits of
+ * `parseRelevanceTerms` apply to them), `conditions` state a requirement the
+ * model filed under the wrong field. A condition is looked for among ALL the
+ * usable terms, before the cap of 5, so one named ninth is not lost either.
+ */
+export function splitRelevanceTerms(raw: unknown, isCondition: ConditionRule = isConstraintPhrase): { topics: string[]; conditions: string[] } {
+  const usable = usableTerms(raw);
+  return {
+    topics: withinLimits(usable.filter((term) => !isCondition(term))),
+    conditions: usable.filter((term) => isCondition(term)).slice(0, RELEVANCE_MOVED_MAX),
+  };
+}
+
+/**
+ * Strict schema validation: no executable instructions, extra tools, or API URLs.
+ * `relevanceTerms` is the one lenient field (see parseRelevanceTerms).
+ *
+ * The prompt's rule is enforced here, for every reader of a plan (the search
+ * API and the feed's natural-language query both parse through this function):
+ * a requirement the model named as a topic ("visa sponsorship", "paying over
+ * 150k") is never a relevance term. It is moved to `unverifiedPreferences`,
+ * where each reader already turns it into a filter it supports or shows it as
+ * not checked. Ranking by closeness to it would read as if it had been
+ * checked, and dropping it would lose a wish the user stated.
+ */
+export function parseAgentPlan(raw: unknown, isCondition: ConditionRule = isConstraintPhrase): AgentPlan {
   const value: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid planning object.');
   const body = value as Record<string, unknown>;
-  const allowed = new Set(['queries', 'country', 'location', 'remote', 'datePosted', 'employmentTypes', 'unverifiedPreferences', 'linkedinOnly']);
+  const allowed = new Set(['queries', 'country', 'location', 'remote', 'datePosted', 'employmentTypes', 'unverifiedPreferences', 'linkedinOnly', 'relevanceTerms']);
   if (Object.keys(body).some(key => !allowed.has(key))) throw new Error('Unexpected planning fields.');
+  // The roleless sentinel. A topic to rank by is not a role, so `relevanceTerms` beside it changes nothing.
   if (Array.isArray(body.queries) && body.queries.length === 0 && Array.isArray(body.unverifiedPreferences)
-    && body.unverifiedPreferences.length === 0 && Object.keys(body).every(key => ['queries', 'unverifiedPreferences'].includes(key))) {
+    && body.unverifiedPreferences.length === 0 && Object.keys(body).every(key => ['queries', 'unverifiedPreferences', 'relevanceTerms'].includes(key))) {
     throw new JobSearchValidationError('request', 'Include a job role or occupational keyword in your request.');
   }
   if (!Array.isArray(body.queries) || body.queries.length < 1 || body.queries.length > 2) throw new Error('Plan must have one or two role queries.');
@@ -77,5 +182,12 @@ export function parseAgentPlan(raw: unknown): AgentPlan {
     if (typeof body.linkedinOnly !== 'boolean') throw new Error('linkedinOnly must be boolean.');
     result.linkedinOnly = body.linkedinOnly;
   }
+  // Never fatal: see parseRelevanceTerms. Left off when no topic was named.
+  const { topics, conditions } = splitRelevanceTerms(body.relevanceTerms, isCondition);
+  if (topics.length) result.relevanceTerms = topics;
+  // After the planner's own preferences, and only when it has not stated the phrase there already (whatever the
+  // letter case). The strict cap of 12 above is on what the model wrote in that field.
+  const stated = new Set(result.unverifiedPreferences.map(item => item.toLowerCase()));
+  for (const condition of conditions) if (!stated.has(condition.toLowerCase())) result.unverifiedPreferences.push(condition);
   return result;
 }

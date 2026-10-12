@@ -22,9 +22,19 @@ export function getActiveEnvironment(): ConfigEnvironment {
   return process.env.NODE_ENV === 'production' ? 'production' : 'development';
 }
 
-export function appConfigKeyFor(env: ConfigEnvironment): string {
-  return `llm_stack.${env}`;
+/**
+ * AppConfig key of one brand's override blob. RoboApply keeps the historical
+ * key (`llm_stack.{env}`); GoApply has its own (`llm_stack.goapply.{env}`).
+ * RoboApply never reads GoApply's blob. GoApply reads its own first and, for a
+ * setting neither that blob nor `CN_<NAME>` provides, RoboApply's (the shared
+ * stack; resolution order in llmModels.ts).
+ */
+export function appConfigKeyFor(env: ConfigEnvironment, brandId: LlmStackBrand = 'roboapply'): string {
+  return brandId === 'roboapply' ? `llm_stack.${env}` : `llm_stack.${brandId}.${env}`;
 }
+
+/** Brands with an LLM stack blob (kept as a string union so this file stays import-free). */
+export type LlmStackBrand = 'roboapply' | 'goapply';
 
 /** Master kill-switch: force pure-env resolution, ignoring all DB overrides. */
 export function isDbConfigDisabled(): boolean {
@@ -52,6 +62,12 @@ export const PURPOSE_KEYS = [
   'onboarding',
   'rewrite',
   'interview',
+  // Clone tasks (WP-14, ARCHITECTURE.md §1.8): the Assistant (tool-capable,
+  // streamed), job enrichment (cheap) and long-form writing (cover letters,
+  // outreach).
+  'copilot',
+  'enrich',
+  'writing',
   'vision',
   'intentParser',
   // SCRM / CS Copilot (the /crm-ai workspace). crmHealth runs the merged
@@ -77,7 +93,17 @@ export type PurposeKey = (typeof PURPOSE_KEYS)[number];
 /** Top-level (non-purpose) model keys + the purpose keys = every model setting. */
 export type ModelKey = 'defaultModel' | 'fallbackModel' | PurposeKey;
 
-/** purpose/core key → the env var that supplies its value when the DB override is null. */
+/**
+ * purpose/core key → the env var that supplies its value when the DB override
+ * is null. These are the UNPREFIXED names: RoboApply's own, and the shared
+ * stack GoApply falls back to. GoApply reads `CN_<NAME>` first, as an optional
+ * override, and the unprefixed name when that is unset (per key; the full
+ * order, admin blobs included, is in llmModels.ts).
+ *
+ * This file imports nothing: platform/brand/brandEnv.ts reads this table (a
+ * model selector decides where a prompt goes), so an import from platform/brand
+ * here would be a cycle.
+ */
 export const MODEL_ENV: Record<ModelKey, string> = {
   defaultModel: 'LLM_MODEL',
   fallbackModel: 'LLM_FALLBACK_MODEL',
@@ -95,6 +121,9 @@ export const MODEL_ENV: Record<ModelKey, string> = {
   onboarding: 'LLM_ONBOARDING_MODEL',
   rewrite: 'LLM_REWRITE_MODEL',
   interview: 'LLM_INTERVIEW_MODEL',
+  copilot: 'LLM_COPILOT_MODEL',
+  enrich: 'LLM_ENRICH_MODEL',
+  writing: 'LLM_WRITING_MODEL',
   vision: 'LLM_VISION_MODEL',
   intentParser: 'LLM_INTENT_PARSER',
   crmHealth: 'LLM_CRM_HEALTH',
@@ -104,6 +133,18 @@ export const MODEL_ENV: Record<ModelKey, string> = {
   crmCoaching: 'LLM_CRM_COACHING',
   agentAlex: 'LLM_AGENT_ALEX',
 };
+
+/**
+ * Every model-selector env var a deployment can set, for both brands: the
+ * unprefixed names (RoboApply's, and GoApply's fallback) and the `CN_`
+ * overrides GoApply reads first. Cost-coverage checks (check:llm-costs,
+ * verify-llm-brand) scan this list, so no model either brand can resolve
+ * bills at the default tier unnoticed.
+ */
+export const ALL_BRAND_MODEL_ENV_VARS: readonly string[] = [
+  ...Object.values(MODEL_ENV),
+  ...Object.values(MODEL_ENV).map((name) => `CN_${name}`),
+];
 
 export type LlmStackPurposes = Record<PurposeKey, string | null>;
 
@@ -151,12 +192,14 @@ export function emptyLlmStackBlob(): LlmStackConfigBlob {
 
 /* ── Env-default snapshot — for the admin UI "inherits: X" display only ──────
  * Returns the RAW env value per key (or null). NOT used at runtime resolution
- * (the accessor reads env directly); purely the "what env provides" view. */
-export function buildEnvDefaultsSnapshot(): LlmStackConfigBlob {
-  const envStr = (name: string): string | null => {
+ * (the accessor reads env directly); purely the "what env provides" view. For
+ * GoApply that is `CN_<NAME>`, else the shared `<NAME>` it falls back to. */
+export function buildEnvDefaultsSnapshot(brandId: LlmStackBrand = 'roboapply'): LlmStackConfigBlob {
+  const read = (name: string): string | null => {
     const v = process.env[name];
     return v && v.trim() ? v.trim() : null;
   };
+  const envStr = (name: string): string | null => (brandId === 'goapply' ? read(`CN_${name}`) ?? read(name) : read(name));
   const envInt = (name: string): number | null => {
     const raw = parseInt((process.env[name] ?? '').trim(), 10);
     return Number.isFinite(raw) ? raw : null;

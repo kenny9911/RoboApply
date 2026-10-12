@@ -1,11 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  RAOnboardingPrefExtractAgent,
-  pickOnboardingExtractModel,
-  pickOnboardingExtractReasoningEffort,
-} from './RAOnboardingPrefExtractAgent.js';
-import {
   RAOnboardingResumeSeedAgent,
   pickOnboardingSeedModel,
   pickOnboardingSeedReasoningEffort,
@@ -15,11 +10,6 @@ import {
   pickResumeRewriteModel,
   pickResumeRewriteReasoningEffort,
 } from './RAResumeRewriteAgent.js';
-import {
-  RoboApplyIntentParserAgent,
-  pickIntentParserModel,
-  pickIntentParserReasoningEffort,
-} from '../../agents/RoboApplyIntentParserAgent.js';
 
 const ENV_KEYS = [
   'LLM_SETTINGS_DB_DISABLED',
@@ -27,18 +17,11 @@ const ENV_KEYS = [
   'LLM_ONBOARDING_REASONING_EFFORT',
   'LLM_REWRITE_MODEL',
   'LLM_REWRITE_REASONING_EFFORT',
-  'RA_V2_ONBOARDING_EXTRACT_MODEL',
   'RA_V2_ONBOARDING_SEED_MODEL',
   'RA_V2_RESUME_REWRITE_MODEL',
 ] as const;
 
 type EnvKey = (typeof ENV_KEYS)[number];
-
-class PrefExtractProbe extends RAOnboardingPrefExtractAgent {
-  readReasoningEffort() {
-    return this.getReasoningEffort();
-  }
-}
 
 class ResumeSeedProbe extends RAOnboardingResumeSeedAgent {
   readReasoningEffort() {
@@ -47,12 +30,6 @@ class ResumeSeedProbe extends RAOnboardingResumeSeedAgent {
 }
 
 class ResumeRewriteProbe extends RAResumeRewriteAgent {
-  readReasoningEffort() {
-    return this.getReasoningEffort();
-  }
-}
-
-class IntentParserProbe extends RoboApplyIntentParserAgent {
   readReasoningEffort() {
     return this.getReasoningEffort();
   }
@@ -77,35 +54,27 @@ describe('RoboApply onboarding and rewrite task settings', () => {
     }
   });
 
-  it('uses one call-time onboarding model for intent parsing, extraction, and resume seeding', () => {
+  // The V1 intent parser and the V2 onboarding preference extractor were
+  // deleted in INT-13 (wave5 WP-93 #48); the resume seed agent is the one
+  // onboarding agent left on the `onboarding` task.
+  it('uses the call-time onboarding model for resume seeding', () => {
     process.env.LLM_ONBOARDING_MODEL = '  deepseek/deepseek-v4-flash  ';
-
-    expect(pickIntentParserModel()).toBe('deepseek/deepseek-v4-flash');
-    expect(pickOnboardingExtractModel()).toBe('deepseek/deepseek-v4-flash');
     expect(pickOnboardingSeedModel()).toBe('deepseek/deepseek-v4-flash');
 
     process.env.LLM_ONBOARDING_MODEL = 'openrouter/openai/gpt-5.6-luna';
-    expect(pickIntentParserModel()).toBe('openrouter/openai/gpt-5.6-luna');
-    expect(pickOnboardingExtractModel()).toBe('openrouter/openai/gpt-5.6-luna');
     expect(pickOnboardingSeedModel()).toBe('openrouter/openai/gpt-5.6-luna');
   });
 
-  it('ignores retired onboarding overrides and falls through to the stack default', () => {
-    process.env.RA_V2_ONBOARDING_EXTRACT_MODEL = 'legacy/extract';
+  it('ignores the retired onboarding override and falls through to the stack default', () => {
     process.env.RA_V2_ONBOARDING_SEED_MODEL = 'legacy/seed';
 
-    expect(pickOnboardingExtractModel()).toBeUndefined();
     expect(pickOnboardingSeedModel()).toBeUndefined();
   });
 
-  it('applies onboarding reasoning effort to every onboarding agent class', () => {
+  it('applies onboarding reasoning effort to the onboarding agent class', () => {
     process.env.LLM_ONBOARDING_REASONING_EFFORT = ' HIGH ';
 
-    expect(pickIntentParserReasoningEffort()).toBe('high');
-    expect(pickOnboardingExtractReasoningEffort()).toBe('high');
     expect(pickOnboardingSeedReasoningEffort()).toBe('high');
-    expect(new IntentParserProbe().readReasoningEffort()).toBe('high');
-    expect(new PrefExtractProbe().readReasoningEffort()).toBe('high');
     expect(new ResumeSeedProbe().readReasoningEffort()).toBe('high');
   });
 

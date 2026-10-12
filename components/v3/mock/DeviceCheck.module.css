@@ -66,6 +66,23 @@
   text-align: center;
 }
 
+.localOnly {
+  margin: calc(-1 * var(--sp-2)) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-body);
+}
+
+.networkActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.networkActions :global(.btn) {
+  min-height: var(--control-lg);
+}
+
 .devices {
   display: flex;
   flex-direction: column;
@@ -193,6 +210,15 @@
   }
 
   .actions :global(.btn) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .networkActions {
+    flex-direction: column;
+  }
+
+  .networkActions :global(.btn) {
     width: 100%;
     justify-content: center;
   }

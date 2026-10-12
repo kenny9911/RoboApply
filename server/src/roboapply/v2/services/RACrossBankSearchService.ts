@@ -7,9 +7,23 @@
 //
 // Reads candidate context + writes ALL rows via the active-brand `prisma`
 // singleton; reads recruiter Job/Company via the two read-only bank clients.
+// A bank whose transport is HTTPS (the GoHire syndication endpoint, or the
+// interim list endpoint) has no client: its jobs are read from the RAJob
+// mirror the ingest sync wrote (raBankProviders.searchBank), and they are
+// already materialised, so step 6 only looks their ids up. The run's closing
+// log line carries each mirror's sync age (`mirrorSyncAge`), so a mirror that
+// stopped moving is visible in the search telemetry.
+// A candidate is materialised and shown only when its bank has a
+// candidate-facing posting page (raCrossBankMatch.synthesizeApplyUrl); a job
+// with no apply link is skipped, never shown with a dead one (D3).
+// A run sweeps the banks of the request brand's market only (RoboApply →
+// RoboHire, GoApply → GoHire): job sources are per brand (parity plan §3.9).
+// It archives nothing: a bank row closes by the ingest sync's listing diff,
+// tombstone or bank status, never by posting age (MARKET_STRATEGY §1.5).
 // See docs/CROSSBANK_JOBSEARCH_SPEC.md §3.1 / §4.
 
 import { prisma } from '../../../lib/prisma.js';
+import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
 import { logger } from '../../../services/LoggerService.js';
 import { writeDeductionLog } from '../../../lib/matchBilling.js';
 import { costPatchFromTally } from '../../../lib/deductionCost.js';
@@ -17,8 +31,8 @@ import { raJobMatchScorerAgent, resolvedJobMatchScorerModel } from '../agents/RA
 import { raCrossBankExplorerAgent } from '../agents/RACrossBankExplorerAgent.js';
 import { raCrossBankInsightAgent } from '../agents/RACrossBankInsightAgent.js';
 import { evaluateCachedScore } from './RAOnboardingRecommendService.js';
-import { listEnabledBanks } from '../lib/raBankClients.js';
-import { searchBank } from '../lib/raBankProviders.js';
+import { bankReadsMirror, listEnabledBanks } from '../lib/raBankClients.js';
+import { bankMirrorSyncAge, mirrorRowListable, searchBank, type BankMirrorSyncAge } from '../lib/raBankProviders.js';
 import { RA_DEFAULT_LOCALE } from '../lib/raLocale.js';
 import {
   deriveCandidateSignals,
@@ -33,6 +47,7 @@ import {
   normalizeSalaryPeriod,
   normalizeWorkMode,
   bankDisplayName,
+  bankMarket,
   synthesizeApplyUrl,
   jobScoringContentHash,
   DEFAULT_SCORER_BUDGET,
@@ -40,7 +55,6 @@ import {
   SCORE_FLOOR,
   RECOMMENDED_LIMIT,
   EXPLORE_CAP,
-  FRESHNESS_DAYS,
 } from '../lib/raCrossBankMatch.js';
 import type {
   BankId,
@@ -104,16 +118,18 @@ export class RACrossBankSearchService {
     const banksDegraded: BankId[] = [];
     let scorerCallsUsed = 0;
     let scorerCacheHits = 0;
+    // Search telemetry: how fresh the mirror of each bank read from our own index is.
+    const mirrorSyncAge: Partial<Record<BankId, BankMirrorSyncAge>> = {};
 
     try {
-      // STEP 0 — gate + lazy archival sweep of expired crossbank mirrors.
+      // STEP 0 — gate, and the banks of the request brand's market.
       if (process.env.RA_CROSSBANK_DISABLED?.trim().toLowerCase() === 'true') {
         return zeroResult([], []);
       }
-      const banks = listEnabledBanks();
+      const market = getCurrentBrandOrDefault().market;
+      const banks = listEnabledBanks().filter((b) => bankMarket(b) === market);
       if (banks.length === 0) return zeroResult([], []);
       banksSwept = banks;
-      await this.archiveStaleMirrors(p).catch(() => undefined);
 
       // STEP 1 — candidate context.
       const variant = await p.rAResumeVariant.findFirst({
@@ -156,14 +172,27 @@ export class RACrossBankSearchService {
         freshnessCutoff: cutoff,
         take: 60,
       };
-      const pools = await Promise.all(
-        banks.map((b) =>
-          searchBank(b, intent, { requestId: input.requestId, signal: input.signal }).then(
-            (rows) => ({ b, rows }),
-            () => ({ b, rows: null as null }),
+      const [pools] = await Promise.all([
+        Promise.all(
+          banks.map((b) =>
+            searchBank(b, intent, { requestId: input.requestId, signal: input.signal }).then(
+              (rows) => ({ b, rows }),
+              () => ({ b, rows: null as null }),
+            ),
           ),
         ),
-      );
+        // Beside the sweep, never after it: two small reads that run while the sweep runs and cannot fail it.
+        ...banks
+          .filter((b) => bankReadsMirror(b))
+          .map((b) =>
+            bankMirrorSyncAge(b).then(
+              (age) => {
+                if (age) mirrorSyncAge[b] = age;
+              },
+              () => undefined,
+            ),
+          ),
+      ]);
       const perBankRetrieved: Record<string, number> = {};
       const rows = pools.flatMap((pool) => {
         if (pool.rows == null) {
@@ -189,10 +218,29 @@ export class RACrossBankSearchService {
       if (preMatch.coverageSet.length === 0) return zeroResult(banksSwept, banksDegraded);
 
       // STEP 6 — materialize coverageSet into RAJob (the P0 inventory fix).
+      // A candidate with no apply URL (its bank has no posting page) is skipped here and so never
+      // scored, persisted or shown.
       const raJobIdByKey = new Map<string, string>();
-      await mapWithConcurrency(preMatch.coverageSet, 8, async (cand) => {
+      const listable = preMatch.coverageSet.filter((cand) => synthesizeApplyUrl(cand.bank, cand.job.id) !== null);
+      // Rows read from our own mirror are RAJob rows already: look their ids up, write nothing.
+      const mirrored = listable.filter((cand) => bankReadsMirror(cand.bank));
+      for (const bank of new Set(mirrored.map((c) => c.bank))) {
+        const ids = mirrored.filter((c) => c.bank === bank).map((c) => c.job.id);
+        try {
+          // The feed's lifecycle and fraud scope once more: a row closed or flagged since it was retrieved is not shown.
+          const found: Array<{ id: string; externalId: string; fraudFlags?: unknown }> = await p.rAJob.findMany({
+            where: { sourceBoard: bank, externalId: { in: ids }, archivedAt: null, closedAt: null, visibility: 'public' },
+            select: { id: true, externalId: true, fraudFlags: true },
+          });
+          for (const row of found) if (mirrorRowListable(row)) raJobIdByKey.set(`${bank}:${row.externalId}`, row.id);
+        } catch (err) {
+          logger.error(TAG, 'mirror id lookup failed', { bank, error: err instanceof Error ? err.message : String(err) }, input.requestId);
+        }
+      }
+      await mapWithConcurrency(listable.filter((cand) => !bankReadsMirror(cand.bank)), 8, async (cand) => {
         try {
           const args = mapRecruiterJobToRAJobUpsert(cand);
+          if (!args) return;
           const row = await p.rAJob.upsert(args);
           raJobIdByKey.set(`${cand.bank}:${cand.job.id}`, row.id);
         } catch (err) {
@@ -203,6 +251,7 @@ export class RACrossBankSearchService {
           }, input.requestId);
         }
       });
+      if (raJobIdByKey.size === 0) return zeroResult(banksSwept, banksDegraded);
 
       // STEP 7 — scoring (cache-first, waves ≤8, budget-bounded).
       // Snapshot the effective task model once for cache validation, calls, and
@@ -422,6 +471,7 @@ export class RACrossBankSearchService {
         banksDegraded,
         scorerCalls: scorerCallsUsed,
         cacheHits: scorerCacheHits,
+        ...(Object.keys(mirrorSyncAge).length > 0 ? { mirrorSyncAge } : {}),
         durationMs: Date.now() - started,
       }, input.requestId);
     }
@@ -499,7 +549,8 @@ export class RACrossBankSearchService {
       source: cand.bank,
       sourcePublisher: bankDisplayName(cand.bank),
       alsoOnBank: cand.alsoOnBank,
-      applyUrl: synthesizeApplyUrl(cand.bank, cand.job.id),
+      // Non-null by construction: only candidates with a posting page are materialised (step 6).
+      applyUrl: synthesizeApplyUrl(cand.bank, cand.job.id) ?? '',
       isExternal: true,
     };
   }
@@ -604,14 +655,6 @@ export class RACrossBankSearchService {
       platformCostUsd: patch.platformCostUsd,
       metadata: { ...(patch.metadata ?? {}), source: 'roboapply_v2_crossbank', rollup: true },
     }).catch(() => undefined);
-  }
-
-  private async archiveStaleMirrors(p: any): Promise<void> {
-    const cutoff = new Date(Date.now() - FRESHNESS_DAYS * 86_400_000);
-    await p.rAJob.updateMany({
-      where: { sourceBoard: { in: ['robohire', 'gohire'] }, archivedAt: null, postedAt: { lt: cutoff } },
-      data: { archivedAt: new Date() },
-    });
   }
 
   private async loadBookmarks(p: any, userId: string, raJobIds: string[]): Promise<Set<string>> {

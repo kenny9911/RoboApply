@@ -7,6 +7,12 @@
 // scores third, and the supporting evidence behind optional disclosures. The
 // data lifecycle is unchanged: deterministic scores arrive immediately while
 // the richer LLM review and recording continue to poll in the background.
+//
+// WP-43: the report ends with one line — "Practice again for this job" and
+// the credit path (PracticeReportEnd) — shows "Recording off" when the user
+// did not consent to a recording (H8), renders WP-72's coach line, WP-66's
+// GoApply blocks (CnReport) and the AI-generated label on GoApply. Scores are
+// described as scores of this practice, never as a prediction (C16).
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRightIcon } from '@heroicons/react/24/outline';
@@ -27,6 +33,12 @@ import {
   type IEReport,
 } from '../../../../../lib/api/interviewEngine';
 import { canonicalDimKey } from '../../../../../lib/mock/dimensionLabels';
+import * as interviewEngineModule from '../../../../../lib/api/interviewEngine';
+import type { PracticeSessionInfo } from '../../../../../lib/api/interviewEngine';
+import { PracticeReportEnd } from '../../../../../components/features/practice';
+import { CnReport } from '../../../../../components/features/practice-cn';
+import { AiGeneratedBadge } from '../../../../../components/features/market';
+import { useBrand } from '../../../../../lib/brand';
 import styles from './report.module.css';
 
 // Poll with exponential backoff while the server finalizes and the review is
@@ -59,10 +71,23 @@ function orderedRecommendations(recommendations: IERecommendation[] | null) {
     .map(({ recommendation }) => recommendation);
 }
 
+/** The practice extras for a session (job, recording consent); null when unavailable. */
+async function loadPracticeInfo(sessionId: string): Promise<PracticeSessionInfo | null> {
+  try {
+    const res = await interviewEngineModule.practiceApi.info(sessionId);
+    return res.practice ?? null;
+  } catch {
+    // Extras are optional: the report renders without them.
+    return null;
+  }
+}
+
 export default function MockReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const t = useTranslations('practice');
   const { localizeRole } = useMockRoleLabels();
+  const brand = useBrand();
+  const [practiceInfo, setPracticeInfo] = useState<PracticeSessionInfo | null>(null);
 
   const [report, setReport] = useState<IEReport | null>(null);
   const [error, setError] = useState(false);
@@ -98,6 +123,19 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Practice extras: once, and again when the session reaches 'completed'.
+  const sessionStatus = report?.session.status ?? null;
+  useEffect(() => {
+    if (!sessionStatus) return;
+    let cancelled = false;
+    void loadPracticeInfo(id).then((info) => {
+      if (!cancelled && info) setPracticeInfo(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, sessionStatus]);
 
   // Right after End the session is still finalizing; the recording (egress
   // webhook) and the written review arrive later still. Keep polling while
@@ -226,7 +264,7 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
     session.gaps[0] ||
     breakdown[0]?.note ||
     session.summary ||
-    t('report.sub');
+    t('reportEnd.scoreNote');
   const practiceAgainParams = new URLSearchParams({
     role: session.role,
     type: session.interviewType,
@@ -337,6 +375,12 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
     hasTranscript ? { id: 'transcript', label: t('report.transcript') } : null,
   ].filter(Boolean) as Array<{ id: string; label: string; count?: string }>;
 
+  // H8: a video practice recorded without the camera opt-in is audio only.
+  // Sessions from before per-session consent keep their mode.
+  const videoRecorded = practiceInfo?.recording.consented
+    ? practiceInfo.recording.video
+    : session.mode === 'video';
+
   const activeTab = tab && evidenceTabs.some((item) => item.id === tab)
     ? tab
     : evidenceTabs[0]?.id ?? '';
@@ -391,7 +435,7 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
           </div>
         </section>
       ) : (
-        <section className={styles.verdict} aria-labelledby="report-verdict-title">
+        <section className={styles.verdict} aria-labelledby="report-verdict-title" data-ai-block="verdict">
           <p
             className={styles.verdictScore}
             role="progressbar"
@@ -406,11 +450,12 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
           <div className={styles.verdictCopy}>
             <h2 id="report-verdict-title">{t('report.overall')}</h2>
             <Markdown block>{outcomeDiagnosis}</Markdown>
+            <AiGeneratedBadge />
           </div>
         </section>
       )}
 
-      <section className={styles.homework} aria-labelledby="report-homework-title">
+      <section className={styles.homework} aria-labelledby="report-homework-title" {...(homework ? { 'data-ai-block': 'homework' } : {})}>
         <div className={styles.homeworkCopy}>
           {homework ? (
             <span className={`${styles.priority} ${styles[homework.priority]}`}>
@@ -433,6 +478,7 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
               <Markdown block>{homework.detail}</Markdown>
             </div>
           ) : null}
+          {homework ? <AiGeneratedBadge /> : null}
           {homework?.drill ? (
             <div className={styles.drill}>
               <span>{t('report.recommendations.drill')}</span>
@@ -455,11 +501,12 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
       {(session.strengths.length > 0 || session.gaps.length > 0 || showCoachingPath) ? (
         <section className={styles.signalGrid} aria-label={t('report.title')}>
           {session.strengths.length > 0 ? (
-            <article className={`${styles.signalCard} ${styles.signalGood}`}>
+            <article className={`${styles.signalCard} ${styles.signalGood}`} data-ai-block="strengths">
               <header>
                 <h2>{t('report.strengths')}</h2>
                 <p>{t('report.keepThese')}</p>
               </header>
+              <AiGeneratedBadge />
               <div className={styles.signalLead}>
                 <Markdown block>{session.strengths[0]}</Markdown>
               </div>
@@ -477,20 +524,22 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
           ) : null}
 
           {(session.gaps.length > 0 || showCoachingPath) ? (
-            <article className={`${styles.signalCard} ${styles.signalImprove}`}>
+            <article className={`${styles.signalCard} ${styles.signalImprove}`} data-ai-block="gaps">
               <header>
                 <h2>{t('report.sharpen')}</h2>
                 {session.gaps.length > 0 ? (
                   <p>{t('report.topN', { count: session.gaps.length })}</p>
                 ) : null}
               </header>
+              <AiGeneratedBadge />
               {session.gaps[0] ? (
                 <div className={styles.signalLead}>
                   <Markdown block>{session.gaps[0]}</Markdown>
                 </div>
               ) : null}
               {showCoachingPath ? (
-                <div className={styles.coachingPath}>
+                <div className={styles.coachingPath} data-ai-block="coaching">
+                  <AiGeneratedBadge />
                   <div className={styles.coachingStep}>
                     <span>{t('report.questionBreakdown.keyQuoteLabel')}</span>
                     <blockquote><Markdown block>{coachingQuote}</Markdown></blockquote>
@@ -523,8 +572,11 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
       ) : null}
 
       {breakdown.length > 0 ? (
-        <section className={styles.scoreSection} aria-labelledby="report-score-title">
-          <h2 id="report-score-title">{t('report.sub')}</h2>
+        <section className={styles.scoreSection} aria-labelledby="report-score-title" data-ai-block="scores">
+          <div>
+            <h2 id="report-score-title">{t('reportEnd.scoresTitle')}</h2>
+            <AiGeneratedBadge />
+          </div>
           <div className={styles.scoreRows}>
             {breakdown.map((item) => (
               <div className={styles.scoreRow} key={item.key}>
@@ -600,50 +652,56 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
             tabIndex={0}
           >
             {activeTab === 'steps' && hasRecommendations ? (
-              <ol className={styles.recommendationList}>
-                {recommendations!.map((recommendation, index) => (
-                  <li key={`${recommendation.priority}-${index}`}>
-                    <div className={styles.recommendationHead}>
-                      <span className={`${styles.priority} ${styles[recommendation.priority]}`}>
-                        {t(`report.recommendations.priority.${recommendation.priority}`)}
-                      </span>
-                      {recommendation.linkedDimension ? (
-                        <span className={styles.dimensionTag}>
-                          {t(`report.dim.${recommendation.linkedDimension as IEDimensionKey}`)}
+              <div data-ai-block="steps">
+                <AiGeneratedBadge />
+                <ol className={styles.recommendationList}>
+                  {recommendations!.map((recommendation, index) => (
+                    <li key={`${recommendation.priority}-${index}`}>
+                      <div className={styles.recommendationHead}>
+                        <span className={`${styles.priority} ${styles[recommendation.priority]}`}>
+                          {t(`report.recommendations.priority.${recommendation.priority}`)}
                         </span>
-                      ) : null}
-                    </div>
-                    <h3><Markdown>{recommendation.title}</Markdown></h3>
-                    <div className={styles.recommendationDetail}>
-                      <Markdown block>{recommendation.detail}</Markdown>
-                    </div>
-                    <div className={styles.example}>
-                      <span>{t('report.recommendations.exampleLabel')}</span>
-                      <Markdown block>{recommendation.example}</Markdown>
-                    </div>
-                    {recommendation.drill ? (
-                      <div className={styles.recommendationDrill}>
-                        <span>{t('report.recommendations.drill')}</span>
-                        <Markdown block>{recommendation.drill}</Markdown>
+                        {recommendation.linkedDimension ? (
+                          <span className={styles.dimensionTag}>
+                            {t(`report.dim.${recommendation.linkedDimension as IEDimensionKey}`)}
+                          </span>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
+                      <h3><Markdown>{recommendation.title}</Markdown></h3>
+                      <div className={styles.recommendationDetail}>
+                        <Markdown block>{recommendation.detail}</Markdown>
+                      </div>
+                      <div className={styles.example}>
+                        <span>{t('report.recommendations.exampleLabel')}</span>
+                        <Markdown block>{recommendation.example}</Markdown>
+                      </div>
+                      {recommendation.drill ? (
+                        <div className={styles.recommendationDrill}>
+                          <span>{t('report.recommendations.drill')}</span>
+                          <Markdown block>{recommendation.drill}</Markdown>
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              </div>
             ) : null}
 
             {activeTab === 'questions' && hasQuestionAnalysis ? (
-              <QuestionBreakdownSection
-                items={session.questionAnalysis}
-                enrichmentPending={reviewPending}
-                showHeading={false}
-                defaultOpenFirst
-              />
+              <div data-ai-block="questions">
+                <AiGeneratedBadge />
+                <QuestionBreakdownSection
+                  items={session.questionAnalysis}
+                  enrichmentPending={reviewPending}
+                  showHeading={false}
+                  defaultOpenFirst
+                />
+              </div>
             ) : null}
 
             {activeTab === 'recording' && report.recordingUrl ? (
               <div className={styles.mediaBody}>
-                {session.mode === 'video' ? (
+                {videoRecorded ? (
                   <video controls preload="metadata" src={report.recordingUrl} />
                 ) : (
                   <audio controls preload="metadata" src={report.recordingUrl} />
@@ -652,14 +710,24 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
             ) : null}
 
             {activeTab === 'transcript' && hasTranscript ? (
-              <TranscriptViewer
-                embedded
-                turns={report.transcript}
-                transcriptUrl={report.transcriptUrl}
-              />
+              // The interviewer's lines are AI output.
+              <div data-ai-block="transcript">
+                <AiGeneratedBadge />
+                <TranscriptViewer
+                  embedded
+                  turns={report.transcript}
+                  transcriptUrl={report.transcriptUrl}
+                />
+              </div>
             ) : null}
           </div>
         </section>
+      ) : null}
+
+      {brand.market === 'cn' ? <CnReport sessionId={session.id} /> : null}
+
+      {practiceInfo ? (
+        <PracticeReportEnd info={practiceInfo} practiceAgainHref={practiceAgainHref} />
       ) : null}
     </div>
   );

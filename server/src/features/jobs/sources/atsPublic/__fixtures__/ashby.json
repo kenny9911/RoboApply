@@ -1,0 +1,47 @@
+{
+  "apiVersion": "1",
+  "jobs": [
+    {
+      "id": "a1b2c3d4-1111-2222-3333-444455556666",
+      "title": "Data Analyst",
+      "location": "Taipei",
+      "secondaryLocations": [{ "location": "Kaohsiung", "address": { "addressLocality": "Kaohsiung", "addressCountry": "Taiwan" } }],
+      "department": "Data",
+      "team": "Analytics",
+      "isListed": true,
+      "isRemote": false,
+      "workplaceType": "OnSite",
+      "descriptionHtml": "<p>Analyse marketplace data.</p><p>薪資：依公司規定。</p><p>We can help you obtain a Taiwan work permit (ARC).</p>",
+      "descriptionPlain": "Analyse marketplace data.\n薪資：依公司規定。\nWe can help you obtain a Taiwan work permit (ARC).",
+      "publishedAt": "2026-09-28T03:00:00.000+00:00",
+      "employmentType": "FullTime",
+      "address": { "postalAddress": { "addressRegion": "Taipei City", "addressCountry": "Taiwan", "addressLocality": "Taipei" } },
+      "jobUrl": "https://jobs.ashbyhq.com/islandlabs/a1b2c3d4-1111-2222-3333-444455556666",
+      "applyUrl": "https://jobs.ashbyhq.com/islandlabs/a1b2c3d4-1111-2222-3333-444455556666/application",
+      "shouldDisplayCompensationOnJobPostings": false,
+      "compensation": { "compensationTierSummary": "Hidden by the employer", "summaryComponents": [{ "compensationType": "Salary", "interval": "1 YEAR", "currencyCode": "TWD", "minValue": 900000, "maxValue": 1200000 }] }
+    },
+    {
+      "id": "a1b2c3d4-1111-2222-3333-777788889999",
+      "title": "Staff Software Engineer",
+      "location": "Remote",
+      "secondaryLocations": [],
+      "isListed": true,
+      "isRemote": true,
+      "descriptionHtml": "<p>Build our platform.</p>",
+      "descriptionPlain": "Build our platform.",
+      "publishedAt": "2026-09-30T03:00:00.000+00:00",
+      "employmentType": "FullTime",
+      "jobUrl": "https://jobs.ashbyhq.com/islandlabs/a1b2c3d4-1111-2222-3333-777788889999",
+      "applyUrl": "https://jobs.ashbyhq.com/islandlabs/a1b2c3d4-1111-2222-3333-777788889999/application",
+      "shouldDisplayCompensationOnJobPostings": true,
+      "compensation": { "compensationTierSummary": "US$180K – US$220K", "summaryComponents": [{ "compensationType": "Salary", "interval": "1 YEAR", "currencyCode": "USD", "minValue": 180000, "maxValue": 220000 }, { "compensationType": "EquityPercentage", "interval": "NONE", "minValue": 0.01, "maxValue": 0.05 }] }
+    },
+    {
+      "id": "a1b2c3d4-unlisted",
+      "title": "Unlisted role",
+      "isListed": false,
+      "jobUrl": "https://jobs.ashbyhq.com/islandlabs/a1b2c3d4-unlisted"
+    }
+  ]
+}

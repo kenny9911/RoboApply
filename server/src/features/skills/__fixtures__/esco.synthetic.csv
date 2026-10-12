@@ -1,0 +1,8 @@
+id,label,altLabels
+synthetic:esco/0001,PostgreSQL,postgres db
+synthetic:esco/0002,machine learning,ML | statistical learning
+synthetic:esco/0003,Kubernetes,
+synthetic:esco/0004,kubernetes,
+synthetic:esco/0005,manage relational database systems,
+synthetic:esco/0006,Supabase,
+synthetic:esco/0007,TERRAFORM,

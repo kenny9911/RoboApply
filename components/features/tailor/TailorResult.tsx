@@ -1,0 +1,299 @@
+'use client';
+
+// TailorResult — the tailored version (WP-36a; F-RES-10, F-RES-15):
+//   - two fit measures, each named for what it is (real AI fit scores with
+//     their source line, or "—"; never an estimate; "This is not your chance
+//     of getting hired."):
+//       "Your fit"           the job's one fit, for the main resume: the number
+//                            the job page shows;
+//       "With this version"  the fit of the tailored version. It appears only
+//                            once every detail is checked and the copy is
+//                            finalized, so it never rests on unchecked claims.
+//     A line under them says the job page keeps showing "Your fit" until this
+//     version is made the main resume;
+//   - change cards and a side-by-side compare;
+//   - Verify details: every line that says something the resume did not say
+//     before must be kept, removed or rewritten by the user;
+//   - "Use this resume" (finalize) stays disabled until nothing is pending.
+// AI blocks carry AiGeneratedBadge (GoApply) and the "Written with AI" line.
+
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+
+import { Btn, FitMeter, HonestyLine, Markdown, SourceNote, Tabs, tabPanelProps } from '../../v3/primitives';
+import { AiGeneratedBadge } from '../market';
+import { useResume } from '../../../hooks/useResumes';
+import { useFinalizeTailor, useTailorClaim } from '../../../hooks/tailor';
+import type { SourcedNumber, TailorChange, TailorFitMeasure, TailorSessionView } from '../../../lib/api/contracts/resume';
+import { KeywordReport } from '../resume/KeywordReport';
+import { ClaimCard } from './ClaimCard';
+import { plainInline, sectionLabel } from './text';
+import { TailorError } from './TailorError';
+import styles from './Tailor.module.css';
+
+export interface TailorResultProps {
+  session: TailorSessionView;
+  /** Called after "Use this resume" succeeds. */
+  onFinalized?: (session: TailorSessionView) => void;
+  /** Open the tailored resume (shown once finalized). */
+  onOpenResume?: (resultVariantId: string) => void;
+  onClose?: () => void;
+}
+
+type Tab = 'changes' | 'compare';
+
+/** One measure as the card shows it: the number and its source line. */
+interface ShownMeasure {
+  value: number;
+  sourced: SourcedNumber;
+}
+
+/**
+ * A measure of the session. The server sends `canonical` / `variant`; a
+ * session answered by a server from before that shape carries only `before` /
+ * `after`, which hold the same two values.
+ */
+function shown(measure: TailorFitMeasure | null | undefined, legacy: SourcedNumber | null): ShownMeasure | null {
+  if (measure) return { value: measure.value, sourced: { value: measure.value, source: 'ai', asOf: measure.scoredAt, method: 'fit_score' } };
+  return legacy ? { value: legacy.value, sourced: legacy } : null;
+}
+
+export function TailorResult({ session, onFinalized, onOpenResume, onClose }: TailorResultProps) {
+  const t = useTranslations('tailor.result');
+  const tf = useTranslations('tailor.fit');
+  const tv = useTranslations('tailor.verify');
+  const yours = shown(session.fit.canonical, session.fit.before);
+  const withVersion = shown(session.fit.variant, session.fit.after);
+  const [tab, setTab] = useState<Tab>('changes');
+  const claim = useTailorClaim(session.id);
+  const finalize = useFinalizeTailor(session.id);
+  const finalized = session.status === 'finalized';
+  const pending = session.pendingClaims;
+  const tabBase = `tailor-${session.id}`;
+  const title = session.target.title ? t('titleFor', { title: [session.target.title, session.target.company].filter(Boolean).join(' · ') }) : t('title');
+
+  return (
+    <div className={styles.flow} data-session-status={session.status}>
+      <div className={styles.spread}>
+        <h3 className={styles.heading}>{title}</h3>
+        <AiGeneratedBadge kind="document" />
+      </div>
+      <HonestyLine kind="ai_written" />
+
+      <section className={styles.card} aria-label={t('scoreHeading')}>
+        {yours ? (
+          <>
+            <div className={styles.scores}>
+              <div className={styles.score}>
+                <p className={styles.label}>{tf('yours')}</p>
+                <p className={styles.scoreValue} data-testid="tailor-score-before">
+                  {t('scoreValue', { score: yours.value })}
+                </p>
+                <FitMeter score={yours.value} compact />
+                <SourceNote sourced={yours.sourced} />
+              </div>
+              <div className={styles.score}>
+                <p className={styles.label}>{tf('withVersion')}</p>
+                {withVersion ? (
+                  <>
+                    <p className={styles.scoreValue} data-testid="tailor-score-after">
+                      {t('scoreValue', { score: withVersion.value })}
+                    </p>
+                    <FitMeter score={withVersion.value} compact />
+                    <SourceNote sourced={withVersion.sourced} />
+                  </>
+                ) : (
+                  <>
+                    <p className={styles.scoreValue} aria-hidden="true">
+                      —
+                    </p>
+                    {/* The tailored text is scored only once every detail is checked (no score rests on unchecked claims). */}
+                    <p className={styles.sub} data-testid="tailor-score-after-pending">
+                      {finalized ? t('scoreNone') : t('scoreAfterPending')}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            {/* Two measures, not one number that moved: the job page keeps showing "Your fit". */}
+            <p className={styles.sub} data-testid="tailor-fit-note">
+              {tf('note')}
+            </p>
+          </>
+        ) : (
+          <div className={styles.score}>
+            <p className={styles.label}>{t('scoreHeading')}</p>
+            <p className={styles.sub} data-testid="tailor-score-none">
+              — {t('scoreNone')}
+            </p>
+            <HonestyLine kind="fit" />
+          </div>
+        )}
+      </section>
+
+      <section className={styles.section} aria-labelledby={`tailor-verify-${session.id}`}>
+        <h4 id={`tailor-verify-${session.id}`} className={styles.heading}>
+          {tv('title')}
+        </h4>
+        <p className={styles.sub}>{tv('sub')}</p>
+        {session.claims.length === 0 || pending === 0 ? (
+          <p className={styles.success} role="status">
+            {tv('allDone')}
+          </p>
+        ) : null}
+        {session.claims.length > 0 ? (
+          <ul className={styles.claims}>
+            {session.claims.map((c) => (
+              <ClaimCard
+                key={c.id}
+                claim={c}
+                busy={claim.pending || finalized}
+                onDecide={(d) => claim.decide(c.id, d).catch(() => undefined)}
+              />
+            ))}
+          </ul>
+        ) : null}
+        <TailorError error={claim.error} />
+      </section>
+
+      {/* Keyword check of the tailored text against the posting (F-RES-08), for a job and for a pasted posting. */}
+      {session.resultVariantId ? (
+        <section className={styles.section} data-testid="tailor-keyword-grid">
+          <KeywordReport
+            resumeId={session.resultVariantId}
+            tailorSession={{ id: session.id, version: `${session.status}:${session.claims.map((c) => c.status[0]).join('')}` }}
+            hideFit
+          />
+        </section>
+      ) : null}
+
+      <section className={styles.section}>
+        <Tabs<Tab>
+          ariaLabel={t('tabs.label')}
+          idBase={tabBase}
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { id: 'changes', label: t('tabs.changes', { count: session.changes.length }) },
+            { id: 'compare', label: t('tabs.compare') },
+          ]}
+        />
+        <div {...tabPanelProps(tabBase, 'changes')} hidden={tab !== 'changes'}>
+          <ChangeList changes={session.changes} />
+        </div>
+        <div {...tabPanelProps(tabBase, 'compare')} hidden={tab !== 'compare'}>
+          {tab === 'compare' ? <Compare baseId={session.baseVariantId} resultId={session.resultVariantId} /> : null}
+        </div>
+      </section>
+
+      <div className={styles.footer}>
+        {finalized ? (
+          <>
+            <p className={styles.success} role="status">
+              {t('done')}
+            </p>
+            <div className={styles.actions}>
+              {session.resultVariantId && onOpenResume ? (
+                <Btn variant="primary" onClick={() => onOpenResume(session.resultVariantId!)}>
+                  {t('open')}
+                </Btn>
+              ) : null}
+              {onClose ? <Btn onClick={onClose}>{t('close')}</Btn> : null}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className={styles.sub} role="status" aria-live="polite">
+              {pending > 0 ? t('pendingBlock', { count: pending }) : tv('allDone')}
+            </p>
+            <Btn
+              variant="primary"
+              disabled={pending > 0 || finalize.isPending || session.status !== 'review'}
+              onClick={async () => {
+                try {
+                  const view = await finalize.mutateAsync();
+                  onFinalized?.(view);
+                } catch {
+                  // shown below
+                }
+              }}
+            >
+              {finalize.isPending ? t('finalizing') : t('finalize')}
+            </Btn>
+          </>
+        )}
+      </div>
+      <TailorError error={finalize.error} />
+    </div>
+  );
+}
+
+function ChangeList({ changes }: { changes: TailorChange[] }) {
+  const t = useTranslations('tailor.result');
+  const ts = useTranslations('tailor.setup.section');
+  if (changes.length === 0) return <p className={styles.sub}>{t('noChanges')}</p>;
+  return (
+    <ul className={styles.changes}>
+      {changes.map((c, i) => {
+        const kind = c.kind ?? (c.before && c.after ? 'rewrite' : c.after ? 'add' : 'remove');
+        return (
+          <li key={`${c.section}-${i}`} className={styles.change} data-kind={kind}>
+            <div className={styles.row}>
+              <span className={styles.changeKind}>{t(`change.${kind}`)}</span>
+              {/* A default section title follows the interface language; a title the user wrote stays as written. */}
+              <span className={styles.sub}>{sectionLabel(c.section, (key) => ts(key))}</span>
+            </div>
+            {c.before ? (
+              <p className={styles.before}>
+                <span className="sr-only">{t('change.before')}: </span>
+                {plainInline(c.before)}
+              </p>
+            ) : null}
+            {c.after ? (
+              <p className={styles.after}>
+                <span className="sr-only">{t('change.after')}: </span>
+                {plainInline(c.after)}
+              </p>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function Compare({ baseId, resultId }: { baseId: string; resultId: string | null }) {
+  const t = useTranslations('tailor.result.compare');
+  const base = useResume(baseId);
+  const result = useResume(resultId);
+  if (base.isLoading || result.isLoading) {
+    return (
+      <p className={styles.sub} role="status">
+        {t('loading')}
+      </p>
+    );
+  }
+  if (base.isError || result.isError || !base.data || !result.data) {
+    return (
+      <p className={styles.error} role="alert">
+        {t('error')}
+      </p>
+    );
+  }
+  return (
+    <div className={styles.compare}>
+      <div>
+        <p className={styles.label}>{t('before')}</p>
+        <div className={styles.paper}>
+          <Markdown block>{base.data.resumeMarkdown}</Markdown>
+        </div>
+      </div>
+      <div>
+        <p className={styles.label}>{t('after')}</p>
+        <div className={styles.paper}>
+          <Markdown block>{result.data.resumeMarkdown}</Markdown>
+        </div>
+      </div>
+    </div>
+  );
+}

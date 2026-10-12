@@ -18,6 +18,7 @@ import type {
   CrossBankExplorerInput,
   CrossBankExplorerPlan,
 } from '../types/crossBank.js';
+import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
 const ENV_MODEL = 'RA_V2_CROSSBANK_EXPLORER_MODEL';
 
@@ -82,7 +83,7 @@ export class RACrossBankExplorerAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `You are RoboApply's opportunity explorer. Your job is COVERAGE: given a
+    return `${currentBrandPersona('opportunity explorer')}. Your job is COVERAGE: given a
 candidate, produce a search expansion plan that surfaces every viable job across
 two recruiter job banks — including adjacent roles and transferable-skill
 stretches the candidate would never search for themselves — WITHOUT drifting

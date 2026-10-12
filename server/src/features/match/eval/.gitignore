@@ -1,0 +1,3 @@
+# Live artefacts of `npm run eval:match -- --live`: snapshots of the real index, the judge cache,
+# the recruiter audit and dated reports. Real posting text lives here and is never committed.
+.snapshots/

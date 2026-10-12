@@ -2,112 +2,103 @@
 
 // hooks/usePipelineBoard.ts
 //
-// Data layer for the V3 Pipeline screen (IA Route 8, `/tracker`). Reads the
-// full tracker via `tracker.list()` and exposes:
+// Data layer for /applications. Reads the whole tracker once (the views are
+// not paginated; 200 is the API max) and exposes:
 //
-//   • the raw entries + statusCounts + total (for the header count line),
-//   • a `patchStatus` mutation (optimistic) used by both drag-to-move and the
-//     per-card status <select> fallback,
+//   • the entries + statusCounts + total (every view, the nav badge and the
+//     header counts share this one TanStack cache entry),
+//   • `usePatchPipelineStatus` (optimistic) used by drag-to-move and the
+//     card's stage menu.
 //
-// Query key is namespaced `['v3', 'pipeline', 'board']` so it doesn't collide
-// with the V2 tracker caches (`['v2','tracker',…]`) or the Home funnel
-// (`['v2','home','tracker']`) — those keep their own lifecycles.
-//
-// Column model lives in `lib/v3/pipelineColumns.ts` (shared with the board so
-// the mapping is defined exactly once). The mutation writes a single canonical
-// `RATrackerStatus` (the column's `status`), which keeps drag targets
-// unambiguous and the `count(visible) = Σ column counts` invariant intact.
+// The read and the stage move are the pre-clone calls on the frozen
+// lib/api/v2 client (TASK_PLAN.md §2.1 rule 9: existing calls may stay;
+// new ones go through lib/api/tracker.ts). The server response gained the
+// clone fields additively, so the entries are typed with the tracker
+// contract's `TrackerEntryView` here.
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseQueryResult,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import { raV2Api } from '../lib/api/v2';
-import type {
-  RATrackerEntryView,
-  RATrackerStatus,
-  TrackerListResponse,
-} from '../lib/api/v2';
+import type { RATrackerStatus } from '../lib/api/v2';
+import type { TrackerEntryView, TrackerStatus } from '../lib/api/contracts/tracker';
 
 export const pipelineKeys = {
   all: ['v3', 'pipeline'] as const,
   board: () => ['v3', 'pipeline', 'board'] as const,
 };
 
-// Pull a generous page so every active conversation lands on the board in one
-// read (the board is not paginated). 200 is the stub/API max.
 const BOARD_LIMIT = 200;
 
 export interface PipelineBoardData {
-  entries: RATrackerEntryView[];
-  statusCounts: Record<RATrackerStatus, number>;
+  entries: TrackerEntryView[];
+  statusCounts: Record<string, number>;
   total: number;
 }
 
-/** Read the full tracker for the Pipeline board (entries + counts). */
+/** Read the full tracker for /applications (entries + counts). */
 export function usePipelineBoard(): UseQueryResult<PipelineBoardData, Error> {
   return useQuery({
     queryKey: pipelineKeys.board(),
     queryFn: async () => {
       const res = await raV2Api.tracker.list({ limit: BOARD_LIMIT });
       return {
-        entries: res.entries,
-        statusCounts: res.statusCounts,
+        entries: res.entries as unknown as TrackerEntryView[],
+        statusCounts: res.statusCounts as Record<string, number>,
         total: res.total,
       } satisfies PipelineBoardData;
     },
   });
 }
 
+/** Replace one entry in the cached board (after a drawer save or a create). */
+export function upsertBoardEntry(prev: PipelineBoardData | undefined, entry: TrackerEntryView): PipelineBoardData | undefined {
+  if (!prev) return prev;
+  const exists = prev.entries.some((e) => e.id === entry.id);
+  const before = prev.entries.find((e) => e.id === entry.id);
+  const statusCounts = { ...prev.statusCounts };
+  if (before && before.status !== entry.status) {
+    statusCounts[before.status] = Math.max(0, (statusCounts[before.status] ?? 0) - 1);
+    statusCounts[entry.status] = (statusCounts[entry.status] ?? 0) + 1;
+  }
+  if (!exists) statusCounts[entry.status] = (statusCounts[entry.status] ?? 0) + 1;
+  return {
+    entries: exists ? prev.entries.map((e) => (e.id === entry.id ? entry : e)) : [entry, ...prev.entries],
+    statusCounts,
+    total: exists ? prev.total : prev.total + 1,
+  };
+}
+
 /**
  * Move a tracker entry to a new status (column). Optimistic: the card jumps
  * columns immediately, rolling back if the write fails. On settle we refetch so
- * the board re-syncs with the server-derived `dateApplied` / `updatedAt`.
+ * the board re-syncs with the server-derived `dateApplied` / `outcome`.
  */
 export function usePatchPipelineStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: RATrackerStatus }) =>
-      raV2Api.tracker.patch(id, { status }),
+    mutationFn: ({ id, status }: { id: string; status: TrackerStatus }) =>
+      raV2Api.tracker.patch(id, { status: status as RATrackerStatus }),
     onMutate: async ({ id, status }) => {
       await qc.cancelQueries({ queryKey: pipelineKeys.board() });
       const prev = qc.getQueryData<PipelineBoardData>(pipelineKeys.board());
-      if (prev) {
+      const moved = prev?.entries.find((e) => e.id === id);
+      if (prev && moved) {
         const nowIso = new Date().toISOString();
-        const nextEntries = prev.entries.map((e) =>
-          e.id === id
-            ? {
-                ...e,
-                status,
-                // Mirror the stub/API: first move into `applied` stamps a date.
-                dateApplied:
-                  status === 'applied' && !e.dateApplied ? nowIso : e.dateApplied,
-                updatedAt: nowIso,
-              }
-            : e,
+        const applied = (status === 'applied' || status === 'applying') && !moved.dateApplied;
+        qc.setQueryData<PipelineBoardData>(
+          pipelineKeys.board(),
+          upsertBoardEntry(prev, { ...moved, status, dateApplied: applied ? nowIso : moved.dateApplied, updatedAt: nowIso }),
         );
-        const moved = prev.entries.find((e) => e.id === id);
-        const nextCounts = { ...prev.statusCounts };
-        if (moved && moved.status !== status) {
-          nextCounts[moved.status] = Math.max(0, nextCounts[moved.status] - 1);
-          nextCounts[status] = (nextCounts[status] ?? 0) + 1;
-        }
-        qc.setQueryData<PipelineBoardData>(pipelineKeys.board(), {
-          ...prev,
-          entries: nextEntries,
-          statusCounts: nextCounts,
-        });
       }
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev) qc.setQueryData(pipelineKeys.board(), ctx.prev);
     },
-    onSettled: () => {
+    onSettled: (_data, _err, vars) => {
       qc.invalidateQueries({ queryKey: pipelineKeys.board() });
+      qc.invalidateQueries({ queryKey: ['tracker', 'events', vars.id] });
+      qc.invalidateQueries({ queryKey: ['tracker', 'follow-ups'] });
     },
   });
 }

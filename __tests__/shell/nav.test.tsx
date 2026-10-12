@@ -1,0 +1,433 @@
+// FND-6a — the per-brand nav registry and the surfaces that render it
+// (components/v3/shell/destinations.ts; PRODUCT_PLAN.md §3.3).
+//
+// Acceptance covered here:
+//   • nav differs per brand;
+//   • a flagged-off entry is absent;
+//   • INT-12 (WP-93) flipped every destination to ready: each flipped entry
+//     shows exactly when its flag (and gate) is on, per brand, with NO dev
+//     override; `ready: false` on one entry still takes that entry out
+//     (the one-line revert), and NEXT_PUBLIC_SHOW_ALL_NAV still overrides it;
+//   • a badge renders the hook's value and nothing for null;
+//   • mobile shows 5 slots: 4 destinations + More (我的 on GoApply), and More
+//     opens a sheet with the registry's `mobile: 'more'` entries.
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, fireEvent, screen, within } from '@testing-library/react';
+
+import { mockAuthState, buildAuthValue, buildFakeUser } from '../utils/mockAuth';
+import { renderWithBrand, flagsWith } from './helpers';
+
+vi.mock('../../lib/auth/AuthProvider', () => ({
+  AuthProvider: ({ children }: { children: unknown }) => children,
+  useAuth: () => mockAuthState.value,
+}));
+
+const pathnameRef = { current: '/jobs' };
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathnameRef.current,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+}));
+
+// Badge hooks: controllable per test (null = no badge).
+const badgeValues = vi.hoisted(() => ({
+  jobs: null as unknown,
+  ready: null as unknown,
+  applications: null as unknown,
+  profile: null as unknown,
+}));
+vi.mock('../../hooks/feed/useJobsBadge', () => ({ useJobsBadge: () => badgeValues.jobs }));
+vi.mock('../../hooks/agent/useReadyBadge', () => ({ useReadyBadge: () => badgeValues.ready }));
+vi.mock('../../hooks/tracker/useApplicationsBadge', async (orig) => ({
+  ...(await orig<typeof import('../../hooks/tracker/useApplicationsBadge')>()),
+  useApplicationsBadge: () => badgeValues.applications,
+}));
+vi.mock('../../hooks/profile/useProfileBadge', () => ({ useProfileBadge: () => badgeValues.profile }));
+
+import { Sidebar } from '../../components/v3/shell/Sidebar';
+import { MobileNav } from '../../components/v3/shell/MobileNav';
+import {
+  NAV_ENTRIES,
+  SURFACES_READY,
+  buildNav,
+  crumbKeyFor,
+  entriesForBrand,
+  extensionPublishedFor,
+  homeHref,
+  invitesLiveFor,
+  jobHref,
+  type NavVisibilityContext,
+} from '../../components/v3/shell/destinations';
+import { INVITE_REWARD_BRANDS } from '../../hooks/growth/useInvites';
+import { normalizeBadge } from '../../hooks/shared/navBadges';
+
+const railHrefs = () =>
+  within(screen.getByRole('navigation')).getAllByRole('link').map((l) => l.getAttribute('href'));
+
+const ctx = (over: Partial<NavVisibilityContext> = {}): NavVisibilityContext => ({
+  brandId: 'roboapply',
+  flags: flagsWith(),
+  isAdmin: false,
+  showAll: false,
+  coachRoster: false,
+  ...over,
+});
+
+beforeEach(() => {
+  pathnameRef.current = '/jobs';
+  mockAuthState.value = buildAuthValue();
+  badgeValues.jobs = null;
+  badgeValues.ready = null;
+  badgeValues.applications = null;
+  badgeValues.profile = null;
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe('registry (pure)', () => {
+  it('every entry has a unique id per brand and a key in the nav namespace', () => {
+    const ids = NAV_ENTRIES.map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const slots = entriesForBrand(brand)
+        .map((e) => e.mobile)
+        .filter((m): m is 1 | 2 | 3 | 4 => typeof m === 'number');
+      expect(new Set(slots).size, `${brand} mobile slots are unique`).toBe(slots.length);
+    }
+  });
+
+  it('RoboApply full IA follows PRODUCT §3.3 order when everything is on', () => {
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id'); // the extension is published
+    const nav = buildNav(ctx({ showAll: true, isAdmin: true, coachRoster: true, flags: flagsWith({ agent: true, coaching: true, invites: true, extension: true }) }));
+    expect(nav.top.map((e) => e.href)).toEqual(['/jobs', '/ready', '/applications', '/resume', '/practice', '/profile']);
+    expect(nav.lower.map((e) => e.href)).toEqual(['/coaching', '/invite', '/extension', '/settings', '/admin']);
+    expect(nav.mobile.map((e) => e.href)).toEqual(['/jobs', '/applications', '/resume', '/practice']);
+    expect(nav.more.map((e) => e.href)).toEqual(['/ready', '/profile', '/coaching', '/invite', '/settings']);
+  });
+
+  it('GoApply full IA: 职位 · 校招日历 · 待投递 · 投递记录 · 简历 · 面试练习 · 我的资料', () => {
+    const nav = buildNav(
+      ctx({
+        brandId: 'goapply',
+        showAll: true,
+        flags: flagsWith({ 'jobs.feed': true, 'jobs.campusCalendar': true, agent: true, 'cn.referralCodes': true, invites: true }),
+      }),
+    );
+    // 邀请好友 joins once GoApply's phone and WeChat sign-ups carry the invite
+    // (INT-01 adds 'goapply' to INVITE_REWARD_BRANDS); the entry follows it.
+    const cnInvite = invitesLiveFor('goapply') ? ['/invite'] : [];
+    expect(nav.top.map((e) => e.href)).toEqual(['/jobs', '/campus', '/ready', '/applications', '/resume', '/practice', '/profile']);
+    expect(nav.lower.map((e) => e.href)).toEqual(['/referrals', ...cnInvite, '/settings']);
+    // 职位 · 校招 · 投递 · 面试 (+ 我的)
+    expect(nav.mobile.map((e) => e.href)).toEqual(['/jobs', '/campus', '/applications', '/practice']);
+    // 简历, 资料, 待投递, 设置 live under 我的.
+    expect(nav.more.map((e) => e.href)).toEqual(['/ready', '/resume', '/profile', '/referrals', ...cnInvite, '/settings']);
+  });
+
+  it('the nav differs per brand', () => {
+    const ra = buildNav(ctx({ flags: flagsWith({ 'jobs.feed': true }) })).all.map((e) => e.id);
+    const ga = buildNav(ctx({ brandId: 'goapply', flags: flagsWith({ 'jobs.feed': true }) })).all.map((e) => e.id);
+    expect(ra).toEqual(['jobs', 'applications', 'resume', 'practice', 'profile', 'settings']);
+    expect(ga).toEqual(['cn.jobs', 'cn.applications', 'cn.resume', 'cn.practice', 'cn.profile', 'cn.settings']);
+    expect(ga.some((id) => ra.includes(id))).toBe(false);
+  });
+
+  it('GoApply 职位 carries no flag, as RoboApply Jobs (D5); a flagged-off entry is absent (校招日历 without the calendar)', () => {
+    expect(NAV_ENTRIES.find((e) => e.id === 'cn.jobs')).toMatchObject({ href: '/jobs', flag: null, brands: ['goapply'] });
+    expect(NAV_ENTRIES.find((e) => e.id === 'jobs')).toMatchObject({ href: '/jobs', flag: null, brands: ['roboapply'] });
+    // Every flag off, and before the flags arrive: 职位 is there.
+    for (const flags of [flagsWith(), null]) {
+      const off = buildNav(ctx({ brandId: 'goapply', showAll: true, flags }));
+      expect(off.top[0].href).toBe('/jobs');
+      expect(off.all.map((e) => e.href)).not.toContain('/campus');
+    }
+    const on = buildNav(ctx({ brandId: 'goapply', showAll: true, flags: flagsWith({ 'jobs.campusCalendar': true }) }));
+    expect(on.top.map((e) => e.href).slice(0, 2)).toEqual(['/jobs', '/campus']);
+  });
+
+  it('flags fail closed: nothing flagged shows before the flags arrive', () => {
+    const nav = buildNav(ctx({ flags: null, showAll: true }));
+    expect(nav.all.every((e) => e.flag === null)).toBe(true);
+  });
+
+  it('gates still decide: admin role, a coach roster, a brand whose sign-ups carry the invite', () => {
+    const flags = flagsWith({ agent: true, coaching: true, invites: true });
+    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).not.toContain('coaching');
+    expect(buildNav(ctx({ flags, coachRoster: true })).all.map((e) => e.id)).toContain('coaching');
+    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).not.toContain('admin');
+    expect(buildNav(ctx({ flags, isAdmin: true })).all.map((e) => e.id)).toContain('admin');
+    // Invite friends: RoboApply runs the programme; GoApply only once wired.
+    expect(invitesLiveFor('roboapply')).toBe(true);
+    expect(invitesLiveFor('goapply')).toBe(INVITE_REWARD_BRANDS.includes('goapply'));
+    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).toContain('invite');
+    expect(buildNav(ctx({ brandId: 'goapply', flags })).all.map((e) => e.id).includes('cn.invite')).toBe(invitesLiveFor('goapply'));
+    // The dev override skips `ready` only, never a gate.
+    expect(buildNav(ctx({ flags, showAll: true })).all.map((e) => e.id)).not.toContain('coaching');
+    expect(buildNav(ctx({ brandId: 'goapply', flags, showAll: true })).all.map((e) => e.id).includes('cn.invite')).toBe(invitesLiveFor('goapply'));
+  });
+
+  it('Get the extension needs a published extension (a store id), not just the flag: /extension can only say "not available" before', () => {
+    const flags = flagsWith({ extension: true });
+    expect(extensionPublishedFor('roboapply')).toBe(false);
+    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).not.toContain('extension');
+    expect(buildNav(ctx({ flags, showAll: true })).all.map((e) => e.id)).not.toContain('extension');
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', '  ');
+    expect(extensionPublishedFor('roboapply')).toBe(false);
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id');
+    expect(extensionPublishedFor('roboapply')).toBe(true);
+    expect(extensionPublishedFor('goapply')).toBe(false); // GoApply has its own id (NEXT_PUBLIC_CN_EXT_ID)
+    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).toContain('extension');
+    expect(buildNav(ctx({ flags: flagsWith() })).all.map((e) => e.id)).not.toContain('extension');
+  });
+
+  // INT-12 (WP-93): the flips. One row per flipped entry: brand, the flag
+  // that shows it, and what else it needs. No dev override anywhere here.
+  const FLIPPED: Array<{
+    id: string;
+    brand: 'roboapply' | 'goapply';
+    href: string;
+    flag: string;
+    needs?: Partial<NavVisibilityContext>;
+    /** Build-time env the entry also needs. */
+    env?: [string, string];
+  }> = [
+    { id: 'ready', brand: 'roboapply', href: '/ready', flag: 'agent' },
+    { id: 'cn.ready', brand: 'goapply', href: '/ready', flag: 'agent' },
+    { id: 'cn.campus', brand: 'goapply', href: '/campus', flag: 'jobs.campusCalendar' },
+    { id: 'cn.referrals', brand: 'goapply', href: '/referrals', flag: 'cn.referralCodes' },
+    { id: 'extension', brand: 'roboapply', href: '/extension', flag: 'extension', env: ['NEXT_PUBLIC_EXT_ID', 'ext-store-id'] },
+    { id: 'invite', brand: 'roboapply', href: '/invite', flag: 'invites' },
+    { id: 'coaching', brand: 'roboapply', href: '/coaching', flag: 'coaching', needs: { coachRoster: true } },
+    // Parity (D5): the same two entries on GoApply, under the same gates.
+    { id: 'cn.coaching', brand: 'goapply', href: '/coaching', flag: 'coaching', needs: { coachRoster: true } },
+    { id: 'cn.extension', brand: 'goapply', href: '/extension', flag: 'extension', env: ['NEXT_PUBLIC_CN_EXT_ID', 'cn-ext-store-id'] },
+  ];
+
+  it('every destination is ready (INT-12 flipped the last eight) and the Ask surface is on', () => {
+    expect(NAV_ENTRIES.filter((e) => !e.ready).map((e) => e.id)).toEqual([]);
+    expect(SURFACES_READY).toEqual({ assistant: true, jobDetail: true });
+    // cn.invite is flipped too; it shows with the invites programme (previous test).
+    expect(NAV_ENTRIES.find((e) => e.id === 'cn.invite')).toMatchObject({ ready: true, flag: 'invites', gate: 'invitesLive', brands: ['goapply'] });
+    // GoApply has the coaching and extension entries under RoboApply's gates (D5).
+    const twin = (id: string) => {
+      const { id: _id, brands: _brands, match, ...rest } = NAV_ENTRIES.find((e) => e.id === id)!;
+      return { ...rest, lights: ['/coaching', '/coaching/x', '/extension', '/extension/uninstalled', '/jobs'].map((p) => match(p)) };
+    };
+    expect(twin('cn.coaching')).toEqual(twin('coaching'));
+    expect(twin('cn.extension')).toEqual(twin('extension'));
+    expect(NAV_ENTRIES.find((e) => e.id === 'cn.coaching')).toMatchObject({ group: 'lower', flag: 'coaching', gate: 'coachRoster', mobile: 'more', brands: ['goapply'] });
+    expect(NAV_ENTRIES.find((e) => e.id === 'cn.extension')).toMatchObject({ group: 'lower', flag: 'extension', gate: 'extensionPublished', mobile: null, brands: ['goapply'] });
+  });
+
+  it('GoApply 求职辅导 waits for a coach in the roster; the extension entry waits for GoApply’s own store id', () => {
+    const flags = flagsWith({ coaching: true, extension: true });
+    const ids = (over: Partial<NavVisibilityContext>) => buildNav(ctx({ brandId: 'goapply', flags, ...over })).all.map((e) => e.id);
+    expect(ids({})).not.toContain('cn.coaching');
+    expect(ids({ coachRoster: true })).toContain('cn.coaching');
+    expect(ids({ coachRoster: true })).not.toContain('cn.extension');
+    // RoboApply's id does not publish GoApply's extension.
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id');
+    expect(ids({})).not.toContain('cn.extension');
+    vi.stubEnv('NEXT_PUBLIC_CN_EXT_ID', 'cn-ext-store-id');
+    expect(ids({})).toContain('cn.extension');
+    // In the lower group, before Settings.
+    const lower = buildNav(ctx({ brandId: 'goapply', flags, coachRoster: true })).lower.map((e) => e.id);
+    expect(lower).toEqual(['cn.coaching', 'cn.extension', 'cn.settings']);
+  });
+
+  it.each(FLIPPED)('$id ($brand): shown with $flag on, absent with it off, and never on the other brand', ({ id, brand, href, flag, needs, env }) => {
+    const on = flagsWith({ [flag]: true } as never);
+    if (env) {
+      // Without it the flag alone is not enough.
+      expect(buildNav(ctx({ brandId: brand, ...needs, flags: on })).all.map((e) => e.id)).not.toContain(id);
+      vi.stubEnv(env[0], env[1]);
+    }
+    const visible = (over: Partial<NavVisibilityContext>) => buildNav(ctx({ brandId: brand, ...needs, ...over })).all.map((e) => e.id);
+    expect(visible({ flags: on })).toContain(id);
+    expect(visible({ flags: flagsWith() })).not.toContain(id);
+    expect(visible({ flags: null })).not.toContain(id); // fail closed while flags load
+    const other = brand === 'roboapply' ? 'goapply' : 'roboapply';
+    expect(buildNav(ctx({ brandId: other, ...needs, flags: on })).all.map((e) => e.id)).not.toContain(id);
+    expect(NAV_ENTRIES.find((e) => e.id === id)).toMatchObject({ href, flag, ready: true });
+  });
+
+  it('one entry can be taken back out with `ready: false` (the revert), and the dev override shows it again', () => {
+    const flags = flagsWith({ agent: true });
+    const reverted = NAV_ENTRIES.map((e) => (e.id === 'ready' ? { ...e, ready: false } : e));
+    expect(buildNav(ctx({ flags }), reverted).all.map((e) => e.id)).not.toContain('ready');
+    expect(buildNav(ctx({ flags, showAll: true }), reverted).all.map((e) => e.id)).toContain('ready');
+    // Nothing else moved.
+    expect(buildNav(ctx({ flags }), reverted).all.map((e) => e.id)).toEqual(buildNav(ctx({ flags })).all.map((e) => e.id).filter((x) => x !== 'ready'));
+  });
+
+  it('crumbs come from the registry, most specific first; unknown paths get none', () => {
+    expect(crumbKeyFor('/settings/billing/history', 'roboapply')).toBe('billing');
+    expect(crumbKeyFor('/settings', 'roboapply')).toBe('settings');
+    expect(crumbKeyFor('/job-search/developers', 'roboapply')).toBe('jobs');
+    expect(crumbKeyFor('/practice/cm1/report', 'goapply')).toBe('cn_practice');
+    expect(crumbKeyFor('/campus/acme', 'goapply')).toBe('campus');
+    expect(crumbKeyFor('/assistant', 'roboapply')).toBe('assistant');
+    expect(crumbKeyFor('/nowhere', 'roboapply')).toBeNull();
+  });
+
+  it('home is the first visible top entry: Jobs on both brands, whatever the flags', () => {
+    expect(homeHref(buildNav(ctx()))).toBe('/jobs');
+    const cnCalendar = buildNav(ctx({ brandId: 'goapply', showAll: true, flags: flagsWith({ 'jobs.campusCalendar': true }) }));
+    expect(homeHref(cnCalendar)).toBe('/jobs');
+    expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: flagsWith() })))).toBe('/jobs');
+    expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: null })))).toBe('/jobs');
+    // The fallback when a registry has no top entry at all.
+    expect(homeHref({ top: [] })).toBe('/settings');
+  });
+
+  it('palette job hits go to /jobs/[id] now that the detail page shipped (WP-34; Wave 3 gate)', () => {
+    expect(jobHref('cm_1', false)).toBe('/jobs/cm_1');
+    expect(jobHref('cm 1', true)).toBe('/jobs/cm%201');
+  });
+
+  it('badge values: zero and negative are no badge', () => {
+    expect(normalizeBadge({ kind: 'count', count: 0 })).toBeNull();
+    expect(normalizeBadge({ kind: 'count', count: -2 })).toBeNull();
+    expect(normalizeBadge({ kind: 'count', count: 3.7 })).toEqual({ kind: 'count', count: 3 });
+    expect(normalizeBadge({ kind: 'dot' })).toEqual({ kind: 'dot' });
+    expect(normalizeBadge(null)).toBeNull();
+  });
+});
+
+describe('Sidebar per brand', () => {
+  it('RoboApply and GoApply render different rails', () => {
+    const { unmount } = renderWithBrand(<Sidebar />, { brand: 'roboapply', flags: { 'jobs.feed': true } });
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    expect(screen.getByRole('link', { name: 'Interview prep' })).toBeInTheDocument();
+    unmount();
+
+    renderWithBrand(<Sidebar />, { brand: 'goapply', flags: { 'jobs.feed': true } });
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    // GoApply's own label (面试练习 in zh; English until INT translates).
+    expect(screen.getByRole('link', { name: 'Interview practice' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Interview prep' })).not.toBeInTheDocument();
+  });
+
+  it('GoApply always shows 职位, with the job feed capability off too', () => {
+    renderWithBrand(<Sidebar />, { brand: 'goapply', flags: {} });
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+  });
+
+  it('GoApply shows 校招日历, 待投递 and 内推 with their flags on (no dev override)', () => {
+    renderWithBrand(<Sidebar />, { brand: 'goapply', flags: { 'jobs.campusCalendar': true, agent: true, 'cn.referralCodes': true } });
+    expect(railHrefs()).toEqual(['/jobs', '/campus', '/ready', '/applications', '/resume', '/practice', '/profile', '/referrals', '/settings']);
+    expect(screen.getByRole('link', { name: 'Campus calendar' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'To apply' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Referral codes' })).toBeInTheDocument();
+  });
+
+  it('RoboApply shows Get the extension once it is flagged on and published; Coaching waits for a roster', () => {
+    const unpublished = renderWithBrand(<Sidebar />, { flags: { extension: true, coaching: true } });
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    unpublished.unmount();
+
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id');
+    // The roster query has no network here, so Coaching stays hidden (fail closed) and the rest shows.
+    renderWithBrand(<Sidebar />, { flags: { extension: true, coaching: true } });
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/extension', '/settings']);
+    expect(screen.getByRole('link', { name: 'Get the extension' })).toBeInTheDocument();
+  });
+
+  it('shows the flipped entries with no dev override, and still only when flagged on', () => {
+    renderWithBrand(<Sidebar />, { flags: { agent: true, invites: true } });
+    const hrefs = railHrefs();
+    expect(hrefs).toContain('/ready');
+    expect(hrefs).toContain('/profile');
+    expect(hrefs).toContain('/invite');
+    // extension and coaching flags are off → absent.
+    expect(hrefs).not.toContain('/extension');
+    expect(hrefs).not.toContain('/coaching');
+  });
+
+  it('a badge renders the hook value; null renders nothing', () => {
+    badgeValues.jobs = { kind: 'count', count: 7 };
+    badgeValues.ready = null;
+    badgeValues.applications = { kind: 'count', count: 2 };
+    badgeValues.profile = { kind: 'dot' };
+    renderWithBrand(<Sidebar />, { flags: { agent: true } });
+
+    const jobs = screen.getByRole('link', { name: /^Jobs/ });
+    expect(within(jobs).getByText('7')).toHaveClass('count');
+    expect(within(jobs).getByText('7 new jobs that fit since your last visit')).toBeInTheDocument();
+
+    const ready = screen.getByRole('link', { name: /^Ready to apply/ });
+    expect(ready.querySelector('.count')).toBeNull();
+    expect(ready.textContent).toBe('Ready to apply');
+
+    expect(within(screen.getByRole('link', { name: /^Applications/ })).getByText('2 with no reply in 10 days')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /^Profile/ })).getByText('Your profile is missing details')).toBeInTheDocument();
+
+    for (const label of ['Resume', 'Interview prep', 'Settings']) {
+      expect(screen.getByRole('link', { name: label }).querySelector('.count')).toBeNull();
+    }
+  });
+});
+
+describe('MobileNav per brand', () => {
+  it('RoboApply: 5 slots — Jobs · Applications · Resume · Interview prep · More', () => {
+    renderWithBrand(<MobileNav />, { flags: {} });
+    const bar = screen.getByRole('navigation', { name: 'Main navigation' });
+    expect(within(bar).getAllByRole('link').map((l) => l.textContent)).toEqual([
+      'Jobs',
+      'Applications',
+      'Resume',
+      'Interview prep',
+    ]);
+    expect(within(bar).getByRole('button', { name: 'More' })).toBeInTheDocument();
+    expect(bar).toHaveAttribute('data-slots', '5');
+  });
+
+  it('GoApply: 5 slots — 职位 · 校招 · 投递 · 面试 · 我的', () => {
+    renderWithBrand(<MobileNav />, { brand: 'goapply', flags: { 'jobs.feed': true, 'jobs.campusCalendar': true } });
+    const bar = screen.getByRole('navigation', { name: 'Main navigation' });
+    expect(within(bar).getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual([
+      '/jobs',
+      '/campus',
+      '/applications',
+      '/practice',
+    ]);
+    expect(within(bar).getAllByRole('link').map((l) => l.textContent)).toEqual(['Jobs', 'Campus', 'Applied', 'Interview']);
+    expect(within(bar).getByRole('button', { name: 'Me' })).toBeInTheDocument();
+    expect(bar).toHaveAttribute('data-slots', '5');
+  });
+
+  it('More opens a sheet with the brand’s More entries; a link closes it', async () => {
+    renderWithBrand(<MobileNav />, { brand: 'goapply', flags: { agent: true } });
+    fireEvent.click(screen.getByRole('button', { name: 'Me' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Me' });
+    expect(within(sheet).getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual([
+      '/ready',
+      '/resume',
+      '/profile',
+      '/settings',
+    ]);
+    act(() => {
+      fireEvent.click(within(sheet).getByRole('link', { name: 'Resume' }));
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('a slot badge renders the hook value with a sentence; null renders nothing', () => {
+    badgeValues.applications = { kind: 'count', count: 4 };
+    renderWithBrand(<MobileNav />, { flags: {} });
+    const apps = screen.getByRole('link', { name: /Applications/ });
+    expect(within(apps).getByText('4')).toBeInTheDocument();
+    expect(within(apps).getByText('4 with no reply in 10 days')).toHaveClass('sr-only');
+    expect(within(screen.getByRole('link', { name: /^Jobs/ })).queryByText(/\d/)).toBeNull();
+  });
+
+  it('admins never get Admin on the bottom bar', () => {
+    mockAuthState.value = buildAuthValue({ user: buildFakeUser({ role: 'admin' }) });
+    renderWithBrand(<MobileNav />, { flags: {} });
+    expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
+  });
+});

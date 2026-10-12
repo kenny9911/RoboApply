@@ -1,177 +1,133 @@
 'use client';
 
-// /settings — ONE page, seven sections. Not a destination.
+// /settings — ONE page, sections chosen by the URL hash (/settings#billing).
+// Not a destination of its own: Settings sits in the nav's lower group.
 //
-// This replaces four routes: /preferences (eight screens), /plans, /account,
-// and the /account danger tail. OVERHAUL_RULINGS D2: there are exactly four
-// destinations (/jobs, /resume, /applications, /practice) and everything a user
-// only visits when something is wrong lives behind the avatar menu, here.
+// Which sections exist, in what order and per brand, is the registry in
+// components/features/settings/registry.ts (FND-6a; PRODUCT_PLAN.md §3.4).
+// What each section renders (INT-12 / WP-93 wiring):
 //
-// Sections, in order. The open section is the URL hash (/settings#billing),
-// read through hooks/useSettingsSection — the same hook the app Sidebar's
-// Settings group renders from, so the rail, the phone section row and every
-// deep link in the product agree on which section is open. The list itself is
-// SETTINGS_SECTIONS in that hook:
+//   Account               this route: IdentitySection       preferences (draft)
+//                                                           + the account name
+//                         + FinishSetupSettingsLine          frame (SECTION_EXTRAS)
+//   Sign-in and security  this route: SecurityCard           account API
+//                         + TwoFactorSettings                frame (SECTION_EXTRAS)
+//                         + ChangePhoneSection on GoApply    frame (SECTION_EXTRAS)
+//   Notifications         notifications SettingsSection      sectionComponents.ts
+//   Plan and billing      credits SettingsSection            sectionComponents.ts
+//   Credits               credits SettingsSection            sectionComponents.ts
+//   Privacy and data      compliance SettingsSection         sectionComponents.ts
+//   Appearance            brand SettingsSection              sectionComponents.ts
+//   Consents (GoApply)    compliance SettingsSection         sectionComponents.ts
+//   Your search           search SettingsSection (saved searches)
+//                         + this route, around it: SearchIntro above;
+//                           SearchNotes, ResumeSection, BlocklistSection
+//                           below                            preferences (draft)
+//   Assistant, Devices, Connections, Invite friends, Sensitive answers
+//                         their areas' SettingsSection       sectionComponents.ts
+//   Danger zone           this route: DangerSection          destructive modals
 //
-//   Your search      HuntSection + BlocklistSection      preferences + goal
-//   Resume           ResumeSection                       preferences
-//   Notifications    NotifSection                        preferences
-//   Appearance       AppearanceSection                   localStorage (theme)
-//   Plan and billing the /plans billing stack            billing API
-//   Account          IdentitySection + DataSection + SecurityCard
-//   Danger zone      DangerSection                       destructive modals
+// Old deep links keep working: #notif → Notifications, #resume → Your search.
 //
-// Two independent write models live side by side and that is deliberate:
+// THE DRAFT. The preference-backed pieces (Account, and the notes / main
+// resume / blocklist under Your search) share one draft + baseline + SaveBar.
+//   • `dirty` = the draft differs from the last server copy; Save clears it,
+//     Discard restores it.
+//   • Save sends ONLY the keys the user changed, never a search-backed key:
+//     job titles, places, pay and the company filters belong to the saved
+//     searches, which this page edits through their own API.
+//   • The blob is refetched while the page is open (saving a saved search
+//     invalidates it). A refetch never wipes unsaved edits, and a save that
+//     lands after a refetch does not mistake the server's newer values for
+//     edits: see `rebasePreferencesDraft` / `settlePreferencesSave` in
+//     hooks/usePreferences.ts.
+// This page no longer writes `goal`: level and pay are filters now, so there
+// is nothing here that could change it.
 //
-//   • The preference-backed sections share ONE draft + baseline + SaveBar,
-//     inherited unchanged from /preferences. `dirty` is a structural compare of
-//     { draft, seniorityIndex } against the server baseline, so Save clears it
-//     and Discard restores it. On Save we fire preferences.update with the full
-//     draft and goal.upsert with the seniority + salary band.
-//     FIELD SPLIT NOTE (contract): `seniority` + the salary band live on
-//     `goal`. The band (salaryMinK/MaxK) is ALSO kept on the prefs draft for
-//     the UI and mirrored to goal on save (goal stores absolute dollars; prefs
-//     stores k).
-//   • Appearance, billing and security write immediately — a theme, a Stripe
-//     redirect and a password change have nothing to Discard.
+// THE NAME. "Full name" is the sign-in account's display name (PATCH
+// /account), edited in the same form and saved by the same Save bar as the
+// preferences, in its own request. It is never the email address: an account
+// without a name shows an empty field (the page used to put the email there,
+// read-only). A LinkedIn link that is not a linkedin.com/in/ profile link is
+// not saved: the field says so and Save waits for it to be fixed or cleared.
 //
-// Post-checkout return: paid CTAs pass { next:'/settings', cancelNext:'/settings' }
-// so Stripe/Alipay return here; the backend appends ?billing=success|cancel,
-// which we surface as a banner, refetch on, and strip (to /settings#billing,
-// so the section the user paid from stays open).
+// Sections that do not need the preferences never wait for them: the section
+// row always renders, and only the draft-backed pieces show a loading line or,
+// when the blob failed to load, what happened and a retry.
+//
+// Security writes immediately — a password change has nothing to Discard.
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 
+import { SettingsPage, type SettingsRenderers, type SettingsRouteExtras } from '../../../components/features/settings';
 import {
-  SETTINGS_SECTIONS,
-  settingsSectionHref,
-  useSettingsSection,
-} from '../../../hooks/useSettingsSection';
-import { usePreferences, useUpdatePreferences } from '../../../hooks/usePreferences';
-import { useGoal, useGoalMutation } from '../../../hooks/useGoal';
+  changedPreferenceKeys,
+  rebasePreferencesDraft,
+  settlePreferencesSave,
+  usePreferences,
+  useUpdatePreferences,
+  type PreferencesDraftState,
+} from '../../../hooks/usePreferences';
 import { useResumeList } from '../../../hooks/useResumes';
 import { useAuth } from '../../../lib/auth/AuthProvider';
 import { RoboApiError } from '../../../lib/api/client';
 import {
   SaveBar,
-  PrefHeader,
   IdentitySection,
-  HuntSection,
+  SearchIntro,
+  SearchNotes,
   ResumeSection,
-  AppearanceSection,
-  NotifSection,
   BlocklistSection,
-  DataSection,
   DangerSection,
 } from '../../../components/v3/preferences';
-import {
-  Panel,
-  PlanCatalog,
-  CurrencyNote,
-  CurrentPlanCard,
-  CreditsCard,
-  BillingHistoryLink,
-  SecurityCard,
-} from '../../../components/v3/account';
+import { linkedinInvalid } from '../../../components/v3/preferences/sections/IdentitySection';
+import { Panel, SecurityCard } from '../../../components/v3/account';
+import { clearDraftsOnSignOut, forgetPushOnSignOut, leaveSignedOut } from '../../../components/v3/shell/signOutCleanup';
 import { Btn } from '../../../components/v3/primitives/Btn';
-import { IconCheck, IconX } from '../../../components/v3/primitives/Iconset';
-import {
-  useAccountProfile,
-  useBillingPlan,
-  useCancelPlan,
-  useChangePassword,
-  useCheckout,
-  useAlipayCheckout,
-  usePortal,
-  useSignOutAll,
-} from '../../../hooks/useAccount';
-import type {
-  RAPreferences,
-  RAPreferenceOptions,
-  RASeniority,
-  PreferencesUpdateBody,
-} from '../../../lib/api/v2';
+import { toast } from '../../../components/v3/primitives/Toast';
+import { useAccountProfile, useChangePassword, useSignOutAll, useUpdateName } from '../../../hooks/useAccount';
+import type { RAPreferences, PreferencesUpdateBody } from '../../../lib/api/v2';
 
-// Map a numeric seniority index (Intern..Principal, 0..5) ↔ the RASeniority
-// enum used by `goal`. The two vocabularies don't line up 1:1 (RASeniority has
-// no "intern/junior/mid" and adds manager/director/vp/cxo) — this is a
-// best-effort bridge, unchanged from /preferences.
-const INDEX_TO_SENIORITY: RASeniority[] = [
-  'ic', // 0 Intern    → ic
-  'ic', // 1 Junior    → ic
-  'ic', // 2 Mid       → ic
-  'senior', // 3 Senior    → senior
-  'staff', // 4 Staff     → staff
-  'principal', // 5 Principal → principal
-];
-
-function seniorityToIndex(s: RASeniority | null): number {
-  if (!s) return 3; // default Senior
-  const i = INDEX_TO_SENIORITY.indexOf(s);
-  return i >= 0 ? i : 3;
-}
-
-export default function SettingsPage() {
-  // One namespace, one translator. This page used to hold three (`t`, `tp`,
-  // `ta`) because it was three routes — /preferences, /plans and /account —
-  // each with its own namespace. Wave 5 merged them into `settings`, so the
-  // aliases were three names for the same function.
+export default function SettingsRoute() {
   const t = useTranslations('settings');
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const tn = useTranslations('nav.settingsNotes');
+  const ta = useTranslations('accountV2.prefs.identity');
   const auth = useAuth();
+  const { user, profile } = auth;
 
   const prefsQuery = usePreferences();
-  const goalQuery = useGoal();
   const resumesQuery = useResumeList();
-  const { user, profile } = useAuth();
-
   const updatePrefs = useUpdatePreferences();
-  const upsertGoal = useGoalMutation();
-
-  const section = useSettingsSection();
 
   // A section switch is a new screen: start it at the top rather than wherever
   // the previous section's scroll left off. Plain scrollTop writes, because
   // .main is the scrollport on desktop and the document is on phones.
-  useEffect(() => {
+  const onSectionChange = useCallback(() => {
     const main = document.querySelector<HTMLElement>('.main');
     if (main) main.scrollTop = 0;
     document.documentElement.scrollTop = 0;
-  }, [section]);
+  }, []);
 
   // ── Preference draft + its server baseline (dirty compare + discard) ──
-  const [draft, setDraft] = useState<RAPreferences | null>(null);
-  const [baseline, setBaseline] = useState<RAPreferences | null>(null);
-  const [seniorityIndex, setSeniorityIndex] = useState(3);
-  const [baselineSeniority, setBaselineSeniority] = useState(3);
-
+  const [prefs, setPrefs] = useState<PreferencesDraftState<RAPreferences> | null>(null);
   const serverPrefs = prefsQuery.data?.preferences ?? null;
-  const options: RAPreferenceOptions | null = prefsQuery.data?.options ?? null;
-  const goalSeniority = goalQuery.data?.goal?.seniority ?? null;
 
-  // Hydrate the draft once the server prefs arrive (and re-sync after a save,
-  // when serverPrefs.updatedAt changes).
+  // Every server copy (first load, a refetch, our own save landing in the
+  // cache) is folded into the draft; unsaved edits survive it.
   useEffect(() => {
     if (!serverPrefs) return;
-    setDraft(structuredClone(serverPrefs));
-    setBaseline(structuredClone(serverPrefs));
+    setPrefs((cur) => rebasePreferencesDraft(cur, serverPrefs));
   }, [serverPrefs]);
 
-  // Seniority comes from goal; seed it once goal resolves.
-  useEffect(() => {
-    const idx = seniorityToIndex(goalSeniority);
-    setSeniorityIndex(idx);
-    setBaselineSeniority(idx);
-  }, [goalSeniority]);
+  const draft = prefs?.draft ?? null;
+  const baseline = prefs?.baseline ?? null;
 
   // Deep path-set on the draft.
-  const set = (path: string, value: unknown) => {
-    setDraft((cur) => {
+  const set = useCallback((path: string, value: unknown) => {
+    setPrefs((cur) => {
       if (!cur) return cur;
-      const next = structuredClone(cur) as unknown as Record<string, unknown>;
+      const next = structuredClone(cur.draft) as unknown as Record<string, unknown>;
       const keys = path.split('.');
       let obj = next;
       for (let i = 0; i < keys.length - 1; i++) {
@@ -179,101 +135,67 @@ export default function SettingsPage() {
         obj = obj[keys[i]] as Record<string, unknown>;
       }
       obj[keys[keys.length - 1]] = value;
-      return next as unknown as RAPreferences;
+      return { draft: next as unknown as RAPreferences, baseline: cur.baseline };
     });
-  };
+  }, []);
 
-  const dirty = useMemo(() => {
-    if (!draft || !baseline) return false;
-    return (
-      JSON.stringify(draft) !== JSON.stringify(baseline) ||
-      seniorityIndex !== baselineSeniority
-    );
-  }, [draft, baseline, seniorityIndex, baselineSeniority]);
+  const changed = useMemo(
+    () => (draft && baseline ? (changedPreferenceKeys(draft, baseline) as PreferencesUpdateBody) : {}),
+    [draft, baseline],
+  );
+  const prefsDirty = Object.keys(changed).length > 0;
 
-  const saving = updatePrefs.isPending || upsertGoal.isPending;
+  // ── The account name (its own request, the same Save bar) ─────────────
+  const updateName = useUpdateName();
+  // `email` may be the generated address of an account without one (GoApply
+  // phone or WeChat sign-up). It still goes to the sections, which need it to
+  // tell (IdentitySection hides it, the delete modal sends it), but it never
+  // stands in for the name: no name is an empty field, not an address.
+  const email = (profile?.email as string) || user?.email || '';
+  const storedName = ((profile?.name as string) || user?.name || '').trim();
+  const savedName = storedName && storedName.toLowerCase() === email.trim().toLowerCase() ? '' : storedName;
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const name = nameDraft ?? savedName;
+  const nameDirty = nameDraft !== null && nameDraft.trim() !== savedName;
 
-  const discard = () => {
-    if (baseline) setDraft(structuredClone(baseline));
-    setSeniorityIndex(baselineSeniority);
-  };
+  const dirty = prefsDirty || nameDirty;
+  const saving = updatePrefs.isPending || updateName.isPending;
+
+  const discard = useCallback(() => {
+    setPrefs((cur) => (cur ? { draft: structuredClone(cur.baseline), baseline: cur.baseline } : cur));
+    setNameDraft(null);
+  }, []);
 
   const save = async () => {
-    if (!draft || !baseline) return;
-    // Send the whole draft (the API deep-merges; only changed fields matter).
-    await updatePrefs.mutateAsync(draft as unknown as PreferencesUpdateBody);
-
-    // Split write: seniority + salary band → goal. goal.upsert requires a
-    // targetTitle; reuse the existing goal's, falling back to the first role
-    // title so a first save doesn't throw.
-    const currentGoal = goalQuery.data?.goal ?? null;
-    const targetTitle =
-      currentGoal?.targetTitle || draft.roleTitles[0] || 'Untitled role';
+    if (!dirty || saving) return;
+    // A link that is not a LinkedIn profile link is never stored (the field says what to change).
+    if (draft && prefsDirty && 'links' in changed && linkedinInvalid(draft.links.linkedin)) {
+      toast({ message: ta('linkedin_invalid'), tone: 'danger' });
+      return;
+    }
+    if (nameDirty) {
+      try {
+        await updateName.mutateAsync((nameDraft ?? '').trim());
+        setNameDraft(null);
+        // The header and the avatar read the name from /auth/me.
+        await auth.refresh?.().catch(() => null);
+      } catch {
+        // Not saved: the typed name stays in the field and the bar stays up.
+        toast({ message: ta('name_save_failed'), tone: 'danger' });
+        return;
+      }
+    }
+    if (!draft || !prefsDirty) return;
+    const sent = changed;
     try {
-      await upsertGoal.mutateAsync({
-        targetTitle,
-        seniority: INDEX_TO_SENIORITY[seniorityIndex] ?? 'senior',
-        targetSalaryMin: draft.salaryMinK * 1000,
-        targetSalaryMax: draft.salaryMaxK * 1000,
-      });
+      const res = await updatePrefs.mutateAsync(sent);
+      // What we sent is saved; anything typed while the request was in flight
+      // stays unsaved.
+      setPrefs((cur) => settlePreferencesSave<RAPreferences>(cur, sent, res.preferences));
     } catch {
-      // Goal write is best-effort; prefs already persisted.
+      // Nothing was saved: the edits stay in the draft and the bar stays up.
+      toast({ message: tn('save_failed'), tone: 'danger' });
     }
-
-    setBaseline(structuredClone(draft));
-    setBaselineSeniority(seniorityIndex);
-  };
-
-  // ── Billing (loaded lazily — only the billing section reads it) ───────
-  const [regionOverride, setRegionOverride] = useState<'cn' | 'other' | null>(null);
-  const planQ = useBillingPlan(regionOverride);
-  const checkout = useCheckout();
-  const alipay = useAlipayCheckout();
-  const portal = usePortal();
-  const cancelPlan = useCancelPlan();
-  const [checkoutError, setCheckoutError] = useState(false);
-
-  const [billingBanner, setBillingBanner] = useState<'success' | 'cancel' | null>(null);
-  useEffect(() => {
-    const flag = searchParams?.get('billing');
-    if (flag === 'success' || flag === 'cancel') {
-      setBillingBanner(flag);
-      // On a successful return the subscription likely changed — refetch so the
-      // now-current tier flips to a disabled "Current plan".
-      if (flag === 'success') void planQ.refetch();
-      // Strip the param so a refresh doesn't re-show the banner; the hash
-      // keeps the billing section open.
-      router.replace(settingsSectionHref('billing'));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
-
-  const onSelectPaid = (tier: 'starter' | 'growth') => {
-    setCheckoutError(false);
-    const mutation = planQ.data?.region.method === 'alipay' ? alipay : checkout;
-    mutation.mutate(
-      { tier, next: '/settings', cancelNext: '/settings' },
-      {
-        onSuccess: (res) => {
-          window.location.href = res.url;
-        },
-        // The provider was unreachable or rejected the order. Surface it
-        // instead of failing silently.
-        onError: () => setCheckoutError(true),
-      },
-    );
-  };
-
-  const onManageBilling = () => {
-    portal.mutate(undefined, {
-      onSuccess: (res) => {
-        window.location.href = res.url;
-      },
-      onError: (err) => {
-        // 409 no_customer — gracefully do nothing visible beyond logging.
-        if (err instanceof RoboApiError && err.code === 'not_found') return;
-      },
-    });
   };
 
   // ── Account security ─────────────────────────────────────────────────
@@ -310,250 +232,107 @@ export default function SettingsPage() {
     );
   };
 
-  const onSignOutEverywhere = () => {
+  // True from the click until the request fails (on success the page leaves).
+  // It covers the push step, which runs before the mutation is pending, so the
+  // button is disabled and a second click cannot start a second sign-out.
+  const [signingOutEverywhere, setSigningOutEverywhere] = useState(false);
+  const signOutEverywhereInFlight = useRef(false);
+
+  const onSignOutEverywhere = async () => {
+    if (signOutEverywhereInFlight.current) return;
+    signOutEverywhereInFlight.current = true;
+    setSigningOutEverywhere(true);
+    // Forget this device's push subscription first, while the session can
+    // still authorise it. It never throws. If the sign-out then fails, this
+    // device's notifications stay off until the user turns them on again;
+    // nothing else is lost, because the drafts are cleared only on success.
+    await forgetPushOnSignOut();
     signOutAll.mutate(undefined, {
       onSuccess: () => {
+        clearDraftsOnSignOut();
         auth.clear();
-        router.replace('/login');
+        // A hard navigation: it drops the TanStack cache of this account.
+        leaveSignedOut();
+      },
+      onError: () => {
+        signOutEverywhereInFlight.current = false;
+        setSigningOutEverywhere(false);
+        toast({ message: tn('sign_out_failed'), tone: 'danger' });
       },
     });
   };
 
-  // ── Loading / empty guard for the preference-backed sections ─────────
-  if (prefsQuery.isLoading || !draft || !options) {
-    return (
-      <div className="pref">
-        <div className="pref-body">
-          <p className="pref-sub">{t('loading')}</p>
-        </div>
-      </div>
-    );
-  }
+  /**
+   * A draft-backed piece: its content once the preferences are here, a
+   * loading line while they load, and the failure with a retry when they did
+   * not load — never a blank panel.
+   */
+  const withDraft = (render: (p: RAPreferences) => ReactNode) => () => {
+    if (draft) return render(draft);
+    if (prefsQuery.isError) return <LoadError onRetry={() => void prefsQuery.refetch()} />;
+    return <p className="pref-sub">{t('loading')}</p>;
+  };
 
-  const name = (profile?.name as string) || user?.name || user?.email || '';
-  const email = (profile?.email as string) || user?.email || '';
+  const renderers: SettingsRenderers = {
+    account: withDraft((p) => <IdentitySection p={p} set={set} name={name} onNameChange={setNameDraft} email={email} />),
+    security: () =>
+      profileQ.data ? (
+        <SecurityCard
+          hasPassword={profileQ.data.hasPassword}
+          provider={profileQ.data.provider}
+          changing={changePassword.isPending}
+          signingOut={signingOutEverywhere || signOutAll.isPending}
+          passwordError={passwordError}
+          passwordSuccess={passwordSuccess}
+          onChangePassword={onChangePassword}
+          onSignOutEverywhere={() => void onSignOutEverywhere()}
+          resetKey={securityResetKey}
+        />
+      ) : profileQ.isError ? (
+        <LoadError onRetry={() => void profileQ.refetch()} />
+      ) : (
+        <p className="pref-sub">{t('loading')}</p>
+      ),
+    danger: () => <DangerSection accountEmail={email} />,
+  };
+
+  const extras: SettingsRouteExtras = {
+    search: {
+      before: () => <SearchIntro />,
+      after: withDraft((p) => (
+        <>
+          <SearchNotes p={p} set={set} />
+          <ResumeSection p={p} set={set} resumes={resumesQuery.data?.resumes ?? []} />
+          <BlocklistSection p={p} set={set} />
+        </>
+      )),
+    },
+  };
 
   return (
-    <div className="pref">
-      {/* Section row — phones only. On ≥760px the app Sidebar carries this
-       *  same list as a Settings group (one rail, not two); below that width
-       *  the Sidebar is hidden, and v3-preferences.css renders this as a sticky
-       *  horizontal scroller above the body, so every section — plan changes,
-       *  cancellation, account deletion — stays reachable on a phone. Before
-       *  this page existed a phone user could reach none of them.
-       *  Fragment anchors rather than buttons: the section IS the hash. */}
-      <aside className="pref-rail">
-        <div className="pref-rail-head">
-          <div className="pref-rail-title">{t('title')}</div>
-        </div>
-        <nav className="pref-nav" aria-label={t('title')}>
-          {SETTINGS_SECTIONS.map((s) => (
-            <a
-              key={s.id}
-              href={`#${s.id}`}
-              className={`pref-nav-item ${section === s.id ? 'active' : ''} ${
-                s.danger ? 'danger' : ''
-              }`}
-              aria-current={section === s.id ? 'page' : undefined}
-            >
-              {t(`nav.${s.id}`)}
-            </a>
-          ))}
-        </nav>
-      </aside>
+    <SettingsPage
+      renderers={renderers}
+      extras={extras}
+      onSectionChange={onSectionChange}
+      // Save bar — appears on dirty, clears on save/discard. Only the
+      // preference-backed pieces can make it appear.
+      footer={dirty ? <SaveBar saving={saving} onDiscard={discard} onSave={() => void save()} /> : null}
+    />
+  );
+}
 
-      <div className="pref-body">
-        {section === 'search' && (
-          <>
-            <HuntSection
-              p={draft}
-              set={set}
-              options={options}
-              seniorityIndex={seniorityIndex}
-              setSeniorityIndex={setSeniorityIndex}
-            />
-            <BlocklistSection p={draft} set={set} />
-          </>
-        )}
-
-        {section === 'resume' && (
-          <ResumeSection
-            p={draft}
-            set={set}
-            resumes={resumesQuery.data?.resumes ?? []}
-          />
-        )}
-
-        {section === 'notif' && <NotifSection p={draft} set={set} />}
-
-        {section === 'appearance' && <AppearanceSection />}
-
-        {section === 'billing' && (
-          <>
-            <PrefHeader
-              eyebrow={t('nav.billing')}
-              title={t('billing.title')}
-              sub={t('billing.sub')}
-            />
-
-            {billingBanner ? (
-              <div
-                role="status"
-                className="ra-settings-banner"
-                style={{
-                  border: `1px solid ${billingBanner === 'success' ? 'var(--ok)' : 'var(--rule)'}`,
-                  background:
-                    billingBanner === 'success' ? 'var(--ok-subtle)' : 'var(--surface)',
-                  color: billingBanner === 'success' ? 'var(--ok)' : 'var(--text-2)',
-                }}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  {billingBanner === 'success' ? <IconCheck size={16} /> : <IconX size={16} />}
-                  {billingBanner === 'success'
-                    ? t('billing.checkout.success')
-                    : t('billing.checkout.cancel')}
-                </span>
-                <button
-                  type="button"
-                  aria-label={t('billing.checkout.dismiss')}
-                  onClick={() => setBillingBanner(null)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    display: 'grid',
-                  }}
-                >
-                  <IconX size={15} />
-                </button>
-              </div>
-            ) : null}
-
-            {checkoutError ? (
-              <div
-                role="alert"
-                className="ra-settings-banner"
-                style={{
-                  border: '1px solid var(--warn)',
-                  background: 'var(--warn-subtle)',
-                  color: 'var(--warn)',
-                }}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <IconX size={16} />
-                  {t('billing.checkout_failed')}
-                </span>
-                <button
-                  type="button"
-                  aria-label={t('billing.checkout.dismiss')}
-                  onClick={() => setCheckoutError(false)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    display: 'grid',
-                  }}
-                >
-                  <IconX size={15} />
-                </button>
-              </div>
-            ) : null}
-
-            {planQ.isError ? (
-              <Panel>
-                <div role="alert" style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 4 }}>
-                  {t('error.title')}
-                </div>
-                <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>
-                  {t('error.body')}
-                </p>
-                <Btn variant="primary" onClick={() => void planQ.refetch()}>
-                  {t('error.retry')}
-                </Btn>
-              </Panel>
-            ) : planQ.isLoading || !planQ.data ? (
-              <p className="pref-sub">{t('loading')}</p>
-            ) : (
-              <>
-                <CurrentPlanCard
-                  plan={planQ.data}
-                  onManageBilling={onManageBilling}
-                  onCancel={() => cancelPlan.mutate()}
-                  managing={portal.isPending}
-                  canceling={cancelPlan.isPending}
-                />
-                <div style={{ marginTop: 16 }}>
-                  <CreditsCard credits={planQ.data.credits} />
-                </div>
-
-                {/* Which currency is a location rule — mainland China pays
-                 *  RMB by Alipay, everyone else US dollars by card — and the
-                 *  API has already applied it. This names it above the grid
-                 *  whose prices it explains, and offers the other market for
-                 *  when the location guess is wrong. */}
-                <CurrencyNote region={planQ.data.region} onSwitch={setRegionOverride} />
-
-                {!planQ.data.stripeConfigured && !planQ.data.alipayConfigured ? (
-                  <p
-                    role="status"
-                    style={{
-                      margin: '12px 0 0',
-                      fontSize: 'var(--fs-meta)',
-                      color: 'var(--text-muted)',
-                      textAlign: 'center',
-                    }}
-                  >
-                    {t('billing.payments_unavailable')}
-                  </p>
-                ) : null}
-
-                <PlanCatalog
-                  plan={planQ.data}
-                  busy={checkout.isPending || alipay.isPending || cancelPlan.isPending}
-                  mode="in-app"
-                  onSelectPaid={onSelectPaid}
-                  onSelectFree={() => {
-                    /* no-op in-app; downgrade is per-card via onCancel */
-                  }}
-                  onCancel={() => cancelPlan.mutate()}
-                />
-
-                <BillingHistoryLink />
-              </>
-            )}
-          </>
-        )}
-
-        {section === 'account' && (
-          <>
-            <IdentitySection p={draft} set={set} name={name} email={email} />
-            <DataSection p={draft} set={set} />
-            {profileQ.data ? (
-              <SecurityCard
-                hasPassword={profileQ.data.hasPassword}
-                provider={profileQ.data.provider}
-                changing={changePassword.isPending}
-                signingOut={signOutAll.isPending}
-                passwordError={passwordError}
-                passwordSuccess={passwordSuccess}
-                onChangePassword={onChangePassword}
-                onSignOutEverywhere={onSignOutEverywhere}
-                resetKey={securityResetKey}
-              />
-            ) : null}
-          </>
-        )}
-
-        {section === 'danger' && (
-          <DangerSection onReset={discard} accountEmail={email} />
-        )}
+/** A load failure: say what happened and what to do next. */
+function LoadError({ onRetry }: { onRetry: () => void }) {
+  const t = useTranslations('settings');
+  return (
+    <Panel>
+      <div role="alert" style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 4 }}>
+        {t('error.title')}
       </div>
-
-      {/* Save bar — appears on dirty, clears on save/discard. Only the
-       *  preference-backed sections can make it appear. */}
-      {dirty && <SaveBar saving={saving} onDiscard={discard} onSave={save} />}
-    </div>
+      <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>{t('error.body')}</p>
+      <Btn variant="primary" onClick={onRetry}>
+        {t('error.retry')}
+      </Btn>
+    </Panel>
   );
 }

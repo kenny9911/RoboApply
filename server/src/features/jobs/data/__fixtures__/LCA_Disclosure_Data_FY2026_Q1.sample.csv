@@ -1,0 +1,35 @@
+CASE_NUMBER,CASE_STATUS,RECEIVED_DATE,DECISION_DATE,VISA_CLASS,JOB_TITLE,SOC_CODE,SOC_TITLE,FULL_TIME_POSITION,TOTAL_WORKER_POSITIONS,EMPLOYER_NAME,WAGE_RATE_OF_PAY_FROM,WAGE_RATE_OF_PAY_TO,WAGE_UNIT_OF_PAY
+I-200-25000001,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",120000.00,,Year
+I-200-25000002,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",121000.00,,Year
+I-200-25000003,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",122000.00,,Year
+I-200-25000004,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",123000.00,,Year
+I-200-25000005,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",124000.00,,Year
+I-200-25000006,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",125000.00,,Year
+I-200-25000007,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",126000.00,,Year
+I-200-25000008,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",127000.00,,Year
+I-200-25000009,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",128000.00,,Year
+I-200-25000010,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",129000.00,,Year
+I-200-25000011,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",130000.00,,Year
+I-200-25000012,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",131000.00,,Year
+I-200-25000013,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",132000.00,,Year
+I-200-25000014,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",133000.00,,Year
+I-200-25000015,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",134000.00,,Year
+I-200-25000016,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",135000.00,,Year
+I-200-25000017,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",136000.00,,Year
+I-200-25000018,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",137000.00,,Year
+I-200-25000019,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",138000.00,,Year
+I-200-25000020,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",139000.00,,Year
+I-200-25000021,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",140000.00,,Year
+I-200-25000022,Certified,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",141000.00,,Year
+I-200-25000023,Certified,12/01/2025,12/15/2025,H-1B,Data Analyst,15-1252.00,Software Developers,Y,1,EXAMPLE ANALYTICS INC,50.00,,Hour
+I-200-25000024,Certified,12/01/2025,12/15/2025,H-1B,Data Analyst,15-1252.00,Software Developers,Y,1,EXAMPLE ANALYTICS INC,51.00,,Hour
+I-200-25000025,Certified,12/01/2025,12/15/2025,H-1B,Data Analyst,15-1252.00,Software Developers,Y,1,EXAMPLE ANALYTICS INC,52.00,,Hour
+I-200-25000026,Certified - Withdrawn,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",130000.00,,Year
+I-200-25000027,Withdrawn,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",130000.00,,Year
+I-200-25000028,Denied,12/01/2025,12/15/2025,H-1B,Software Engineer,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",130000.00,,Year
+I-200-25000029,Certified,12/01/2025,12/15/2025,E-3 Australian,Accountant,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",90000.00,,Year
+I-200-25000030,Certified,12/01/2025,12/15/2025,H-1B1 Singapore,Analyst,15-1252.00,Software Developers,Y,1,"Example Analytics, Inc.",95000.00,,Year
+I-200-25000031,Certified,12/01/2025,12/15/2025,H-1B,Research Scientist,15-1252.00,Software Developers,Y,1,Sample Robotics LLC,"$150,000.00",,Year
+I-200-25000032,Certified,12/01/2025,12/15/2025,H-1B,Research Scientist,15-1252.00,Software Developers,Y,1,Sample Robotics LLC,"12,000.00",,Month
+I-200-25000033,Certified,12/01/2025,12/15/2025,H-1B,Engineer,15-1252.00,Software Developers,Y,1,,100000.00,,Year
+I-200-25000034,Certified,12/01/2025,12/15/2025,H-1B,Mechanic,15-1252.00,Software Developers,Y,1,Sample Robotics LLC,1000.00,,Piece

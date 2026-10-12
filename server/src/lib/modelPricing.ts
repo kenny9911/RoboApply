@@ -141,6 +141,43 @@ export function calculateAudioModelCost(model: string, minutes: number): number 
   return rate * Math.max(0, minutes);
 }
 
+// ─── Embedding models ─────────────────────────────────────────────────────────
+//
+// Embedding models are billed per input token only and are not chat models, so
+// they are priced here and not in MODEL_COST_TABLE (whose rows feed the chat
+// rate card). Keyed by the lower-cased bare model id; USD per 1M input tokens.
+//
+// A row is added ONLY with a price read on the vendor's own pricing page, with
+// the URL and the date next to it. A model without a row has an UNKNOWN cost:
+// `calculateEmbeddingCost` answers null and the usage row says so. It never
+// falls back to the default tier (no assumed price).
+export const EMBEDDING_MODEL_PRICING_PER_1M: Readonly<Record<string, number>> = {
+  // OpenAI, standard tier: "Embedding | text-embedding-3-small | $0.02" per 1M input tokens.
+  // Read 2026-10-11 at https://developers.openai.com/api/docs/pricing (where
+  // https://platform.openai.com/docs/pricing redirects). It is the price of OpenAI's own endpoint.
+  'text-embedding-3-small': 0.02,
+};
+
+/** `openai/text-embedding-3-small@1024` → `text-embedding-3-small`. */
+function embeddingModelKey(model: string): string {
+  const cleaned = cleanModelId(model).toLowerCase().replace(/@\d+$/, '');
+  const slash = cleaned.lastIndexOf('/');
+  return slash >= 0 ? cleaned.slice(slash + 1) : cleaned;
+}
+
+/** USD per 1M input tokens for an embedding model (a model id or a `<model>@<dimensions>` tag); null when no price is on file. */
+export function lookupEmbeddingRate(model: string): number | null {
+  const key = embeddingModelKey(model);
+  return Object.prototype.hasOwnProperty.call(EMBEDDING_MODEL_PRICING_PER_1M, key) ? EMBEDDING_MODEL_PRICING_PER_1M[key]! : null;
+}
+
+/** The cost of `tokens` input tokens in USD, or null when the model has no price on file (the cost is then unknown). */
+export function calculateEmbeddingCost(model: string, tokens: number): number | null {
+  const rate = lookupEmbeddingRate(model);
+  if (rate === null || !Number.isFinite(tokens) || tokens < 0) return null;
+  return (tokens / 1_000_000) * rate;
+}
+
 // Tavily web-search pricing. Tavily bills per "API credit": a basic search
 // costs 1 credit, an advanced search 2 credits. The per-credit USD rate is
 // plan-dependent (pay-as-you-go ≈ $0.008/credit); override at runtime with

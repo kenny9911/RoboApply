@@ -19,38 +19,67 @@
 //                      → 'completed'; zero candidate turns → 'failed'/no_answer,
 //                      never charged)
 //
+// Per brand and plane (WP-63a; D5, GOAPPLY_PARITY_PLAN §3.5): every media-plane
+// call goes through the session's VoiceSessionProvider (../providers/), fixed
+// at create from the request's brand and stored on the row
+// (`InterviewSession.brand` / `voiceProvider`, SCHEMA-4; the LiveKit plane in
+// `liveMetrics.voiceSeam.stack`). Readers go through `resolveSessionSeam(row)`:
+// the columns, else `liveMetrics.voiceSeam`, else the owner's `User.brand` — a
+// null column is never read as RoboApply. Session work that can arrive from
+// anywhere (webhooks, callbacks, crons) runs inside the session's brand and on
+// its plane (`inSeam`), so storage, LLM routing and content safety resolve for
+// that brand. GoApply runs on the shared LiveKit project, worker, speech set
+// and bucket by default, and on its own (CN_LIVEKIT_*, 'GoApply-Interview',
+// DashScope speech, CN_S3_*) where those optional overrides are set; a session
+// stays on the plane it was created on.
+//
 // Ownership: every read/mutation is scoped to the owning user (the human user
 // OR the API-key owner for external sessions); cross-tenant access 404s.
 
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { InterviewSession } from '../../generated/prisma/client.js';
 import prisma from '../../lib/prisma.js';
 import { logger, generateRequestId } from '../../services/LoggerService.js';
 import {
-  isLiveKitConfigured,
-  getInterviewAgentName,
+  getAgentCallbackSecrets,
   getAgentCallbackSecret,
   getCallbackBaseUrl,
+  getInterviewMediaPolicy,
   getSessionExpiryMinutes,
   getInterviewLlmRouting,
+  getLiveKitCreds,
   getWorkerLlmModel,
   getBlueprintModel,
   getPrepareTimeoutMs,
+  isLiveKitConfigured,
   isRecordingEnabled,
+  warnVoiceConfigProblemsOnce,
   InterviewEngineConfigError,
   type InterviewLlmRouting,
 } from '../config.js';
 import {
-  createInterviewRoom,
-  dispatchAgent,
-  mintJoinToken,
-  deleteInterviewRoom,
-  sendInterviewEndSignal,
-} from '../livekit/liveKitClient.js';
-import { startRoomRecording, stopRecording } from '../livekit/egress.js';
+  assertBrandSpeech,
+  inSeam,
+  isDefaultSeam,
+  resolveBrandSessionStt,
+  resolveBrandSessionVoice,
+  resolveBrandStt,
+  resolveBrandVoice,
+  resolveSessionSeam,
+  voiceProviderFor,
+  voiceSeamColumns,
+  voiceSeamForBrand,
+  voiceSeamMetrics,
+  type VoiceSeam,
+  type VoiceSessionProvider,
+} from '../providers/index.js';
+import { getBrand, type BrandId } from '../../platform/brand/registry.js';
+import { cnLlmDomesticOnly } from '../../platform/brand/brandEnv.js';
+import type { WebhookSigner } from '../livekit/webhookReceiver.js';
 import { interviewR2Storage } from '../storage/r2Storage.js';
-import { resolveVoice, resolveSessionVoice, resolveStt, normalizeLocale } from '../voice/voiceCatalog.js';
-import { findPersona, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
+import { normalizeLocale } from '../voice/voiceCatalog.js';
+import { findPersona, findSessionType, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
+import { CN_AI_INTERVIEW_FORMAT_ID, clampCnMinutes, usesCnFormat, type CnPracticeReport } from '../../features/cn/interview/index.js';
 import { normalizeCharacteristics } from '../prompt/characteristics.js';
 import { interviewPromptService } from '../prompt/interviewPromptService.js';
 import { classifyPrepareError, describePrepareError, type PrepareFailureCode } from '../prompt/llmFailure.js';
@@ -70,6 +99,7 @@ import {
 } from '../billing/sessionCost.js';
 import { getTaskModel } from '../../lib/llm/llmTaskSettings.js';
 import { gateMockInterview } from '../../lib/mockCreditService.js';
+import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import type {
   InterviewMode,
   InterviewSource,
@@ -233,6 +263,22 @@ export interface CreateSessionInput {
   /** 'parley' runs this session on the Parley pilot transport (see
    *  parley/parleyConfig.ts); omitted = LiveKit. Fixed for the session's life. */
   transport?: 'parley';
+  /**
+   * WP-43: practise for one of our jobs. The job is loaded server-side and
+   * must belong to `market` (a job from the other market, or someone else's
+   * private import, answers 404 — PracticeJobNotFoundError). Its title and
+   * posting fill `role` / `jdText` when the caller left them empty.
+   */
+  jobId?: string | null;
+  /** The requesting brand's market; defaults to the current brand context. */
+  market?: PracticeMarket;
+  /**
+   * WP-43 / H8: what the user asked to record for THIS session. Recording is
+   * off unless asked AND backed by a live `interview_recording` consent
+   * (`interview_video` as well for the camera). External API sessions take
+   * the tenant's flag as their attestation. Omitted = no recording.
+   */
+  recording?: { audio?: boolean; video?: boolean };
 }
 
 export interface PrepareSessionParams {
@@ -258,6 +304,13 @@ export interface ConnectionDetails {
   expiresAt: string;
   agentDispatched: boolean;
   recording: boolean;
+  /**
+   * False when the media policy keeps the camera as a local preview only
+   * (GoApply with CN_INTERVIEW_CAMERA_PUBLISH=false): the token cannot publish
+   * a camera track, and the live room shows the camera to the candidate alone.
+   * Absent on Parley.
+   */
+  cameraPublish?: boolean;
   /** Present only for Parley sessions: url/token are then empty and the
    *  browser joins Parley with `parley` instead of a LiveKit room. */
   transport?: 'parley';
@@ -294,22 +347,42 @@ export class InterviewSessionService {
   // ─── Create ─────────────────────────────────────────────────────────────
 
   async createSession(input: CreateSessionInput): Promise<InterviewSession> {
-    const jdText = (input.jdText ?? '').trim().slice(0, 8000) || undefined;
+    const source: InterviewSource = input.source ?? 'roboapply';
+    // WP-43: a job-based practice loads the job first, so a job from another
+    // market (or another user's private import) is a 404 before any credit
+    // check or write.
+    const jobId = typeof input.jobId === 'string' ? input.jobId.trim() : '';
+    const job = jobId ? await loadPracticeJobOrThrow(input.userId, jobId, input.market) : null;
+
+    const jdText = ((input.jdText ?? '').trim() || job?.jdText || '').slice(0, 8000) || undefined;
     // When the candidate pasted a JD without picking a role, seed the role from
     // the JD so the session/report/recents never show an empty title.
-    const role = (input.role ?? '').trim() || (jdText ? inferRoleFromJd(jdText) : '');
+    const role = (input.role ?? '').trim() || job?.title || (jdText ? inferRoleFromJd(jdText) : '');
     const persona = (input.personaId && findPersona(input.personaId)) || DEFAULT_PERSONA;
-    const type = (input.interviewType && findType(input.interviewType)) || DEFAULT_TYPE;
+    // A market's own formats (GoApply's AI-interview practice) are offered to
+    // the first-party flow only; recruiter and external API sessions keep the
+    // international list.
+    const typeMarket: PracticeMarket = source === 'roboapply' ? (input.market ?? practiceDeps.currentMarket()) : 'intl';
+    let type = (input.interviewType && findType(input.interviewType, typeMarket)) || DEFAULT_TYPE;
     const mode: InterviewMode = input.mode === 'video' ? 'video' : 'voice';
     const language = normalizeLocale(input.language);
-    const durationMinutes = clampDuration(input.durationMinutes) ?? type.minutes;
+    let durationMinutes = clampDuration(input.durationMinutes) ?? type.minutes;
+    // WP-66: on GoApply a general practice (screening / behavioral / culture)
+    // of 20–30 minutes runs the AI-interview format, and so does the format
+    // picked by name. The row says so (`interviewType`), which is what the
+    // blueprint directive, the grading lens and the report's `cn` block read.
+    // A general practice of another length keeps its own type and length.
+    if (source === 'roboapply' && usesCnFormat({ market: typeMarket, typeId: type.id, minutes: durationMinutes })) {
+      type = findSessionType(CN_AI_INTERVIEW_FORMAT_ID) ?? type;
+      // The format is 20–30 minutes; the credit gate below sees the same length.
+      if (type.id === CN_AI_INTERVIEW_FORMAT_ID) durationMinutes = clampCnMinutes(durationMinutes);
+    }
 
     // CREDIT GATE (RoboApply candidate flow only). Recruiter + external-API
     // sources bill separately and are exempt; admins are exempt explicitly.
     // Runs BEFORE anything is persisted so a credit-less user never gets a
     // session (or blueprint spend). Throws InterviewInsufficientCreditsError →
     // 402 with an upsell payload.
-    const source: InterviewSource = input.source ?? 'roboapply';
     if (source === 'roboapply' && !input.creditExempt) {
       const afford = await gateMockInterview(input.userId, durationMinutes);
       if (!afford.ok) {
@@ -324,22 +397,67 @@ export class InterviewSessionService {
       }
     }
 
+    // WP-63a: the session runs on one media plane for its whole life: the
+    // shared LiveKit project, or GoApply's own when CN_LIVEKIT_URL is set (the
+    // seam records which). Resolving the provider here also refuses a reserved
+    // one (volcano / trtc → 503) before anything is persisted.
+    const brand = getCurrentBrandOrDefault();
+    const seam = voiceSeamForBrand(brand.id);
+    // A half-set GoApply voice or speech group is never silent (PAR-1 P4-2).
+    warnVoiceConfigProblemsOnce(brand);
+    // The Parley pilot runs for every brand the caller chose it for (D5). Only
+    // under the operator's opt-in domestic-only wall does a GoApply session
+    // stay off it: Parley runs its own models, which the wall cannot vouch
+    // for, so the session takes the LiveKit path, where the wall is checked.
+    const transport = brand.market === 'cn' && cnLlmDomesticOnly() ? undefined : input.transport;
+    if (transport !== 'parley') voiceProviderFor(seam);
+
     // A session created here is destined for the LiveKit worker. Validate the
     // interview model selectors before persisting a session that can never
     // connect (InterviewEngineConfigError → 503).
-    getInterviewLlmRouting();
+    getInterviewLlmRouting(brand);
 
     const characteristics = normalizeCharacteristics(input.characteristics, persona.difficulty);
     const candidateName = (input.candidateName ?? '').trim() || undefined;
     const resumeContext = (input.resumeContext ?? '').trim() || undefined;
 
-    const voice = resolveVoice(language, persona.voiceGender);
+    // The shared voice catalog and STT on both brands; GoApply's DashScope
+    // speech when its CN pair is set (a foreign model in that pair → 503
+    // before anything is persisted).
+    const voice = resolveBrandVoice(brand.id, language, persona.voiceGender);
+    if (transport !== 'parley') resolveBrandStt(brand.id, language);
     const roomName = `ie-${randomUUID()}`;
     const expiresAt = new Date(Date.now() + getSessionExpiryMinutes() * 60_000);
     const control: SessionControl = {
       ...(input.callbackBaseUrl ? { callbackBaseUrl: input.callbackBaseUrl } : {}),
       ...(input.creditExempt ? { creditExempt: true } : {}),
-      ...(input.transport === 'parley' ? { transport: 'parley' as const } : {}),
+      ...(transport === 'parley' ? { transport: 'parley' as const } : {}),
+    };
+    // H8: decide recording now, from the consent ledger — never from the env
+    // default alone. getConnection starts egress only when this says so.
+    const recording = await resolvePracticeRecording({
+      userId: input.userId,
+      source,
+      mode,
+      requested: input.recording,
+      // One policy on both brands; false only under GoApply's operator
+      // opt-out (CN_INTERVIEW_CAMERA_PUBLISH=false): audio only, whatever was asked.
+      allowVideo: getInterviewMediaPolicy(brand).recordVideo,
+    });
+    const practice: PracticeMeta | null =
+      job || recording.audio
+        ? {
+            v: 1,
+            jobId: job?.id ?? null,
+            jobTitle: job?.title ?? null,
+            companyName: job?.companyName ?? null,
+            recording,
+          }
+        : null;
+    const liveMetrics: Record<string, unknown> = {
+      ...(Object.keys(control).length > 0 ? { control } : {}),
+      ...(practice ? { practice } : {}),
+      ...voiceSeamMetrics(seam),
     };
 
     // C1: persist immediately as 'preparing'. Blueprint + prompt generation
@@ -364,8 +482,16 @@ export class InterviewSessionService {
         roomName,
         status: 'preparing',
         expiresAt,
-        ...(Object.keys(control).length > 0
-          ? { liveMetrics: { control } as unknown as object }
+        // WP-43-S1 columns (SCHEMA-3), written alongside liveMetrics.practice
+        // during the transition; readers take the column first.
+        jobId: job?.id ?? null,
+        // WP-63a-S1 columns (SCHEMA-4): every new row says which brand and
+        // provider it runs on. liveMetrics.voiceSeam stays for non-default
+        // seams during the transition (see providers/sessionSeam.ts).
+        ...voiceSeamColumns(seam),
+        ...(source === 'roboapply' ? { recordingConsent: { audio: recording.audio, video: recording.video } } : {}),
+        ...(Object.keys(liveMetrics).length > 0
+          ? { liveMetrics: liveMetrics as unknown as object }
           : {}),
       },
     });
@@ -382,7 +508,10 @@ export class InterviewSessionService {
       creditExempt: input.creditExempt === true ? true : undefined,
       callbackOrigin: input.callbackBaseUrl ?? undefined,
       apiKeyId: input.apiKeyId ?? undefined,
-      transport: input.transport,
+      transport,
+      jobId: job?.id,
+      recording: recording.audio ? (recording.video ? 'audio+video' : 'audio') : 'off',
+      ...(isDefaultSeam(seam) ? {} : { brand: seam.brand, voiceProvider: seam.provider, voiceStack: seam.stack }),
       requestId: input.requestId,
     });
     return created;
@@ -430,20 +559,26 @@ export class InterviewSessionService {
 
     const inflight = this.inflightPrepares.get(session.id);
     if (inflight) return inflight;
-    const run = this.runPrepare(session, params).finally(() => {
+    const prepared = session;
+    const seam = await resolveSessionSeam(prepared);
+    // Another call may have started the same prepare while the brand was read.
+    const raced = this.inflightPrepares.get(session.id);
+    if (raced) return raced;
+    const run = inSeam(seam, () => this.runPrepare(prepared, params, seam.brand)).finally(() => {
       this.inflightPrepares.delete(session.id);
     });
     this.inflightPrepares.set(session.id, run);
     return run;
   }
 
-  private async runPrepare(session: InterviewSession, params: PrepareSessionParams): Promise<InterviewSession> {
+  private async runPrepare(session: InterviewSession, params: PrepareSessionParams, brand: BrandId): Promise<InterviewSession> {
     const startedAt = Date.now();
     try {
       const persona = (session.personaId && findPersona(session.personaId)) || DEFAULT_PERSONA;
-      const type = findType(session.interviewType) || DEFAULT_TYPE;
+      // A stored row may be in a market format (GoApply: cn_ai_interview).
+      const type = findSessionType(session.interviewType) || DEFAULT_TYPE;
       const characteristics = normalizeCharacteristics(session.characteristics, persona.difficulty);
-      const routing = getInterviewLlmRouting();
+      const routing = getInterviewLlmRouting(brand);
 
       const gen = await interviewPromptService.generate({
         role: session.role,
@@ -466,7 +601,7 @@ export class InterviewSessionService {
         strictLlm: params.strictLlm !== false,
       });
 
-      const voice = resolveVoice(session.language, persona.voiceGender);
+      const voice = resolveBrandVoice(brand, session.language, persona.voiceGender);
       // Conditional on 'preparing': a concurrent run elsewhere, a delete or an
       // end-by-owner must win over this (late) result.
       const persisted = await prisma.interviewSession.updateMany({
@@ -516,7 +651,7 @@ export class InterviewSessionService {
       // is the only LLM call on the prepare request. Best-effort.
       if (params.requestId) {
         const snap = logger.getRequestSnapshot(params.requestId);
-        void recordBlueprintCost(session.id, tokenCostFromSnapshot(snap, getBlueprintModel()));
+        void recordBlueprintCost(session.id, tokenCostFromSnapshot(snap, getBlueprintModel(brand)));
       }
       return current;
     } catch (err) {
@@ -556,6 +691,11 @@ export class InterviewSessionService {
     requestId?: string;
   }): Promise<ConnectionDetails> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+    const seam = await resolveSessionSeam(session);
+    return inSeam(seam, () => this.connectLoaded(session, params, seam));
+  }
+
+  private async connectLoaded(session: InterviewSession, params: { requestId?: string }, seam: VoiceSeam): Promise<ConnectionDetails> {
 
     // C4: a session that is still preparing, failed or already over can never
     // go (back) live — answer with a typed 409 the client can act on.
@@ -566,14 +706,16 @@ export class InterviewSessionService {
     }
 
     const mode = session.mode as InterviewMode;
-    const voice = resolveSessionVoice(
+    const voice = resolveBrandSessionVoice(
+      seam.brand,
       session.voice as unknown as ResolvedVoice | null,
       session.language,
       session.personaId ? findPersona(session.personaId)?.voiceGender : undefined,
     );
     // Parley pilot: no room, dispatch or worker — the browser joins Parley.
     if (isParleySession(session)) return getParleyConnection(session, voice);
-    if (!isLiveKitConfigured()) {
+    const provider = voiceProviderFor(seam);
+    if (!provider.isConfigured()) {
       throw new InterviewEngineConfigError('LiveKit is not configured; cannot start a live interview.');
     }
     const identity = `candidate-${session.id}`;
@@ -583,8 +725,8 @@ export class InterviewSessionService {
     let resolvedMetadata: InterviewRoomMetadata | undefined;
     let resolvedMetadataStr: string | undefined;
     const resolveRoomConfig = () => {
-      const routing = resolvedRouting ?? getInterviewLlmRouting();
-      const metadata = resolvedMetadata ?? this.buildRoomMetadata(session, voice, routing);
+      const routing = resolvedRouting ?? getInterviewLlmRouting(seam.brand);
+      const metadata = resolvedMetadata ?? this.buildRoomMetadata(session, voice, routing, seam.brand);
       const metadataStr = resolvedMetadataStr ?? JSON.stringify(metadata);
       resolvedRouting = routing;
       resolvedMetadata = metadata;
@@ -650,17 +792,16 @@ export class InterviewSessionService {
       // unavailable LiveKit must NEVER hang the connect request — wrap each in a
       // timeout. The candidate's join token is what actually matters.
       const { sid } = await withTimeout(
-        createInterviewRoom({ roomName: session.roomName, metadata: metadataStr }),
+        provider.createRoom({ roomName: session.roomName, metadata: metadataStr }),
         8000,
         { sid: null as string | null },
       );
 
-      const agentName = getInterviewAgentName();
       // Race the dispatch for the response (a slow LiveKit must not hang the
       // connect), but do NOT discard a slow-but-successful dispatch id: persist
       // it whenever it lands so the reconnect path can tell "dispatched late"
       // apart from "never dispatched" (and won't double-dispatch).
-      const dispatchPromise = dispatchAgent({ roomName: session.roomName, agentName, metadata: metadataStr });
+      const dispatchPromise = provider.dispatchAgent({ roomName: session.roomName, metadata: metadataStr });
       dispatchPromise
         .then((id) => (id ? this.persistDispatchIdIfUnset(session.id, id) : undefined))
         .catch((err) => {
@@ -678,13 +819,19 @@ export class InterviewSessionService {
       // failed egress start never writes. startRecordingInBackground persists
       // key + mime only once egress actually starts; the egress_ended webhook
       // (handleEgressEnded) stays the completion source of truth.
-      if (isRecordingEnabled() && interviewR2Storage.isConfigured()) {
+      //
+      // H8 (WP-43): the env switch and storage are necessary, never
+      // sufficient. Egress starts only for a session whose create-time
+      // consent check said so; video frames only with the second opt-in.
+      const consented = readPracticeRecording(session);
+      if (consented.audio && isRecordingEnabled(seam.brand) && interviewR2Storage.canStore()) {
         recording = true;
         void this.startRecordingInBackground(
+          provider,
           session.id,
           session.roomName,
           interviewR2Storage.recordingKey(session.id, 'mp4'),
-          mode,
+          consented.video && mode === 'video' && provider.media.recordVideo ? 'video' : 'voice',
         );
       }
 
@@ -716,9 +863,8 @@ export class InterviewSessionService {
       // both dispatch converge on one recorded id.
       if (fresh && fresh.status === 'live' && !fresh.agentDispatchId) {
         const { metadataStr } = resolveRoomConfig();
-        const redispatchPromise = dispatchAgent({
+        const redispatchPromise = provider.dispatchAgent({
           roomName: session.roomName,
-          agentName: getInterviewAgentName(),
           metadata: metadataStr,
         });
         redispatchPromise
@@ -740,7 +886,7 @@ export class InterviewSessionService {
 
     // Mint (or re-mint) the join token.
     const joinMeta = JSON.stringify({ role: 'candidate', sessionId: session.id, name: session.candidateName ?? undefined });
-    const tok = await mintJoinToken({
+    const tok = await provider.mintClientToken({
       roomName: session.roomName,
       identity,
       name: session.candidateName ?? 'Candidate',
@@ -765,6 +911,7 @@ export class InterviewSessionService {
       expiresAt: tok.expiresAt.toISOString(),
       agentDispatched,
       recording,
+      cameraPublish: mode === 'video' && provider.media.cameraPublish,
     };
   }
 
@@ -791,9 +938,15 @@ export class InterviewSessionService {
   /** Start Egress recording out-of-band. recordingKey/mime are persisted HERE,
    *  only once egress has actually started — a failed start leaves them unset
    *  so the session never advertises a recording that was never written. */
-  private async startRecordingInBackground(sessionId: string, roomName: string, filepath: string, mode: InterviewMode): Promise<void> {
+  private async startRecordingInBackground(
+    provider: VoiceSessionProvider,
+    sessionId: string,
+    roomName: string,
+    filepath: string,
+    mode: InterviewMode,
+  ): Promise<void> {
     try {
-      const rec = await startRoomRecording({ roomName, filepath, audioOnly: mode === 'voice' });
+      const rec = await provider.startRecording({ roomName, filepath, audioOnly: mode === 'voice' });
       if (rec) {
         await prisma.interviewSession.update({
           where: { id: sessionId },
@@ -815,8 +968,11 @@ export class InterviewSessionService {
     session: InterviewSession,
     voice: ResolvedVoice,
     llmRouting: InterviewLlmRouting,
+    brand: BrandId,
   ): InterviewRoomMetadata {
-    const stt = resolveStt(session.language);
+    // STT from the same speech set as the session's voice (never a mix).
+    const stt = resolveBrandSessionStt(brand, voice, session.language);
+    assertBrandSpeech(brand, voice, stt);
     const blueprint = (session.blueprint ?? {}) as Record<string, unknown>;
     const openingInstruction = typeof blueprint.openingInstruction === 'string' ? blueprint.openingInstruction : `Greet the candidate and begin the ${session.interviewType} interview.`;
     const openingLine = typeof blueprint.openingLine === 'string' ? blueprint.openingLine : '';
@@ -851,7 +1007,10 @@ export class InterviewSessionService {
       },
       // C13: the origin captured from the create request (production, when
       // INTERVIEW_ENGINE_CALLBACK_BASE_URL is unset); env still wins.
-      callbackBaseUrl: getCallbackBaseUrl(readSessionControl(session.liveMetrics).callbackBaseUrl),
+      callbackBaseUrl: getCallbackBaseUrl(
+        readSessionControl(session.liveMetrics).callbackBaseUrl,
+        brand,
+      ),
     };
   }
 
@@ -862,7 +1021,7 @@ export class InterviewSessionService {
     secret: string | undefined;
     turns: TranscriptTurn[];
   }): Promise<{ ok: true; total: number }> {
-    this.assertCallbackSecret(params.secret);
+    await this.assertCallbackSecret(params.sessionId, params.secret);
     // C11: the worker retries failed batches, so a turn can arrive twice —
     // dedupe on (role, ts) within the batch here and against the stored
     // transcript in the statement below.
@@ -940,7 +1099,7 @@ export class InterviewSessionService {
     reason?: string;
     message?: string;
   }): Promise<void> {
-    this.assertCallbackSecret(params.secret);
+    await this.assertCallbackSecret(params.sessionId, params.secret);
     if (params.event === 'started') {
       logger.info('INTERVIEW_ENGINE_SESSION', 'worker started', {
         sessionId: params.sessionId, joinMs: params.joinMs, greeting: params.greeting,
@@ -1025,6 +1184,7 @@ export class InterviewSessionService {
       where: { id: sessionId },
       select: {
         status: true, error: true, transcript: true, liveMetrics: true, roomName: true, egressId: true, endedAt: true,
+        userId: true, brand: true, voiceProvider: true,
       },
     });
     if (!row) return;
@@ -1050,8 +1210,11 @@ export class InterviewSessionService {
         logger.error('INTERVIEW_ENGINE_SESSION', 'session failed by worker error before any answer (not charged)', {
           sessionId, reason: code, fromStatus: row.status,
         });
-        if (row.egressId) void stopRecording(row.egressId).catch(() => { /* best-effort */ });
-        void deleteInterviewRoom(row.roomName).catch(() => { /* best-effort */ });
+        const provider = safeProvider(await resolveSessionSeam(row));
+        if (provider) {
+          if (row.egressId) void provider.stopRecording(row.egressId).catch(() => { /* best-effort */ });
+          void provider.deleteRoom(row.roomName).catch(() => { /* best-effort */ });
+        }
         return;
       }
     }
@@ -1079,7 +1242,7 @@ export class InterviewSessionService {
     secret: string | undefined;
     events: unknown;
   }): Promise<{ ok: true; stored: number }> {
-    this.assertCallbackSecret(params.secret);
+    await this.assertCallbackSecret(params.sessionId, params.secret);
     const events = sanitizeMetricEvents(params.events);
     const row = await prisma.interviewSession.findUnique({
       where: { id: params.sessionId },
@@ -1134,11 +1297,25 @@ export class InterviewSessionService {
 
   // ─── Webhook handlers (LiveKit) ───────────────────────────────────────────
 
-  async handleEgressEnded(params: { egressId?: string; roomName?: string; sizeBytes?: number; durationSec?: number; location?: string }): Promise<void> {
+  /**
+   * @param params.signer the LiveKit project that signed the webhook
+   *   (`receiveBrandWebhook`: its API key and the brands on it). When given,
+   *   the event is processed only for a session that runs on that project, so
+   *   one project can never touch a session on another. Two brands on one
+   *   project (GoApply on the shared plane) are both served by it.
+   */
+  async handleEgressEnded(params: { egressId?: string; roomName?: string; sizeBytes?: number; durationSec?: number; location?: string; signer?: WebhookSigner }): Promise<void> {
     const where = params.egressId ? { egressId: params.egressId } : params.roomName ? { roomName: params.roomName } : null;
     if (!where) return;
-    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true } });
+    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true, liveMetrics: true, recordingConsent: true, userId: true, brand: true, voiceProvider: true } });
     if (!session) return;
+    const seam = await resolveSessionSeam(session);
+    if (!webhookSignerMatches(params.signer, seam, session.id, 'egress_ended')) return;
+    // A video session recorded without the camera opt-in is audio-only (H8),
+    // and so is one under GoApply's camera opt-out.
+    const recordedMode = session.mode === 'video' && readPracticeRecording(session).video && getInterviewMediaPolicy(seam.brand).recordVideo
+      ? 'video'
+      : 'voice';
     // This webhook is the completion source of truth: a non-empty file result
     // means the recording really exists in R2, so backfill recordingKey if the
     // background-start persist was lost (restart between egress start and the
@@ -1150,7 +1327,7 @@ export class InterviewSessionService {
         recordingBytes: typeof params.sizeBytes === 'number' ? params.sizeBytes : undefined,
         recordingDurationSec: typeof params.durationSec === 'number' ? params.durationSec : undefined,
         recordingKey: session.recordingKey ?? (producedFile ? interviewR2Storage.recordingKey(session.id, 'mp4') : undefined),
-        recordingMimeType: session.recordingKey || producedFile ? recordingMimeForMode(session.mode) : undefined,
+        recordingMimeType: session.recordingKey || producedFile ? recordingMimeForMode(recordedMode) : undefined,
       },
     });
     // Meter the recording's egress + storage cost (no-op until a rate is set).
@@ -1160,9 +1337,11 @@ export class InterviewSessionService {
     logger.info('INTERVIEW_ENGINE_SESSION', 'egress ended', { sessionId: session.id, sizeBytes: params.sizeBytes, durationSec: params.durationSec });
   }
 
-  async handleRoomFinished(roomName: string): Promise<void> {
-    const session = await prisma.interviewSession.findFirst({ where: { roomName }, select: { id: true, status: true } });
+  /** @param signer see handleEgressEnded. */
+  async handleRoomFinished(roomName: string, signer?: WebhookSigner): Promise<void> {
+    const session = await prisma.interviewSession.findFirst({ where: { roomName }, select: { id: true, status: true, liveMetrics: true, userId: true, brand: true, voiceProvider: true } });
     if (!session) return;
+    if (!webhookSignerMatches(signer, await resolveSessionSeam(session), session.id, 'room_finished')) return;
     if (NON_FINALIZABLE.includes(session.status)) return;
     await this.finalize(session.id).catch((err) => {
       logger.error('INTERVIEW_ENGINE_SESSION', 'finalize from room_finished failed', {
@@ -1179,6 +1358,11 @@ export class InterviewSessionService {
   async finalize(sessionId: string, opts: { workerDrained?: boolean } = {}): Promise<InterviewSession> {
     const session = await prisma.interviewSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new InterviewNotFoundError();
+    return inSeam(await resolveSessionSeam(session), () => this.finalizeLoaded(session, opts));
+  }
+
+  private async finalizeLoaded(session: InterviewSession, opts: { workerDrained?: boolean }): Promise<InterviewSession> {
+    const sessionId = session.id;
     // Terminal rows (completed / failed / expired) and an in-flight finalize
     // are never re-claimed: a late room_finished webhook or worker 'ended'
     // must not turn a failed (uncharged) session into a completed one.
@@ -1217,10 +1401,13 @@ export class InterviewSessionService {
     const parley = isParleySession(session);
 
     if (wentLive && !parley) {
-      // Stop recording if still active (best-effort).
-      if (session.egressId) await stopRecording(session.egressId);
-      // Tear down the room (best-effort; releases the worker).
-      await deleteInterviewRoom(session.roomName);
+      const provider = safeProvider(await resolveSessionSeam(session));
+      if (provider) {
+        // Stop recording if still active (best-effort).
+        if (session.egressId) await provider.stopRecording(session.egressId);
+        // Tear down the room (best-effort; releases the worker).
+        await provider.deleteRoom(session.roomName);
+      }
     }
     if (wentLive && parley && !opts.workerDrained) {
       // Parley finalizing without a drain (lost webhook, expiry sweep): pull
@@ -1249,7 +1436,7 @@ export class InterviewSessionService {
     // artifacts always match the scored transcript.
     const uploadTranscript = async (t: TranscriptTurn[]): Promise<{ key: string | null; text: string }> => {
       const text = renderTranscriptText(t, session.candidateName ?? 'Candidate');
-      if (!interviewR2Storage.isConfigured() || t.length === 0) return { key: null, text };
+      if (!interviewR2Storage.canStore() || t.length === 0) return { key: null, text };
       try {
         const jsonKey = interviewR2Storage.transcriptJsonKey(sessionId);
         const txtKey = interviewR2Storage.transcriptTextKey(sessionId);
@@ -1323,7 +1510,7 @@ export class InterviewSessionService {
     const durationSec = computeParticipationDurationSec(turns, wallClockSec);
 
     // Persist the report to R2 too (best-effort).
-    if (interviewR2Storage.isConfigured()) {
+    if (interviewR2Storage.canStore()) {
       try {
         await interviewR2Storage.putObject({
           key: interviewR2Storage.reportKey(sessionId),
@@ -1357,6 +1544,24 @@ export class InterviewSessionService {
     logger.info('INTERVIEW_ENGINE_SESSION', 'session finalized', {
       sessionId, overall: score.overall, turns: turns.length, durationSec,
     });
+
+    // WP-43: a finished candidate practice ticks "Do a practice interview" on
+    // the getting-started checklist and the job's "Practiced" step. Only the
+    // finalize claim winner reaches this line; the hook is idempotent anyway.
+    if (updated.source === 'roboapply') {
+      void this.markPracticeCompleted(updated).catch(() => undefined);
+      // GoApply: the report is ready to read — say so in WeChat when the
+      // person asked for it at practice start (soft; once per report).
+      void notifyPracticeReportReady({
+        target: 'live',
+        sessionId,
+        userId: updated.userId,
+        // The session's own brand (column, else liveMetrics, else the owner's).
+        cn: async () => getBrand((await resolveSessionSeam(updated)).brand).market === 'cn',
+        title: updated.role,
+        completedAt: updated.endedAt ?? new Date(),
+      });
+    }
 
     // Phase B: LLM enrichment, FIRE-AND-FORGET. The session is already
     // 'completed' with a usable deterministic report; this PATCHes the rich,
@@ -1423,7 +1628,7 @@ export class InterviewSessionService {
       );
 
       // Refresh the R2 report sidecar with the rich version (best-effort).
-      if (interviewR2Storage.isConfigured()) {
+      if (interviewR2Storage.canStore()) {
         void interviewR2Storage.putObject({
           key: interviewR2Storage.reportKey(sessionId),
           body: JSON.stringify({ sessionId, richReport }, null, 2),
@@ -1631,7 +1836,7 @@ export class InterviewSessionService {
     secret: string | undefined;
     modelUsage: LiveModelUsageItem[];
   }): Promise<{ ok: true }> {
-    this.assertCallbackSecret(params.secret);
+    await this.assertCallbackSecret(params.sessionId, params.secret);
     const items = Array.isArray(params.modelUsage) ? params.modelUsage : [];
     const stored = await prisma.interviewSession.findUnique({
       where: { id: params.sessionId },
@@ -1640,8 +1845,10 @@ export class InterviewSessionService {
     let fallbackWorkerModel = storedWorkerModel(stored?.blueprint);
     if (!fallbackWorkerModel) {
       try {
-        // Legacy session rows predate the persisted liveLlm snapshot.
-        fallbackWorkerModel = getWorkerLlmModel();
+        // Legacy session rows predate the persisted liveLlm snapshot. They are
+        // RoboApply rows (GoApply sessions always carry the snapshot), so the
+        // model is read for RoboApply whichever host the callback arrived on.
+        fallbackWorkerModel = getWorkerLlmModel('roboapply');
       } catch {
         // Usage is still recorded as `unreported`; metering must remain best-effort.
       }
@@ -1664,6 +1871,10 @@ export class InterviewSessionService {
    */
   async endByOwner(params: { sessionId: string; userId: string; apiKeyId?: string | null }): Promise<InterviewSession> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+    return inSeam(await resolveSessionSeam(session), () => this.endLoaded(session));
+  }
+
+  private async endLoaded(session: InterviewSession): Promise<InterviewSession> {
     if (session.status !== 'live') return this.finalize(session.id);
 
     const endedAt = session.endedAt ?? new Date();
@@ -1675,7 +1886,8 @@ export class InterviewSessionService {
 
     // Parley: stop the conversation and pull its final transcript directly.
     const parley = isParleySession(session);
-    const signalled = parley ? false : await withTimeout(sendInterviewEndSignal(session.roomName), 3000, false);
+    const endProvider = parley ? null : safeProvider(await resolveSessionSeam(session));
+    const signalled = endProvider ? await withTimeout(endProvider.sendEndSignal(session.roomName), 3000, false) : false;
     const drained = parley
       ? await drainParleySession(this, session)
       : signalled ? await this.waitForWorkerEnded(session.id, endedAt.getTime()) : false;
@@ -1718,16 +1930,25 @@ export class InterviewSessionService {
    */
   async deleteByOwner(params: { sessionId: string; userId: string; apiKeyId?: string | null }): Promise<void> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+    return inSeam(await resolveSessionSeam(session), () => this.deleteLoaded(session, params));
+  }
 
+  private async deleteLoaded(
+    session: InterviewSession,
+    params: { userId: string; apiKeyId?: string | null },
+  ): Promise<void> {
     // Tear down any live LiveKit resources before dropping the row.
     if (session.status === 'created' || session.status === 'live' || session.status === 'finalizing') {
       if (isParleySession(session)) {
         await stopParleySession(session);
       } else {
-        if (session.egressId) {
-          await stopRecording(session.egressId).catch(() => { /* best-effort */ });
+        const provider = safeProvider(await resolveSessionSeam(session));
+        if (provider) {
+          if (session.egressId) {
+            await provider.stopRecording(session.egressId).catch(() => { /* best-effort */ });
+          }
+          await provider.deleteRoom(session.roomName).catch(() => { /* best-effort */ });
         }
-        await deleteInterviewRoom(session.roomName).catch(() => { /* best-effort */ });
       }
     }
 
@@ -1758,6 +1979,16 @@ export class InterviewSessionService {
     transcriptUrl: string | null;
   }> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+    // Presigned links come from the bucket of the session's brand (the shared
+    // bucket, or CN_S3_* when GoApply has its own).
+    return inSeam(await resolveSessionSeam(session), () => this.reportLoaded(session));
+  }
+
+  private async reportLoaded(session: InterviewSession): Promise<{
+    session: InterviewSession;
+    recordingUrl: string | null;
+    transcriptUrl: string | null;
+  }> {
 
     // Self-healing: re-fire the LLM enrichment for reports stuck at the
     // deterministic version (a deploy/restart killed the fire-and-forget
@@ -1816,6 +2047,240 @@ export class InterviewSessionService {
     return this.loadOwned(userId, sessionId, apiKeyId);
   }
 
+  // ─── Practice from a job (WP-43) ─────────────────────────────────────────
+
+  /**
+   * A finished candidate practice: tick the getting-started checklist step
+   * `practice` (growth.markChecklistStep, idempotent there) and stamp the
+   * session as completed for its job, which is what the job's "Practiced"
+   * step reads (practicedJobs). Never throws.
+   *
+   * Order: `completedAt` is stamped first (atomic jsonb merge, so concurrent
+   * telemetry writers to liveMetrics never lose their update), then growth is
+   * told, and only after growth succeeded is `checklistMarkedAt` claimed with
+   * a conditional merge. A transient growth failure leaves no claim, so a
+   * later run (another lifecycle event, the reconcile cron) retries it.
+   */
+  async markPracticeCompleted(session: Pick<InterviewSession, 'id' | 'userId' | 'status' | 'source'>): Promise<boolean> {
+    if (session.status !== 'completed' || session.source !== 'roboapply') return false;
+    try {
+      const fresh = await prisma.interviewSession.findUnique({
+        where: { id: session.id },
+        select: { liveMetrics: true, endedAt: true, jobId: true, practiceCompletedAt: true },
+      });
+      if (!fresh) return false;
+      const meta = readPracticeMeta(fresh.liveMetrics);
+      if (meta?.checklistMarkedAt) return false;
+      const completedAt = fresh.practiceCompletedAt?.toISOString() ?? meta?.completedAt ?? null;
+      return await completePractice({
+        target: 'live',
+        sessionId: session.id,
+        userId: session.userId,
+        jobId: fresh.jobId ?? meta?.jobId ?? null,
+        completedAt: completedAt ? null : (fresh.endedAt ?? new Date()).toISOString(),
+      });
+    } catch (err) {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'practice completion hook failed', {
+        sessionId: session.id, error: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
+  }
+
+  /** What the report needs beyond the session detail: the job it was for and the recording consent. */
+  async getPracticeInfo(params: { sessionId: string; userId: string }): Promise<PracticeSessionInfo> {
+    const session = await this.loadOwned(params.userId, params.sessionId);
+    const meta = readPracticeMeta(session.liveMetrics);
+    // SCHEMA-3 columns first, liveMetrics.practice for older rows.
+    const jobId = session.jobId ?? meta?.jobId ?? null;
+    const recording = readPracticeRecording(session);
+    const completedAt = session.practiceCompletedAt?.toISOString() ?? meta?.completedAt ?? null;
+    return {
+      sessionId: session.id,
+      status: session.status,
+      job: jobId
+        ? {
+            id: jobId,
+            title: meta?.jobId === jobId ? meta.jobTitle : null,
+            companyName: meta?.jobId === jobId ? meta.companyName : null,
+          }
+        : null,
+      recording: {
+        consented: recording.audio === true,
+        video: recording.video === true,
+        available: !!session.recordingKey,
+      },
+      completedAt: session.status === 'completed' ? (completedAt ?? session.endedAt?.toISOString() ?? null) : null,
+    };
+  }
+
+  /**
+   * The job's "Practiced" step: for each of `jobIds`, the end time of the
+   * user's latest completed practice for that job (absent = not practised).
+   * Counts live (voice/video) sessions and written practices (GoApply without
+   * voice). Seam for the job checklist (WP-34) and the tracker (WP-38).
+   */
+  async practicedJobs(userId: string, jobIds: string[]): Promise<Record<string, string>> {
+    const ids = [...new Set(jobIds.map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean))].slice(0, 100);
+    if (ids.length === 0) return {};
+    const [rows, written] = await Promise.all([
+      prisma.interviewSession.findMany({
+        where: {
+          userId,
+          source: 'roboapply',
+          status: 'completed',
+          OR: [
+            { jobId: { in: ids } },
+            ...ids.map((id) => ({ liveMetrics: { path: ['practice', 'jobId'], equals: id } })),
+          ],
+        },
+        select: { liveMetrics: true, endedAt: true, createdAt: true, jobId: true },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+      practiceDeps.findTextPracticesForJobs(userId, ids).catch(() => [] as TextPracticeRow[]),
+    ]);
+    const out: Record<string, string> = {};
+    const keepLatest = (jobId: string | null, at: string | null | undefined) => {
+      if (!jobId || !at || !ids.includes(jobId)) return;
+      if (!out[jobId] || out[jobId] < at) out[jobId] = at;
+    };
+    for (const row of rows) {
+      const meta = readPracticeMeta(row.liveMetrics);
+      keepLatest(row.jobId ?? meta?.jobId ?? null, (row.endedAt ?? row.createdAt).toISOString());
+    }
+    for (const row of written) {
+      // A written practice counts once it was answered and scored (completedAt stamp).
+      const meta = textPracticeMetaOf(row);
+      keepLatest(meta?.jobId ?? null, meta?.completedAt ?? null);
+    }
+    return out;
+  }
+
+  // ─── Written practice (WP-43; GoApply without `ai.interviewVoice`) ────────
+  //
+  // First-party wrappers over the existing text interview (RAMockService).
+  // The route checks the brand gate (phone, aiAllowed) before any of these
+  // run. What they add over the bare text interview: the job loaded
+  // server-side (market check) seeds the role; the session is metered like a
+  // live practice (gate at start, pro-rated debit when scored; the first free
+  // practice is topped up by the route before the gate); and an answered,
+  // scored practice ticks the checklist and the job's "Practiced" step once.
+
+  async startTextPractice(input: TextPracticeStartInput): Promise<TextPracticeStartResult> {
+    const durationMinutes = clampTextMinutes(input.durationMinutes);
+    if (!input.creditExempt) {
+      const afford = await practiceDeps.gatePractice(input.userId, durationMinutes);
+      if (!afford.ok) {
+        logger.info('INTERVIEW_ENGINE_SESSION', 'written practice blocked — insufficient credits', {
+          userId: input.userId, plannedDurationMinutes: durationMinutes, balance: afford.balance, required: afford.required,
+        });
+        throw new InterviewInsufficientCreditsError(afford);
+      }
+    }
+    const job = input.job;
+    // The job's title (and company) is the role the interviewer plans for; its
+    // posting is the evidence the questions are written from (WP-66).
+    const role = job
+      ? `${job.title}${job.companyName ? ` (${job.companyName})` : ''}`.slice(0, 200)
+      : (input.role ?? '').trim().slice(0, 200);
+    const started = await practiceDeps.textStart(
+      input.userId,
+      {
+        role,
+        interviewerId: input.interviewerId,
+        typeId: input.typeId,
+        format: 'voice',
+        language: input.language,
+        durationMinutes,
+        jdText: job?.jdText || undefined,
+        market: practiceDeps.currentMarket(),
+        // SCHEMA-3 column (RAMockSession.jobId), written with the row.
+        jobId: job?.id ?? null,
+      },
+      input.locale,
+      input.knownValues,
+    );
+    const meta: TextPracticeMeta = {
+      v: 1,
+      kind: 'text',
+      jobId: job?.id ?? null,
+      jobTitle: job?.title ?? null,
+      companyName: job?.companyName ?? null,
+      creditExempt: input.creditExempt === true,
+    };
+    // Tag the row as a first-party practice (the metering rule, the job's
+    // display names). The job id is also on the row's own column; the JSON
+    // copy stays during the transition (an older deploy reads only it). A
+    // lost tag only loses the "Practiced" step, so it is best-effort.
+    await practiceDeps.mergePracticeMeta('text', started.sessionId, meta as unknown as Record<string, unknown>).catch((err) => {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'written practice tag failed', {
+        sessionId: started.sessionId, error: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    });
+    return { ...started, jobId: meta.jobId };
+  }
+
+  async textPracticeTurn(input: { userId: string; sessionId: string; answer: string; questionIndex: number; locale?: string }) {
+    const row = await practiceDeps.findTextPractice(input.userId, input.sessionId);
+    if (!row || !textPracticeMetaOf(row)) throw new InterviewNotFoundError();
+    return practiceDeps.textTurn(
+      input.userId,
+      { sessionId: input.sessionId, answer: input.answer, questionIndex: input.questionIndex },
+      input.locale,
+    );
+  }
+
+  /**
+   * Score a written practice. When at least one question was answered it
+   * counts as a practice: debit the pro-rated credits (idempotent per
+   * session, capped at what the start gate authorised), stamp it completed
+   * for its job and tick the checklist step once.
+   */
+  async scoreTextPractice(input: { userId: string; sessionId: string }): Promise<TextPracticeScoreResult> {
+    const row = await practiceDeps.findTextPractice(input.userId, input.sessionId);
+    const meta = row ? textPracticeMetaOf(row) : null;
+    if (!row || !meta) throw new InterviewNotFoundError();
+    const score = await practiceDeps.textScore(input.userId, input.sessionId, practiceDeps.currentMarket());
+    const answered = countTextAnswers(row.transcript) > 0;
+    if (answered) {
+      if (!meta.creditExempt) {
+        await practiceDeps
+          .debitPractice({
+            userId: input.userId,
+            sessionId: input.sessionId,
+            durationSec: Math.max(1, Math.round(score.durationMinutes)) * 60,
+            plannedDurationMinutes: row.plannedDurationMinutes,
+          })
+          .catch((err) => {
+            logger.warn('INTERVIEW_ENGINE_SESSION', 'written practice debit failed', {
+              sessionId: input.sessionId, error: err instanceof Error ? err.message : String(err),
+            });
+          });
+      }
+      if (!meta.checklistMarkedAt) {
+        await completePractice({
+          target: 'text',
+          sessionId: input.sessionId,
+          userId: input.userId,
+          jobId: meta.jobId,
+          completedAt: meta.completedAt ? null : new Date().toISOString(),
+        });
+      }
+      // GoApply: the results are ready (soft; once per practice, also on a repeated score call).
+      void notifyPracticeReportReady({
+        target: 'text',
+        sessionId: input.sessionId,
+        userId: input.userId,
+        cn: practiceDeps.currentMarket() === 'cn',
+        title: meta.jobTitle ?? row.role ?? '',
+        completedAt: new Date(),
+      });
+    }
+    return { ...score, practiceCounted: answered, jobId: meta.jobId };
+  }
+
   // ─── Internals ──────────────────────────────────────────────────────────
 
   /**
@@ -1833,14 +2298,82 @@ export class InterviewSessionService {
     return session;
   }
 
-  private assertCallbackSecret(secret: string | undefined): void {
-    const expected = getAgentCallbackSecret();
-    if (!expected) throw new InterviewAuthError('Callback secret not configured');
-    if (!secret || secret !== expected) throw new InterviewAuthError('Invalid callback secret');
+  /**
+   * Each plane's worker carries its own secret (LIVEKIT_AGENT_CALLBACK_SECRET on
+   * the shared LiveKit project, CN_LIVEKIT_AGENT_CALLBACK_SECRET on GoApply's
+   * own), and a callback may only touch a session that runs on that plane: the
+   * mainland worker's secret can never append to, end or meter a session on
+   * the shared project, nor the reverse. Both brands' sessions on the shared
+   * project are served by its one worker and its one secret. A secret no plane
+   * configured is refused before any database read; otherwise the session's
+   * stored seam (brand: column, else liveMetrics, else the owner's brand; plane:
+   * `liveMetrics.voiceSeam.stack`) picks the one secret that is accepted.
+   * Constant-time compares.
+   * An unknown session id passes here (there is nothing of another brand to
+   * touch) and each callback handles not-found as before.
+   */
+  private async assertCallbackSecret(sessionId: string, secret: string | undefined): Promise<void> {
+    const configured = getAgentCallbackSecrets();
+    if (configured.length === 0) throw new InterviewAuthError('Callback secret not configured');
+    if (!secret || !configured.some((e) => secretEquals(secret, e))) throw new InterviewAuthError('Invalid callback secret');
+    const id = (sessionId ?? '').trim();
+    if (!id) return;
+    const row = await prisma.interviewSession.findUnique({ where: { id }, select: { liveMetrics: true, userId: true, brand: true, voiceProvider: true } });
+    if (!row) return;
+    const seam = await resolveSessionSeam(row);
+    const expected = getAgentCallbackSecret(seam.brand, seam.stack);
+    if (!expected || !secretEquals(secret, expected)) throw new InterviewAuthError('Invalid callback secret');
   }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
+
+function secretEquals(given: string, expected: string): boolean {
+  const a = Buffer.from(given, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** The provider of a stored seam, or null when it can no longer be built
+ *  (a reserved provider id). Teardown is best-effort, so it never throws. */
+function safeProvider(seam: VoiceSeam): VoiceSessionProvider | null {
+  try {
+    return voiceProviderFor(seam);
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_SESSION', 'voice provider unavailable for teardown', {
+      brand: seam.brand, provider: seam.provider, error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/** The API key of the LiveKit project a session runs on, or null when that
+ *  plane is not configured any more. */
+function sessionPlaneApiKey(seam: VoiceSeam): string | null {
+  try {
+    return isLiveKitConfigured(seam.brand, seam.stack) ? getLiveKitCreds(seam.brand, seam.stack).apiKey : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A webhook acts only on a session that runs on the LiveKit project which
+ * signed it: the signing API key must be the key of the session's plane (plan
+ * §3.5). Several brands may share that project, so the brand alone never
+ * decides. When the session's plane can no longer be read, the brands on the
+ * signing project decide. No signer given (a caller that does not pass it) =
+ * accepted.
+ */
+function webhookSignerMatches(signer: WebhookSigner | undefined, seam: VoiceSeam, sessionId: string, event: string): boolean {
+  if (!signer) return true;
+  const planeKey = sessionPlaneApiKey(seam);
+  if (planeKey ? planeKey === signer.apiKey : signer.brands.includes(seam.brand)) return true;
+  logger.warn('INTERVIEW_ENGINE_WEBHOOK', 'ignored a webhook signed by another LiveKit project', {
+    sessionId, event, signerBrands: signer.brands, sessionBrand: seam.brand, sessionStack: seam.stack,
+  });
+  return false;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1909,6 +2442,786 @@ function renderTranscriptText(turns: TranscriptTurn[], candidateName: string): s
     .filter((t) => !t.interim)
     .map((t) => `${t.role === 'candidate' ? candidateName : t.role === 'system' ? 'System' : 'Interviewer'}: ${t.text}`)
     .join('\n\n');
+}
+
+// ─── Practice from a job: jobs, resumes, consent, first free practice (WP-43) ──
+//
+// Narrow typed adapters over the rows WP-43 reads. The practice facts live in
+// `liveMetrics.practice` (PracticeMeta) until the schema carries first-class
+// columns (Schema request WP-43-S1: InterviewSession.jobId / recordingConsent).
+
+export type PracticeMarket = 'intl' | 'cn';
+
+export interface PracticeRecordingChoice {
+  audio: boolean;
+  video: boolean;
+}
+
+export const NO_RECORDING: PracticeRecordingChoice = Object.freeze({ audio: false, video: false }) as PracticeRecordingChoice;
+
+/** `liveMetrics.practice` — written at create, stamped at completion. */
+export interface PracticeMeta {
+  v: 1;
+  jobId: string | null;
+  jobTitle: string | null;
+  companyName: string | null;
+  /** The recording the user consented to for this session (H8). */
+  recording: PracticeRecordingChoice;
+  completedAt?: string;
+  checklistMarkedAt?: string;
+}
+
+export interface PracticeSessionInfo {
+  sessionId: string;
+  status: string;
+  job: { id: string; title: string | null; companyName: string | null } | null;
+  /** consented=false renders "Recording off" on the report. */
+  recording: { consented: boolean; video: boolean; available: boolean };
+  completedAt: string | null;
+}
+
+/** Read `liveMetrics.practice`; null when the session has none (= no job, no recording). */
+export function readPracticeMeta(liveMetrics: unknown): PracticeMeta | null {
+  const raw = asLiveMetrics(liveMetrics).practice;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const p = raw as Record<string, unknown>;
+  const rec = p.recording && typeof p.recording === 'object' ? (p.recording as Record<string, unknown>) : {};
+  const audio = rec.audio === true;
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  return {
+    v: 1,
+    jobId: str(p.jobId),
+    jobTitle: str(p.jobTitle),
+    companyName: str(p.companyName),
+    recording: { audio, video: audio && rec.video === true },
+    ...(str(p.completedAt) ? { completedAt: str(p.completedAt)! } : {}),
+    ...(str(p.checklistMarkedAt) ? { checklistMarkedAt: str(p.checklistMarkedAt)! } : {}),
+  };
+}
+
+/** Parse the `InterviewSession.recordingConsent` column ({ audio, video }); null when absent or malformed. */
+export function parseRecordingConsent(value: unknown): PracticeRecordingChoice | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.audio !== 'boolean') return null;
+  return { audio: v.audio, video: v.audio && v.video === true };
+}
+
+/**
+ * The recording the user consented to for a live session: the
+ * `recordingConsent` column (SCHEMA-3) first, else `liveMetrics.practice`
+ * (rows written before the column existed). No choice = nothing recorded.
+ */
+export function readPracticeRecording(row: { liveMetrics: unknown; recordingConsent?: unknown }): PracticeRecordingChoice {
+  return parseRecordingConsent(row.recordingConsent) ?? readPracticeMeta(row.liveMetrics)?.recording ?? NO_RECORDING;
+}
+
+/** A job id that is unknown, from the other market, or someone else's private import. */
+export class PracticeJobNotFoundError extends InterviewNotFoundError {
+  readonly code = 'job_not_found' as const;
+  constructor() {
+    super();
+    this.name = 'PracticeJobNotFoundError';
+  }
+}
+
+export interface PracticeJob {
+  id: string;
+  title: string;
+  companyName: string;
+  location: string | null;
+  /** The posting as plain text (≤ 8000 chars), used as the interview brief. */
+  jdText: string;
+  /** Closed or archived postings still work for practice; the UI says so. */
+  closed: boolean;
+}
+
+export interface PracticeJobRow {
+  id: string;
+  title: string;
+  companyName: string;
+  location: string | null;
+  description: string;
+  descriptionPlain: string;
+  market: string;
+  visibility: string;
+  ownerUserId: string | null;
+  archivedAt: Date | null;
+  closedAt: Date | null;
+}
+
+export type PracticeResumeKind = 'chosen' | 'tailored' | 'primary' | 'latest';
+
+export interface PracticeResumeRow {
+  id: string;
+  name: string;
+  resumeMarkdown: string;
+  kind: PracticeResumeKind;
+}
+
+export interface PracticeUserRow {
+  brand: string;
+  name: string | null;
+  emailVerified: boolean;
+  emailVerifiedAt: Date | null;
+  emailIsPlaceholder: boolean;
+  phoneE164: string | null;
+  phoneVerifiedAt: Date | null;
+}
+
+export type PracticeConsentType = 'interview_recording' | 'interview_video';
+export type FirstPracticeGrantReason = 'email_verified' | 'phone_verified';
+export type FirstPracticeGrantStatus = 'granted' | 'already_granted' | 'in_progress' | 'no_profile' | 'failed';
+
+export interface PracticeDeps {
+  findJob(jobId: string): Promise<PracticeJobRow | null>;
+  findResume(userId: string, opts: { resumeId?: string | null; jobId?: string | null }): Promise<PracticeResumeRow | null>;
+  findUser(userId: string): Promise<PracticeUserRow | null>;
+  hasConsent(userId: string, type: PracticeConsentType): Promise<boolean>;
+  markChecklistStep(userId: string, step: 'practice'): Promise<unknown>;
+  grantPracticeCredit(userId: string, reason: FirstPracticeGrantReason, key: string): Promise<{ status: FirstPracticeGrantStatus }>;
+  /**
+   * The first free practice was already granted (or is being granted) under
+   * this reason key. Read-only. Used so an account that earned it by one
+   * verification is not granted a second one by the other.
+   */
+  hasPracticeGrant(userId: string, reason: FirstPracticeGrantReason): Promise<boolean>;
+  currentMarket(): PracticeMarket;
+  /**
+   * Atomic jsonb merge of `patch` into the practice object of a live session
+   * (`InterviewSession.liveMetrics.practice`) or a written one
+   * (`RAMockSession.blueprint.practice`). With `unlessSet`, the merge is a
+   * claim: it applies only while that key is still absent. True = applied.
+   */
+  mergePracticeMeta(
+    target: PracticeTarget,
+    sessionId: string,
+    patch: Record<string, unknown>,
+    unlessSet?: PracticeClaimKey,
+  ): Promise<boolean>;
+  /**
+   * GoApply: mirror "your practice report is ready" to WeChat
+   * (features/notify-cn `sendNotice`, template `report_ready`). Resolves with
+   * the delivery outcome; expected skips (not linked, no accepted prompt,
+   * channel off, template unset) are not errors.
+   */
+  sendReportNotice(input: PracticeReportNotice): Promise<unknown>;
+  /** Set `practiceCompletedAt` once (SCHEMA-3 column; never overwritten). */
+  stampPracticeCompleted(target: PracticeTarget, sessionId: string, at: Date): Promise<unknown>;
+  /** Practice credits: can the user afford a practice of this length? */
+  gatePractice(userId: string, plannedMinutes: number): Promise<{ ok: boolean; balance: number; required: number; tier: string }>;
+  /** Pro-rated practice debit, idempotent per session id. */
+  debitPractice(input: { userId: string; sessionId: string; durationSec: number; plannedDurationMinutes: number | null }): Promise<unknown>;
+  textStart(
+    userId: string,
+    input: TextStartCall,
+    locale?: string,
+    /** Never sent to the web-search vendor (the account name). */
+    knownValues?: ReadonlyArray<string | null | undefined>,
+  ): Promise<{ sessionId: string; questions: TextPracticeQuestion[]; cnFormat?: TextPracticeCnFormat | null }>;
+  textTurn(
+    userId: string,
+    input: { sessionId: string; answer: string; questionIndex: number },
+    locale?: string,
+  ): Promise<{ nextIndex: number | null; turns: Array<{ who: 'them' | 'you'; text: string }>; coachTip: unknown }>;
+  textScore(userId: string, sessionId: string, market?: PracticeMarket): Promise<TextPracticeScore>;
+  findTextPractice(userId: string, sessionId: string): Promise<TextPracticeRow | null>;
+  findTextPracticesForJobs(userId: string, jobIds: string[]): Promise<TextPracticeRow[]>;
+}
+
+export type PracticeTarget = 'live' | 'text';
+
+/** Keys of the practice object that are claimed once (the merge applies only while the key is absent). */
+export type PracticeClaimKey = 'checklistMarkedAt' | 'reportNoticeAt';
+
+/** What the WeChat "report ready" notice carries (the person's own practice; no numbers). */
+export interface PracticeReportNotice {
+  userId: string;
+  template: 'report_ready';
+  params: { title: string; completedAt: string };
+  /** The report this notice is about (the session id): a prompt accepted for it is spent first. */
+  eventId: string;
+  /** Same-site path the message opens. */
+  href: string;
+}
+
+export interface TextStartCall {
+  role: string;
+  interviewerId: string;
+  typeId: string;
+  format: 'voice';
+  language?: string;
+  durationMinutes: number;
+  /** The job post the practice is for: evidence for the question plan (WP-66). */
+  jdText?: string;
+  /** The requesting brand's market (GoApply runs its AI-interview format). */
+  market?: PracticeMarket;
+  /** Written to `RAMockSession.jobId` with the row. */
+  jobId?: string | null;
+}
+
+/** Per-question timing of the GoApply AI-interview format (from `blueprint.cnFormat`). */
+export interface TextPracticeCnFormat {
+  formatId: string;
+  minutes: number;
+  questions: Array<{ prepSeconds: number; answerSeconds: number; story: boolean }>;
+}
+
+export interface TextPracticeQuestion {
+  q: string;
+  hint: string;
+  coachTip: { kind: 'good' | 'careful'; text: string } | null;
+}
+
+export interface TextPracticeScore {
+  overall: number;
+  delta: number | null;
+  breakdown: Array<{ key: string; value: number; note: string }>;
+  strengths: string[];
+  gaps: string[];
+  durationMinutes: number;
+  /** GoApply only: the practice report block (communication / logic / story answers, STAR, filler words). */
+  cn?: CnPracticeReport;
+}
+
+/** The RAMockSession columns the written practice reads. */
+export interface TextPracticeRow {
+  id: string;
+  /** The role the practice was planned for (the notice title); absent from an older select. */
+  role?: string | null;
+  blueprint: unknown;
+  transcript: unknown;
+  plannedDurationMinutes: number | null;
+  status: string;
+  /** SCHEMA-3 columns; absent from a row read by an older select. */
+  jobId?: string | null;
+  practiceCompletedAt?: Date | null;
+}
+
+/**
+ * The first-party view of a written practice.
+ *
+ * `jobId` and `completedAt` live on `RAMockSession.jobId` /
+ * `practiceCompletedAt` (SCHEMA-3) and are read from there first
+ * (`textPracticeMetaOf`). `RAMockSession.blueprint.practice` still carries the
+ * tag that makes a text interview a first-party practice (`kind: 'text'`), the
+ * metering rule, the checklist claim and the job's display names, which have
+ * no column, plus a copy of `jobId` / `completedAt` for rows written before
+ * the columns and for a rollback (no backfill DML).
+ */
+export interface TextPracticeMeta {
+  v: 1;
+  kind: 'text';
+  jobId: string | null;
+  jobTitle: string | null;
+  companyName: string | null;
+  /** Admin runs are not metered (mirrors the live create). */
+  creditExempt: boolean;
+  completedAt?: string;
+  checklistMarkedAt?: string;
+}
+
+export interface TextPracticeStartInput {
+  userId: string;
+  role?: string;
+  interviewerId: string;
+  typeId: string;
+  language?: string;
+  durationMinutes?: number;
+  /** Loaded server-side and market-checked by the caller (loadPracticeJob). */
+  job: PracticeJob | null;
+  creditExempt?: boolean;
+  locale?: string;
+  /**
+   * Values the research query of the plan must not contain (the account name,
+   * as the live practice does with the candidate name): a role text that
+   * carries one is not sent to the web-search vendor.
+   */
+  knownValues?: ReadonlyArray<string | null | undefined>;
+}
+
+export interface TextPracticeStartResult {
+  sessionId: string;
+  questions: TextPracticeQuestion[];
+  jobId: string | null;
+  /** GoApply AI-interview format: thinking and answer time per question; absent otherwise. */
+  cnFormat?: TextPracticeCnFormat | null;
+}
+
+export interface TextPracticeScoreResult extends TextPracticeScore {
+  /** True when the practice was answered: it counts for the checklist and the job. */
+  practiceCounted: boolean;
+  jobId: string | null;
+}
+
+/**
+ * A written practice's meta, columns first: `RAMockSession.jobId` and
+ * `practiceCompletedAt` win over the JSON copies, which serve rows written
+ * before the columns. null for a text interview that is not a first-party
+ * practice (no `blueprint.practice` tag).
+ */
+export function textPracticeMetaOf(row: Pick<TextPracticeRow, 'blueprint' | 'jobId' | 'practiceCompletedAt'>): TextPracticeMeta | null {
+  const meta = readTextPracticeMeta(row.blueprint);
+  if (!meta) return null;
+  const jobId = typeof row.jobId === 'string' && row.jobId ? row.jobId : meta.jobId;
+  const completedAt = row.practiceCompletedAt instanceof Date ? row.practiceCompletedAt.toISOString() : meta.completedAt;
+  return {
+    ...meta,
+    jobId,
+    // The display names belong to the job the JSON tag was written for.
+    ...(jobId === meta.jobId ? {} : { jobTitle: null, companyName: null }),
+    ...(completedAt ? { completedAt } : {}),
+  };
+}
+
+/**
+ * Read `RAMockSession.blueprint.practice` alone; null for a text interview
+ * that is not a first-party practice. Callers holding the row use
+ * `textPracticeMetaOf`, which reads the columns first.
+ */
+export function readTextPracticeMeta(blueprint: unknown): TextPracticeMeta | null {
+  if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) return null;
+  const raw = (blueprint as Record<string, unknown>).practice;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const p = raw as Record<string, unknown>;
+  if (p.kind !== 'text') return null;
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  return {
+    v: 1,
+    kind: 'text',
+    jobId: str(p.jobId),
+    jobTitle: str(p.jobTitle),
+    companyName: str(p.companyName),
+    creditExempt: p.creditExempt === true,
+    ...(str(p.completedAt) ? { completedAt: str(p.completedAt)! } : {}),
+    ...(str(p.checklistMarkedAt) ? { checklistMarkedAt: str(p.checklistMarkedAt)! } : {}),
+  };
+}
+
+const TEXT_MINUTES_DEFAULT = 20;
+
+function clampTextMinutes(value: unknown): number {
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : TEXT_MINUTES_DEFAULT;
+  return Math.min(120, Math.max(5, n));
+}
+
+/** Non-empty candidate answers in a written transcript (a skipped question is an empty answer). */
+function countTextAnswers(transcript: unknown): number {
+  if (!Array.isArray(transcript)) return 0;
+  return transcript.filter(
+    (turn) => !!turn && typeof turn === 'object' && (turn as { who?: unknown }).who === 'you'
+      && typeof (turn as { text?: unknown }).text === 'string' && ((turn as { text: string }).text).trim().length > 0,
+  ).length;
+}
+
+/**
+ * Shared completion for live and written practice: stamp `completedAt` (when
+ * given), tell growth, then claim `checklistMarkedAt`. Growth is idempotent,
+ * so a rare concurrent double call is harmless; the claim keeps later runs
+ * from calling it again. A growth failure leaves no claim (a retry may tick
+ * it). Returns true when this call made the claim.
+ */
+async function completePractice(input: {
+  target: PracticeTarget;
+  sessionId: string;
+  userId: string;
+  jobId: string | null;
+  completedAt: string | null;
+}): Promise<boolean> {
+  try {
+    if (input.completedAt) {
+      await practiceDeps.mergePracticeMeta(input.target, input.sessionId, { completedAt: input.completedAt });
+      // The SCHEMA-3 column, set once (best-effort: liveMetrics stays the fallback).
+      await practiceDeps.stampPracticeCompleted(input.target, input.sessionId, new Date(input.completedAt)).catch((err: unknown) => {
+        logger.warn('INTERVIEW_ENGINE_SESSION', 'practiceCompletedAt stamp failed', {
+          sessionId: input.sessionId, target: input.target, error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+    await practiceDeps.markChecklistStep(input.userId, 'practice');
+    const claimed = await practiceDeps.mergePracticeMeta(
+      input.target,
+      input.sessionId,
+      { checklistMarkedAt: new Date().toISOString() },
+      'checklistMarkedAt',
+    );
+    if (claimed) {
+      logger.info('INTERVIEW_ENGINE_SESSION', 'practice completed: checklist step marked', {
+        sessionId: input.sessionId, userId: input.userId, target: input.target, jobId: input.jobId ?? undefined,
+      });
+    }
+    return claimed;
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_SESSION', 'practice completion hook failed', {
+      sessionId: input.sessionId, target: input.target, error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
+/** Longest title a WeChat template field takes (`thing` keywords: 20 characters). */
+const REPORT_NOTICE_TITLE_MAX = 20;
+
+/**
+ * GoApply only: when a practice report is finished, mirror "your report is
+ * ready" to WeChat (features/notify-cn, template `report_ready`). Soft and
+ * once per report:
+ *   - `reportNoticeAt` is claimed first with a conditional merge on the
+ *     practice object, so a repeated score call, a second finalize trigger or
+ *     another instance never sends a second notice for the same report;
+ *   - nothing here throws, and a skipped or failed send is not retried (the
+ *     report itself is on the page; WeChat only mirrors it).
+ * RoboApply (`cn` false) sends nothing and claims nothing.
+ */
+async function notifyPracticeReportReady(input: {
+  target: PracticeTarget;
+  sessionId: string;
+  userId: string;
+  /** Is this a GoApply practice? (A thunk when it has to be looked up; a failed lookup sends nothing.) */
+  cn: boolean | (() => Promise<boolean>);
+  title: string;
+  completedAt: Date;
+}): Promise<boolean> {
+  try {
+    if (!(typeof input.cn === 'function' ? await input.cn() : input.cn)) return false;
+    const completedAt = input.completedAt.toISOString();
+    const claimed = await practiceDeps.mergePracticeMeta(input.target, input.sessionId, { reportNoticeAt: completedAt }, 'reportNoticeAt');
+    if (!claimed) return false;
+    // Whole characters (a title may hold characters outside the BMP).
+    const title = [...(input.title ?? '').trim()].slice(0, REPORT_NOTICE_TITLE_MAX).join('');
+    // The notice needs a title: an untitled practice is not announced.
+    if (!title) return false;
+    await practiceDeps.sendReportNotice({
+      userId: input.userId,
+      template: 'report_ready',
+      params: { title, completedAt },
+      eventId: input.sessionId,
+      href: input.target === 'live' ? `/practice/${input.sessionId}/report` : '/practice',
+    });
+    return true;
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_SESSION', 'practice report notice failed', {
+      sessionId: input.sessionId, target: input.target, error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
+const PRACTICE_TABLES: Record<PracticeTarget, { table: string; column: string }> = {
+  live: { table: '"InterviewSession"', column: '"liveMetrics"' },
+  text: { table: '"RAMockSession"', column: '"blueprint"' },
+};
+
+const TEXT_PRACTICE_SELECT = {
+  id: true, role: true, blueprint: true, transcript: true, plannedDurationMinutes: true, status: true, jobId: true, practiceCompletedAt: true,
+} as const;
+
+/** Map the text interview's errors onto the engine's (404 / 422 via handleEngineError). */
+async function mapTextErrors<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    const name = err instanceof Error ? err.name : '';
+    if (name === 'MockSessionNotFoundError') throw new InterviewNotFoundError();
+    if (name === 'MockValidationError') throw new InterviewValidationError((err as Error).message);
+    throw err;
+  }
+}
+
+const RESUME_SELECT = { id: true, name: true, resumeMarkdown: true } as const;
+
+const defaultPracticeDeps: PracticeDeps = {
+  async findJob(jobId) {
+    return prisma.rAJob.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true, title: true, companyName: true, location: true, description: true, descriptionPlain: true,
+        market: true, visibility: true, ownerUserId: true, archivedAt: true, closedAt: true,
+      },
+    });
+  },
+  async findResume(userId, { resumeId, jobId }) {
+    const base = { userId, deletedAt: null };
+    if (resumeId) {
+      const chosen = await prisma.rAResumeVariant.findFirst({ where: { ...base, id: resumeId }, select: RESUME_SELECT });
+      if (chosen) return { ...chosen, kind: 'chosen' };
+    }
+    if (jobId) {
+      const tailored = await prisma.rAResumeVariant.findFirst({
+        where: { ...base, targetJobId: jobId },
+        orderBy: { lastEditedAt: 'desc' },
+        select: RESUME_SELECT,
+      });
+      if (tailored) return { ...tailored, kind: 'tailored' };
+    }
+    const primary = await prisma.rAResumeVariant.findFirst({ where: { ...base, isPrimary: true }, select: RESUME_SELECT });
+    if (primary) return { ...primary, kind: 'primary' };
+    const latest = await prisma.rAResumeVariant.findFirst({
+      where: base,
+      orderBy: { lastEditedAt: 'desc' },
+      select: RESUME_SELECT,
+    });
+    return latest ? { ...latest, kind: 'latest' } : null;
+  },
+  async findUser(userId) {
+    return prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        brand: true, name: true, emailVerified: true, emailVerifiedAt: true, emailIsPlaceholder: true,
+        phoneE164: true, phoneVerifiedAt: true,
+      },
+    });
+  },
+  async hasConsent(userId, type) {
+    const { hasLiveConsent } = await import('../../platform/consent/index.js');
+    return hasLiveConsent(userId, type);
+  },
+  async markChecklistStep(userId, step) {
+    const growth = await import('../../features/growth/index.js');
+    return growth.markChecklistStep(userId, step);
+  },
+  async grantPracticeCredit(userId, reason, key) {
+    const credits = await import('../../platform/credits/index.js');
+    return credits.grantPracticeCredit(userId, reason, key);
+  },
+  async hasPracticeGrant(userId, reason) {
+    // The ledger key platform/credits/practice.ts writes for a grant:
+    // '<userId>:practice:<key>', and the first-practice key is its reason.
+    // 'released' = a grant that failed and may be tried again.
+    const row = await prisma.rACreditLedger.findUnique({
+      where: { idempotencyKey: `${userId}:practice:${reason}` },
+      select: { status: true },
+    });
+    return !!row && (row.status === 'committed' || row.status === 'reserved');
+  },
+  currentMarket() {
+    return getCurrentBrandOrDefault().market === 'cn' ? 'cn' : 'intl';
+  },
+  async mergePracticeMeta(target, sessionId, patch, unlessSet) {
+    const { table, column } = PRACTICE_TABLES[target];
+    // One statement: concurrent writers to the same column (worker metrics,
+    // client events, lifecycle) keep their keys; the WHERE is the claim.
+    // A missing column, or a JSON null / non-object, starts from {}.
+    const base = `(CASE WHEN jsonb_typeof(${column}) = 'object' THEN ${column} ELSE '{}'::jsonb END)`;
+    const practice = `(CASE WHEN jsonb_typeof(${column} -> 'practice') = 'object' THEN ${column} -> 'practice' ELSE '{}'::jsonb END)`;
+    const claim = unlessSet ? ` AND (${column} -> 'practice' ->> '${unlessSet}') IS NULL` : '';
+    const count = await prisma.$executeRawUnsafe(
+      `UPDATE ${table}
+          SET ${column} = jsonb_set(${base}, '{practice}', ${practice} || $2::jsonb, true)
+        WHERE id = $1${claim}`,
+      sessionId,
+      JSON.stringify(patch),
+    );
+    return count === 1;
+  },
+  async sendReportNotice(input) {
+    const { notifyCnService } = await import('../../features/notify-cn/index.js');
+    return notifyCnService().sendNotice(input);
+  },
+  async stampPracticeCompleted(target, sessionId, at) {
+    const where = { id: sessionId, practiceCompletedAt: null };
+    const data = { practiceCompletedAt: at };
+    return target === 'live'
+      ? prisma.interviewSession.updateMany({ where, data })
+      : prisma.rAMockSession.updateMany({ where, data });
+  },
+  async gatePractice(userId, plannedMinutes) {
+    return gateMockInterview(userId, plannedMinutes);
+  },
+  async debitPractice(input) {
+    const credits = await import('../../lib/mockCreditService.js');
+    return credits.debitForFinishedSession({ ...input, metadata: { practice: 'text' } });
+  },
+  async textStart(userId, input, locale, knownValues) {
+    const [{ raMockService }, { withSearchKnownValues }] = await Promise.all([
+      import('../../roboapply/v2/services/RAMockService.js'),
+      import('../../roboapply/v2/services/RAInterviewPromptService.js'),
+    ]);
+    // RAMockService.start does not forward known values to the prompt
+    // generator, so they are set for everything it runs.
+    return mapTextErrors(() => withSearchKnownValues(knownValues, () => raMockService.start(userId, input, locale)));
+  },
+  async textTurn(userId, input, locale) {
+    const { raMockService } = await import('../../roboapply/v2/services/RAMockService.js');
+    return mapTextErrors(() => raMockService.nextTurn(userId, input, locale));
+  },
+  async textScore(userId, sessionId, market) {
+    const { raMockService } = await import('../../roboapply/v2/services/RAMockService.js');
+    return mapTextErrors(() => raMockService.score(userId, sessionId, { market }));
+  },
+  async findTextPractice(userId, sessionId) {
+    const id = (sessionId ?? '').trim();
+    if (!id) return null;
+    return prisma.rAMockSession.findFirst({ where: { id, userId }, select: TEXT_PRACTICE_SELECT });
+  },
+  async findTextPracticesForJobs(userId, jobIds) {
+    return prisma.rAMockSession.findMany({
+      where: {
+        userId,
+        status: 'complete',
+        // The column first; the JSON path finds rows written before it.
+        OR: [{ jobId: { in: jobIds } }, ...jobIds.map((id) => ({ blueprint: { path: ['practice', 'jobId'], equals: id } }))],
+      },
+      select: TEXT_PRACTICE_SELECT,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+  },
+};
+
+let practiceDeps: PracticeDeps = defaultPracticeDeps;
+
+/** Test seam: override some practice dependencies (null restores the defaults). */
+export function setPracticeDeps(overrides: Partial<PracticeDeps> | null): void {
+  practiceDeps = overrides ? { ...defaultPracticeDeps, ...overrides } : defaultPracticeDeps;
+}
+
+/**
+ * The job a practice is for. 404 (PracticeJobNotFoundError) when it does not
+ * exist, belongs to the other market (a GoApply session never loads a
+ * RoboApply job and vice versa) or is another user's private import.
+ */
+export async function loadPracticeJob(userId: string, jobId: string, market?: PracticeMarket): Promise<PracticeJob | null> {
+  const id = jobId.trim();
+  if (!id || id.length > 64) return null;
+  const row = await practiceDeps.findJob(id);
+  if (!row) return null;
+  if (row.market !== (market ?? practiceDeps.currentMarket())) return null;
+  if (row.visibility !== 'public' && row.ownerUserId !== userId) return null;
+  const text = (row.descriptionPlain || row.description || '').trim();
+  return {
+    id: row.id,
+    title: row.title,
+    companyName: row.companyName,
+    location: row.location,
+    jdText: text.slice(0, 8000),
+    closed: !!(row.archivedAt || row.closedAt),
+  };
+}
+
+async function loadPracticeJobOrThrow(userId: string, jobId: string, market?: PracticeMarket): Promise<PracticeJob> {
+  const job = await loadPracticeJob(userId, jobId, market);
+  if (!job) throw new PracticeJobNotFoundError();
+  return job;
+}
+
+/** Résumé context sent to the interview brief: PII stripped, clipped to the blueprint's 2000 chars. */
+export const PRACTICE_RESUME_CONTEXT_CHARS = 2000;
+
+export interface PracticeResume {
+  id: string;
+  name: string;
+  kind: PracticeResumeKind;
+  /** Redacted and clipped; this exact text goes into the interview brief. */
+  context: string;
+}
+
+/** The resume to practise with: `resumeId`, else the job's tailored one, else the primary, else the latest. */
+export async function loadPracticeResume(
+  userId: string,
+  opts: { resumeId?: string | null; jobId?: string | null; knownValues?: string[] },
+): Promise<PracticeResume | null> {
+  const row = await practiceDeps.findResume(userId, { resumeId: opts.resumeId ?? null, jobId: opts.jobId ?? null });
+  if (!row) return null;
+  const { redactPii, LLM_PII_KINDS } = await import('../../platform/pii/index.js');
+  const redacted = redactPii(row.resumeMarkdown ?? '', {
+    kinds: LLM_PII_KINDS,
+    knownValues: (opts.knownValues ?? []).filter((v) => typeof v === 'string' && v.trim().length >= 2),
+  }).text;
+  return { id: row.id, name: row.name, kind: row.kind, context: redacted.trim().slice(0, PRACTICE_RESUME_CONTEXT_CHARS) };
+}
+
+/**
+ * H8: the recording this session may make. Off unless the user asked for it
+ * AND their newest `interview_recording` record is a grant; the camera also
+ * needs `interview_video` and a video session. External API sessions carry
+ * the tenant's own attestation. A failed consent lookup fails closed.
+ */
+export async function resolvePracticeRecording(input: {
+  userId: string;
+  source: InterviewSource;
+  mode: InterviewMode;
+  requested?: { audio?: boolean; video?: boolean } | null;
+  /** False where the media policy records no video (GoApply's operator opt-out). Default true. */
+  allowVideo?: boolean;
+}): Promise<PracticeRecordingChoice> {
+  const wantAudio = input.requested?.audio === true;
+  if (!wantAudio) return NO_RECORDING;
+  const wantVideo = input.requested?.video === true && input.mode === 'video' && input.allowVideo !== false;
+  if (input.source === 'external') return { audio: true, video: wantVideo };
+  if (input.source !== 'roboapply') return NO_RECORDING;
+  const live = async (type: PracticeConsentType) => {
+    try {
+      return await practiceDeps.hasConsent(input.userId, type);
+    } catch {
+      return false;
+    }
+  };
+  if (!(await live('interview_recording'))) return NO_RECORDING;
+  return { audio: true, video: wantVideo ? await live('interview_video') : false };
+}
+
+export interface FirstPracticeState {
+  /**
+   * The verification this state is about. Verified: the one that earned the
+   * free practice. Not verified: the one still open for this account, which
+   * the UI prompts for (email for an account with a real address; phone for a
+   * GoApply account without one).
+   */
+  method: 'email' | 'phone';
+  verified: boolean;
+  /** The grant result when verified (idempotent; null when not verified or unknown). */
+  grant: FirstPracticeGrantStatus | null;
+}
+
+/**
+ * Ruling C42: the first full practice is free after verification. RoboApply:
+ * a verified email (WP-10 grants it when the link is clicked). GoApply: a
+ * verified email OR a verified phone, whichever the account has (D5; plan
+ * §3.5, G69): an email + password account does not need an SMS provider to
+ * earn it.
+ *
+ * This tops up the existing idempotency keys ('email_verified' /
+ * 'phone_verified'), so the same verification never grants twice, and it
+ * covers a verification whose grant failed or was never attempted. On GoApply
+ * the two keys are ONE entitlement: when the key of the other verification
+ * already holds a grant, nothing more is granted (an email-verified user who
+ * later verifies a phone does not get a second free practice).
+ */
+export async function ensureFirstPracticeGrant(userId: string): Promise<FirstPracticeState> {
+  let user: PracticeUserRow | null = null;
+  try {
+    user = await practiceDeps.findUser(userId);
+  } catch {
+    user = null;
+  }
+  const goapply = user?.brand === 'goapply';
+  if (!user) return { method: 'email', verified: false, grant: null };
+  // emailVerified defaults to true for grandfathered rows; only an explicit
+  // verification (emailVerifiedAt) of a real address earns the free practice.
+  const emailOk = !!(user.emailVerified && user.emailVerifiedAt && !user.emailIsPlaceholder);
+  const phoneOk = goapply && !!(user.phoneE164 && user.phoneVerifiedAt);
+  if (!emailOk && !phoneOk) {
+    // What is still open: an account with a real address verifies it; a
+    // GoApply account without one (phone or WeChat sign-up) verifies a phone.
+    return { method: goapply && user.emailIsPlaceholder ? 'phone' : 'email', verified: false, grant: null };
+  }
+  // The reason key of the verification that holds (phone first on GoApply).
+  const reason: FirstPracticeGrantReason = phoneOk ? 'phone_verified' : 'email_verified';
+  const method: 'email' | 'phone' = phoneOk ? 'phone' : 'email';
+  try {
+    if (goapply) {
+      const other: FirstPracticeGrantReason = reason === 'phone_verified' ? 'email_verified' : 'phone_verified';
+      if (await practiceDeps.hasPracticeGrant(userId, other)) return { method, verified: true, grant: 'already_granted' };
+    }
+    const res = await practiceDeps.grantPracticeCredit(userId, reason, reason);
+    return { method, verified: true, grant: res.status };
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_SESSION', 'first practice grant failed', {
+      userId, error: err instanceof Error ? err.message : String(err),
+    });
+    return { method, verified: true, grant: 'failed' };
+  }
 }
 
 export const interviewSessionService = new InterviewSessionService();

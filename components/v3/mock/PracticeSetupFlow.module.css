@@ -1014,6 +1014,10 @@
     overflow-x: auto;
     margin: var(--sp-4) calc(var(--sp-4) * -1) 0;
     padding: 2px var(--sp-4);
+    /* Snap to the padded edge. Without this the first chip snaps to the
+     * scroller's own edge: the row starts 16px scrolled, the first chip sits
+     * on the card border and the gutter the padding was for is gone. */
+    scroll-padding-inline: var(--sp-4);
     scrollbar-width: none;
     scroll-snap-type: x proximity;
   }
@@ -1037,6 +1041,7 @@
     /* Bleeds to the shell's own gutter (.main-inner padding at this width). */
     margin: 0 calc(var(--sp-5) * -1);
     padding: 2px var(--sp-5);
+    scroll-padding-inline: var(--sp-5);
     scrollbar-width: none;
     scroll-snap-type: x mandatory;
   }
@@ -1065,6 +1070,7 @@
     overflow-x: auto;
     margin: 0 calc(var(--sp-3) * -1);
     padding: 2px var(--sp-3);
+    scroll-padding-inline: var(--sp-3);
     scrollbar-width: none;
     scroll-snap-type: x proximity;
   }
@@ -1188,4 +1194,29 @@
     animation: none;
     background: var(--surface-2);
   }
+}
+
+/* ─── WP-43: intro aside (Practice questions link) ─────────────────────── */
+
+.introAside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-2);
+  font-size: var(--fs-meta);
+}
+
+.introAside a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-lg);
+  color: var(--action);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.introAside a:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
 }

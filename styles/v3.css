@@ -251,6 +251,13 @@
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--action);
 }
+/* Topbar search is two buttons for one action: the .search pill on wide
+ * screens and this icon button on phones (the swap is in the 760px block at
+ * the end of this file). Both selectors carry .top-actions so they outrank
+ * `.search { display: flex }` and `.icon-btn { display: grid }` wherever those
+ * are declared. The swap must live here: this sheet is imported unlayered, so
+ * no Tailwind utility on the element can override its `display`. */
+.top-actions .search-compact { display: none; }
 .avatar {
   width: var(--control-md); height: var(--control-md);
   border-radius: 50%;
@@ -3053,6 +3060,9 @@ details.qb-item[open] .qb-chevron { transform: rotate(180deg); }
   .main { overflow-y: visible; }
 
   .main-inner, .topbar { padding-left: var(--sp-5); padding-right: var(--sp-5); }
+  /* Search: the pill does not fit beside the other topbar buttons on a phone. */
+  .top-actions .search { display: none; }
+  .top-actions .search-compact { display: grid; }
   .match-top { grid-template-columns: 44px 1fr; }
   .match-right { grid-column: 2; flex-direction: row; align-items: center; }
   .stat-strip { grid-template-columns: repeat(2, 1fr); }

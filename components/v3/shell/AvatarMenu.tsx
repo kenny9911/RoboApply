@@ -35,11 +35,28 @@ import {
 } from 'react';
 import { useAuth } from '../../../lib/auth/useAuth';
 import { logout } from '../../../lib/api/auth';
+import { IconPerson } from '../primitives/Iconset';
+import { cleanUpDeviceOnSignOut, leaveSignedOut } from './signOutCleanup';
 
-/** Initials for the trigger. Two letters from a name, else from the address. */
-export function monogramFor(source: string | null | undefined): string {
+/**
+ * A placeholder address, not a mailbox: `.invalid` is reserved (RFC 6761) and
+ * is what a GoApply phone account carries in place of an email
+ * (`u-<random>@users.goapply.invalid`, server/src/features/auth-cn/accounts.ts).
+ */
+function isPlaceholderAddress(source: string): boolean {
+  return source.toLowerCase().endsWith('.invalid');
+}
+
+/**
+ * Initials for the trigger: two letters from a name, else from the address.
+ * Empty when there is nothing real to abbreviate — no session yet, or a phone
+ * account with no name. The trigger then shows a person icon. It never falls
+ * back to made-up letters: the old 'RA' was RoboApply's initials on GoApply
+ * too, and a placeholder address abbreviated to "UU".
+ */
+export function initialsFor(source: string | null | undefined): string {
   const src = source?.trim() ?? '';
-  if (!src) return 'RA';
+  if (!src || isPlaceholderAddress(src)) return '';
   const bits = src.split(/[\s@.]+/).filter(Boolean);
   if (bits.length >= 2) return (bits[0][0] + bits[1][0]).toUpperCase();
   return src.slice(0, 2).toUpperCase();
@@ -82,12 +99,16 @@ export function AvatarMenu() {
   const [pendingFocus, setPendingFocus] = useState<number | null>(null);
   const menuId = useId();
   const triggerId = useId();
+  // True from the Sign out click until the page leaves (see signOut below).
+  const [signingOut, setSigningOut] = useState(false);
+  const signOutInFlight = useRef(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
 
-  const monogram = monogramFor(user?.name || user?.email);
+  // A name that is only spaces is no name; fall through to the address.
+  const initials = initialsFor(user?.name?.trim() || user?.email);
 
   const focusItem = useCallback((index: number) => {
     const items = itemRefs.current.filter(Boolean) as HTMLElement[];
@@ -163,13 +184,30 @@ export function AvatarMenu() {
   }
 
   /**
-   * Sign out. The server route is deliberately sessionless (it clears the
-   * cookie even for a token it cannot validate), so this works from a stranded
-   * session too. The hard navigation is not laziness: it drops the TanStack
-   * cache, which still holds the previous account's jobs and applications.
+   * Sign out, in this order:
+   *   1. forget this device (signOutCleanup.ts): the push subscription is
+   *      removed while the session can still authorise it, then unsent
+   *      resume-builder drafts are cleared from this browser. It never throws
+   *      and gives up by itself after a few seconds, so it cannot block 2–4;
+   *   2. end the server session (the route is deliberately sessionless: it
+   *      clears the cookie even for a token it cannot validate, so this works
+   *      from a stranded session too);
+   *   3. clear the client;
+   *   4. a HARD navigation — not laziness: it drops the TanStack cache, which
+   *      still holds the previous account's jobs and applications.
    */
   async function signOut() {
-    setOpen(false);
+    // One sign-out at a time. Step 1 can take a few seconds on a slow push
+    // service, so the menu stays open and its item reads "Signing out…" until
+    // the page leaves; a second click or Enter does nothing.
+    if (signOutInFlight.current) return;
+    signOutInFlight.current = true;
+    setSigningOut(true);
+    try {
+      await cleanUpDeviceOnSignOut();
+    } catch {
+      // Belt and braces: the cleanup swallows its own errors.
+    }
     try {
       window.localStorage.removeItem('auth_token');
     } catch {
@@ -182,7 +220,7 @@ export function AvatarMenu() {
       // leaving the user on an authenticated-looking screen is worse.
     }
     clear();
-    window.location.assign('/login');
+    leaveSignedOut();
   }
 
   return (
@@ -205,7 +243,7 @@ export function AvatarMenu() {
         }}
         onKeyDown={onTriggerKeyDown}
       >
-        {monogram}
+        {initials || <IconPerson size={18} aria-hidden="true" />}
       </button>
 
       {open ? (
@@ -248,10 +286,12 @@ export function AvatarMenu() {
             type="button"
             role="menuitem"
             tabIndex={-1}
-            style={ITEM_STYLE}
+            style={signingOut ? { ...ITEM_STYLE, cursor: 'default', color: 'var(--text-muted)' } : ITEM_STYLE}
+            aria-disabled={signingOut || undefined}
+            aria-busy={signingOut || undefined}
             onClick={() => void signOut()}
           >
-            {t('sign_out')}
+            {signingOut ? t('signing_out') : t('sign_out')}
           </button>
         </div>
       ) : null}

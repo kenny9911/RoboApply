@@ -1,0 +1,17 @@
+{
+  "744000098765432": {
+    "id": "744000098765432",
+    "name": "Sales Representative",
+    "postingUrl": "https://jobs.smartrecruiters.com/HarborFoods/744000098765432-sales-representative",
+    "applyUrl": "https://jobs.smartrecruiters.com/HarborFoods/744000098765432-sales-representative?oga=true",
+    "location": { "city": "Taichung", "country": "tw", "remote": false },
+    "jobAd": {
+      "sections": {
+        "companyDescription": { "title": "Company Description", "text": "<p>Harbor Foods makes snacks.</p>" },
+        "jobDescription": { "title": "Job Description", "text": "<p>Visit retail partners.</p><p>月薪 NT$32,000 - NT$38,000</p>" },
+        "qualifications": { "title": "Qualifications", "text": "<p>Driving licence.</p>" },
+        "additionalInformation": { "title": "Additional Information", "text": "<p>恕不協助申請工作許可。</p>" }
+      }
+    }
+  }
+}

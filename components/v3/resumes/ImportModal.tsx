@@ -6,16 +6,23 @@
 //   source  ∈ 'scratch' | 'file' | 'linkedin'
 //   stage   ∈ 'input'   | 'parsing' | 'done'
 //
-//   • input   — scratch: pick a template · file: drop zone · linkedin: URL field
-//   • parsing — animated "what I picked up" ingest rows (cosmetic) WHILE the real
-//               `onCreate` mutation runs in the background
-//   • done    — success check; "Open editor" hands the created variant to the page
+//   • input   — scratch: pick a template · file: drop zone · linkedin: the user's own PDF export (no URL import, TASK_PLAN.md H9)
+//   • parsing — the real `onCreate` request is running. For a file there is
+//               one pending row ("Reading <file>…") and nothing else: no step
+//               is ticked before the server has answered (D3 — the rows used
+//               to tick "Experience ✓ Roles · titles · dates" on a timer
+//               whatever the file held). A new draft from a template shows
+//               what the template is while it is created.
+//   • done    — success check, and for a file what was ACTUALLY read
+//               (`doneFacts`, built by the page from the saved resume);
+//               "Open editor" hands the created variant to the page
 //
 // The actual resume creation is the parent's `onCreate(source, ctx)` async fn
 // (it owns the `useCreateResumeMutation` hook + the localized default name). We
-// advance to `done` only once BOTH the ingest animation finished AND the create
-// promise resolved — so a create failure surfaces as an error, never a fake
-// success. On "Open editor" the page routes to `/resumes/[id]` (Lane F).
+// advance to `done` only once the create promise resolved (and, for a draft,
+// the template rows were shown) — so a create failure surfaces as an error,
+// never a fake success. On "Open editor" the page routes to `/resumes/[id]`
+// (Lane F).
 //
 // SOLID PANEL per the CLAUDE.md modal rule: `.rb-modal-card` already paints
 // `var(--bg)` (a :root literal in V3, so it can't bleed through), and we pin a
@@ -36,13 +43,14 @@ export interface ImportCreateContext {
   fileName: string | null;
   /** the real uploaded File (file source) — sent to the upload endpoint */
   file: File | null;
-  /** pasted LinkedIn URL (linkedin) — display only in the stub */
-  linkedinUrl: string;
 }
 
 /** Accepted résumé upload types (mirrors the backend accepted-MIME list —
- *  RTF is NOT supported server-side, so it is intentionally excluded). */
+ *  RTF and Apple Pages are NOT read server-side, so they are not offered). */
 const ACCEPT_RESUME = '.pdf,.doc,.docx,.txt,.md,application/pdf';
+
+/** The same list as the user reads it (file-type names, not copy). */
+export const RESUME_UPLOAD_FORMATS = ['PDF', 'DOC', 'DOCX', 'TXT', 'MD'] as const;
 
 /** LinkedIn "Save to PDF" produces a PDF — steer the picker to it. */
 const ACCEPT_LINKEDIN = '.pdf,application/pdf';
@@ -68,6 +76,8 @@ function readApiErrorCode(err: unknown): string | null {
 interface IngestItem {
   k: string;
   v: string;
+  /** False for something the file did not have (shown without a tick). */
+  found?: boolean;
 }
 
 interface Labels {
@@ -94,10 +104,6 @@ interface Labels {
   linkedinUploadTitle: string;
   linkedinUploadSub: string;
   linkedinReady: string;
-  linkedinOr: string;
-  linkedinUrlLabel: string;
-  linkedinPlaceholder: string;
-  linkedinHint: string;
   // ingest
   ingestTitleScratch: string;
   ingestTitleParse: string;
@@ -122,9 +128,6 @@ interface Labels {
 interface Props {
   source: ImportSource;
   labels: Labels;
-  /** Whether the optional LinkedIn URL-import path is available on this
-   *  deployment. When false (the default), only the PDF-export uploader shows. */
-  linkedinUrlEnabled?: boolean;
   /** Localized failure copy keyed by backend error code (invalid_url,
    *  fetch_failed, parse_failed, …). Falls back to `labels.error` when a code
    *  is unmapped or absent. */
@@ -137,8 +140,12 @@ interface Props {
   /** Recovery for a lost-response failure: refetch the library list so the user
    *  can see whether the résumé actually landed. */
   onCheckList?: () => void;
-  /** Per-source ingest rows shown during the parsing animation. */
+  /** What a new draft from a template is made of (shown while it is created). Not used for files. */
   ingestRows: (source: ImportSource, ctx: ImportCreateContext) => IngestItem[];
+  /** The pending line while a file is being read ("Reading resume.pdf…"). */
+  readingLabel?: (fileName: string) => string;
+  /** What was actually read from an uploaded file, from the saved resume (shown when done). */
+  doneFacts?: (variant: RAResumeVariant) => IngestItem[];
   /** Creates the variant for real; resolves with the new variant. */
   onCreate: (ctx: ImportCreateContext) => Promise<RAResumeVariant>;
   onClose: () => void;
@@ -157,17 +164,17 @@ const TEMPLATES: { key: string; lblKey: keyof Labels }[] = [
 export function ImportModal({
   source,
   labels,
-  linkedinUrlEnabled = false,
   errorMessages,
   lostResponseCodes,
   onCheckList,
   ingestRows,
+  readingLabel,
+  doneFacts,
   onCreate,
   onClose,
   onDone,
 }: Props) {
   const [stage, setStage] = useState<Stage>('input');
-  const [url, setUrl] = useState('');
   const [file, setFile] = useState<{ name: string; size: string } | null>(null);
   const [realFile, setRealFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -202,8 +209,7 @@ export function ImportModal({
   const canStart =
     source === 'scratch' ||
     (source === 'file' && !!file) ||
-    (source === 'linkedin' &&
-      (!!file || (linkedinUrlEnabled && url.trim().length > 8)));
+    (source === 'linkedin' && !!file);
 
   // ESC closes (mirror the V3 Modal primitive) + lock scroll while open.
   const handleKey = useCallback(
@@ -231,13 +237,13 @@ export function ImportModal({
       templateKey,
       fileName: file?.name ?? null,
       file: realFile,
-      linkedinUrl: url.trim(),
     };
 
-    // Cosmetic ingest reveal.
-    const items = ingestRows(source, ctx);
+    // A file: nothing is revealed until the server has read it (D3). A draft
+    // from a template: what the template is, while it is created.
+    const items = source === 'scratch' ? ingestRows(source, ctx) : [];
     setParsed([]);
-    let animDone = false;
+    let animDone = items.length === 0;
     let createResult: RAResumeVariant | null = null;
     let createFailed = false;
     let createErrorCode: string | null = null;
@@ -261,15 +267,17 @@ export function ImportModal({
         setTimeout(() => setParsed((cur) => [...cur, it]), 350 + i * 350),
       );
     });
-    timers.current.push(
-      setTimeout(
-        () => {
-          animDone = true;
-          tryFinish();
-        },
-        350 + items.length * 350 + 400,
-      ),
-    );
+    if (items.length > 0) {
+      timers.current.push(
+        setTimeout(
+          () => {
+            animDone = true;
+            tryFinish();
+          },
+          350 + items.length * 350 + 400,
+        ),
+      );
+    }
 
     // Real create runs in parallel with the animation.
     onCreate(ctx)
@@ -282,7 +290,7 @@ export function ImportModal({
         createErrorCode = readApiErrorCode(err);
         tryFinish();
       });
-  }, [source, templateKey, file, realFile, url, ingestRows, onCreate]);
+  }, [source, templateKey, file, realFile, ingestRows, onCreate]);
 
   // Resolve the failure message: specific per-code copy when we have it, else
   // the generic label.
@@ -388,8 +396,14 @@ export function ImportModal({
                     </div>
                     <h3>{labels.dropTitle}</h3>
                     <p>{labels.dropSub}</p>
+                    {/* Only the types the server reads. */}
                     <div className="formats">
-                      <span>PDF</span> · <span>DOCX</span> · <span>Pages</span> · <span>RTF</span>
+                      {RESUME_UPLOAD_FORMATS.map((f, i) => (
+                        <span key={f}>
+                          {i > 0 ? ' · ' : ''}
+                          <span>{f}</span>
+                        </span>
+                      ))}
                     </div>
                   </>
                 ) : (
@@ -461,7 +475,6 @@ export function ImportModal({
                       if (f) {
                         setRealFile(f);
                         setFile({ name: f.name, size: humanSize(f.size) });
-                        setUrl(''); // a picked PDF takes precedence over a URL
                         setError(false);
                       }
                     }}
@@ -498,60 +511,6 @@ export function ImportModal({
                   )}
                 </button>
 
-                {/* Optional URL path — only when an enrichment provider is set. */}
-                {linkedinUrlEnabled && (
-                  <>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        margin: '16px 0 12px',
-                        color: 'var(--text-muted)',
-                        fontSize: 12,
-                      }}
-                    >
-                      <span style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
-                      <span>{labels.linkedinOr}</span>
-                      <span style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
-                    </div>
-                    <div
-                      style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 8 }}
-                    >
-                      {labels.linkedinUrlLabel}
-                    </div>
-                    <div className="rb-input-row">
-                      <div className="rb-input-prefix" aria-hidden="true">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M20.5 2h-17A1.5 1.5 0 0 0 2 3.5v17A1.5 1.5 0 0 0 3.5 22h17a1.5 1.5 0 0 0 1.5-1.5v-17A1.5 1.5 0 0 0 20.5 2ZM8 19H5V8h3v11Zm-1.5-12.3a1.7 1.7 0 1 1 0-3.5 1.7 1.7 0 0 1 0 3.5ZM19 19h-3v-5.6c0-1.4-.5-2.3-1.8-2.3-1 0-1.5.6-1.8 1.3 0 .2-.1.5-.1.8V19h-3V8h3v1.4c.4-.6 1.1-1.5 2.7-1.5 2 0 3.5 1.3 3.5 4V19Z" />
-                        </svg>
-                      </div>
-                      <input
-                        className="rb-input"
-                        placeholder={labels.linkedinPlaceholder}
-                        value={url}
-                        onChange={(e) => {
-                          setUrl(e.target.value);
-                          if (e.target.value.trim()) {
-                            // a typed URL takes precedence over a picked file
-                            setRealFile(null);
-                            setFile(null);
-                          }
-                        }}
-                      />
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        color: 'var(--text-muted)',
-                        marginTop: 10,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {labels.linkedinHint}
-                    </div>
-                  </>
-                )}
               </>
             )}
 
@@ -579,11 +538,11 @@ export function ImportModal({
                   <div className="extracted">{it.v}</div>
                 </div>
               ))}
-              <div className="ingest-row pending">
+              <div className="ingest-row pending" role="status" aria-live="polite">
                 <div className="ic">
                   <div className="spinner" />
                 </div>
-                <div>{labels.working}</div>
+                <div>{source !== 'scratch' && file && readingLabel ? readingLabel(file.name) : labels.working}</div>
               </div>
             </div>
           </div>
@@ -625,6 +584,18 @@ export function ImportModal({
             >
               {source === 'scratch' ? labels.doneBodyScratch : labels.doneBodyImport}
             </p>
+            {/* What the saved resume really holds (never a fixed list). */}
+            {source !== 'scratch' && created && doneFacts ? (
+              <div className="ingest" style={{ textAlign: 'left', marginTop: 16 }} data-testid="import-facts">
+                {doneFacts(created).map((it, i) => (
+                  <div key={i} className={`ingest-row${it.found === false ? ' pending' : ''}`} data-found={it.found === false ? 'false' : 'true'}>
+                    <div className="ic">{it.found === false ? <span aria-hidden="true">–</span> : <IconCheck size={12} strokeWidthValue={3.5} />}</div>
+                    <div>{it.k}</div>
+                    <div className="extracted">{it.v}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
 

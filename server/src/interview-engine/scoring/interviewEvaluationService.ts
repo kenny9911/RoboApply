@@ -30,6 +30,7 @@ import { recommendationsAgent } from './RecommendationsAgent.js';
 import { findPersona } from '../catalog/interviewCatalog.js';
 import { getArchetype } from '../catalog/interviewArchetypes.js';
 import { getDomainExpert } from '../catalog/domainExperts.js';
+import { attachCnReport, cnEvaluationLens, isCnPracticeSession } from './cnRubricBranch.js';
 
 export interface EvaluationResult {
   richReport: RichInterviewReport;
@@ -110,13 +111,31 @@ function extractBlueprint(session: InterviewSession): {
   return { questions, requirementsSummary, focusAreas, domainKey };
 }
 
-/** NEVER THROWS. */
+/**
+ * NEVER THROWS. GoApply practices (WP-66) get the AI-interview grading lens
+ * when run in that format and the `cn` report block; RoboApply sessions are
+ * evaluated exactly as before.
+ */
 export async function runInterviewEvaluation(
   session: InterviewSession,
   turns: TranscriptTurn[],
   deterministicScore: InterviewScore,
   durationSec: number | null,
   requestId: string,
+): Promise<EvaluationResult> {
+  const isCn = await isCnPracticeSession(session);
+  const result = await evaluate(session, turns, deterministicScore, durationSec, requestId, cnEvaluationLens(session, isCn));
+  attachCnReport(session, turns, result.richReport, isCn);
+  return result;
+}
+
+async function evaluate(
+  session: InterviewSession,
+  turns: TranscriptTurn[],
+  deterministicScore: InterviewScore,
+  durationSec: number | null,
+  requestId: string,
+  extraLens: string | null,
 ): Promise<EvaluationResult> {
   const locale = session.language || 'en';
   const candidateName = session.candidateName ?? '';
@@ -133,9 +152,10 @@ export async function runInterviewEvaluation(
   // shapes the grading — appended so the archetype lens keeps precedence on
   // style while the domain lens adds field-authenticity judgment.
   const domainExpert = getDomainExpert(domainKey);
-  const evaluationLens = domainExpert
+  const baseLens = domainExpert
     ? `${playbook.evaluationLens}\n\nDomain lens (${domainExpert.labelEn}): ${domainExpert.evaluationLens}`
     : playbook.evaluationLens;
+  const evaluationLens = extraLens ? `${baseLens}\n\nFormat lens: ${extraLens}` : baseLens;
   const archetypeLabel = playbook.labelEn;
   const primaryDimensions = playbook.primaryDimensions;
 

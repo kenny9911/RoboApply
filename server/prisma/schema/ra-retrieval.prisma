@@ -1,0 +1,47 @@
+// ra-retrieval.prisma: RETRIEVAL area models (MKT-0; MARKET_STRATEGY 2.3 step 6 and its
+// stack constraints; SM-7).
+//
+// Dense vectors for the third retrieval leg and for Similar jobs. Both tables are
+// declared here, and not in raw SQL, because `prisma db push` drops what the schema
+// does not declare. The `vector` extension itself is installed once per database by
+// server/prisma/sql/001_vector.sql, BEFORE the push that creates these tables.
+//
+// Rows are read and written with $queryRaw / $executeRaw only: the client cannot
+// write an Unsupported column, and because `embedding` is required the generated
+// client has no create or upsert for these two models. That is intended.
+//
+// Vectors never cross markets: `market` is a column of both tables, not a default.
+// No HNSW index is declared (Prisma 7.10 cannot declare one and the next push would
+// drop it); retrieval scans exactly over the filtered rows. See 001_vector.sql.
+
+/// One dense vector per job: the embedded card text of an RAJob. Deleted with the job.
+model RAJobEmbedding {
+  jobId       String                      @id
+  job         RAJob                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// 'intl' | 'cn' (the job's market; a query never reads another market's rows).
+  market      String
+  /// e.g. 'openai/text-embedding-3-small@1024'
+  model       String
+  /// sha1 of the embedded card text
+  contentHash String
+  embedding   Unsupported("halfvec(1024)")
+  embeddedAt  DateTime                    @default(now())
+
+  @@index([market, model])
+}
+
+/// Dense vectors of a person per market and kind. Deleted with the account.
+model RAUserEmbedding {
+  userId     String
+  user       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 'intl' | 'cn'
+  market     String
+  /// 'intent' (onboarding and search answers) | 'resume' (primary resume)
+  kind       String
+  model      String
+  sourceHash String
+  embedding  Unsupported("halfvec(1024)")
+  updatedAt  DateTime                    @default(now())
+
+  @@id([userId, market, kind])
+}

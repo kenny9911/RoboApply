@@ -1,0 +1,498 @@
+{
+  "_synthetic": true,
+  "_note": "Hand-written role table for the evaluation fixtures (MKT-1D). The 15 role groups are the 15 largest of taxonomy v1 by number of roles (ties in tree order): the offline harness has no index counts to rank them by. Titles, skills and work phrases were written for this file from common vocabulary. Nothing is copied from a job board, a provider response or a database row. \"skills\" of a group is its vocabulary, aligned across languages: position i names the same skill in every language. Every role has its own \"skills\": eight positions of that vocabulary, the most characteristic of the role first (a posting requires the first ones), and its own \"work\": the two things a person in that role is responsible for. The two roles of a group share some skills and never the same list or the same work.",
+  "groups": [
+    {
+      "groupId": "swe_backend",
+      "categoryId": "software_engineering",
+      "country": "US",
+      "industry": "B2B SaaS",
+      "field": {"en": "Computer Science", "zh-CN": "计算机科学", "zh-TW": "資訊工程", "ja": "情報工学"},
+      "skills": {
+        "en": ["Java", "Go", "PostgreSQL", "Kubernetes", "REST API design", "Redis", "Kafka", "Docker", "TypeScript", "React", "Node.js", "GraphQL"],
+        "zh-CN": ["Java", "Go", "PostgreSQL", "Kubernetes", "REST API 设计", "Redis", "Kafka", "Docker", "TypeScript", "React", "Node.js", "GraphQL"],
+        "zh-TW": ["Java", "Go", "PostgreSQL", "Kubernetes", "REST API 設計", "Redis", "Kafka", "Docker", "TypeScript", "React", "Node.js", "GraphQL"],
+        "ja": ["Java", "Go", "PostgreSQL", "Kubernetes", "REST API設計", "Redis", "Kafka", "Docker", "TypeScript", "React", "Node.js", "GraphQL"]
+      },
+      "roles": [
+        {
+          "roleId": "backend_engineer",
+          "title": {"en": "Backend Engineer", "zh-CN": "后端开发工程师", "zh-TW": "後端工程師", "ja": "バックエンドエンジニア"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["payment and order services", "the internal platform APIs"],
+            "zh-CN": ["支付与订单服务", "内部平台接口"],
+            "zh-TW": ["金流與訂單服務", "內部平台 API"],
+            "ja": ["決済・注文サービス", "社内プラットフォームAPI"]
+          }
+        },
+        {
+          "roleId": "fullstack_engineer",
+          "title": {"en": "Full-Stack Engineer", "zh-CN": "全栈工程师", "zh-TW": "全端工程師", "ja": "フルスタックエンジニア"},
+          "skills": [8, 9, 10, 2, 4, 7, 5, 11],
+          "work": {
+            "en": ["the merchant dashboard and its APIs", "the order tracking pages"],
+            "zh-CN": ["商家后台及其接口", "订单跟踪页面"],
+            "zh-TW": ["商家後台及其 API", "訂單追蹤頁面"],
+            "ja": ["加盟店向け管理画面とそのAPI", "注文追跡ページ"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "swe_frontend",
+      "categoryId": "software_engineering",
+      "country": "GB",
+      "industry": "Consumer",
+      "field": {"en": "Software Engineering", "zh-CN": "软件工程", "zh-TW": "軟體工程"},
+      "skills": {
+        "en": ["React", "TypeScript", "CSS", "Next.js", "Web accessibility", "Jest", "GraphQL", "Webpack", "Swift", "SwiftUI", "UIKit", "Xcode", "Core Data", "XCTest", "Combine"],
+        "zh-CN": ["React", "TypeScript", "CSS", "Next.js", "无障碍设计", "Jest", "GraphQL", "Webpack", "Swift", "SwiftUI", "UIKit", "Xcode", "Core Data", "XCTest", "Combine"],
+        "zh-TW": ["React", "TypeScript", "CSS", "Next.js", "無障礙設計", "Jest", "GraphQL", "Webpack", "Swift", "SwiftUI", "UIKit", "Xcode", "Core Data", "XCTest", "Combine"]
+      },
+      "roles": [
+        {
+          "roleId": "frontend_engineer",
+          "title": {"en": "Frontend Engineer", "zh-CN": "前端开发工程师", "zh-TW": "前端工程師"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["the customer web app", "the shared component library"],
+            "zh-CN": ["面向用户的网页应用", "公共组件库"],
+            "zh-TW": ["面向用戶的網頁應用", "共用元件庫"]
+          }
+        },
+        {
+          "roleId": "ios_engineer",
+          "title": {"en": "iOS Engineer", "zh-CN": "iOS开发工程师", "zh-TW": "iOS 工程師"},
+          "skills": [8, 9, 10, 11, 12, 13, 6, 14],
+          "work": {
+            "en": ["the customer iOS app", "the in-app purchase flow"],
+            "zh-CN": ["面向用户的 iOS 应用", "应用内购买流程"],
+            "zh-TW": ["面向用戶的 iOS 應用程式", "應用程式內購買流程"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "ml_ai",
+      "categoryId": "data_ai",
+      "country": "US",
+      "industry": "AI / ML",
+      "field": {"en": "Computer Science", "zh-CN": "人工智能", "zh-TW": "人工智慧"},
+      "skills": {
+        "en": ["Python", "PyTorch", "TensorFlow", "Model deployment", "Feature engineering", "MLflow", "SQL", "Transformers", "Prompt engineering", "Retrieval-augmented generation", "Model fine-tuning", "Text classification"],
+        "zh-CN": ["Python", "PyTorch", "TensorFlow", "模型部署", "特征工程", "MLflow", "SQL", "Transformers", "提示词工程", "检索增强生成", "模型微调", "文本分类"],
+        "zh-TW": ["Python", "PyTorch", "TensorFlow", "模型部署", "特徵工程", "MLflow", "SQL", "Transformers", "提示工程", "檢索增強生成", "模型微調", "文本分類"]
+      },
+      "roles": [
+        {
+          "roleId": "ml_engineer",
+          "title": {"en": "Machine Learning Engineer", "zh-CN": "机器学习工程师", "zh-TW": "機器學習工程師"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["recommendation and ranking models", "the model training pipeline"],
+            "zh-CN": ["推荐与排序模型", "模型训练流水线"],
+            "zh-TW": ["推薦與排序模型", "模型訓練流程"]
+          }
+        },
+        {
+          "roleId": "nlp_engineer",
+          "title": {"en": "NLP Engineer", "zh-CN": "大模型算法工程师", "zh-TW": "自然語言處理工程師"},
+          "skills": [7, 8, 9, 0, 1, 10, 11, 3],
+          "work": {
+            "en": ["the customer support assistant", "the document search pipeline"],
+            "zh-CN": ["智能客服助手", "文档检索流程"],
+            "zh-TW": ["智慧客服助理", "文件檢索流程"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "data_analytics",
+      "categoryId": "data_ai",
+      "country": "DE",
+      "industry": "Fintech",
+      "field": {"en": "Statistics", "zh-CN": "统计学", "zh-TW": "統計學"},
+      "skills": {
+        "en": ["SQL", "Python", "Tableau", "A/B testing", "Statistics", "Excel", "dbt", "Data visualization", "Machine learning", "R", "Predictive modeling", "Experiment design"],
+        "zh-CN": ["SQL", "Python", "Tableau", "A/B 测试", "统计分析", "Excel", "dbt", "数据可视化", "机器学习", "R 语言", "预测建模", "实验设计"],
+        "zh-TW": ["SQL", "Python", "Tableau", "A/B 測試", "統計分析", "Excel", "dbt", "資料視覺化", "機器學習", "R 語言", "預測建模", "實驗設計"]
+      },
+      "roles": [
+        {
+          "roleId": "data_analyst",
+          "title": {"en": "Data Analyst", "zh-CN": "数据分析师", "zh-TW": "資料分析師"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["weekly business reporting", "pricing and retention analysis"],
+            "zh-CN": ["每周经营报表", "定价与留存分析"],
+            "zh-TW": ["每週營運報表", "定價與留存分析"]
+          }
+        },
+        {
+          "roleId": "data_scientist",
+          "title": {"en": "Data Scientist", "zh-CN": "数据科学家", "zh-TW": "資料科學家"},
+          "skills": [8, 10, 1, 4, 3, 0, 9, 11],
+          "work": {
+            "en": ["churn and demand forecasting models", "experiment analysis for the product teams"],
+            "zh-CN": ["流失与需求预测模型", "产品团队的实验分析"],
+            "zh-TW": ["流失與需求預測模型", "產品團隊的實驗分析"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "it_ops",
+      "categoryId": "it_infrastructure",
+      "country": "CA",
+      "industry": "Developer tools",
+      "field": {"en": "Information Technology", "zh-CN": "信息技术"},
+      "skills": {
+        "en": ["Linux", "Windows Server", "Active Directory", "Bash", "VMware", "Network troubleshooting", "Backup and recovery", "Microsoft 365", "Help desk ticketing", "Hardware repair", "Laptop imaging", "Remote desktop support", "Mobile device management"],
+        "zh-CN": ["Linux", "Windows Server", "Active Directory", "Bash", "VMware", "网络故障排查", "备份与恢复", "Microsoft 365", "工单处理", "硬件维修", "电脑系统部署", "远程桌面支持", "移动设备管理"]
+      },
+      "roles": [
+        {
+          "roleId": "sysadmin",
+          "title": {"en": "Systems Administrator", "zh-CN": "系统管理员"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["office systems and user accounts", "server patching and backups"],
+            "zh-CN": ["办公系统与账号管理", "服务器补丁与备份"]
+          }
+        },
+        {
+          "roleId": "it_support",
+          "title": {"en": "IT Support Specialist", "zh-CN": "IT支持工程师"},
+          "skills": [8, 9, 7, 5, 10, 11, 2, 12],
+          "work": {
+            "en": ["the staff help desk", "laptop setup for new joiners"],
+            "zh-CN": ["员工服务台", "新员工电脑配置"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "product_design",
+      "categoryId": "design",
+      "country": "GB",
+      "industry": "Consumer",
+      "field": {"en": "Interaction Design", "zh-CN": "交互设计"},
+      "skills": {
+        "en": ["Figma", "User research", "Wireframing", "Prototyping", "Usability testing", "Design systems", "Interaction design", "Information architecture", "Visual design", "Sketch", "Iconography", "Motion design"],
+        "zh-CN": ["Figma", "用户研究", "线框图", "原型设计", "可用性测试", "设计系统", "交互设计", "信息架构", "视觉设计", "Sketch", "图标设计", "动效设计"]
+      },
+      "roles": [
+        {
+          "roleId": "ux_designer",
+          "title": {"en": "UX Designer", "zh-CN": "交互设计师"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["the onboarding and checkout flows", "the product design system"],
+            "zh-CN": ["注册与结算流程", "产品设计系统"]
+          }
+        },
+        {
+          "roleId": "ui_designer",
+          "title": {"en": "UI Designer", "zh-CN": "UI设计师"},
+          "skills": [8, 10, 0, 5, 3, 9, 11, 6],
+          "work": {
+            "en": ["the visual language of the mobile app", "the icon and component library"],
+            "zh-CN": ["移动端的视觉规范", "图标与组件库"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "visual_design",
+      "categoryId": "design",
+      "country": "AU",
+      "industry": "Media",
+      "field": {"en": "Graphic Design", "zh-CN": "视觉传达设计"},
+      "skills": {
+        "en": ["Adobe Illustrator", "Adobe Photoshop", "Typography", "Brand identity", "Layout design", "Adobe InDesign", "Print production", "Digital illustration", "Storyboarding", "Procreate", "Character design", "Concept art", "Color theory"],
+        "zh-CN": ["Adobe Illustrator", "Adobe Photoshop", "字体设计", "品牌视觉", "版式设计", "Adobe InDesign", "印刷制作", "数字插画", "分镜绘制", "Procreate", "角色设计", "概念设计", "色彩理论"]
+      },
+      "roles": [
+        {
+          "roleId": "graphic_designer",
+          "title": {"en": "Graphic Designer", "zh-CN": "平面设计师"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["brand and campaign visuals", "packaging and print layouts"],
+            "zh-CN": ["品牌与活动视觉", "包装与印刷版式"]
+          }
+        },
+        {
+          "roleId": "illustrator",
+          "title": {"en": "Illustrator", "zh-CN": "插画师"},
+          "skills": [7, 9, 8, 10, 1, 11, 0, 12],
+          "work": {
+            "en": ["editorial and book illustrations", "character sheets for animation"],
+            "zh-CN": ["杂志与图书插画", "动画角色设定图"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "marketing_brand",
+      "categoryId": "marketing",
+      "country": "US",
+      "industry": "Consumer",
+      "field": {"en": "Marketing", "zh-CN": "市场营销", "zh-TW": "行銷學"},
+      "skills": {
+        "en": ["Campaign planning", "Market research", "Brand strategy", "Budget management", "Content strategy", "Google Analytics", "CRM", "Copywriting", "Brand positioning", "Agency management", "Brand guidelines", "Consumer insights"],
+        "zh-CN": ["营销活动策划", "市场调研", "品牌策略", "预算管理", "内容策略", "Google Analytics", "CRM", "文案撰写", "品牌定位", "代理商管理", "品牌规范", "消费者洞察"],
+        "zh-TW": ["行銷活動企劃", "市場調查", "品牌策略", "預算管理", "內容策略", "Google Analytics", "CRM", "文案撰寫", "品牌定位", "代理商管理", "品牌規範", "消費者洞察"]
+      },
+      "roles": [
+        {
+          "roleId": "marketing_manager",
+          "title": {"en": "Marketing Manager", "zh-CN": "市场经理", "zh-TW": "行銷經理"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["product launch campaigns", "the annual marketing plan"],
+            "zh-CN": ["新品上市活动", "年度营销计划"],
+            "zh-TW": ["新品上市活動", "年度行銷計畫"]
+          }
+        },
+        {
+          "roleId": "brand_manager",
+          "title": {"en": "Brand Manager", "zh-CN": "品牌经理", "zh-TW": "品牌經理"},
+          "skills": [2, 8, 10, 1, 9, 11, 3, 7],
+          "work": {
+            "en": ["the brand refresh", "the yearly brand tracking study"],
+            "zh-CN": ["品牌焕新项目", "年度品牌健康度调研"],
+            "zh-TW": ["品牌更新專案", "年度品牌追蹤調查"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "digital_marketing",
+      "categoryId": "marketing",
+      "country": "SG",
+      "industry": "E-commerce",
+      "field": {"en": "Communications", "zh-CN": "传播学"},
+      "skills": {
+        "en": ["SEO", "Keyword research", "Google Search Console", "Technical SEO", "Link building", "Google Analytics", "Content calendar", "Social media advertising", "Community management", "Short video editing", "Influencer partnerships", "Social listening", "Livestream planning"],
+        "zh-CN": ["SEO", "关键词研究", "Google Search Console", "技术 SEO", "外链建设", "Google Analytics", "内容排期", "社交媒体广告", "社群管理", "短视频剪辑", "达人合作", "舆情监测", "直播策划"]
+      },
+      "roles": [
+        {
+          "roleId": "seo_specialist",
+          "title": {"en": "SEO Specialist", "zh-CN": "SEO专员"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["organic search growth", "the technical site audits"],
+            "zh-CN": ["自然搜索增长", "网站技术审计"]
+          }
+        },
+        {
+          "roleId": "social_media_manager",
+          "title": {"en": "Social Media Manager", "zh-CN": "新媒体运营"},
+          "skills": [8, 9, 7, 6, 10, 11, 5, 12],
+          "work": {
+            "en": ["the social media channels", "the weekly short video series"],
+            "zh-CN": ["社交媒体账号", "每周短视频栏目"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "online_operations",
+      "categoryId": "marketing",
+      "country": "CA",
+      "industry": "Marketplaces",
+      "field": {"en": "Business Administration", "zh-CN": "工商管理"},
+      "skills": {
+        "en": ["User growth", "Retention analysis", "Community operations", "Campaign operations", "SQL", "User segmentation", "Content planning", "Topic selection", "Editorial calendar", "Data reporting", "Copy editing", "Creator outreach"],
+        "zh-CN": ["用户增长", "留存分析", "社群运营", "活动运营", "SQL", "用户分层", "内容策划", "选题策划", "栏目排期", "数据复盘", "文案编辑", "创作者合作"]
+      },
+      "roles": [
+        {
+          "roleId": "user_operations",
+          "title": {"en": "User Operations Specialist", "zh-CN": "用户运营"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["user growth and retention programmes", "the member loyalty scheme"],
+            "zh-CN": ["用户增长与留存项目", "会员忠诚度计划"]
+          }
+        },
+        {
+          "roleId": "content_operations",
+          "title": {"en": "Content Operations Specialist", "zh-CN": "内容运营"},
+          "skills": [6, 7, 8, 10, 9, 11, 2, 3],
+          "work": {
+            "en": ["the content calendar", "the weekly featured topics"],
+            "zh-CN": ["内容排期", "每周专题策划"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "sales_roles",
+      "categoryId": "sales",
+      "country": "US",
+      "industry": "B2B SaaS",
+      "field": {"en": "Business Administration", "zh-CN": "工商管理", "zh-TW": "企業管理"},
+      "skills": {
+        "en": ["Salesforce", "Prospecting", "Contract negotiation", "Pipeline management", "Cold calling", "Solution selling", "Sales forecasting", "Account planning", "Renewals", "Upselling", "Quarterly business reviews", "Customer retention"],
+        "zh-CN": ["Salesforce", "客户开发", "合同谈判", "销售漏斗管理", "电话销售", "解决方案销售", "销售预测", "客户规划", "续约管理", "增购销售", "季度业务回顾", "客户留存"],
+        "zh-TW": ["Salesforce", "客戶開發", "合約談判", "銷售漏斗管理", "電話銷售", "解決方案銷售", "銷售預測", "客戶規劃", "續約管理", "加購銷售", "季度業務檢討", "客戶留存"]
+      },
+      "roles": [
+        {
+          "roleId": "account_executive",
+          "title": {"en": "Account Executive", "zh-CN": "销售代表", "zh-TW": "業務代表"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["new business in the mid-market segment", "outbound prospecting campaigns"],
+            "zh-CN": ["中型客户的新业务拓展", "主动客户开发活动"],
+            "zh-TW": ["中型客戶的新業務開發", "主動開發客戶活動"]
+          }
+        },
+        {
+          "roleId": "account_manager",
+          "title": {"en": "Account Manager", "zh-CN": "客户经理", "zh-TW": "客戶經理"},
+          "skills": [7, 8, 9, 0, 10, 2, 11, 6],
+          "work": {
+            "en": ["renewals for existing accounts", "growth plans for key accounts"],
+            "zh-CN": ["老客户续约", "重点客户的增长计划"],
+            "zh-TW": ["既有客戶續約", "重點客戶的成長計畫"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "financial_analysis",
+      "categoryId": "finance",
+      "country": "GB",
+      "industry": "Fintech",
+      "field": {"en": "Finance", "zh-CN": "金融学", "zh-TW": "財務金融"},
+      "skills": {
+        "en": ["Financial modeling", "Excel", "Forecasting", "Variance analysis", "Budgeting", "SQL", "Power BI", "Credit analysis", "Risk modeling", "Regulatory reporting", "Stress testing", "Fraud detection"],
+        "zh-CN": ["财务建模", "Excel", "财务预测", "差异分析", "预算编制", "SQL", "Power BI", "信用分析", "风险建模", "监管报送", "压力测试", "反欺诈"],
+        "zh-TW": ["財務建模", "Excel", "財務預測", "差異分析", "預算編製", "SQL", "Power BI", "信用分析", "風險建模", "法遵申報", "壓力測試", "詐欺偵測"]
+      },
+      "roles": [
+        {
+          "roleId": "financial_analyst",
+          "title": {"en": "Financial Analyst", "zh-CN": "财务分析师", "zh-TW": "財務分析師"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["monthly forecasting and variance reports", "the annual budget"],
+            "zh-CN": ["月度预测与差异报告", "年度预算"],
+            "zh-TW": ["每月預測與差異報告", "年度預算"]
+          }
+        },
+        {
+          "roleId": "risk_analyst",
+          "title": {"en": "Risk Analyst", "zh-CN": "风控分析师", "zh-TW": "風險分析師"},
+          "skills": [8, 7, 9, 10, 5, 1, 11, 6],
+          "work": {
+            "en": ["credit and risk reviews", "the quarterly stress tests"],
+            "zh-CN": ["信用与风险评审", "季度压力测试"],
+            "zh-TW": ["信用與風險審查", "每季壓力測試"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "human_resources",
+      "categoryId": "people",
+      "country": "AU",
+      "industry": "Healthtech",
+      "field": {"en": "Human Resource Management", "zh-CN": "人力资源管理", "zh-TW": "人力資源管理"},
+      "skills": {
+        "en": ["Employee relations", "Onboarding", "HRIS", "Payroll", "Employment law", "Performance management", "Workday", "Compensation benchmarking", "Benefits administration", "Job evaluation", "Salary surveys", "Bonus plan design"],
+        "zh-CN": ["员工关系", "入职管理", "HRIS", "薪资核算", "劳动法", "绩效管理", "Workday", "薪酬对标", "福利管理", "岗位评估", "薪酬调研", "奖金方案设计"],
+        "zh-TW": ["員工關係", "到職管理", "HRIS", "薪資核算", "勞動法規", "績效管理", "Workday", "薪酬對標", "福利管理", "職位評價", "薪資調查", "獎金方案設計"]
+      },
+      "roles": [
+        {
+          "roleId": "hr_generalist",
+          "title": {"en": "HR Generalist", "zh-CN": "人事专员", "zh-TW": "人資專員"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["onboarding and employee relations", "the performance review cycle"],
+            "zh-CN": ["入职与员工关系", "绩效考核周期"],
+            "zh-TW": ["到職與員工關係", "績效考核週期"]
+          }
+        },
+        {
+          "roleId": "compensation_benefits",
+          "title": {"en": "Compensation and Benefits Specialist", "zh-CN": "薪酬福利专员", "zh-TW": "薪酬福利專員"},
+          "skills": [7, 8, 9, 3, 10, 6, 11, 2],
+          "work": {
+            "en": ["the yearly pay review", "the benefits renewal"],
+            "zh-CN": ["年度调薪", "福利方案续约"],
+            "zh-TW": ["年度調薪", "福利方案續約"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "clinical",
+      "categoryId": "healthcare",
+      "country": "US",
+      "industry": "Healthtech",
+      "field": {"en": "Nursing", "zh-CN": "护理学"},
+      "skills": {
+        "en": ["Patient assessment", "Medication administration", "Electronic health records", "IV therapy", "Wound care", "Patient education", "BLS certification", "Infection control", "Medication dispensing", "Drug interaction review", "Prescription verification", "Compounding", "Controlled substance records", "Pharmacy inventory"],
+        "zh-CN": ["病情评估", "给药护理", "电子病历", "静脉输液", "伤口护理", "患者宣教", "BLS 证书", "感染控制", "处方调配", "药物相互作用审核", "处方审核", "药品配制", "管制药品登记", "药房库存管理"]
+      },
+      "roles": [
+        {
+          "roleId": "registered_nurse",
+          "title": {"en": "Registered Nurse", "zh-CN": "护士"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["patient care on a 28-bed ward", "shift handovers and care plans"],
+            "zh-CN": ["28 床病区的患者护理", "交接班与护理计划"]
+          }
+        },
+        {
+          "roleId": "pharmacist",
+          "title": {"en": "Pharmacist", "zh-CN": "药剂师"},
+          "skills": [8, 9, 10, 11, 2, 12, 13, 5],
+          "work": {
+            "en": ["prescription checks in the hospital pharmacy", "medication safety reviews"],
+            "zh-CN": ["医院药房的处方审核", "用药安全核查"]
+          }
+        }
+      ]
+    },
+    {
+      "groupId": "teaching",
+      "categoryId": "education",
+      "country": "CA",
+      "industry": "Edtech",
+      "field": {"en": "Education", "zh-CN": "教育学"},
+      "skills": {
+        "en": ["Lesson planning", "Classroom management", "Curriculum development", "Student assessment", "Differentiated instruction", "Parent communication", "Google Classroom", "Special education support", "Second language instruction", "Exam preparation", "Pronunciation coaching", "Conversation classes"],
+        "zh-CN": ["备课", "课堂管理", "课程开发", "学生评价", "分层教学", "家校沟通", "多媒体课件制作", "特殊教育支持", "第二语言教学", "备考辅导", "语音纠正", "口语课"]
+      },
+      "roles": [
+        {
+          "roleId": "school_teacher",
+          "title": {"en": "School Teacher", "zh-CN": "中小学教师"},
+          "skills": [0, 1, 2, 3, 4, 5, 6, 7],
+          "work": {
+            "en": ["lesson plans for years 7 to 9", "the year-group assessment calendar"],
+            "zh-CN": ["七至九年级的教案", "年级测评安排"]
+          }
+        },
+        {
+          "roleId": "language_teacher",
+          "title": {"en": "Language Teacher", "zh-CN": "语言教师"},
+          "skills": [8, 9, 0, 10, 11, 3, 1, 2],
+          "work": {
+            "en": ["evening language classes for adults", "exam preparation groups"],
+            "zh-CN": ["成人晚间语言班", "备考辅导小组"]
+          }
+        }
+      ]
+    }
+  ]
+}

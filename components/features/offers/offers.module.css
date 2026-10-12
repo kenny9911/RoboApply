@@ -1,0 +1,313 @@
+/* Offer comparison (WP-64): the drawer section, the form, posted pay, the
+   AI draft and the Offers view table. Clarity tokens only; light + dark come
+   from the token values; controls are at least 44px tall; one column at 760px. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--sp-4);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bigTitle {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.muted {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.text {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-meta);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* ── Summary ─────────────────────────────────────────────────────────── */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.factLabel {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.factValue {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* ── Form ────────────────────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.label {
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.input,
+.select,
+.textarea {
+  min-height: 44px;
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+
+.textarea {
+  resize: vertical;
+}
+
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible,
+.check input:focus-visible,
+.tableWrap:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+}
+
+.legend {
+  padding: 0 var(--sp-1);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  color: var(--text);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--action);
+}
+
+/* ── Posted pay, AI text ─────────────────────────────────────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.aiPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--grad-soft);
+}
+
+.aiLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.aiText {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.points {
+  margin: 0;
+  padding-left: var(--sp-5);
+  color: var(--text-2);
+  font-size: var(--fs-body);
+}
+
+/* ── Comparison table ────────────────────────────────────────────────── */
+
+.picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  font-size: var(--fs-body);
+}
+
+.table th,
+.table td {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.table thead th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+.table tbody th {
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: var(--fs-meta);
+  min-width: 120px;
+}
+
+.colRole {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 400;
+}
+
+.totalRow th,
+.totalRow td {
+  background: var(--action-subtle);
+  font-weight: 600;
+}
+
+.highest {
+  display: inline-block;
+  margin-left: var(--sp-1);
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--action);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.assumptions {
+  margin: 0;
+  padding-left: var(--sp-5);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .section {
+    padding: var(--sp-3);
+  }
+}

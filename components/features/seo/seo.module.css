@@ -1,0 +1,449 @@
+/* components/features/seo — public browse pages, public job pages and the job
+   ticker (WP-56). Clarity tokens only (app/globals.css, light + dark; brand
+   identity tokens from styles/brands/<brand>.css). Single column below
+   760 px, no sideways scroll at 375 px, every control at least 44 px tall. */
+
+.page {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-6) var(--sp-8);
+  box-sizing: border-box;
+  min-width: 0;
+  color: var(--text);
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.crumbs li + li::before {
+  content: '/';
+  margin-right: var(--sp-2);
+  color: var(--text-muted);
+}
+
+.crumbs a {
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.crumbs a:hover {
+  color: var(--action);
+  text-decoration: underline;
+}
+
+.intro {
+  padding: var(--sp-6);
+  border-radius: var(--r-lg);
+  background: var(--grad-soft);
+  border: 1px solid var(--rule);
+}
+
+.eyebrow {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  line-height: var(--lh-display);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.lede {
+  margin: var(--sp-3) 0 0;
+  max-width: 68ch;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-2);
+}
+
+.note {
+  margin: var(--sp-3) 0 0;
+  max-width: 68ch;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-muted);
+}
+
+.method {
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-3) var(--sp-4);
+  max-width: 68ch;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-2);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0 0;
+}
+
+.stat {
+  margin: 0;
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  min-width: 0;
+}
+
+.statLabel {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.statValue {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-title);
+  line-height: var(--lh-title);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sourceNote {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta);
+  color: var(--text-muted);
+}
+
+.section {
+  margin-top: var(--sp-7);
+}
+
+.h2 {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-subtitle);
+  line-height: var(--lh-subtitle);
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  text-decoration: none;
+}
+
+.chip:hover {
+  border-color: var(--action);
+  color: var(--action);
+}
+
+.chipCount {
+  color: var(--text-muted);
+}
+
+.list {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: block;
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  line-height: var(--lh-subtitle);
+  font-weight: 600;
+}
+
+.cardLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.cardLink:hover {
+  color: var(--action);
+  text-decoration: underline;
+}
+
+.company {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.quote {
+  margin: var(--sp-3) 0 0;
+  padding-left: var(--sp-3);
+  border-left: 2px solid var(--action);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-2);
+}
+
+.empty {
+  padding: var(--sp-6);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  border: 1px dashed var(--rule);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+}
+
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-6);
+  border-radius: var(--r-lg);
+  background: var(--grad-panel);
+  border: 1px solid var(--rule);
+}
+
+.ctaText {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+.ctaTitle {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+}
+
+.btnPrimary,
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btnPrimary {
+  background: var(--grad-brand);
+  color: var(--action-ink);
+}
+
+.btnPrimary:hover {
+  background: var(--grad-brand-hover);
+}
+
+.btnSecondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--rule-strong);
+}
+
+.btnSecondary:hover {
+  border-color: var(--action);
+  color: var(--action);
+}
+
+.btnPrimary:focus-visible,
+.btnSecondary:focus-visible,
+.chip:focus-visible,
+.cardLink:focus-visible,
+.inlineLink:focus-visible,
+.crumbs a:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.inlineLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--action);
+  font-size: var(--fs-body);
+}
+
+/* ── Job page ───────────────────────────────────────────────────────────── */
+
+.jobLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--sp-6);
+  margin-top: var(--sp-5);
+  align-items: start;
+}
+
+.facts {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+}
+
+.fact {
+  margin: 0;
+}
+
+.factLabel {
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.factValue {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.prose {
+  max-width: 68ch;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.prose p {
+  margin: 0 0 var(--sp-3);
+  white-space: pre-line;
+}
+
+/* ── Ticker ─────────────────────────────────────────────────────────────── */
+
+.ticker {
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-6);
+  box-sizing: border-box;
+}
+
+.tickerList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2) var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tickerItem {
+  min-width: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.tickerLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.tickerLink:hover {
+  color: var(--action);
+  text-decoration: underline;
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: var(--sp-4) var(--sp-4) var(--sp-7);
+  }
+
+  .intro {
+    padding: var(--sp-4);
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jobLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cta {
+    padding: var(--sp-4);
+  }
+
+  .ticker {
+    padding: var(--sp-4);
+  }
+
+  .tickerList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Apply - Example Co</title>
+  <meta property="og:site_name" content="Example Co">
+</head>
+<body>
+  <div class="jobTitle">Maintenance Engineer</div>
+  <div class="jobLocation">Rotterdam, NL</div>
+  <div class="applicationSteps"><span class="currentStep">Candidate Profile</span><span>Questions</span></div>
+  <form id="careerApplyForm" name="careerApplyForm" method="post" action="/careers?company=ExampleCoP&amp;career_ns=job_application">
+    <div class="field"><label for="fbclc_fName">First Name *</label><input type="text" id="fbclc_fName" name="fbclc_fName" aria-required="true"></div>
+    <div class="field"><label for="fbclc_lName">Last Name *</label><input type="text" id="fbclc_lName" name="fbclc_lName" aria-required="true"></div>
+    <div class="field"><label for="fbclc_email">Email *</label><input type="text" id="fbclc_email" name="fbclc_email" aria-required="true"></div>
+    <div class="field"><label for="fbclc_cellPhone">Cell Phone</label><input type="text" id="fbclc_cellPhone" name="fbclc_cellPhone"></div>
+    <div class="field"><label for="fbclc_city">City</label><input type="text" id="fbclc_city" name="fbclc_city"></div>
+    <div class="field"><label for="fbclc_zip">Postal Code</label><input type="text" id="fbclc_zip" name="fbclc_zip"></div>
+    <div class="field">
+      <label for="fbclc_country">Country of Residence</label>
+      <select id="fbclc_country" name="fbclc_country"><option value="">No Selection</option><option value="NL">Netherlands</option><option value="BE">Belgium</option></select>
+    </div>
+    <div class="attachmentField"><label>Resume *</label><input type="file" id="fbclc_resumeUpload" name="fbclc_resumeUpload"></div>
+    <div class="buttons"><button type="button" class="sfButton">Cancel</button><button type="button" class="sfButton primary">Next</button></div>
+  </form>
+</body>
+</html>

@@ -55,14 +55,18 @@ function envNum(name: string, fallback: number): number {
   return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
 }
 
-/** Tier price + daily cap defaults — de-duplicates the constants previously
- *  hardcoded in roboapply/routes/settings.ts and RoboApplyMissionService.ts. */
+/** Tier price + daily cap defaults. The one copy: the V1 settings route that
+ *  used to hard-code them was deleted in WP-75 and the V1 mission service no
+ *  longer holds its own. `dailyCap` is the V1 applications-a-day figure; it is
+ *  still written to `RoboApplyMission.dailyCap` on a tier change and shown by
+ *  the legacy account summary and the admin console (`tierDailyCap`). The
+ *  clone's limits live in the credits catalog (platform/credits). */
 const TIER_DEFAULTS: Record<RoboApplyTierKey, { priceUsdMonthly: number; dailyCap: number }> = {
   free: { priceUsdMonthly: 0, dailyCap: 3 },
   premium: { priceUsdMonthly: 19, dailyCap: 15 },
   premium_plus: { priceUsdMonthly: 49, dailyCap: 30 },
   // Mock-interview subscription plans (canonical pricing lives in
-  // mockInterviewPlans.ts; dailyCap here only governs legacy auto-apply so
+  // mockInterviewPlans.ts; dailyCap is the legacy V1 figure, kept so
   // starter/growth don't fall through to the free default).
   starter: { priceUsdMonthly: 15, dailyCap: 15 },
   growth: { priceUsdMonthly: 29, dailyCap: 30 },

@@ -1,0 +1,30 @@
+# GoApply interview voice worker on Kubernetes (Aliyun ACK, cn-shanghai).
+#
+# This file is a pointer. It defines nothing: applying it creates no object.
+#
+# The worker's Deployment lives in ONE place, the mainland stack's kustomize
+# base, next to the API, web and gateway it runs with:
+#
+#   deploy/cn/k8s/worker.yaml            (listed in deploy/cn/k8s/kustomization.yaml)
+#
+# WP-63b's standalone recipe that used to be here (Deployment
+# `goapply-interview-agent` + an HPA, Secret `goapply-interview-agent-env`) was
+# folded into that manifest in the integration wave (INT-13). What changed:
+#
+#   - name:     Deployment `worker` in namespace `goapply`
+#   - image:    `goapply-worker`, built from interview-agent/deploy/cn/Dockerfile
+#               by .github/workflows/deploy-cn.yml and rewritten to the ACR name
+#               by deploy/cn/render-overlay.mjs
+#   - secret:   `goapply-worker-env`, filled from ./worker.env.example
+#               (kubectl -n goapply create secret generic goapply-worker-env \
+#                  --from-env-file=<filled copy of worker.env.example>)
+#   - pins:     INTERVIEW_ENGINE_AGENT_NAME=GoApply-Interview, WORKER_BRAND=goapply,
+#               LLM_BACKEND=openai_compatible, STT_BACKEND=dashscope_paraformer,
+#               TTS_BACKEND=dashscope_cosyvoice (unchanged)
+#   - replicas: 0 in the base; the release overlay sets the count
+#               (--worker-replicas / CI variable CN_WORKER_REPLICAS). The CPU
+#               autoscaler was not carried over: the overlay sets `replicas` on
+#               every rollout, which would fight an HPA. Scale by the count.
+#   - drain:    terminationGracePeriodSeconds 5400 (unchanged)
+#
+# Deploy: docs/runbooks/cn-deploy.md. Render offline: kubectl kustomize deploy/cn/k8s

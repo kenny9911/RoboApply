@@ -1,0 +1,99 @@
+# ci — the gates every change must pass (INT-13; WP-70 R5).
+#
+# Three packages live in this repository and root `npm test` covers only the
+# first, so each gets its own job:
+#
+#   root             Next.js app + Express API   typecheck:server, typecheck:web, test, check
+#   extension        browser extension (MV3)      typecheck, test (unit tests + the no-submit gate)
+#   interview-agent  LiveKit voice worker         typecheck, test (builds, then node --test)
+#
+# - No deploy step and no secrets: nothing here reads the `secrets` context,
+#   calls a provider, or connects to a database. `prisma generate` (root
+#   postinstall) only reads the schema.
+# - DATABASE_URL in the root job is a placeholder, not a database. A runner has
+#   no .env, and server/src/lib/prisma.ts refuses to build the client without a
+#   connection string, which fails every test file that imports it (89 files on
+#   a clean checkout). The address is a closed loopback port and carries no
+#   password, so a test that does reach the client gets "connection refused"
+#   at once and never leaves the runner.
+# - The extension's Playwright e2e (`npm --prefix extension run e2e`) needs a
+#   browser and is run before a release, not here.
+# - Deployments are separate: Vercel's Git integration (RoboApply) and the
+#   manual deploy-cn workflow (GoApply).
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  root:
+    name: Root (API + web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://ci@127.0.0.1:1/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Typecheck the API
+        run: npm run typecheck:server
+      - name: Typecheck the web app
+        run: npm run typecheck:web
+      - name: Tests
+        run: npm test
+      - name: Design, copy, LLM cost, API boundary, extension and zh-variant checks
+        run: npm run check
+
+  extension:
+    name: Extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            extension/package-lock.json
+      # The extension imports the brand registry and the server's extension
+      # contract from the root sources, so their dependencies (zod) come from
+      # the root install.
+      - run: npm ci --no-audit --no-fund
+      - run: npm --prefix extension ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm --prefix extension run typecheck
+      - name: Tests and the no-submit gate
+        run: npm --prefix extension test
+
+  interview-agent:
+    name: Interview agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: interview-agent/package-lock.json
+      - run: npm --prefix interview-agent ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm --prefix interview-agent run typecheck
+      - name: Tests
+        run: npm --prefix interview-agent test

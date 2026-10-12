@@ -5,6 +5,10 @@
 // TanStack Query wrappers around `raV2Api.goal.{get,upsert}`. The Home page
 // (and later /settings) both read from the same `['v2', 'goal']` key so a
 // goal update from one place immediately invalidates the other.
+//
+// WP-20: the goal is the goal card's surface (title shown, target date,
+// weekly goal, notes). Search filters live in the search profiles
+// (hooks/search); a goal edit does not change the feed's filters.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { raV2Api } from '../lib/api/v2';

@@ -6,20 +6,71 @@
 // screen. On launch it creates a real InterviewSession via the Interview
 // Engine (LiveKit voice) and routes to the live room. The engine's persona ids
 // are aligned to this catalog's interviewer ids, so the selection maps 1:1.
+//
+// WP-43 (practice from any job):
+//   - `/practice?job=<id>[&resume=<id>]` (hooks/shared/useLaunchPractice)
+//     prefills the role, company and posting from the server, which also
+//     picks the resume (the job's tailored one, else the primary) and
+//     market-checks the job (404 → a one-line notice).
+//   - Sessions are created through `practiceApi.create`: the server loads the
+//     job, the PII-redacted resume and the recording consent itself.
+//   - Recording is off unless turned on in the RecordingConsentSheet (H8).
+//   - A 402 opens the shared out-of-credits sheet; when the free first
+//     practice still waits on verification, a notice says how to get it.
+//   - GoApply without voice offers the written practice with a one-line reason.
+//     It runs through the first-party practice routes: the server checks the
+//     GoApply gate, loads the job, meters credits and ticks the checklist.
+//   - The market-requirements preview (web search + LLM) is offered on both
+//     brands (D5). The server refuses it without the AI gate, and its search
+//     query never carries personal information.
+//   - Voice is offered wherever the server says it is available
+//     (`setup.voice`, the `ai.interviewVoice` capability): no brand term here.
+//   - GoApply (WP-66): the catalog lists the AI-interview practice format
+//     first, under its own name (practiceCn.format.*); it runs 20–30 minutes,
+//     so only those lengths are offered and priced. Start asks WeChat once for
+//     the "your report is ready" notice (SubscribeOnTap; inside WeChat only).
+//   - The setup may grant the free first practice; the balance is refetched
+//     when it does, so Start is not left disabled.
+//
+// What the first plan on screen promises (FIX-6):
+//   - The length starts on one the balance covers: the type's own length when
+//     it is affordable, else the longest offered length that is. A new user
+//     with one credit is not shown a 45-minute plan with Start turned off.
+//   - Where the practice runs in writing (or voice is not available at all),
+//     no video or voice format is offered.
+//   - "Get credits" appears only where something is on sale (a practice pack,
+//     or a plan that raises the allowance), and the "verify to get your first
+//     practice free" notice only when the balance covers no length at all.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RoboApiError } from '../../../lib/api/client';
-import { raV2Api } from '../../../lib/api/v2';
-import { useCredits } from '../../../hooks/useAccount';
+import { accountKeys, useCredits } from '../../../hooks/useAccount';
+import { useCredits as useCreditSummary } from '../../../hooks/shared/useCredits';
+import { reportCreditsExhausted } from '../../../hooks/shared/useCreditGate';
+import { useFlag } from '../../../lib/flags';
+import { usePlans, visiblePlans } from '../../../hooks/credits/usePlans';
+import {
+  PracticeJobBanner,
+  PracticeNotices,
+  RecordingConsentSheet,
+  RecordingRow,
+  TextPracticeRoom,
+  setupNotices,
+} from '../../../components/features/practice';
 
+import { isCnFormatType, plannedMinutesForType, useLocalizeType } from '../../../components/features/practice-cn';
+import { SubscribeOnTap } from '../../../components/features/notify-cn';
 import { useMockCatalog } from '../../../hooks/useMockV3';
 import {
   PracticeSetupFlow,
   PracticeSetupError,
   PracticeSetupSkeleton,
   JD_MIN_CHARS,
+  practiceDurationOptions,
   type RoleSourceMode,
 } from '../../../components/v3/mock';
 import { useInterviewPreview } from '../../../hooks/useInterviewPreview';
@@ -28,6 +79,9 @@ import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
 import { formatRelativeTime } from '../../../lib/relativeTime';
 import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
 import {
+  canAffordMinutes,
+  defaultPracticeMinutes,
+  longestAffordableMinutes,
   mockCreditsForMinutes,
   normalizeMockCreditMinutes,
 } from '../../../lib/mockInterviewCredits';
@@ -36,15 +90,33 @@ import type { RAMockFormat, RAMockSessionSummary } from '../../../lib/api/v2/typ
 import {
   ieErrorInfo,
   interviewEngineApi,
-  type IECreateBody,
+  practiceApi,
+  practiceErrorInfo,
   type IESessionSummary,
+  type PracticeCreateBody,
+  type PracticeFirstState,
+  type PracticeRecordingRequest,
+  type PracticeSetupJob,
 } from '../../../lib/api/interviewEngine';
 
 const DEFAULT_DURATION_MINUTES = 30;
 
-// The blueprint agent clips résumé context to 2000 chars server-side — sending
-// more just bloats the create body.
-const RESUME_CONTEXT_MAX_CHARS = 2000;
+/** Read once on mount: `?job=`, `?resume=` (WP-43 route contract). */
+function readJobParams(): { job: string | null; resume: string | null } {
+  if (typeof window === 'undefined') return { job: null, resume: null };
+  const params = new URLSearchParams(window.location.search);
+  const clip = (v: string | null) => (v && v.trim() ? v.trim().slice(0, 64) : null);
+  return { job: clip(params.get('job')), resume: clip(params.get('resume')) };
+}
+
+interface TextRun {
+  jobId: string | null;
+  role: string;
+  interviewerId: string;
+  typeId: string;
+  language: string;
+  durationMinutes: number;
+}
 
 /** Cheap client-side working title from a pasted JD — the first meaningful
  *  line, clipped. The backend blueprint agent infers the canonical title; this
@@ -60,9 +132,11 @@ function deriveRoleLabelFromJd(jd: string): string {
 
 export default function MockSetupPage() {
   const t = useTranslations('practice');
-  const { localizeRole, localizeType } = useMockRoleLabels();
+  const { localizeRole } = useMockRoleLabels();
+  const localizeType = useLocalizeType();
   const router = useRouter();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const catalogQuery = useMockCatalog();
   const catalog = catalogQuery.data?.catalog;
@@ -70,27 +144,42 @@ export default function MockSetupPage() {
   const replayHydratedRef = useRef(false);
   const replayTargetRef = useRef<string | null>(null);
 
-  // Résumé context for the blueprint prompt (the interviewer tailors question
-  // targeting to it). Fetched in the background at page load — never inside
-  // launch(), which must stay instant — and strictly best-effort: no résumé
-  // (or a failed fetch) simply omits it from the create body.
-  const [resumeContext, setResumeContext] = useState<string | null>(null);
+  // WP-43: the job (and the resume the interviewer reads) come from the
+  // server. The params are read after mount so the first frame stays stable.
+  const [jobParams, setJobParams] = useState<{ job: string | null; resume: string | null } | null>(null);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { resumes } = await raV2Api.resumes.list();
-        // Primary résumé preferred; the list is lastEditedAt-desc, so the
-        // fallback is the most recently edited one.
-        const pick = resumes.find((r) => r.isPrimary) ?? resumes[0];
-        if (!pick) return;
-        const { resume } = await raV2Api.resumes.get(pick.id);
-        const md = resume.resumeMarkdown?.trim();
-        if (!cancelled && md) setResumeContext(md.slice(0, RESUME_CONTEXT_MAX_CHARS));
-      } catch { /* best-effort — interview setup works without a résumé */ }
-    })();
-    return () => { cancelled = true; };
+    setJobParams(readJobParams());
   }, []);
+  const setupQuery = useQuery({
+    queryKey: ['practice', 'setup', jobParams?.job ?? null, jobParams?.resume ?? null],
+    queryFn: () => practiceApi.setup({ job: jobParams?.job, resume: jobParams?.resume }),
+    enabled: jobParams !== null,
+    retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const setup = setupQuery.data ?? null;
+  // The setup tops up the free first practice; when it just did, the balance
+  // fetched on mount is stale (Start would stay disabled). Refetch it once.
+  const grantRefreshedRef = useRef(false);
+  useEffect(() => {
+    if (grantRefreshedRef.current || setup?.firstPractice.grant !== 'granted') return;
+    grantRefreshedRef.current = true;
+    void queryClient.invalidateQueries({ queryKey: accountKeys.credits() });
+  }, [setup, queryClient]);
+  const jobNotFound = setupQuery.isError && practiceErrorInfo(setupQuery.error).code === 'job_not_found';
+  const [job, setJob] = useState<PracticeSetupJob | null>(null);
+  const prefilledJobRef = useRef<string | null>(null);
+
+  const [recording, setRecording] = useState<PracticeRecordingRequest>({ audio: false, video: false });
+  const [recordingSheetOpen, setRecordingSheetOpen] = useState(false);
+  const [firstPracticeFrom402, setFirstPracticeFrom402] = useState<PracticeFirstState | null>(null);
+  const [textRun, setTextRun] = useState<TextRun | null>(null);
+  const showQuestionsLink = useFlag('interviewBank');
+  const studentPlans = useFlag('student');
+  const creditSummary = useCreditSummary();
+  // The server says whether a sellable plan raises the allowance.
+  const upgradable = creditSummary.data?.summary.upgradable === true;
 
   // Recent sessions come from the engine (completed voice interviews), mapped to
   // the strip's shape using the catalog for display names.
@@ -114,6 +203,24 @@ export default function MockSetupPage() {
   // Default to Video — the recommended, most realistic format (eye contact +
   // body language practice). The candidate can switch to voice-only.
   const [format, setFormat] = useState<RAMockFormat>('video');
+
+  // WP-43: prefill once from the job — the posting becomes the brief and the
+  // job title the role. The user can still edit the post or drop the job.
+  useEffect(() => {
+    const next = setup?.job ?? null;
+    if (!next || prefilledJobRef.current === next.id) return;
+    prefilledJobRef.current = next.id;
+    setJob(next);
+    setSourceMode('jd');
+    setJdText(next.jdText);
+    setRole(null);
+  }, [setup]);
+
+  function clearJob() {
+    setJob(null);
+    setJdText('');
+    setSourceMode('role');
+  }
 
   // Pre-launch market-requirements preview (mutation = user-triggered only).
   const previewMut = useInterviewPreview();
@@ -262,21 +369,50 @@ export default function MockSetupPage() {
     [role, sourceMode, catalog],
   );
 
-  const durationMinutes = durationOverride ?? type?.minutes ?? DEFAULT_DURATION_MINUTES;
+  // Mirror the server's runtime credit policy. The optional-field fallback is
+  // only for a rolling deployment where the frontend reaches an older API.
+  const creditMinutes = normalizeMockCreditMinutes(creditsQ.data?.creditMinutes);
+  const creditBalance = creditsQ.data?.balance;
+  const durationOptions = useMemo(() => practiceDurationOptions(type), [type]);
+
+  // GoApply's AI-interview practice runs 20–30 minutes: the length shown, priced
+  // and sent is the one the server will run (it clamps the same way).
+  // Until the user picks a length, the plan starts on one the balance covers
+  // (the type's own length when it does; the longest offered one otherwise).
+  const durationMinutes = plannedMinutesForType(
+    type?.id,
+    durationOverride ?? defaultPracticeMinutes({
+      preferred: plannedMinutesForType(type?.id, type?.minutes ?? DEFAULT_DURATION_MINUTES),
+      options: durationOptions,
+      balance: creditBalance,
+      creditMinutes,
+    }),
+  );
 
   // The effective role comes from EITHER the picked chip (browse) or the pasted
   // JD's working title — a single source of truth for launch + the LaunchBar.
   const jdTrimmed = jdText.trim();
-  const effectiveRole =
-    sourceMode === 'jd' ? (jdTrimmed ? deriveRoleLabelFromJd(jdTrimmed) : null) : role;
-  const hasRoleSource = sourceMode === 'role' ? !!role : jdTrimmed.length >= JD_MIN_CHARS;
-  const canLaunch = !!(interviewer && type && hasRoleSource);
-  // Preview just needs a target + persona + type; it never gates launch.
-  const canPreview = !!(interviewer && type && hasRoleSource);
+  // A job practice keeps the job's title and works even when the stored post
+  // is short: the server loads the job itself.
+  const jobActive = !!job && sourceMode === 'jd';
+  const effectiveRole = jobActive
+    ? job!.title
+    : sourceMode === 'jd' ? (jdTrimmed ? deriveRoleLabelFromJd(jdTrimmed) : null) : role;
+  const hasRoleSource = jobActive || (sourceMode === 'role' ? !!role : jdTrimmed.length >= JD_MIN_CHARS);
+  // GoApply gates (server-decided): no AI practice without a phone / consent;
+  // without voice, the practice runs in writing.
+  const aiBlocked = setup ? !setup.ai.allowed : false;
+  const textMode = !!setup && setup.ai.allowed && !setup.voice.available && setup.voice.reason === 'voice_unavailable';
+  const canLaunch = !!(interviewer && type && hasRoleSource) && !aiBlocked;
+  // The preview runs a web search and an LLM on the post, on both brands: only
+  // where AI is allowed (GoApply's consent gate). It never gates launch.
+  const canPreview = !!(interviewer && type && hasRoleSource) && !aiBlocked;
   const targetKey = hasRoleSource
-    ? sourceMode === 'role'
-      ? `role:${role}`
-      : `jd:${deriveRoleLabelFromJd(jdTrimmed)}`
+    ? jobActive
+      ? `job:${job!.id}`
+      : sourceMode === 'role'
+        ? `role:${role}`
+        : `jd:${deriveRoleLabelFromJd(jdTrimmed)}`
     : null;
 
   // Once the target is known, build a sensible plan immediately. Role-aware
@@ -307,6 +443,9 @@ export default function MockSetupPage() {
       null;
     const nextTypeId =
       recs?.typeIds[0] ??
+      // GoApply: a job post or pasted description starts on the AI-interview
+      // practice format (the catalog lists it only there); a role keeps its recommendation.
+      catalog.types.find((item) => isCnFormatType(item.id))?.id ??
       catalog.types.find((item) => item.id === 'behavioral')?.id ??
       catalog.types[0]?.id ??
       null;
@@ -384,13 +523,60 @@ export default function MockSetupPage() {
     }
   }
 
+  /**
+   * A start the server refused for a reason this page shows: out of credits
+   * (the shared sheet + inline shortfall + how to get the free first one), an
+   * unknown job, or the GoApply gate. True = handled.
+   */
+  function handleRefusal(err: unknown): boolean {
+    const info = ieErrorInfo(err);
+    const practice = practiceErrorInfo(err);
+    if (info.code === 'insufficient_credits') {
+      const p = (err instanceof RoboApiError ? err.payload : {}) as { balance?: number; required?: number };
+      setInsufficientCredits({ balance: p.balance ?? 0, required: p.required ?? 0 });
+      setFirstPracticeFrom402(practice.firstPractice);
+      reportCreditsExhausted({
+        bucket: 'practice',
+        resetsAt: null,
+        upgradable,
+      });
+      void queryClient.invalidateQueries({ queryKey: accountKeys.credits() });
+      return true;
+    }
+    if (practice.code === 'job_not_found') {
+      clearJob();
+      setStartError('generic');
+      return true;
+    }
+    if (practice.code === 'phone_binding_required' || (practice.code === 'ai_unavailable' && practice.reason !== 'voice_unavailable')) {
+      void setupQuery.refetch();
+      setStartError('generic');
+      return true;
+    }
+    return false;
+  }
+
   async function launch() {
     if (!canLaunch || !canAfford || !interviewer || !type) return;
-    setStarting(true);
     setStartError(null);
     setInsufficientCredits(null);
+    setFirstPracticeFrom402(null);
+    if (textMode) {
+      // GoApply without voice: the written practice runs on this page, for
+      // the job when there is one (the server loads it and meters the run).
+      setTextRun({
+        jobId: jobActive ? job!.id : null,
+        role: effectiveRole ?? '',
+        interviewerId: interviewer.id,
+        typeId: type.id,
+        language,
+        durationMinutes,
+      });
+      return;
+    }
+    setStarting(true);
     try {
-      const body: IECreateBody = {
+      const body: PracticeCreateBody = {
         role: effectiveRole ?? '',
         jdText: sourceMode === 'jd' ? jdTrimmed : undefined,
         interviewType: type.id,
@@ -399,21 +585,21 @@ export default function MockSetupPage() {
         language,
         durationMinutes,
         candidateName: user?.name ?? undefined,
-        // Whatever the background fetch has by now — a still-pending fetch is
-        // simply omitted rather than delaying the launch.
-        resumeContext: resumeContext ?? undefined,
+        // The server loads the job, picks and redacts the resume, and checks
+        // the recording consent itself.
+        jobId: jobActive ? job!.id : null,
+        resumeId: jobParams?.resume ?? null,
+        recording: { audio: recording.audio, video: recording.audio && recording.video && format === 'video' },
       };
       // The server answers as soon as the session row exists (status
       // 'preparing'); the interview plan is written while the live page shows
       // its own progress, so navigate straight away.
-      const { session } = await interviewEngineApi.create(body);
+      const { session } = await practiceApi.create(body);
       router.push(`/practice/${session.id}`);
     } catch (err) {
       const info = ieErrorInfo(err);
-      // 402 → out of mock-interview credits. Show an upsell, not a generic error.
-      if (info.code === 'insufficient_credits') {
-        const p = (err instanceof RoboApiError ? err.payload : {}) as { balance?: number; required?: number };
-        setInsufficientCredits({ balance: p.balance ?? 0, required: p.required ?? 0 });
+      if (handleRefusal(err)) {
+        // Shown on the page (sheet, notice or start error).
       } else if (info.network) {
         setStartError('network');
       } else if (info.code === 'llm_unavailable' || info.code === 'worker_unavailable' || info.status === 503) {
@@ -427,16 +613,27 @@ export default function MockSetupPage() {
     }
   }
 
-  // Mirror the server's runtime credit policy. The optional-field fallback is
-  // only for a rolling deployment where the frontend reaches an older API.
-  const creditMinutes = normalizeMockCreditMinutes(creditsQ.data?.creditMinutes);
   const creditCost = mockCreditsForMinutes(durationMinutes, creditMinutes);
-  const canAfford = creditsQ.data === undefined || creditsQ.data.balance + 1e-9 >= creditCost;
+  const canAfford = creditBalance === undefined || canAffordMinutes(durationMinutes, creditBalance, creditMinutes);
+  // The balance covers none of the offered lengths: only then is the user
+  // "short of credits" in the sense the first-practice notice means. A balance
+  // that covers a shorter length is repaired by "Use N min instead".
+  const noLengthAffordable =
+    creditBalance !== undefined && longestAffordableMinutes(durationOptions, creditBalance, creditMinutes) === null;
+
+  // Is there anything to buy? A plan that raises the allowance (the server
+  // says so), or a practice pack on sale right now (the plans API says what is
+  // sellable on this brand). The plans are only read when a shortfall is on screen and
+  // the summary has not already answered.
+  const plansQ = usePlans({ enabled: (!canAfford || insufficientCredits !== null) && !upgradable });
+  const canGetCredits =
+    upgradable ||
+    visiblePlans(plansQ.data?.plans, { studentEnabled: studentPlans }).some((plan) => plan.kind === 'pack' && plan.sellable);
 
   // Fetch the market-grounded requirements preview for the current selection.
   // User-triggered (the panel's Preview button); never auto-fires.
   function runPreview() {
-    if (!interviewer || !type || !hasRoleSource) return;
+    if (!canPreview || !interviewer || !type) return;
     previewMut.mutate({
       role: sourceMode === 'role' ? role ?? undefined : undefined,
       jdText: sourceMode === 'jd' ? jdTrimmed : undefined,
@@ -444,6 +641,25 @@ export default function MockSetupPage() {
       personaId: interviewer.id,
       language,
     });
+  }
+
+  if (textRun) {
+    return (
+      <TextPracticeRoom
+        jobId={textRun.jobId}
+        onStartRefused={(err) => {
+          if (!handleRefusal(err)) return false;
+          setTextRun(null);
+          return true;
+        }}
+        role={textRun.role}
+        interviewerId={textRun.interviewerId}
+        typeId={textRun.typeId}
+        language={textRun.language}
+        durationMinutes={textRun.durationMinutes}
+        onExit={() => setTextRun(null)}
+      />
+    );
   }
 
   if (catalogQuery.isError) {
@@ -454,8 +670,43 @@ export default function MockSetupPage() {
     return <PracticeSetupSkeleton />;
   }
 
+  const notices = setupNotices({
+    setup,
+    jobNotFound,
+    creditsShort: !canAfford && noLengthAffordable,
+    firstPracticeFrom402,
+  });
+  const recordingChoice: PracticeRecordingRequest = {
+    audio: recording.audio,
+    video: recording.audio && recording.video && format === 'video',
+  };
+
   return (
+    <>
     <PracticeSetupFlow
+      topSlot={
+        <>
+          {jobActive && job ? (
+            <PracticeJobBanner job={job} resume={setup?.resume ?? null} onClear={clearJob} />
+          ) : null}
+          <PracticeNotices kinds={notices} />
+        </>
+      }
+      introAside={
+        showQuestionsLink ? <Link href="/practice/questions">{t('questionsLink')}</Link> : null
+      }
+      dockSlot={
+        setup && hasRoleSource && !textMode ? (
+          <RecordingRow
+            available={setup.recording.available}
+            choice={recordingChoice}
+            onChange={() => setRecordingSheetOpen(true)}
+          />
+        ) : null
+      }
+      startLabel={textMode ? t('gate.startText') : undefined}
+      // GoApply inside WeChat: Start also asks, once, to be told when the report is ready.
+      wrapStart={(button) => <SubscribeOnTap template="report_ready">{button}</SubscribeOnTap>}
       categories={catalog.roleCategories}
       totalRoles={catalog.totalRoles}
       query={query}
@@ -483,6 +734,8 @@ export default function MockSetupPage() {
       recommendedTypeIds={recs?.typeIds}
       format={format}
       onFormatChange={setFormat}
+      // Video or voice is a choice only where the voice practice can run.
+      formatChoice={setup ? setup.voice.available : true}
       language={language}
       onLanguageChange={setLanguage}
       durationMinutes={durationMinutes}
@@ -505,12 +758,28 @@ export default function MockSetupPage() {
       creditCost={creditCost}
       creditMinutes={creditMinutes}
       creditsRemaining={creditsQ.data?.balance}
+      // The written practice is metered like a live one (C42: the first is free).
       canAfford={canAfford}
       startError={startError}
       insufficientCredits={insufficientCredits}
+      canGetCredits={canGetCredits}
       canLaunch={canLaunch}
       starting={starting}
       onStart={() => void launch()}
     />
+    {setup?.recording.available ? (
+      <RecordingConsentSheet
+        open={recordingSheetOpen}
+        onClose={() => setRecordingSheetOpen(false)}
+        mode={format}
+        videoAllowed={setup.media?.recordVideo !== false}
+        initial={recordingChoice}
+        onConfirm={(choice) => {
+          setRecording(choice);
+          setRecordingSheetOpen(false);
+        }}
+      />
+    ) : null}
+    </>
   );
 }

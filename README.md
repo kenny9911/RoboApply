@@ -9,6 +9,10 @@ AI candidate-facing job-application app — **extracted from the RoboHire monore
 
 See [`docs/ENGINEERING_PLAN.md`](docs/ENGINEERING_PLAN.md) for architecture & rationale and [`docs/TASK_PLAN.md`](docs/TASK_PLAN.md) for the phased execution checklist.
 
+## Two brands, one shared stack
+
+On the `feat/jobright-clone` branch this codebase serves two product brands, resolved per request from the Host header: **RoboApply** (`roboapply.io`, the international market including Taiwan) and **GoApply** (`goapply.top`, mainland China). Both have the same functions and run on the same shared stack: one set of credentials for models, email, voice, storage and web push serves both. A China-specific provider (`CN_<NAME>` in `.env.example`) is an optional override of `<NAME>`, never a prerequisite, so GoApply works with no variable of its own. What differs is what follows from the market: job sources and job-search providers, language, currency and prices, the payment rail (Alipay for GoApply, Stripe for RoboApply), extra sign-in methods and legal lines. Neither brand ever submits a job application for the user. A deployment serves both brands unless `ALLOWED_BRANDS` narrows it (`ALLOWED_BRANDS=roboapply` keeps GoApply closed). The plans are indexed in [`docs/jobright-clone/README.md`](docs/jobright-clone/README.md); the parity rules are in [`docs/jobright-clone/GOAPPLY_PARITY_PLAN.md`](docs/jobright-clone/GOAPPLY_PARITY_PLAN.md). Locally, `./scripts/dev-clone.sh` starts both brands at `http://localhost:3621` and `http://goapply.localhost:3621`.
+
 ## Quick start
 
 ```bash

@@ -22,51 +22,33 @@
 //   1. Flip `NEXT_PUBLIC_USE_STUB_API=false`.
 //   2. `lib/api/v2/_real.ts` becomes the active surface.
 //   3. This file stays — it's the executable contract spec.
+//
+// WP-75 removed the dead slices (queue, activity, integrations, onboarding,
+// discover, jobs, insights, saved searches, LinkedIn URL config) here and in
+// `lib/api/v2/_real.ts`, in lockstep.
 
 import { RoboApiError } from '../api/client';
 import {
-  FIXTURE_ACTIVITY,
-  FIXTURE_AGENT_STATS,
   FIXTURE_AI_REWRITES,
   FIXTURE_GOAL,
-  FIXTURE_INSIGHT,
-  FIXTURE_INTEGRATIONS,
   FIXTURE_JOBS,
-  FIXTURE_KEYWORDS,
   FIXTURE_MOCK_CATALOG,
   FIXTURE_MOCK_QUESTIONS,
   FIXTURE_MOCK_SCORE,
   FIXTURE_MOCK_SESSIONS,
   FIXTURE_PREFERENCE_OPTIONS,
   FIXTURE_PREFERENCES,
-  FIXTURE_QUEUE,
   FIXTURE_RESUME_COACH_TIPS,
   FIXTURE_RESUMES,
-  FIXTURE_SAVED_SEARCHES,
   FIXTURE_SKILL_SUGGESTIONS,
   FIXTURE_SUMMARY_REWRITES,
   FIXTURE_TAILOR_DIFF,
   FIXTURE_TRACKER,
 } from '../fixtures';
 import type {
-  ActivityFeedParams,
-  ActivityFeedResponse,
-  AgentStatsResponse,
   GoalGetResponse,
   GoalUpsertBody,
   GoalUpsertResponse,
-  InsightsRefreshResponse,
-  InsightsWeeklyParams,
-  InsightsWeeklyResponse,
-  IntegrationResponse,
-  IntegrationsListResponse,
-  JobApplyBody,
-  JobApplyResponse,
-  JobGetParams,
-  JobGetResponse,
-  JobSaveResponse,
-  JobScoreBody,
-  JobScoreResponse,
   MockCatalogResponse,
   MockNextTurnBody,
   MockNextTurnResponse,
@@ -77,23 +59,14 @@ import type {
   PreferencesGetResponse,
   PreferencesUpdateBody,
   PreferencesUpdateResponse,
-  QueueItemResponse,
-  QueueListResponse,
-  QueueUpdateCoverBody,
-  RAActivityDay,
   RACareerGoal,
-  RACareerInsight,
-  RAIntegration,
-  RAIntegrationProvider,
   RAJob,
   RAJobListItem,
   RAJobMatchScoreView,
   RAPreferences,
-  RAQueueItem,
   RAResumeKind,
   RAResumeVariant,
   RAResumeVariantSummary,
-  RASavedSearch,
   RATrackerEntryView,
   RATrackerStatus,
   RaV2Api,
@@ -104,7 +77,6 @@ import type {
   ResumeListResponse,
   ResumePatchBody,
   ResumePatchResponse,
-  LinkedInImportConfigResponse,
   LinkedInImportArgs,
   ResumeRewriteBody,
   ResumeRewriteResponse,
@@ -112,11 +84,9 @@ import type {
   ResumeTailorDiffResponse,
   ResumeTailorApplyBody,
   ResumeTailorApplyResponse,
-  SearchListSavedResponse,
   SearchQuery,
   SearchRunParams,
   SearchRunResponse,
-  SearchSaveQueryResponse,
   TrackerBulkBody,
   TrackerBulkResponse,
   TrackerCreateBody,
@@ -126,21 +96,7 @@ import type {
   TrackerListResponse,
   TrackerPatchBody,
   TrackerPatchResponse,
-  RAWorkType,
   // ── First-run setup (two steps) ──
-  IngestRow,
-  OnboardingBootstrapBody,
-  OnboardingBootstrapResponse,
-  OnboardingConfirmBody,
-  OnboardingConfirmResponse,
-  OnboardingDraftPreferences,
-  OnboardingSeedEvidence,
-  OnboardingSeedFieldMeta,
-  OnboardingSeenBody,
-  OnboardingSeenResponse,
-  OnboardingSessionResponse,
-  OnboardingSkipBody,
-  OnboardingSkipResponse,
 } from '../api/v2/types';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -170,37 +126,11 @@ interface StubStore {
   jobs: RAJob[];
   tracker: RATrackerEntryView[];
   resumes: RAResumeVariant[];
-  savedSearches: RASavedSearch[];
-  insightsByWeek: Map<string, RACareerInsight>;
-  /** key = `${userId}:${jobId}:${resumeVariantId}` */
+  /** key = `${userId}:${jobId}:${resumeVariantId}`. Nothing writes it since
+   *  WP-75 removed `jobs.score`; search/resume readers treat it as empty. */
   matchScores: Map<string, RAJobMatchScoreView>;
-  /** last `insights.refresh()` timestamp per user, for 1/hour throttling */
-  lastInsightRefreshAt: Map<string, number>;
-  // ── V3 mutable state ──
-  /** Review queue — `send`/`skip` flip status, `updateCover` overwrites. */
-  queue: RAQueueItem[];
-  /** Connected services — `connect`/`disconnect` flip `connected` + account. */
-  integrations: RAIntegration[];
   /** Extended preferences — single mutable blob, like `goal`. */
   preferences: RAPreferences;
-  /** First-run setup — the single active fake session (null = none). */
-  onboarding: StubOnboardingSession | null;
-  /** `preferencesBlob.onboarding.autoOpens`, bumped by `seen()`. */
-  onboardingAutoOpens: number;
-}
-
-/** Mirrors the server-side `RAOnboardingSession` row closely enough for the
- *  bootstrap → confirm loop to run end-to-end against the stub. */
-interface StubOnboardingSession {
-  sessionId: string;
-  resumeVariantId: string | null;
-  resumeVariantName: string;
-  draftPreferences: OnboardingDraftPreferences;
-  fieldMeta: Record<string, OnboardingSeedFieldMeta>;
-  proposedFields: string[];
-  evidence: OnboardingSeedEvidence;
-  thin: boolean;
-  ingestRows: IngestRow[];
 }
 
 let store: StubStore | null = null;
@@ -212,17 +142,8 @@ function getStore(): StubStore {
     jobs: structuredClone(FIXTURE_JOBS),
     tracker: structuredClone(FIXTURE_TRACKER),
     resumes: structuredClone(FIXTURE_RESUMES),
-    savedSearches: structuredClone(FIXTURE_SAVED_SEARCHES),
-    insightsByWeek: new Map([
-      [FIXTURE_INSIGHT.weekStartUtc, structuredClone(FIXTURE_INSIGHT)],
-    ]),
     matchScores: new Map(),
-    lastInsightRefreshAt: new Map(),
-    queue: structuredClone(FIXTURE_QUEUE),
-    integrations: structuredClone(FIXTURE_INTEGRATIONS),
     preferences: structuredClone(FIXTURE_PREFERENCES),
-    onboarding: null,
-    onboardingAutoOpens: 0,
   };
   return store;
 }
@@ -377,98 +298,6 @@ function syntheticMatchScore(jobId: string, resumeVariantId: string): number {
     h = (h * 31 + s.charCodeAt(i)) >>> 0;
   }
   return 35 + (h % 64); // 35..98
-}
-
-function syntheticMatchExplanation(
-  job: RAJob,
-  resumeVariantId: string,
-  score: number,
-): RAJobMatchScoreView {
-  const baseSkill = score - 5;
-  const baseExp = score + (resumeVariantId.length % 7) - 3;
-  return {
-    score,
-    explanation: {
-      strengths: [
-        `Strong overlap on the core ${job.title.split(',')[0].trim()} responsibilities`,
-        'Production ML experience aligns with the team\'s stated needs',
-        'Recent role at a high-growth company maps to the company stage',
-      ],
-      gaps: [
-        score < 70
-          ? 'The resume shows no work in the industry this role calls out'
-          : 'No project on the resume matches what this job post asks for most',
-        score < 60
-          ? 'They ask for more years than the resume shows'
-          : 'Recent roles have no numbers in them',
-      ],
-      rationale:
-        `This is a ${score >= 80 ? 'great fit' : score >= 60 ? 'good fit' : score >= 40 ? 'possible fit' : 'unlikely fit'}. ` +
-        `The resume covers the headline requirements and shows recent production experience at relevant scale. ` +
-        `The top three bullets do not mention the product area this job post names.`,
-      signals: {
-        skills: Math.max(0, Math.min(100, baseSkill)),
-        experience: Math.max(0, Math.min(100, baseExp)),
-        location: job.workType === 'remote' ? 95 : 80,
-        salary: 85,
-      },
-    },
-    generatedAt: nowIso(),
-    resumeVariantId,
-    stale: false,
-  };
-}
-
-function syntheticInsightForCurrentWeek(
-  tracker: RATrackerEntryView[],
-): RACareerInsight {
-  const recent = tracker
-    .filter((t) => t.status === 'applied' || t.status === 'interviewing')
-    .slice(0, 2)
-    .map((t) => t.id);
-  return {
-    id: newId('cm_in'),
-    userId: DEMO_USER_ID,
-    weekStartUtc: currentWeekStartUtc(),
-    summaryMarkdown:
-      `## Week summary\n\n` +
-      `You're moving steadily through your applications. Top priority this week: keep momentum on your active ` +
-      `interviews and follow up on applications past their 5-day window.`,
-    citedTrackerIds: recent,
-    metrics: {
-      applicationsCount: tracker.filter((t) => t.dateApplied).length,
-      interviewsCount: tracker.filter((t) => t.status === 'interviewing').length,
-      offerCount:
-        tracker.filter((t) => t.status === 'accepted' || t.status === 'negotiating')
-          .length,
-      weeksToOfferEstimate: 4,
-      recruiterViewsCount: 10,
-      topSkillsObserved: ['LLM evaluation', 'TypeScript', 'Python'],
-    },
-    modelUsed: 'stub',
-    citationGuardPassed: true,
-    generatedAt: nowIso(),
-    createdAt: nowIso(),
-  };
-}
-
-function currentWeekStartUtc(): string {
-  // Sunday-anchored UTC, matching the fixture and the doc.
-  const now = new Date();
-  const dow = now.getUTCDay(); // 0..6 (Sun..Sat)
-  const sunday = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow),
-  );
-  return sunday.toISOString().slice(0, 10);
-}
-
-function weekRangeFor(weekStartUtc: string): { startUtc: string; endUtc: string } {
-  const start = new Date(weekStartUtc + 'T00:00:00.000Z');
-  const end = new Date(start.getTime() + 6 * 86_400_000);
-  return {
-    startUtc: start.toISOString().slice(0, 10),
-    endUtc: end.toISOString().slice(0, 10),
-  };
 }
 
 /** Shallow-merge a preferences patch into the stored blob, but DEEP-merge the
@@ -860,167 +689,6 @@ export const stubApi: RaV2Api = {
       }
       return { jobs: items, nextCursor, facets };
     },
-
-    async saveQuery(body: {
-      name: string;
-      query: SearchQuery;
-    }): Promise<SearchSaveQueryResponse> {
-      await delay('slow');
-      const s = getStore();
-      if (s.savedSearches.some((ss) => ss.name === body.name)) {
-        throw new RoboApiError('Saved search name already taken', {
-          status: 409,
-          code: 'unknown',
-        });
-      }
-      const saved: RASavedSearch = {
-        id: newId('cm_ss'),
-        userId: DEMO_USER_ID,
-        name: body.name,
-        query: structuredClone(body.query),
-        lastRunAt: null,
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      };
-      s.savedSearches.unshift(saved);
-      return { savedSearch: structuredClone(saved) };
-    },
-
-    async listSaved(): Promise<SearchListSavedResponse> {
-      await delay('fast');
-      const s = getStore();
-      const out = [...s.savedSearches].sort((a, b) =>
-        b.createdAt.localeCompare(a.createdAt),
-      );
-      return { savedSearches: structuredClone(out) };
-    },
-
-    async deleteSaved(id: string): Promise<void> {
-      await delay('slow');
-      const s = getStore();
-      const idx = s.savedSearches.findIndex((ss) => ss.id === id);
-      if (idx === -1) {
-        throw new RoboApiError('Saved search not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      s.savedSearches.splice(idx, 1);
-    },
-  },
-
-  // ─────────── Jobs ───────────
-  jobs: {
-    async get(id: string, params?: JobGetParams): Promise<JobGetResponse> {
-      await delay('fast');
-      const s = getStore();
-      const job = s.jobs.find((j) => j.id === id);
-      if (!job) {
-        throw new RoboApiError('Job not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      const trackerEntry =
-        s.tracker.find((t) => t.jobId === id) ?? null;
-      let matchScore: RAJobMatchScoreView | null = null;
-      if (params?.resumeVariantId) {
-        const key = `${DEMO_USER_ID}:${id}:${params.resumeVariantId}`;
-        matchScore = s.matchScores.get(key) ?? null;
-      } else {
-        // No specific variant requested — surface the best score (if any).
-        for (const [key, sc] of s.matchScores) {
-          if (key.includes(`:${id}:`)) {
-            if (!matchScore || sc.score > matchScore.score) matchScore = sc;
-          }
-        }
-      }
-      const keywords = FIXTURE_KEYWORDS[id] ?? null;
-      return {
-        job: structuredClone(job),
-        trackerEntry: trackerEntry ? structuredClone(trackerEntry) : null,
-        matchScore: matchScore ? structuredClone(matchScore) : null,
-        keywords: keywords ? structuredClone(keywords) : null,
-      };
-    },
-
-    async apply(id: string, body: JobApplyBody): Promise<JobApplyResponse> {
-      await delay('slow');
-      const s = getStore();
-      const job = s.jobs.find((j) => j.id === id);
-      if (!job) {
-        throw new RoboApiError('Job not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      const existing = s.tracker.find((t) => t.jobId === id);
-      if (existing) {
-        existing.status = 'applied';
-        existing.dateApplied = existing.dateApplied ?? nowIso();
-        existing.appliedVia = body.appliedVia ?? 'manual';
-        existing.updatedAt = nowIso();
-        return { trackerEntry: structuredClone(existing) };
-      }
-      const entry = entryFromJob(s, id, { jobId: id }, 'applied');
-      entry.appliedVia = body.appliedVia ?? 'manual';
-      s.tracker.unshift(entry);
-      return { trackerEntry: structuredClone(entry) };
-    },
-
-    async save(
-      id: string,
-      body?: { excitementStars?: number },
-    ): Promise<JobSaveResponse> {
-      await delay('slow');
-      const s = getStore();
-      const job = s.jobs.find((j) => j.id === id);
-      if (!job) {
-        throw new RoboApiError('Job not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      const existing = s.tracker.find((t) => t.jobId === id);
-      if (existing) {
-        // Idempotent — bump excitement if provided but don't downgrade status.
-        if (body?.excitementStars !== undefined) {
-          existing.excitementStars = body.excitementStars;
-        }
-        existing.updatedAt = nowIso();
-        return { trackerEntry: structuredClone(existing) };
-      }
-      const entry = entryFromJob(
-        s,
-        id,
-        { jobId: id, excitementStars: body?.excitementStars },
-        'bookmarked',
-      );
-      s.tracker.unshift(entry);
-      return { trackerEntry: structuredClone(entry) };
-    },
-
-    async score(id: string, body: JobScoreBody): Promise<JobScoreResponse> {
-      const s = getStore();
-      const job = s.jobs.find((j) => j.id === id);
-      if (!job) {
-        throw new RoboApiError('Job not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      const key = `${DEMO_USER_ID}:${id}:${body.resumeVariantId}`;
-      const cached = s.matchScores.get(key);
-      if (cached && !body.force) {
-        await delay('fast');
-        return { matchScore: structuredClone(cached), cached: true };
-      }
-      await delay('very_slow');
-      const score = syntheticMatchScore(id, body.resumeVariantId);
-      const view = syntheticMatchExplanation(job, body.resumeVariantId, score);
-      s.matchScores.set(key, view);
-      return { matchScore: structuredClone(view), cached: false };
-    },
   },
 
   // ─────────── Resumes ───────────
@@ -1150,12 +818,6 @@ export const stubApi: RaV2Api = {
       };
       s.resumes.unshift(created);
       return { resume: structuredClone(created) };
-    },
-
-    async linkedinConfig(): Promise<LinkedInImportConfigResponse> {
-      await delay('fast');
-      // Stub has no enrichment provider — only the PDF-export path is offered.
-      return { urlImportEnabled: false };
     },
 
     async importLinkedIn(args: LinkedInImportArgs): Promise<ResumeCreateResponse> {
@@ -1408,133 +1070,6 @@ export const stubApi: RaV2Api = {
     },
   },
 
-  // ─────────── Insights ───────────
-  insights: {
-    async weekly(params?: InsightsWeeklyParams): Promise<InsightsWeeklyResponse> {
-      await delay('fast');
-      const s = getStore();
-      const weekStartUtc = params?.weekStartUtc ?? FIXTURE_INSIGHT.weekStartUtc;
-      const insight = s.insightsByWeek.get(weekStartUtc) ?? null;
-      const week = weekRangeFor(weekStartUtc);
-      return {
-        insight: insight ? structuredClone(insight) : null,
-        week,
-        // Stub never schedules a future generation; UI just shows "Refresh now".
-        nextGenerationAt: null,
-      };
-    },
-    async refresh(): Promise<InsightsRefreshResponse> {
-      const s = getStore();
-      const last = s.lastInsightRefreshAt.get(DEMO_USER_ID) ?? 0;
-      const cooldownMs = 60 * 60 * 1000; // 1h
-      if (Date.now() - last < cooldownMs) {
-        throw new RoboApiError('Already refreshed recently', {
-          status: 429,
-          code: 'rate_limited',
-        });
-      }
-      await delay('very_slow');
-      const insight = syntheticInsightForCurrentWeek(s.tracker);
-      s.insightsByWeek.set(insight.weekStartUtc, insight);
-      s.lastInsightRefreshAt.set(DEMO_USER_ID, Date.now());
-      return { insight: structuredClone(insight) };
-    },
-  },
-
-  // ─────────── Queue (V3) ───────────
-  queue: {
-    async list(): Promise<QueueListResponse> {
-      await delay('fast');
-      const s = getStore();
-      const pending = s.queue.filter((q) => q.status === 'pending');
-      return {
-        items: structuredClone(pending),
-        pendingCount: pending.length,
-      };
-    },
-
-    async send(id: string): Promise<QueueItemResponse> {
-      await delay('slow');
-      const s = getStore();
-      const item = s.queue.find((q) => q.id === id);
-      if (!item) {
-        throw new RoboApiError('Queue item not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      item.status = 'sent';
-      item.updatedAt = nowIso();
-      return { item: structuredClone(item) };
-    },
-
-    async skip(id: string): Promise<QueueItemResponse> {
-      await delay('slow');
-      const s = getStore();
-      const item = s.queue.find((q) => q.id === id);
-      if (!item) {
-        throw new RoboApiError('Queue item not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      item.status = 'skipped';
-      item.updatedAt = nowIso();
-      return { item: structuredClone(item) };
-    },
-
-    async updateCover(
-      id: string,
-      body: QueueUpdateCoverBody,
-    ): Promise<QueueItemResponse> {
-      await delay('slow');
-      const s = getStore();
-      const item = s.queue.find((q) => q.id === id);
-      if (!item) {
-        throw new RoboApiError('Queue item not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      if (body.coverLetterMarkdown.length > 6000) {
-        throw new RoboApiError('Cover letter too long', {
-          status: 422,
-          code: 'unknown',
-        });
-      }
-      item.coverLetterMarkdown = body.coverLetterMarkdown;
-      item.updatedAt = nowIso();
-      return { item: structuredClone(item) };
-    },
-  },
-
-  // ─────────── Activity (V3) ───────────
-  activity: {
-    async feed(params?: ActivityFeedParams): Promise<ActivityFeedResponse> {
-      await delay('fast');
-      const days = params?.days ?? 7;
-      const cutoff = Date.now() - days * DAY_MS;
-      const filtered: RAActivityDay[] = FIXTURE_ACTIVITY.filter((d) => {
-        const dayMs = new Date(d.dateUtc + 'T00:00:00.000Z').getTime();
-        return dayMs >= cutoff;
-      });
-      return { days: structuredClone(filtered) };
-    },
-
-    async orbStats(): Promise<AgentStatsResponse> {
-      await delay('fast');
-      const s = getStore();
-      // Derive the few fields that should stay consistent with live mutations
-      // (sending a queue item shrinks `inQueue`); the rest come from the fixture.
-      const inQueue = s.queue.filter((q) => q.status === 'pending').length;
-      const stats = {
-        ...structuredClone(FIXTURE_AGENT_STATS),
-        inQueue,
-      };
-      return { stats };
-    },
-  },
-
   // ─────────── Mock interview (V3) ───────────
   mock: {
     async catalog(): Promise<MockCatalogResponse> {
@@ -1604,47 +1139,6 @@ export const stubApi: RaV2Api = {
     },
   },
 
-  // ─────────── Integrations (V3) ───────────
-  integrations: {
-    async list(): Promise<IntegrationsListResponse> {
-      await delay('fast');
-      const s = getStore();
-      return { integrations: structuredClone(s.integrations) };
-    },
-
-    async connect(provider: RAIntegrationProvider): Promise<IntegrationResponse> {
-      await delay('slow');
-      const s = getStore();
-      const integration = s.integrations.find((i) => i.provider === provider);
-      if (!integration) {
-        throw new RoboApiError('Integration not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      integration.connected = true;
-      integration.account = integration.account ?? 'maya@chen.io';
-      return { integration: structuredClone(integration) };
-    },
-
-    async disconnect(
-      provider: RAIntegrationProvider,
-    ): Promise<IntegrationResponse> {
-      await delay('slow');
-      const s = getStore();
-      const integration = s.integrations.find((i) => i.provider === provider);
-      if (!integration) {
-        throw new RoboApiError('Integration not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      integration.connected = false;
-      integration.account = null;
-      return { integration: structuredClone(integration) };
-    },
-  },
-
   // ─────────── Preferences (V3) ───────────
   preferences: {
     async get(): Promise<PreferencesGetResponse> {
@@ -1665,251 +1159,4 @@ export const stubApi: RaV2Api = {
       return { preferences: structuredClone(s.preferences) };
     },
   },
-
-  // ─────────── First-run setup (two steps) ───────────
-  //
-  // Realistic seeded content on purpose: step 2 is a CONFIRM screen, so a
-  // stub that returns an empty draft would make every test and every dev-mode
-  // walkthrough render the one state the design says must not exist.
-  onboarding: {
-    async bootstrap(
-      body: OnboardingBootstrapBody,
-    ): Promise<OnboardingBootstrapResponse> {
-      await delay('slow');
-      const s = getStore();
-      const variant = s.resumes.find(
-        (r) => r.id === body.resumeVariantId && !r.deletedAt,
-      );
-      if (!variant) {
-        throw new RoboApiError('Resume variant not found', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      const session: StubOnboardingSession = {
-        sessionId: newId('cm_obs'),
-        resumeVariantId: variant.id,
-        resumeVariantName: variant.name,
-        // Seeded exactly the way the server seeds it: roles read from the
-        // resume, employment type read from it, a city PROPOSED but not
-        // applied, and no salary anywhere.
-        draftPreferences: {
-          targetRoles: ['Senior Product Manager', 'Group Product Manager'],
-          seniority: 'senior',
-          employmentTypes: ['full_time'],
-          locations: { cities: ['San Francisco'] },
-          industriesTarget: ['Healthtech', 'Climate'],
-        },
-        fieldMeta: {
-          targetRoles: { source: 'resume', confidence: 0.8 },
-          seniority: { source: 'resume', confidence: 0.7 },
-          employmentTypes: { source: 'resume', confidence: 0.6 },
-          // Inferred, and therefore marked: where they HAVE worked is not
-          // where they want to work.
-          locations: { source: 'inferred', confidence: 0.5 },
-          industriesTarget: { source: 'inferred', confidence: 0.7 },
-        },
-        proposedFields: ['locations'],
-        evidence: {
-          roles: ['Senior Product Manager', 'Group Product Manager'],
-          years: 8,
-          city: 'San Francisco',
-          employers: ['Lattice', 'Figma'],
-        },
-        thin: false,
-        ingestRows: buildStubIngestRows(variant),
-      };
-      s.onboarding = session;
-      return structuredClone({
-        sessionId: session.sessionId,
-        returning: false,
-        resumeVariant: { id: variant.id, name: variant.name },
-        ingestRows: session.ingestRows,
-        draft: session.draftPreferences,
-        fieldMeta: session.fieldMeta,
-        proposedFields: session.proposedFields,
-        evidence: session.evidence,
-        thin: session.thin,
-        enrichmentPending: false,
-      });
-    },
-
-    async getSession(): Promise<OnboardingSessionResponse> {
-      await delay('fast');
-      const s = getStore();
-      if (!s.onboarding) {
-        throw new RoboApiError('No active setup session', {
-          status: 404,
-          code: 'no_active_session',
-        });
-      }
-      const o = s.onboarding;
-      return structuredClone({
-        sessionId: o.sessionId,
-        returning: false,
-        resumeVariant: { id: o.resumeVariantId ?? '', name: o.resumeVariantName },
-        ingestRows: o.ingestRows,
-        draft: o.draftPreferences,
-        fieldMeta: o.fieldMeta,
-        proposedFields: o.proposedFields,
-        evidence: o.evidence,
-        thin: o.thin,
-        enrichmentPending: false,
-      });
-    },
-
-    async confirm(
-      body: OnboardingConfirmBody,
-    ): Promise<OnboardingConfirmResponse> {
-      await delay('slow');
-      const s = getStore();
-      const o = s.onboarding;
-      // REPLACE, never merge — removing a chip has to actually remove it.
-      const draft: OnboardingDraftPreferences = {
-        ...(o?.draftPreferences ?? {}),
-        ...body.draft,
-      };
-
-      const prev = s.goal;
-      s.goal = {
-        id: prev?.id ?? newId('cm_goal'),
-        userId: DEMO_USER_ID,
-        targetTitle: draft.targetRoles?.[0] ?? prev?.targetTitle ?? 'My next role',
-        targetDate: prev?.targetDate ?? null,
-        targetSalaryMin: prev?.targetSalaryMin ?? null,
-        targetSalaryMax: prev?.targetSalaryMax ?? null,
-        targetSalaryCurrency: prev?.targetSalaryCurrency ?? 'USD',
-        weeklyApplicationGoal: prev?.weeklyApplicationGoal ?? 5,
-        preferredLocations: prev?.preferredLocations ?? null,
-        preferredWorkType: draft.workModes?.[0] ?? prev?.preferredWorkType ?? null,
-        seniority: prev?.seniority ?? null,
-        notesMarkdown: prev?.notesMarkdown ?? null,
-        createdAt: prev?.createdAt ?? nowIso(),
-        updatedAt: nowIso(),
-      };
-
-      // The write that changes the feed: `roleTitles` becomes the search `q`,
-      // a single-mode `workModes` becomes `workType`, a single city becomes
-      // `location`. Salary is stored, never sent as a filter.
-      s.preferences = mergePreferences(s.preferences, {
-        huntActive: true,
-        dailyCap: 10,
-        ...(o?.resumeVariantId ? { defaultResumeId: o.resumeVariantId } : {}),
-        ...(draft.targetRoles ? { roleTitles: draft.targetRoles } : {}),
-        ...(draft.workModes ? { workModes: toWorkModeRecord(draft.workModes) } : {}),
-        ...(draft.locations?.cities ? { cities: draft.locations.cities } : {}),
-        ...(draft.employmentTypes ? { employmentTypes: draft.employmentTypes } : {}),
-        ...(draft.targetCompanies ? { targetCompanies: draft.targetCompanies } : {}),
-        ...(draft.industriesTarget ? { industriesTarget: draft.industriesTarget } : {}),
-        ...(draft.industriesAvoid ? { industriesAvoid: draft.industriesAvoid } : {}),
-        ...(draft.mustHaves ? { mustHaves: draft.mustHaves } : {}),
-        ...(draft.dealbreakers ? { dealbreakers: draft.dealbreakers } : {}),
-        ...(body.freeText ? { intentMarkdown: body.freeText } : {}),
-      });
-      s.onboarding = null;
-
-      // Deterministic stand-in for the one Haiku call: a non-empty notes line
-      // "captures" dealbreakers, so the notes echo has something to render.
-      const capturedFromNotes = body.freeText?.trim() ? ['dealbreakers'] : [];
-      return {
-        goal: structuredClone(s.goal),
-        preferences: structuredClone(s.preferences),
-        capturedFromNotes,
-      };
-    },
-
-    async skip(_body?: OnboardingSkipBody): Promise<OnboardingSkipResponse> {
-      await delay('fast');
-      const s = getStore();
-      // Writes NO preferences — the user declined to confirm, so nothing on
-      // that screen was agreed to.
-      s.onboarding = null;
-      return { skipped: true };
-    },
-
-    async seen(body: OnboardingSeenBody): Promise<OnboardingSeenResponse> {
-      await delay('fast');
-      const s = getStore();
-      void body.step;
-      s.onboardingAutoOpens += 1;
-      return { autoOpens: s.onboardingAutoOpens };
-    },
-  },
-  discover: {
-    async run() {
-      await delay('slow');
-      return {
-        recommended: [],
-        explore: [],
-        coverage: {
-          banksSwept: ['robohire', 'gohire'],
-          banksDegraded: [],
-          totalRetrieved: 0,
-          materialized: 0,
-          recommendedCount: 0,
-          exploreCount: 0,
-          droppedTwins: 0,
-          metSolidTarget: false,
-          perBank: {},
-        },
-        insight: null,
-        banksSwept: ['robohire', 'gohire'],
-        scorer: { callsUsed: 0, cacheHits: 0, budget: 16 },
-        zeroResults: true,
-      };
-    },
-  },
 };
-
-// ─────────────────────────────────────────────────────────────────────
-// First-run setup helpers
-// ─────────────────────────────────────────────────────────────────────
-//
-// The fake NDJSON chat stream that used to live here is deleted along
-// with the chat itself — there is no `/onboarding/chat/stream` to fake.
-
-/** Draft `workModes[]` → the blob's boolean-record shape. Written as a loop
- *  rather than three `.includes('…')` calls so no work-mode enum token appears
- *  as a string literal: `scripts/check-copy.mjs` scans this file's literals as
- *  product copy, and it is right to — fixture strings are what dev mode and
- *  the tests render. The enum belongs in the type, not in quotes. */
-function toWorkModeRecord(
-  modes: RAWorkType[],
-): { remote: boolean; hybrid: boolean; onsite: boolean } {
-  const out = { remote: false, hybrid: false, onsite: false };
-  for (const mode of modes) out[mode] = true;
-  return out;
-}
-
-/** Deterministic ingest rows derived from the chosen variant — real values
- *  from the fixture markdown, never canned persona data. */
-function buildStubIngestRows(variant: RAResumeVariant): IngestRow[] {
-  const heading = variant.resumeMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim();
-  const firstParagraph = variant.resumeMarkdown
-    .split('\n')
-    .map((l) => l.trim())
-    .find((l) => l.length > 0 && !l.startsWith('#'));
-  const rows: IngestRow[] = [
-    {
-      id: 'identity',
-      kind: 'identity',
-      label: 'Identity',
-      value: heading || variant.name,
-    },
-  ];
-  if (variant.summary || firstParagraph) {
-    rows.push({
-      id: 'summary',
-      kind: 'summary',
-      label: 'Summary',
-      value: (variant.summary ?? firstParagraph ?? '').slice(0, 120),
-    });
-  }
-  rows.push({
-    id: 'imported',
-    kind: 'imported',
-    label: 'Imported',
-    value: `Imported ${variant.name}`,
-  });
-  return rows;
-}

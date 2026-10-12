@@ -1,0 +1,651 @@
+// @vitest-environment node
+//
+// Retention schedule: one test per row (TASK_PLAN.md WP-13 acceptance).
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/prisma.js', () => ({ default: {} }));
+
+import { getBrand } from '../../platform/brand/registry.js';
+import { createBudget } from '../../platform/queue/index.js';
+import { AUTH_TOKEN_KINDS, TOKEN_TTL_MS } from '../auth/tokens.js';
+import { TOOLS_LIMITS } from '../tools/contract.js';
+import { createToolsPurge } from '../tools/cron.js';
+import { createMemoryToolsStore } from '../tools/memoryStore.js';
+import type { ToolResultPayload } from '../tools/store.js';
+import { ANON_ALERT_CONFIRM_TTL_HOURS, ANON_ALERT_PURGE_UNSUBSCRIBED_DAYS } from '../visitor/contract.js';
+import { createAnonAlertDigestTask } from '../visitor/digest.js';
+import type { VisitorAlertsRepo } from '../visitor/repo.js';
+import { BILLING_CONSENT_KEEP_YEARS, BILLING_CONSENT_TYPES as ARCHIVED_CONSENT_TYPES } from '../../platform/billing/consentArchive.js';
+import { RETENTION_ENFORCERS } from './contract.js';
+import {
+  BILLING_CONSENT_KEEP,
+  BILLING_CONSENT_TYPES,
+  JOB_INTERACTION_KINDS_KEPT,
+  KNOWN_DEVICE_KEEP,
+  KNOWN_DEVICE_TOKEN_KIND,
+  RETENTION_BATCH,
+  RETENTION_RULES,
+  backupRetentionFromEnv,
+  registerArtifactStorageDeleter,
+  retentionCutoff,
+  setResumeOriginalDeleterForTests,
+  retentionSchedule,
+  retentionScheduleMarkdown,
+  runRetention,
+  type RetentionDb,
+} from './retention.js';
+
+const NOW = new Date('2026-10-10T05:00:00.000Z');
+
+type Call = { model: string; method: string; args: Record<string, unknown> };
+
+/** A recording fake: `findMany` returns the queued id rows once, deletes count the ids. */
+function recorder(queued: Record<string, Array<Record<string, unknown>>> = {}, counts: Record<string, number> = {}) {
+  const calls: Call[] = [];
+  const db = new Proxy(
+    {},
+    {
+      get(_t, model: string) {
+        return {
+          findMany: async (args: Record<string, unknown>) => {
+            calls.push({ model, method: 'findMany', args });
+            const rows = queued[model] ?? [];
+            queued[model] = [];
+            return rows;
+          },
+          deleteMany: async (args: { where: { id: string | { in: string[] } } }) => {
+            calls.push({ model, method: 'deleteMany', args });
+            const id = args.where.id;
+            return { count: typeof id === 'string' ? 1 : id.in.length };
+          },
+          count: async (args: Record<string, unknown>) => {
+            calls.push({ model, method: 'count', args });
+            return counts[model] ?? 0;
+          },
+        };
+      },
+    },
+  ) as unknown as RetentionDb;
+  return { db, calls };
+}
+
+function rule(id: string) {
+  const r = RETENTION_RULES.find((x) => x.id === id);
+  if (!r) throw new Error(`no rule ${id}`);
+  return r;
+}
+
+const firstWhere = (calls: Call[], model: string) => calls.find((c) => c.model === model && c.method === 'findMany')!.args.where as Record<string, unknown>;
+
+afterEach(() => {
+  registerArtifactStorageDeleter(null);
+  setResumeOriginalDeleterForTests(null);
+});
+
+describe('retention schedule (published values)', () => {
+  const fmt = (env: Record<string, string | undefined>) =>
+    Object.fromEntries(retentionSchedule(env).map((r) => [r.id, `${r.keep ? `${r.keep.amount} ${r.keep.unit}` : 'Not listed'} · ${r.enforcedBy}`]));
+
+  it('matches PRODUCT_PLAN F-TRUST-06 / TASK_PLAN WP-13', () => {
+    expect(fmt({})).toEqual({
+      assistant_messages: '12 months · compliance-daily',
+      job_interactions: '13 months · compliance-daily',
+      feed_impressions: '13 months · compliance-daily',
+      product_events: '13 months · compliance-daily',
+      closed_accounts: '30 days · account-purge',
+      soft_deleted_rows: '30 days · compliance-daily',
+      application_artifacts: '180 days · compliance-daily',
+      inactive_accounts: '24 months · not_automated',
+      auth_tokens: '24 hours · compliance-daily',
+      known_devices: '90 days · compliance-daily',
+      ai_label_logs: '180 days · compliance-daily',
+      content_safety_events: '180 days · compliance-daily',
+      interview_recordings: '90 days · interview-retention',
+      tool_results: '24 hours · tools-purge',
+      anon_alerts_unconfirmed: '72 hours · visitor-alerts',
+      anon_alerts_unsubscribed: '30 days · visitor-alerts',
+      // A minimum (3 years), not a deletion.
+      billing_consent_records: '36 months · kept_minimum',
+      // The proof the account purge leaves behind: each row carries its own end date (3 years at least).
+      billing_consent_archive: '36 months · compliance-daily',
+      data_exports: '7 days · compliance-daily',
+      // The provider's window is not assumed: "Not listed" until ops sets it.
+      backups: 'Not listed · provider',
+    });
+  });
+
+  it('every compliance-daily row (except the export sweep in dataExport.ts) has a run here; no other row claims automation', () => {
+    for (const r of RETENTION_RULES) {
+      if (r.enforcedBy === 'compliance-daily' && r.id !== 'data_exports') expect(r.run, r.id).toBeTypeOf('function');
+      if (r.enforcedBy !== 'compliance-daily') expect(r.run, r.id).toBeUndefined();
+    }
+    expect(RETENTION_RULES.filter((r) => r.enforcedBy === 'interview-retention').map((r) => r.id)).toEqual(['interview_recordings']);
+  });
+
+  it('backups: BACKUP_RETENTION_DAYS when set and valid, else null', () => {
+    expect(fmt({ BACKUP_RETENTION_DAYS: '14' }).backups).toBe('14 days · provider');
+    expect(backupRetentionFromEnv({ BACKUP_RETENTION_DAYS: ' 7 ' })).toEqual({ amount: 7, unit: 'days' });
+    for (const v of [undefined, '', '0', 'seven', '-3', '1.5']) expect(backupRetentionFromEnv({ BACKUP_RETENTION_DAYS: v })).toBeNull();
+  });
+
+  it('cutoffs: hours, days, calendar months', () => {
+    expect(retentionCutoff({ amount: 24, unit: 'hours' }, NOW).toISOString()).toBe('2026-10-09T05:00:00.000Z');
+    expect(retentionCutoff({ amount: 180, unit: 'days' }, NOW).toISOString()).toBe('2026-04-13T05:00:00.000Z');
+    expect(retentionCutoff({ amount: 13, unit: 'months' }, NOW).toISOString()).toBe('2025-09-10T05:00:00.000Z');
+  });
+
+  it('month cutoffs clamp to the last day of the target month (never early)', () => {
+    const at = (iso: string, months: number) => retentionCutoff({ amount: months, unit: 'months' }, new Date(iso)).toISOString();
+    expect(at('2027-03-31T05:00:00.000Z', 13)).toBe('2026-02-28T05:00:00.000Z');
+    expect(at('2028-03-31T05:00:00.000Z', 1)).toBe('2028-02-29T05:00:00.000Z');
+    expect(at('2026-12-31T23:59:59.999Z', 12)).toBe('2025-12-31T23:59:59.999Z');
+    expect(at('2026-10-31T05:00:00.000Z', 24)).toBe('2024-10-31T05:00:00.000Z');
+    expect(at('2026-05-31T05:00:00.000Z', 3)).toBe('2026-02-28T05:00:00.000Z');
+  });
+
+  it('the notice table has one row per rule in both languages', () => {
+    for (const locale of ['en', 'zh'] as const) {
+      const md = retentionScheduleMarkdown(locale, {});
+      expect(md.split('\n')).toHaveLength(RETENTION_RULES.length + 2);
+      expect(md).not.toMatch(/\| [a-z_]+ \|/); // every id has a label
+    }
+    expect(retentionScheduleMarkdown('en', {})).toContain('| Database backups | Not listed |');
+    expect(retentionScheduleMarkdown('zh', { BACKUP_RETENTION_DAYS: '14' })).toContain('| 数据库备份 | 14 天 |');
+    expect(retentionScheduleMarkdown('en', {})).toContain('| Resumes, cover letters, tracked jobs and Assistant memories you delete | 30 days |');
+  });
+
+  it('the notice says, in English and in Chinese, that the proof of a purchase acknowledgement is kept after the account is deleted, and what it holds', () => {
+    const row = (locale: 'en' | 'zh', find: string) =>
+      retentionScheduleMarkdown(locale, {})
+        .split('\n')
+        .find((line) => line.includes(find));
+    // The records themselves: a minimum while the account exists, and a pointer to the row below.
+    const recordsEn = row('en', 'Records that you agreed to a plan renewing automatically');
+    expect(recordsEn).toContain('after you delete it, see the next row');
+    expect(recordsEn).toMatch(/\| 36 months \|$/);
+    expect(row('zh', '你同意自动续费或购买条款的记录')).toMatch(/注销账户后见下一行.*\| 36 个月 \|$/);
+    // The proof that outlives the account: what it holds, what it leaves out, and the full rule.
+    const proofEn = row('en', 'Proof of those records after you delete your account');
+    expect(proofEn).toBeDefined();
+    for (const part of ['a hash of your email address', 'No IP address or browser details', '3 years after you agreed', '1 year after your plan ended']) expect(proofEn).toContain(part);
+    expect(proofEn).toMatch(/\| 36 months \|$/);
+    const proofZh = row('zh', '注销账户后保留的上述记录凭证');
+    expect(proofZh).toBeDefined();
+    for (const part of ['邮箱地址的哈希值', '不含 IP 地址和浏览器信息', '3 年', '1 年']) expect(proofZh).toContain(part);
+    expect(proofZh).toMatch(/\| 36 个月 \|$/);
+    // In the notice the proof comes right after the records it is about.
+    const ids = retentionSchedule({}).map((r) => r.id);
+    expect(ids.indexOf('billing_consent_archive')).toBe(ids.indexOf('billing_consent_records') + 1);
+    // Plain words, no dash punctuation.
+    for (const line of [recordsEn, proofEn, proofZh]) expect(line).not.toMatch(/[\u2013\u2014]/);
+  });
+});
+
+describe('retention rows', () => {
+  const ctx = (db: RetentionDb) => ({ db, brand: 'goapply' as const, now: NOW });
+
+  it('assistant_messages: 12 months, brand via thread owner', async () => {
+    const { db, calls } = recorder({ rACopilotMessage: [{ id: 'm1' }, { id: 'm2' }] });
+    expect(await rule('assistant_messages').run!(ctx(db))).toEqual({ deleted: 2 });
+    expect(firstWhere(calls, 'rACopilotMessage')).toEqual({ createdAt: { lt: new Date('2025-10-10T05:00:00.000Z') }, thread: { user: { brand: 'goapply' } } });
+    expect(calls.find((c) => c.method === 'deleteMany')!.args).toEqual({ where: { id: { in: ['m1', 'm2'] } } });
+  });
+
+  it('job_interactions: 13 months, brand via user', async () => {
+    const { db, calls } = recorder({ rAJobInteraction: [{ id: 'i1' }] });
+    expect(await rule('job_interactions').run!(ctx(db))).toEqual({ deleted: 1 });
+    expect(firstWhere(calls, 'rAJobInteraction')).toEqual({
+      createdAt: { lt: new Date('2025-09-10T05:00:00.000Z') },
+      kind: { notIn: ['admin_review'] },
+      user: { brand: 'goapply' },
+    });
+  });
+
+  it("job_interactions: admin review decisions (kind 'admin_review') are left out of the 13-month rule", async () => {
+    expect(JOB_INTERACTION_KINDS_KEPT).toEqual(['admin_review']);
+    // Apply the rule's own `where` to rows the way the database would.
+    const old = new Date('2025-01-01T00:00:00.000Z');
+    const table = [
+      { id: 'view-old', kind: 'view', createdAt: old, user: { brand: 'goapply' } },
+      { id: 'save-old', kind: 'save', createdAt: old, user: { brand: 'goapply' } },
+      { id: 'review-old', kind: 'admin_review', createdAt: old, user: { brand: 'goapply' } },
+      { id: 'view-new', kind: 'view', createdAt: new Date('2026-10-01T00:00:00.000Z'), user: { brand: 'goapply' } },
+      { id: 'view-other-brand', kind: 'view', createdAt: old, user: { brand: 'roboapply' } },
+    ];
+    type Where = { createdAt: { lt: Date }; kind: { notIn: string[] }; user: { brand: string } };
+    const deletedIds: string[] = [];
+    const db = {
+      rAJobInteraction: {
+        findMany: async ({ where }: { where: Where }) =>
+          table
+            .filter((r) => !deletedIds.includes(r.id))
+            .filter((r) => r.createdAt < where.createdAt.lt && !where.kind.notIn.includes(r.kind) && r.user.brand === where.user.brand)
+            .map((r) => ({ id: r.id })),
+        deleteMany: async ({ where }: { where: { id: { in: string[] } } }) => {
+          deletedIds.push(...where.id.in);
+          return { count: where.id.in.length };
+        },
+      },
+    } as unknown as RetentionDb;
+    expect(await rule('job_interactions').run!(ctx(db))).toEqual({ deleted: 2 });
+    expect(deletedIds.sort()).toEqual(['save-old', 'view-old']);
+  });
+
+  it('feed_impressions: 13 months', async () => {
+    const { db, calls } = recorder();
+    expect(await rule('feed_impressions').run!(ctx(db))).toEqual({ deleted: 0 });
+    expect(firstWhere(calls, 'rAFeedSession')).toEqual({ createdAt: { lt: new Date('2025-09-10T05:00:00.000Z') }, user: { brand: 'goapply' } });
+    expect(calls.some((c) => c.method === 'deleteMany')).toBe(false);
+  });
+
+  it('product_events: 13 months, brand column', async () => {
+    const { db, calls } = recorder({ rAProductEvent: [{ id: 'e1' }] });
+    await rule('product_events').run!(ctx(db));
+    expect(firstWhere(calls, 'rAProductEvent')).toEqual({ brand: 'goapply', createdAt: { lt: new Date('2025-09-10T05:00:00.000Z') } });
+  });
+
+  it('closed_accounts: enforced by account-purge (no run here)', () => {
+    expect(rule('closed_accounts').run).toBeUndefined();
+    expect(rule('closed_accounts').enforcedBy).toBe('account-purge');
+  });
+
+  describe('soft_deleted_rows: rows the user deleted, hard-deleted 30 days later', () => {
+    const cutoff = new Date('2026-09-10T05:00:00.000Z');
+    const due = { deletedAt: { lt: cutoff }, user: { brand: 'goapply' } };
+
+    it.each([
+      ['cover letters', 'rACoverLetter'],
+      ['tracker entries', 'rATrackerEntry'],
+      ['Assistant memories', 'rACopilotMemory'],
+    ])('%s', async (_label, model) => {
+      const { db, calls } = recorder({ [model]: [{ id: 'x1' }, { id: 'x2' }] });
+      expect(await rule('soft_deleted_rows').run!(ctx(db))).toEqual({ deleted: 2 });
+      expect(firstWhere(calls, model)).toEqual(due);
+      expect(calls.find((c) => c.model === model && c.method === 'deleteMany')!.args).toEqual({ where: { id: { in: ['x1', 'x2'] } } });
+    });
+
+    it('resumes without a stored original or a live cover letter go in batches', async () => {
+      const { db, calls } = recorder({ rAResumeVariant: [{ id: 'v1' }] });
+      expect(await rule('soft_deleted_rows').run!(ctx(db))).toEqual({ deleted: 1 });
+      expect(firstWhere(calls, 'rAResumeVariant')).toEqual({ ...due, originalFileKey: null, coverLetters: { none: { deletedAt: null } } });
+    });
+
+    it('resumes with a stored original: file first, row held back when the file delete fails', async () => {
+      let n = 0;
+      const { db, calls } = recorder({}, { rAResumeVariant: 1 });
+      const db2 = new Proxy(db as object, {
+        get(t, model: string) {
+          const d = (t as Record<string, Record<string, (a: Record<string, unknown>) => unknown>>)[model]!;
+          if (model !== 'rAResumeVariant') return d;
+          return {
+            ...d,
+            findMany: async (args: Record<string, unknown>) => {
+              n += 1;
+              calls.push({ model, method: 'findMany', args });
+              if (n === 2) {
+                return [
+                  { id: 'f1', originalFileProvider: 's3', originalFileKey: 'k1', originalFileName: 'a.pdf', originalFileMimeType: 'application/pdf' },
+                  { id: 'f2', originalFileProvider: 's3', originalFileKey: 'k2', originalFileName: 'b.pdf', originalFileMimeType: 'application/pdf' },
+                ];
+              }
+              return [];
+            },
+          };
+        },
+      }) as unknown as RetentionDb;
+      const deleter = vi.fn(async (ref: { key: string }) => {
+        if (ref.key === 'k2') throw new Error('s3 down');
+        return true;
+      });
+      setResumeOriginalDeleterForTests(deleter);
+      // f1 deleted; f2 held back (file delete failed); 1 more held back by a live cover letter.
+      expect(await rule('soft_deleted_rows').run!(ctx(db2))).toEqual({ deleted: 1, blocked: 2 });
+      expect(deleter).toHaveBeenCalledWith({ provider: 's3', key: 'k1', fileName: 'a.pdf', mimeType: 'application/pdf' });
+      const resumeFinds = calls.filter((c) => c.model === 'rAResumeVariant' && c.method === 'findMany');
+      expect(resumeFinds[1]!.args.where).toEqual({ ...due, originalFileKey: { not: null }, coverLetters: { none: { deletedAt: null } } });
+      expect(calls.filter((c) => c.model === 'rAResumeVariant' && c.method === 'deleteMany').map((c) => c.args)).toEqual([{ where: { id: 'f1' } }]);
+      expect(calls.find((c) => c.model === 'rAResumeVariant' && c.method === 'count')!.args).toEqual({
+        where: { ...due, coverLetters: { some: { deletedAt: null } } },
+      });
+    });
+
+    it('rows deleted less than 30 days ago (or on the other brand) are not selected', async () => {
+      const { db, calls } = recorder();
+      await rule('soft_deleted_rows').run!({ db, brand: 'roboapply', now: NOW });
+      for (const c of calls.filter((x) => x.method === 'findMany')) {
+        expect((c.args.where as { deletedAt: { lt: Date } }).deletedAt.lt).toEqual(cutoff);
+        expect((c.args.where as { user: { brand: string } }).user.brand).toBe('roboapply');
+      }
+      expect(calls.some((c) => c.method === 'deleteMany')).toBe(false);
+    });
+  });
+
+  it('application_artifacts: 180 days; stored files deleted first, held back without a deleter', async () => {
+    const queued = { rAApplicationArtifact: [{ id: 'a1' }] };
+    const { db, calls } = recorder(queued);
+    // second findMany (stored rows) returns two rows
+    let n = 0;
+    const db2 = new Proxy(db as object, {
+      get(t, model: string) {
+        const d = (t as Record<string, Record<string, (a: Record<string, unknown>) => unknown>>)[model]!;
+        if (model !== 'rAApplicationArtifact') return d;
+        return {
+          ...d,
+          findMany: async (args: Record<string, unknown>) => {
+            n += 1;
+            if (n === 2) return [{ id: 's1', storageKey: 'k1', userId: 'u1' }, { id: 's2', storageKey: 'k2', userId: 'u2' }];
+            return d.findMany!(args);
+          },
+        };
+      },
+    }) as unknown as RetentionDb;
+    expect(await rule('application_artifacts').run!(ctx(db2))).toEqual({ deleted: 1, blocked: 2 });
+    expect(firstWhere(calls, 'rAApplicationArtifact')).toEqual({ createdAt: { lt: new Date('2026-04-13T05:00:00.000Z') }, storageKey: null, user: { brand: 'goapply' } });
+
+    n = 0;
+    const deleter = vi.fn(async (row: { id: string }) => row.id === 's1');
+    registerArtifactStorageDeleter(deleter);
+    expect(await rule('application_artifacts').run!(ctx(db2))).toEqual({ deleted: 1, blocked: 1 });
+    expect(deleter).toHaveBeenCalledWith({ id: 's1', storageKey: 'k1', userId: 'u1' });
+  });
+
+  it('inactive_accounts: published, not automated (honest)', () => {
+    expect(rule('inactive_accounts').run).toBeUndefined();
+    expect(rule('inactive_accounts').enforcedBy).toBe('not_automated');
+  });
+
+  it('auth_tokens: tokens and phone codes 24 hours after expiry', async () => {
+    const { db, calls } = recorder({ rAAuthToken: [{ id: 't1' }], rAPhoneOtp: [{ id: 'o1' }, { id: 'o2' }] });
+    expect(await rule('auth_tokens').run!(ctx(db))).toEqual({ deleted: 3 });
+    const cutoff = new Date('2026-10-09T05:00:00.000Z');
+    expect(firstWhere(calls, 'rAAuthToken')).toEqual({ brand: 'goapply', expiresAt: { lt: cutoff } });
+    expect(firstWhere(calls, 'rAPhoneOtp')).toEqual({ brand: 'goapply', expiresAt: { lt: cutoff } });
+  });
+
+  it('known_devices: the mark goes once 90 days have passed since the last sign-in from that device', async () => {
+    const { db, calls } = recorder({ rAAuthToken: [{ id: 'd1' }, { id: 'd2' }] });
+    expect(await rule('known_devices').run!(ctx(db))).toEqual({ deleted: 2 });
+    // `expiresAt` = last sign-in + the mark's lifetime, so "expired" is exactly "90 days since the last sign-in".
+    expect(firstWhere(calls, 'rAAuthToken')).toEqual({ brand: 'goapply', kind: 'known_device', expiresAt: { lte: NOW } });
+    expect(calls.find((c) => c.method === 'deleteMany')!.args).toEqual({ where: { id: { in: ['d1', 'd2'] } } });
+    expect(rule('known_devices').keep).toEqual({ amount: 90, unit: 'days' });
+    // The published period is the lifetime the sign-in code gives a mark, and the kind is the one it writes.
+    expect(TOKEN_TTL_MS.known_device).toBe(KNOWN_DEVICE_KEEP.amount * 24 * 60 * 60 * 1000);
+    expect(AUTH_TOKEN_KINDS.knownDevice).toBe(KNOWN_DEVICE_TOKEN_KIND);
+  });
+
+  it('known_devices: a device used inside the 90 days is not selected; other token kinds are not this rule', async () => {
+    const lastSignIn = (daysAgo: number) => new Date(NOW.getTime() - daysAgo * 86_400_000 + TOKEN_TTL_MS.known_device);
+    const table = [
+      { id: 'stale', brand: 'goapply', kind: 'known_device', expiresAt: lastSignIn(91) },
+      { id: 'edge', brand: 'goapply', kind: 'known_device', expiresAt: lastSignIn(90) },
+      { id: 'recent', brand: 'goapply', kind: 'known_device', expiresAt: lastSignIn(10) },
+      { id: 'reset-link', brand: 'goapply', kind: 'password_reset', expiresAt: lastSignIn(200) },
+      { id: 'other-brand', brand: 'roboapply', kind: 'known_device', expiresAt: lastSignIn(200) },
+    ];
+    type Where = { brand: string; kind: string; expiresAt: { lte: Date } };
+    const gone: string[] = [];
+    const db = {
+      rAAuthToken: {
+        findMany: async ({ where }: { where: Where }) =>
+          table
+            .filter((r) => !gone.includes(r.id))
+            .filter((r) => r.brand === where.brand && r.kind === where.kind && r.expiresAt <= where.expiresAt.lte)
+            .map((r) => ({ id: r.id })),
+        deleteMany: async ({ where }: { where: { id: { in: string[] } } }) => {
+          gone.push(...where.id.in);
+          return { count: where.id.in.length };
+        },
+      },
+    } as unknown as RetentionDb;
+    await rule('known_devices').run!(ctx(db));
+    expect(gone.sort()).toEqual(['edge', 'stale']);
+  });
+
+  it('ai_label_logs: 180 days', async () => {
+    const { db, calls } = recorder({ rAAiContentLabelLog: [{ id: 'l1' }] });
+    expect(await rule('ai_label_logs').run!(ctx(db))).toEqual({ deleted: 1 });
+    expect(firstWhere(calls, 'rAAiContentLabelLog')).toEqual({ brand: 'goapply', createdAt: { lt: new Date('2026-04-13T05:00:00.000Z') } });
+  });
+
+  it('content_safety_events: 180 days', async () => {
+    const { db, calls } = recorder();
+    await rule('content_safety_events').run!(ctx(db));
+    expect(firstWhere(calls, 'rAContentSafetyEvent')).toEqual({ brand: 'goapply', createdAt: { lt: new Date('2026-04-13T05:00:00.000Z') } });
+  });
+
+  it('interview_recordings: enforced by WP-63a interview retention (run from compliance-daily, not a row run here)', () => {
+    expect(rule('interview_recordings').enforcedBy).toBe('interview-retention');
+    expect(rule('interview_recordings').run).toBeUndefined();
+  });
+
+  it('data_exports: 7 days, swept by compliance-daily (dataExport.ts)', () => {
+    expect(rule('data_exports').keep).toEqual({ amount: 7, unit: 'days' });
+  });
+
+  it('backups: provider setting, period from configuration only', () => {
+    expect(rule('backups').enforcedBy).toBe('provider');
+    expect(rule('backups').keep).toBeNull();
+  });
+});
+
+describe('rows enforced by another job: the job exists, is scheduled, and uses the published period', () => {
+  const handlers = readFileSync(fileURLToPath(new URL('../../cron/handlers.ts', import.meta.url)), 'utf8');
+
+  it('every enforcedBy value is a known enforcer, and every job-backed one is wired into a platform cron', () => {
+    const scheduled: Record<string, RegExp | null> = {
+      'compliance-daily': /brandCronJob\('compliance-daily'/,
+      'account-purge': /account-purge/,
+      'interview-retention': /runInterviewRetention/,
+      'tools-purge': /task: runToolsPurge/,
+      'visitor-alerts': /task: runAnonAlertDigests/,
+      provider: null,
+      not_automated: null,
+      kept_minimum: null,
+    };
+    expect(Object.keys(scheduled).sort()).toEqual([...RETENTION_ENFORCERS].sort());
+    for (const r of RETENTION_RULES) {
+      expect(RETENTION_ENFORCERS, r.id).toContain(r.enforcedBy);
+      const wired = scheduled[r.enforcedBy];
+      if (wired) expect(handlers, `${r.id} → ${r.enforcedBy}`).toMatch(wired);
+    }
+    // The rows this bundle added name a job; none of them is "Not automated yet".
+    for (const id of ['known_devices', 'tool_results', 'anon_alerts_unconfirmed', 'anon_alerts_unsubscribed']) {
+      expect(['compliance-daily', 'tools-purge', 'visitor-alerts'], id).toContain(rule(id).enforcedBy);
+    }
+    expect(RETENTION_RULES.filter((r) => r.enforcedBy === 'not_automated').map((r) => r.id)).toEqual(['inactive_accounts']);
+  });
+
+  it('tool_results (24 hours): runToolsPurge deletes a result once its window has passed, not before', async () => {
+    expect(rule('tool_results')).toMatchObject({ keep: { amount: TOOLS_LIMITS.cacheHours, unit: 'hours' }, enforcedBy: 'tools-purge' });
+    expect(rule('tool_results').run).toBeUndefined();
+    const payload: ToolResultPayload = {
+      v: 1,
+      tool: 'resume_check',
+      cacheKey: 'k',
+      report: { kind: 'resume_check', label: 'fair', counts: { urgent: 0, critical: 1, optional: 0 }, issues: [], rulesChecked: 10, profile: 'intl' },
+      resume: { markdown: '# A', name: 'a' },
+    };
+    const store = createMemoryToolsStore();
+    const created = new Date('2026-10-09T05:00:00.000Z');
+    const keepMs = rule('tool_results').keep!.amount * 3_600_000;
+    await store.create({ brand: 'roboapply', tokenHash: 'h1', payload, expiresAt: new Date(created.getTime() + keepMs) });
+    const task = createToolsPurge(() => store);
+    const at = (now: Date) => ({ name: 'reminders', brand: getBrand('roboapply'), budget: createBudget(10_000), now });
+    expect(await task(at(new Date(created.getTime() + keepMs - 60_000)))).toEqual({ skipped: 'no_work', processed: 0 });
+    expect(store.rows).toHaveLength(1);
+    expect(await task(at(new Date(created.getTime() + keepMs)))).toEqual({ processed: 1 });
+    expect(store.rows).toHaveLength(0);
+  });
+
+  it('signed-out job alerts: the visitor-alerts job purges unconfirmed rows at 72 h and unsubscribed rows at 30 days', async () => {
+    expect(rule('anon_alerts_unconfirmed')).toMatchObject({ keep: { amount: ANON_ALERT_CONFIRM_TTL_HOURS, unit: 'hours' }, enforcedBy: 'visitor-alerts' });
+    expect(rule('anon_alerts_unsubscribed')).toMatchObject({ keep: { amount: ANON_ALERT_PURGE_UNSUBSCRIBED_DAYS, unit: 'days' }, enforcedBy: 'visitor-alerts' });
+    expect(ANON_ALERT_CONFIRM_TTL_HOURS).toBe(72);
+    expect(ANON_ALERT_PURGE_UNSUBSCRIBED_DAYS).toBe(30);
+
+    const purge = vi.fn(async () => ({ pending: 2, unsubscribed: 1 }));
+    const repo = { purge, due: vi.fn(async () => []) } as unknown as VisitorAlertsRepo;
+    // Alerts switched off for the brand: the purge still runs with the published cut-offs.
+    const task = createAnonAlertDigestTask({ repo, alertsEnabled: async () => false, send: vi.fn(), origin: () => 'https://example.test' });
+    const out = await task({ name: 'job-alerts', brand: getBrand('goapply'), budget: createBudget(10_000), now: NOW });
+    expect(out).toMatchObject({ skipped: 'disabled', purged: { pending: 2, unsubscribed: 1 } });
+    expect(purge).toHaveBeenCalledWith('goapply', {
+      pendingBefore: retentionCutoff(rule('anon_alerts_unconfirmed').keep!, NOW),
+      unsubscribedBefore: retentionCutoff(rule('anon_alerts_unsubscribed').keep!, NOW),
+    });
+  });
+
+  it('billing consent records (auto_renew_ack …) are kept at least 3 years: a minimum row, and no rule here can delete a consent record', async () => {
+    expect(rule('billing_consent_records')).toMatchObject({ keep: { amount: 36, unit: 'months' }, enforcedBy: 'kept_minimum' });
+    expect(rule('billing_consent_records').run).toBeUndefined();
+    expect(BILLING_CONSENT_KEEP).toEqual({ amount: 36, unit: 'months' });
+    expect(BILLING_CONSENT_TYPES).toEqual(expect.arrayContaining(['auto_renew_ack', 'withdrawal_waiver']));
+    expect(rule('billing_consent_records').covers).toContain('auto_renew_ack');
+    // Run every rule far in the future against a database that records each model touched.
+    const touched = new Set<string>();
+    const db = new Proxy(
+      {},
+      {
+        get(_t, model: string) {
+          touched.add(model);
+          return { findMany: async () => [], deleteMany: async () => ({ count: 0 }), count: async () => 0 };
+        },
+      },
+    ) as unknown as RetentionDb;
+    for (const brand of ['roboapply', 'goapply'] as const) await runRetention({ db, brand, now: new Date('2040-01-01T00:00:00.000Z') });
+    expect(touched.size).toBeGreaterThan(5);
+    // The consent ledger is never touched. The one consent-named table a rule reads is the archive of
+    // deleted accounts, whose rows carry their own end date (rule billing_consent_archive, below).
+    expect(touched.has('seekerConsentRecord')).toBe(false);
+    expect([...touched].filter((m) => /consent/i.test(m))).toEqual(['rABillingConsentArchive']);
+    // The retention source never names the consent ledger's delegate at all.
+    const source = readFileSync(fileURLToPath(new URL('./retention.ts', import.meta.url)), 'utf8');
+    expect(source).not.toMatch(/seekerConsentRecord\s*\./);
+    // The published minimum is the archive's own first period, and the types are the ones it copies.
+    expect(BILLING_CONSENT_KEEP.amount).toBe(BILLING_CONSENT_KEEP_YEARS * 12);
+    expect(BILLING_CONSENT_TYPES).toBe(ARCHIVED_CONSENT_TYPES);
+  });
+
+  describe('billing_consent_archive: the proof kept after the account is deleted goes when its own period is over (ST-9)', () => {
+    const DAY = 86_400_000;
+    /** The archive as the database would answer the rule's own `where`. */
+    function archiveDb(table: Array<{ id: string; brand: string; retainUntil: Date }>) {
+      const gone: string[] = [];
+      const wheres: unknown[] = [];
+      type Where = { brand: string; retainUntil: { lt: Date } };
+      const db = {
+        rABillingConsentArchive: {
+          findMany: async ({ where, take }: { where: Where; take: number }) => {
+            wheres.push(where);
+            return table
+              .filter((r) => !gone.includes(r.id) && r.brand === where.brand && r.retainUntil < where.retainUntil.lt)
+              .slice(0, take)
+              .map((r) => ({ id: r.id }));
+          },
+          deleteMany: async ({ where }: { where: { id: { in: string[] } } }) => {
+            gone.push(...where.id.in);
+            return { count: where.id.in.length };
+          },
+        },
+      } as unknown as RetentionDb;
+      return { db, gone, wheres };
+    }
+
+    it('is a compliance-daily deletion, published with the 3-year minimum, right after the records it is about', () => {
+      expect(rule('billing_consent_archive')).toMatchObject({ keep: { amount: 36, unit: 'months' }, enforcedBy: 'compliance-daily' });
+      expect(rule('billing_consent_archive').run).toBeTypeOf('function');
+      expect(rule('billing_consent_archive').covers).toContain('RABillingConsentArchive');
+      // The records themselves stay a minimum: no rule deletes them.
+      expect(rule('billing_consent_records')).toMatchObject({ enforcedBy: 'kept_minimum' });
+      expect(rule('billing_consent_records').covers).toContain('RABillingConsentArchive');
+    });
+
+    it('a row is deleted by the daily run after its retainUntil, and not before', async () => {
+      const table = [
+        { id: 'due-yesterday', brand: 'goapply', retainUntil: new Date(NOW.getTime() - 17 * 3_600_000) },
+        { id: 'due-long-ago', brand: 'goapply', retainUntil: new Date(NOW.getTime() - 400 * DAY) },
+        { id: 'due-this-instant', brand: 'goapply', retainUntil: NOW },
+        { id: 'due-later-today', brand: 'goapply', retainUntil: new Date(NOW.getTime() + 7 * 3_600_000) },
+        { id: 'due-in-a-year', brand: 'goapply', retainUntil: new Date(NOW.getTime() + 365 * DAY) },
+        { id: 'other-brand', brand: 'roboapply', retainUntil: new Date(NOW.getTime() - 400 * DAY) },
+      ];
+      const { db, gone, wheres } = archiveDb(table);
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'goapply', now: NOW })).toEqual({ deleted: 2 });
+      expect(gone.sort()).toEqual(['due-long-ago', 'due-yesterday']);
+      expect(wheres[0]).toEqual({ brand: 'goapply', retainUntil: { lt: NOW } });
+      // The next day's run takes the rows that came due since; the row of next year stays.
+      const next = new Date(NOW.getTime() + DAY);
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'goapply', now: next })).toEqual({ deleted: 2 });
+      expect(gone.sort()).toEqual(['due-later-today', 'due-long-ago', 'due-this-instant', 'due-yesterday']);
+      // Each brand's run deletes its own rows only.
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'roboapply', now: next })).toEqual({ deleted: 1 });
+      expect(gone).toContain('other-brand');
+      expect(gone).not.toContain('due-in-a-year');
+    });
+
+    it('deletes by id in batches, like its neighbours, and does nothing when nothing is due', async () => {
+      const { db, calls } = recorder({ rABillingConsentArchive: [{ id: 'a1' }, { id: 'a2' }] });
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'roboapply', now: NOW })).toEqual({ deleted: 2 });
+      expect(firstWhere(calls, 'rABillingConsentArchive')).toEqual({ brand: 'roboapply', retainUntil: { lt: NOW } });
+      expect(calls.find((c) => c.method === 'findMany')!.args).toMatchObject({ select: { id: true }, take: RETENTION_BATCH });
+      expect(calls.find((c) => c.method === 'deleteMany')!.args).toEqual({ where: { id: { in: ['a1', 'a2'] } } });
+      const idle = recorder();
+      expect(await rule('billing_consent_archive').run!({ db: idle.db, brand: 'roboapply', now: NOW })).toEqual({ deleted: 0 });
+      expect(idle.calls.some((c) => c.method === 'deleteMany')).toBe(false);
+    });
+
+    it('a backlog larger than one batch is drained in the same run', async () => {
+      const table = Array.from({ length: RETENTION_BATCH + 3 }, (_, i) => ({ id: `r${i}`, brand: 'roboapply', retainUntil: new Date(NOW.getTime() - DAY) }));
+      const { db, gone } = archiveDb(table);
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'roboapply', now: NOW })).toEqual({ deleted: RETENTION_BATCH + 3 });
+      expect(gone).toHaveLength(RETENTION_BATCH + 3);
+    });
+  });
+
+  it('rows already present before this bundle: content-safety checks 6 months, Assistant messages 12 months', () => {
+    expect(rule('content_safety_events')).toMatchObject({ keep: { amount: 180, unit: 'days' }, enforcedBy: 'compliance-daily' });
+    expect(rule('assistant_messages')).toMatchObject({ keep: { amount: 12, unit: 'months' }, enforcedBy: 'compliance-daily' });
+    // Owner decision pending (deferred): the inactive-accounts row stays unautomated.
+    expect(rule('inactive_accounts')).toMatchObject({ enforcedBy: 'not_automated' });
+    expect(rule('inactive_accounts').run).toBeUndefined();
+  });
+});
+
+describe('runRetention', () => {
+  it('batches until a short page, totals per rule, survives a failing rule', async () => {
+    const full = Array.from({ length: RETENTION_BATCH }, (_, i) => ({ id: `p${i}` }));
+    const pages = [full, [{ id: 'last' }]];
+    const log = vi.fn();
+    const db = new Proxy(
+      {},
+      {
+        get(_t, model: string) {
+          return {
+            findMany: async () => {
+              if (model === 'rAJobInteraction') throw new Error('boom');
+              if (model === 'rAProductEvent') return pages.shift() ?? [];
+              return [];
+            },
+            deleteMany: async (a: { where: { id: { in: string[] } | string } }) => ({ count: typeof a.where.id === 'string' ? 1 : a.where.id.in.length }),
+            count: async () => 0,
+          };
+        },
+      },
+    ) as unknown as RetentionDb;
+    const res = await runRetention({ db, brand: 'roboapply', now: NOW }, log);
+    expect(res.deleted).toEqual({ product_events: RETENTION_BATCH + 1 });
+    expect(res.total).toBe(RETENTION_BATCH + 1);
+    expect(log).toHaveBeenCalledWith('retention rule failed', { rule: 'job_interactions', error: 'boom' });
+    expect(log).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops when the budget is nearly spent', async () => {
+    const { db, calls } = recorder();
+    await runRetention({ db, brand: 'roboapply', now: NOW, budget: { remainingMs: () => 1000 } });
+    expect(calls).toEqual([]);
+  });
+});

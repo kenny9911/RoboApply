@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>样本电网招聘</title></head>
+<body>
+<div class="wrap">
+  <h1 class="post-name">变电运维岗</h1><span class="corp-name">样本电网</span>
+  <form id="applyForm" action="/apply/save">
+    <h3 class="module-title">个人信息</h3>
+    <table class="form-table"><tbody>
+      <tr><th>姓名<span class="required">*</span></th><td><input id="d_name" name="name"></td></tr>
+      <tr><th>手机号码<span class="required">*</span></th><td><input id="d_mobile" name="mobile"></td></tr>
+      <tr><th>邮箱<span class="required">*</span></th><td><input id="d_email" name="email"></td></tr>
+      <tr><th>政治面貌</th><td><input id="d_political" name="political"></td></tr>
+    </tbody></table>
+    <h3 class="module-title">家庭成员及主要社会关系</h3>
+    <table class="grid-table">
+      <thead><tr><th>关系</th><th>姓名</th><th>工作单位</th><th>职务</th></tr></thead>
+      <tbody>
+        <tr><td><input id="fam0_rel" name="fam[0].relation"></td><td><input id="fam0_name" name="fam[0].name"></td><td><input id="fam0_org" name="fam[0].org"></td><td><input id="fam0_title" name="fam[0].title"></td></tr>
+        <tr><td><input id="fam1_rel" name="fam[1].relation"></td><td><input id="fam1_name" name="fam[1].name"></td><td><input id="fam1_org" name="fam[1].org"></td><td><input id="fam1_title" name="fam[1].title"></td></tr>
+        <tr><td><input id="fam2_rel" name="fam[2].relation"></td><td><input id="fam2_name" name="fam[2].name"></td><td><input id="fam2_org" name="fam[2].org"></td><td><input id="fam2_title" name="fam[2].title"></td></tr>
+      </tbody>
+    </table>
+    <h3 class="module-title">附件</h3>
+    <table class="form-table"><tbody><tr><th>个人简历</th><td><input type="file" id="d_cv" name="cv"></td></tr></tbody></table>
+    <div class="btn-bar"><input type="submit" class="btn btn-primary" value="提交"></div>
+  </form>
+</div>
+</body>
+</html>

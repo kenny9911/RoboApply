@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>示范能源校园招聘</title></head>
+<body>
+<div id="app">
+  <div class="position-header"><h1 class="position-name">储备干部（管培生）</h1><div class="company-name">示范能源</div><span class="position-city">成都</span></div>
+  <div class="position-desc">参加轮岗培养。</div>
+  <form class="el-form resume-form">
+    <div class="module">
+      <div class="module-title">个人信息</div>
+      <div class="el-form-item is-required"><label for="bs_name" class="el-form-item__label">姓名</label><div class="el-form-item__content"><div class="el-input"><input id="bs_name" type="text" class="el-input__inner"></div></div></div>
+      <div class="el-form-item is-required"><label for="bs_mobile" class="el-form-item__label">手机号码</label><div class="el-form-item__content"><div class="el-input"><input id="bs_mobile" type="text" class="el-input__inner"></div></div></div>
+      <div class="el-form-item is-required"><label for="bs_email" class="el-form-item__label">电子邮箱</label><div class="el-form-item__content"><div class="el-input"><input id="bs_email" type="text" class="el-input__inner"></div></div></div>
+      <div class="el-form-item is-required"><label class="el-form-item__label">性别</label><div class="el-form-item__content">
+        <label class="el-radio"><input type="radio" name="bs_gender" value="1" class="el-radio__original"><span class="el-radio__label">男</span></label>
+        <label class="el-radio"><input type="radio" name="bs_gender" value="2" class="el-radio__original"><span class="el-radio__label">女</span></label>
+      </div></div>
+      <div class="el-form-item"><label for="bs_birth" class="el-form-item__label">出生年月</label><div class="el-form-item__content"><div class="el-date-editor el-input"><input id="bs_birth" readonly class="el-input__inner" placeholder="选择月份"></div></div></div>
+      <div class="el-form-item"><label for="bs_political" class="el-form-item__label">政治面貌</label><div class="el-form-item__content">
+        <div class="el-select"><div class="el-input"><input id="bs_political" readonly role="combobox" aria-controls="el-list-political" class="el-input__inner" placeholder="请选择"></div></div>
+        <div class="el-select-dropdown"><ul id="el-list-political" role="listbox" class="el-select-dropdown__list"><li role="option" class="el-select-dropdown__item">中共党员</li><li role="option" class="el-select-dropdown__item">共青团员</li><li role="option" class="el-select-dropdown__item">群众</li></ul></div>
+      </div></div>
+    </div>
+    <div class="module">
+      <div class="module-title">教育经历</div>
+      <div class="el-card">
+        <div class="el-form-item is-required"><label for="bs_school" class="el-form-item__label">学校</label><div class="el-form-item__content"><div class="el-input"><input id="bs_school" class="el-input__inner"></div></div></div>
+        <div class="el-form-item is-required"><label for="bs_degree" class="el-form-item__label">学历</label><div class="el-form-item__content"><select id="bs_degree"><option value="">请选择</option><option value="1">大专</option><option value="2">本科</option><option value="3">硕士</option><option value="4">博士</option></select></div></div>
+        <div class="el-form-item is-required"><label for="bs_major" class="el-form-item__label">专业</label><div class="el-form-item__content"><div class="el-input"><input id="bs_major" class="el-input__inner"></div></div></div>
+        <div class="el-form-item"><label for="bs_start" class="el-form-item__label">入学时间</label><div class="el-form-item__content"><input id="bs_start" type="month" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="bs_end" class="el-form-item__label">毕业时间</label><div class="el-form-item__content"><input id="bs_end" type="month" class="el-input__inner"></div></div>
+      </div>
+    </div>
+    <div class="module">
+      <div class="module-title">附件</div>
+      <div class="el-form-item is-required"><label for="bs_resume" class="el-form-item__label">简历附件</label><div class="el-form-item__content"><input id="bs_resume" type="file" class="el-upload__input"></div></div>
+    </div>
+    <div class="form-actions"><button type="button" class="el-button el-button--primary"><span>提交</span></button></div>
+  </form>
+</div>
+</body>
+</html>

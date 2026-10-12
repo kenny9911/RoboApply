@@ -48,6 +48,8 @@
     "node_modules",
     "server",
     "interview-agent",
-    "api"
+    "api",
+    "extension",
+    "deploy"
   ]
 }

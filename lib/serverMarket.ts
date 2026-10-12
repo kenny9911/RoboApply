@@ -13,19 +13,31 @@ import { resolveMarket, type BillingMarket } from './pricing';
 
 const COUNTRY_HEADERS = ['x-vercel-ip-country', 'cf-ipcountry', 'x-country', 'x-geo-country'];
 
-export async function resolveVisitorMarket(locale: string): Promise<BillingMarket> {
-  let countryHeader: string | null = null;
+async function readCountryHeader(): Promise<string | null> {
   try {
     const headersList = await headers();
     for (const name of COUNTRY_HEADERS) {
       const value = headersList.get(name);
-      if (value) {
-        countryHeader = value;
-        break;
-      }
+      if (value) return value;
     }
   } catch {
     /* prerender context — no request to read */
   }
-  return resolveMarket({ countryHeader, locale });
+  return null;
+}
+
+export async function resolveVisitorMarket(locale: string): Promise<BillingMarket> {
+  return resolveMarket({ countryHeader: await readCountryHeader(), locale });
+}
+
+/**
+ * The visitor's ISO-3166 alpha-2 country from the edge header, or null when
+ * there is no usable signal (local dev, a relay, Cloudflare's XX/T1). Used by
+ * the plan sheet to decide whether the EU/UK/TW withdrawal acknowledgement
+ * applies (WP-21b); unknown stays unknown — never guessed from the locale.
+ */
+export async function resolveVisitorCountry(): Promise<string | null> {
+  const v = ((await readCountryHeader()) ?? '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(v) || v === 'XX' || v === 'T1') return null;
+  return v;
 }

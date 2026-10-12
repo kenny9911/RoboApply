@@ -72,3 +72,15 @@ describe('admin operations console', () => {
     expect(screen.getByText('User: user-1')).toBeInTheDocument();
   });
 });
+
+describe('admin home navigation', () => {
+  it('links every admin area of the site, including held invite rewards', async () => {
+    renderWithProviders(<AdminPage />, { authValue: adminAuth });
+    const nav = await screen.findByRole('navigation', { name: 'Admin areas' });
+    const hrefs = within(nav).getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(expect.arrayContaining(['/admin/system', '/admin/reports', '/admin/reports/invites', '/admin/credits']));
+    const invites = within(nav).getByRole('link', { name: /Held invite rewards/ });
+    expect(invites).toHaveAttribute('href', '/admin/reports/invites');
+    expect(invites).toHaveTextContent('Invites whose rewards wait for a person to approve or reject.');
+  });
+});

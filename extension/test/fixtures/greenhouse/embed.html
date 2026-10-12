@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head><title>Greenhouse application</title></head>
+<body>
+<div id="app_body">
+  <div id="header">
+    <h1 class="app-title">Data Analyst</h1>
+    <span class="company-name">at Sample Labs</span>
+    <div class="location">Taipei, Taiwan</div>
+  </div>
+  <form id="application_form" action="/embed/job_app?for=samplelabs&amp;token=2002" method="post">
+    <div id="main_fields">
+      <div class="field"><label for="first_name">First Name *</label><input type="text" id="first_name" name="job_application[first_name]" required></div>
+      <div class="field"><label for="last_name">Last Name *</label><input type="text" id="last_name" name="job_application[last_name]" required></div>
+      <div class="field"><label for="email">Email *</label><input type="email" id="email" name="job_application[email]" required></div>
+      <div class="field"><label for="phone">Phone</label><input type="tel" id="phone" name="job_application[phone]"></div>
+      <div class="field"><label for="job_application_location">Location (City)</label><input type="text" id="job_application_location" name="job_application[location]"></div>
+      <div class="field" id="resume_fieldset"><label>Resume/CV *</label><input type="file" id="resume_file" name="job_application[resume]"></div>
+    </div>
+    <div id="custom_fields">
+      <fieldset class="field">
+        <legend>How many years of experience do you have with SQL? *</legend>
+        <label><input type="radio" name="job_application[answers_attributes][0][answer_selected_options_attributes][0][question_option_id]" value="11"> Less than 2</label>
+        <label><input type="radio" name="job_application[answers_attributes][0][answer_selected_options_attributes][0][question_option_id]" value="12"> 2 to 5</label>
+        <label><input type="radio" name="job_application[answers_attributes][0][answer_selected_options_attributes][0][question_option_id]" value="13"> More than 5</label>
+      </fieldset>
+      <div class="field">
+        <label>Website<input type="text" name="job_application[answers_attributes][1][text_value]" id="job_application_answers_attributes_1_text_value"></label>
+      </div>
+      <div class="field">
+        <label>Tell us about a dashboard you built. *<textarea name="job_application[answers_attributes][2][text_value]" id="job_application_answers_attributes_2_text_value" required maxlength="1000"></textarea></label>
+      </div>
+      <div class="field checkbox">
+        <label><input type="checkbox" id="data_consent" name="job_application[data_compliance][gdpr_processing_consent_given]" value="1"> I consent to Sample Labs storing my details for this role</label>
+      </div>
+    </div>
+    <input type="button" id="submit_app" value="Submit Application">
+  </form>
+</div>
+</body>
+</html>

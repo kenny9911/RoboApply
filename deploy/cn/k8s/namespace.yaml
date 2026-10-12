@@ -1,0 +1,7 @@
+# GoApply mainland stack (CN-1). Everything in deploy/cn/k8s lives in this namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: goapply
+  labels:
+    app.kubernetes.io/part-of: goapply

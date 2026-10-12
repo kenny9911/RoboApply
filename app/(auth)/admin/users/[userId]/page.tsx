@@ -37,6 +37,8 @@ import {
   fmtCount,
   fmtPercent,
   fmtShortDate,
+  UserOverridesPanel,
+  RefundQuotePanel,
 } from '../../../../../components/v3/admin';
 import type {
   AdminCostByFeature,
@@ -247,6 +249,12 @@ export default function AdminUserDetailPage({
         emptyMessage="—"
         errorTitle={t('error.title')}
       /></div>
+
+      {/* WP-74: per-user overrides (audited) and the refund-policy quote. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24, marginTop: 24 }}>
+        <UserOverridesPanel userId={userId} />
+        <RefundQuotePanel userId={userId} />
+      </div>
 
       <SetPlanModal
         open={planOpen}

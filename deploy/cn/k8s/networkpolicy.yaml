@@ -1,0 +1,33 @@
+# The API and the web server accept traffic only from inside the namespace
+# (gateway, web → api server-side reads, CronJobs). The gateway is the only
+# public entry. Takes effect on clusters with a NetworkPolicy-capable CNI
+# (Terway with network policy enabled on ACK).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-internal-only
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: goapply-api
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - { port: 4607, protocol: TCP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-internal-only
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: goapply-web
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - { port: 3000, protocol: TCP }

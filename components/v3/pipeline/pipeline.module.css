@@ -1,0 +1,61 @@
+/* "By stage" grid additions (WP-38). The base look is .pipeline-grid /
+   .pipe-* in styles/v3.css; the column count comes from the brand's ladder
+   (inline grid-template-columns), so the grid scrolls sideways inside its
+   own region when the columns do not fit. */
+
+.board {
+  overflow-x: auto;
+  padding-bottom: var(--sp-2);
+  scroll-snap-type: x proximity;
+}
+
+.board > * {
+  scroll-snap-align: start;
+}
+
+.open {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.open:hover {
+  color: var(--action);
+  text-decoration: underline;
+}
+
+.open:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+.ended {
+  font-size: var(--fs-label);
+  color: var(--text-2);
+  margin-bottom: var(--sp-2);
+}
+
+.stageSelect {
+  min-height: 32px;
+  max-width: 100%;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-xs);
+  padding: 3px 5px;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .stageSelect {
+    min-height: 44px;
+  }
+}

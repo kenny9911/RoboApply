@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>演示物流 社会招聘</title></head>
+<body>
+<div class="wrap">
+  <h1 class="post-name">仓储主管</h1><span class="corp-name">演示物流</span><span class="post-city">武汉</span>
+  <form id="applyForm" action="/resume/step1">
+    <h3 class="module-title">个人信息</h3>
+    <table class="form-table"><tbody>
+      <tr><th>姓名</th><td><input id="x_name"></td><th>手机</th><td><input id="x_mobile"></td></tr>
+      <tr><th>电子邮件</th><td><input id="x_email"></td><th>户口所在地</th><td><input id="x_hukou"></td></tr>
+    </tbody></table>
+    <h3 class="module-title">工作经历</h3>
+    <table class="grid-table">
+      <thead><tr><th>公司名称</th><th>职位</th><th>开始时间</th><th>结束时间</th></tr></thead>
+      <tbody>
+        <tr><td><input id="w0_company"></td><td><input id="w0_title"></td><td><input id="w0_from" placeholder="yyyy-mm"></td><td><input id="w0_to" placeholder="yyyy-mm"></td></tr>
+        <tr><td><input id="w1_company"></td><td><input id="w1_title"></td><td><input id="w1_from" placeholder="yyyy-mm"></td><td><input id="w1_to" placeholder="yyyy-mm"></td></tr>
+      </tbody>
+    </table>
+    <h3 class="module-title">自我评价</h3>
+    <table class="form-table"><tbody><tr><th>自我评价</th><td><textarea id="x_self"></textarea></td></tr><tr><th>简历</th><td><input type="file" id="x_cv"></td></tr></tbody></table>
+    <div class="btn-bar"><input type="button" class="btn btn-primary" value="下一步"></div>
+  </form>
+</div>
+</body>
+</html>

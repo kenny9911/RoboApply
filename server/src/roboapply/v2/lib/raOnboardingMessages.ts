@@ -123,8 +123,8 @@ export function getMessages(locale: RaLocale): OnboardingMessages {
   return CATALOG[locale] ?? en;
 }
 
-/** Tiny `{name}` substitution — same helper shape as raQueueMessages.ts;
- *  re-declared here so the two catalogs stay independently deletable. */
+/** Tiny `{name}` substitution, declared here so this catalog stays
+ *  deletable on its own (raResumeAIMessages.ts has its own copy). */
 export function format(
   template: string,
   params: Record<string, string | number>,

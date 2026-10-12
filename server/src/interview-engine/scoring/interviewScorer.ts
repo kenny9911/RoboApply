@@ -2,8 +2,11 @@
 //
 // Deterministic, free, never-throws scorer over the candidate's transcript
 // turns. Produces a 0..100 overall, a 5-dimension breakdown, strengths, gaps,
-// and a one-line summary. Mirrors the proven heuristic in RAMockService but
-// operates on the engine's TranscriptTurn shape (role: 'candidate').
+// and a one-line summary. Operates on the engine's TranscriptTurn shape
+// (role: 'candidate'). It is the ONE free scorer: the voice engine and the
+// written practice (RAMockService) both call it, so both get the same
+// localized, CJK-aware prose. The written practice also passes how many
+// questions went unanswered (`ScoreOptions.unanswered`).
 //
 // CJK-aware: word counts use Intl.Segmenter for Han/Kana/Hangul text (a full
 // Chinese answer is NOT one "word"), and structure/number signals include CJK
@@ -142,7 +145,18 @@ interface ScorerStrings {
   specificity: { high: string; some: string; none: string };
   communication: { short: string; high: string; mid: string };
   confidence: { high: string; mid: string; low: string };
-  roleFit: { thin: (n: number) => string; high: string; mid: string };
+  roleFit: {
+    thin: (n: number) => string;
+    /** `n` of `total` questions got no answer (the written practice knows the count). */
+    skipped: (n: number, total: number) => string;
+    high: string;
+    mid: string;
+  };
+  /**
+   * True whenever at least one answer exists; never claims every question was
+   * answered. Medium-neutral: voice sessions get this line too, so it must not
+   * say the answers were written or spoken.
+   */
   strengthFallback: string;
   gapFallback: string;
   summary: { top: string; strong: string; good: string; base: string };
@@ -178,11 +192,12 @@ const STRINGS: Record<ScorerLocale, ScorerStrings> = {
       low: 'Tended to hedge — commit and use ownership verbs.',
     },
     roleFit: {
-      thin: (n) => `${n} answer(s) were thin — fuller engagement strengthens fit.`,
+      thin: (n) => (n === 1 ? '1 answer was thin — fuller engagement strengthens fit.' : `${n} answers were thin — fuller engagement strengthens fit.`),
+      skipped: (n, total) => `${n} of ${total} questions went unanswered. Answer every question for a complete result.`,
       high: 'Engaged with every prompt.',
       mid: 'Answered most prompts; fuller engagement helps.',
     },
-    strengthFallback: 'You engaged with the prompts — a clear base to build on.',
+    strengthFallback: 'The answers you gave are a clear base to build on.',
     gapFallback: 'Keep tightening: one crisp metric per answer and a clear position on every question.',
     summary: {
       top: 'Authentic and specific — a strong session.',
@@ -221,10 +236,11 @@ const STRINGS: Record<ScorerLocale, ScorerStrings> = {
     },
     roleFit: {
       thin: (n) => `有 ${n} 个回答过于单薄——更投入的回答能体现匹配度。`,
+      skipped: (n, total) => `${total} 道题中有 ${n} 道没有作答——每道题都作答，结果才完整。`,
       high: '每个问题都有认真回应。',
       mid: '回应了大部分问题；更充分的投入会更好。',
     },
-    strengthFallback: '你对每个问题都有回应——这是一个可以继续构建的基础。',
+    strengthFallback: '你给出的回答是一个可以继续打磨的基础。',
     gapFallback: '继续打磨：每个回答带一个清晰的数字，每个问题给出明确立场。',
     summary: {
       top: '真实而具体——一场高质量的练习。',
@@ -263,10 +279,11 @@ const STRINGS: Record<ScorerLocale, ScorerStrings> = {
     },
     roleFit: {
       thin: (n) => `有 ${n} 個回答過於單薄——更投入的回答能展現匹配度。`,
+      skipped: (n, total) => `${total} 題中有 ${n} 題沒有作答——每題都作答，結果才完整。`,
       high: '每個問題都有認真回應。',
       mid: '回應了大部分問題；更充分的投入會更好。',
     },
-    strengthFallback: '你對每個問題都有回應——這是一個可以繼續累積的基礎。',
+    strengthFallback: '你給出的回答是一個可以繼續累積的基礎。',
     gapFallback: '繼續打磨：每個回答帶一個清晰的數字，每個問題給出明確立場。',
     summary: {
       top: '真實而具體——一場高品質的練習。',
@@ -305,10 +322,11 @@ const STRINGS: Record<ScorerLocale, ScorerStrings> = {
     },
     roleFit: {
       thin: (n) => `${n} 件の回答が薄めでした。より踏み込んだ回答が適合性を高めます。`,
+      skipped: (n, total) => `${total} 問中 ${n} 問が未回答でした。すべての質問に答えると、結果がより正確になります。`,
       high: 'すべての質問にしっかり向き合えていました。',
       mid: 'ほとんどの質問に回答できました。より踏み込むとさらに良くなります。',
     },
-    strengthFallback: '質問にきちんと向き合えていました。ここから積み上げていけます。',
+    strengthFallback: 'いただいた回答は、ここから積み上げていく土台になります。',
     gapFallback: '引き続き磨きましょう。各回答に明確な数字を1つ、各質問に明確な立場を。',
     summary: {
       top: '誠実で具体的。非常に良いセッションでした。',
@@ -347,10 +365,11 @@ const STRINGS: Record<ScorerLocale, ScorerStrings> = {
     },
     roleFit: {
       thin: (n) => `${n}개의 답변이 빈약했습니다. 더 충실한 답변이 적합도를 높입니다.`,
+      skipped: (n, total) => `질문 ${total}개 중 ${n}개에 답하지 않았습니다. 모든 질문에 답하면 결과가 더 정확해집니다.`,
       high: '모든 질문에 성실히 답했습니다.',
       mid: '대부분의 질문에 답했습니다. 더 충실히 참여하면 좋습니다.',
     },
-    strengthFallback: '질문에 성실히 임했습니다. 여기서부터 쌓아갈 수 있는 기반입니다.',
+    strengthFallback: '답변하신 내용은 여기서부터 쌓아갈 수 있는 기반입니다.',
     gapFallback: '계속 다듬으세요. 답변마다 명확한 수치 하나, 질문마다 분명한 입장을 제시하세요.',
     summary: {
       top: '진정성 있고 구체적이었습니다. 훌륭한 세션입니다.',
@@ -389,10 +408,11 @@ const STRINGS: Record<ScorerLocale, ScorerStrings> = {
     },
     roleFit: {
       thin: (n) => `${n} respuesta(s) quedaron escasas: una participación más completa refuerza el encaje.`,
+      skipped: (n, total) => `Preguntas sin responder: ${n} de ${total}. Responde a todas para obtener un resultado completo.`,
       high: 'Respondió a todas las preguntas.',
       mid: 'Respondió a la mayoría de las preguntas; una participación más completa ayuda.',
     },
-    strengthFallback: 'Participaste en las preguntas: una base clara sobre la que construir.',
+    strengthFallback: 'Tus respuestas son una base clara sobre la que construir.',
     gapFallback: 'Sigue puliendo: una métrica clara por respuesta y una posición definida en cada pregunta.',
     summary: {
       top: 'Auténtico y específico: una sesión sólida.',
@@ -431,10 +451,11 @@ const STRINGS: Record<ScorerLocale, ScorerStrings> = {
     },
     roleFit: {
       thin: (n) => `${n} réponse(s) trop minces — un engagement plus complet renforce l’adéquation.`,
+      skipped: (n, total) => `Questions sans réponse : ${n} sur ${total}. Répondez à toutes pour obtenir un résultat complet.`,
       high: 'A répondu à toutes les questions.',
       mid: 'A répondu à la plupart des questions ; un engagement plus complet aiderait.',
     },
-    strengthFallback: 'Vous avez répondu aux questions — une base claire sur laquelle construire.',
+    strengthFallback: 'Vos réponses constituent une base claire sur laquelle construire.',
     gapFallback: 'Continuez à affiner : une métrique nette par réponse et une position claire sur chaque question.',
     summary: {
       top: 'Authentique et précis — une très bonne session.',
@@ -473,10 +494,11 @@ const STRINGS: Record<ScorerLocale, ScorerStrings> = {
     },
     roleFit: {
       thin: (n) => `${n} resposta(s) ficaram rasas — um engajamento mais completo fortalece o encaixe.`,
+      skipped: (n, total) => `Perguntas sem resposta: ${n} de ${total}. Responda a todas para obter um resultado completo.`,
       high: 'Respondeu a todas as perguntas.',
       mid: 'Respondeu à maioria das perguntas; um engajamento mais completo ajuda.',
     },
-    strengthFallback: 'Você se engajou com as perguntas — uma base clara para construir.',
+    strengthFallback: 'Suas respostas são uma base clara para construir.',
     gapFallback: 'Continue lapidando: uma métrica clara por resposta e uma posição definida em cada pergunta.',
     summary: {
       top: 'Autêntico e específico — uma sessão forte.',
@@ -515,10 +537,11 @@ const STRINGS: Record<ScorerLocale, ScorerStrings> = {
     },
     roleFit: {
       thin: (n) => `${n} Antwort(en) blieben dünn — mehr Substanz stärkt die Passung.`,
+      skipped: (n, total) => `Unbeantwortete Fragen: ${n} von ${total}. Beantworten Sie alle Fragen für ein vollständiges Ergebnis.`,
       high: 'Auf jede Frage eingegangen.',
       mid: 'Die meisten Fragen beantwortet; mehr Substanz hilft.',
     },
-    strengthFallback: 'Sie haben sich auf die Fragen eingelassen — eine klare Basis zum Aufbauen.',
+    strengthFallback: 'Ihre Antworten sind eine klare Basis zum Aufbauen.',
     gapFallback: 'Weiter verfeinern: eine prägnante Kennzahl pro Antwort und eine klare Position zu jeder Frage.',
     summary: {
       top: 'Authentisch und konkret — eine starke Session.',
@@ -570,9 +593,34 @@ function ratioScore(part: number, whole: number, floor: number, ceil: number): n
   return clampScore(floor + (ceil - floor) * (part / whole));
 }
 
-export function scoreTranscript(turns: TranscriptTurn[], difficulty = 3, locale?: string): InterviewScore {
+export interface ScoreOptions {
+  /**
+   * Questions put to the candidate that got no answer (skipped, or never
+   * reached). The written practice knows this number; a voice session does
+   * not, and leaves it out. Counted against completeness and named in the
+   * report, so the report never says every question was answered after a skip.
+   * It also scales the overall score by coverage (see COVERAGE_FLOOR).
+   */
+  unanswered?: number;
+}
+
+/**
+ * Structure, Specificity and Communication are measured over the answers that
+ * were given, so on their own they would score one good answer out of five
+ * like five good answers. The overall is therefore scaled by coverage (the
+ * share of questions answered): full coverage keeps it as is, and it falls
+ * linearly to this share of itself as coverage approaches zero. The
+ * per-dimension values are not scaled; the Role-fit note names the skips.
+ */
+const COVERAGE_FLOOR = 0.4;
+
+/** Below this coverage the result leads with the skips, not with praise. */
+const MOSTLY_UNANSWERED = 0.5;
+
+export function scoreTranscript(turns: TranscriptTurn[], difficulty = 3, locale?: string, opts: ScoreOptions = {}): InterviewScore {
   const L = STRINGS[normalizeScorerLocale(locale)];
   const s = gatherSignals(turns, locale);
+  const unanswered = Number.isFinite(opts.unanswered) ? Math.max(0, Math.floor(opts.unanswered as number)) : 0;
   if (s.answerCount === 0) {
     return {
       overall: 0,
@@ -594,7 +642,8 @@ export function scoreTranscript(turns: TranscriptTurn[], difficulty = 3, locale?
   const structure = clampScore(ratioScore(s.structuredAnswers, s.answerCount, 55, 92) - penalty);
   const specificity = clampScore(ratioScore(s.numericAnswers, s.answerCount, 48, 95) - penalty);
   const communication = clampScore(lengthScore(s.avgWords) - penalty / 2);
-  const completeness = clampScore(ratioScore(s.answerCount - s.emptyAnswers, s.answerCount, 40, 95));
+  const asked = s.answerCount + unanswered;
+  const completeness = clampScore(ratioScore(s.answerCount - s.emptyAnswers, asked, 40, 95));
   const confidence = clampScore(structure * 0.5 + completeness * 0.5 - penalty);
 
   const breakdown: ScoreBreakdownItem[] = [
@@ -602,20 +651,44 @@ export function scoreTranscript(turns: TranscriptTurn[], difficulty = 3, locale?
     { key: 'Specificity', value: specificity, note: specificity >= 80 ? L.specificity.high : s.numericAnswers > 0 ? L.specificity.some : L.specificity.none },
     { key: 'Communication', value: communication, note: s.avgWords < 15 ? L.communication.short : communication >= 80 ? L.communication.high : L.communication.mid },
     { key: 'Confidence', value: confidence, note: confidence >= 80 ? L.confidence.high : confidence >= 60 ? L.confidence.mid : L.confidence.low },
-    { key: 'Role fit', value: completeness, note: s.emptyAnswers > 0 ? L.roleFit.thin(s.emptyAnswers) : completeness >= 80 ? L.roleFit.high : L.roleFit.mid },
+    {
+      key: 'Role fit',
+      value: completeness,
+      note: unanswered > 0 ? L.roleFit.skipped(unanswered, asked)
+        : s.emptyAnswers > 0 ? L.roleFit.thin(s.emptyAnswers)
+        : completeness >= 80 ? L.roleFit.high : L.roleFit.mid,
+    },
   ];
 
-  const overall = clampScore(breakdown.reduce((a, b) => a + b.value, 0) / breakdown.length);
+  const mean = breakdown.reduce((a, b) => a + b.value, 0) / breakdown.length;
+  // `unanswered` is 0 unless the caller knows the count, so coverage is 1 then.
+  const coverage = asked > 0 ? s.answerCount / asked : 1;
+  const mostlyUnanswered = coverage < MOSTLY_UNANSWERED;
+  const overall = clampScore(mean * (COVERAGE_FLOOR + (1 - COVERAGE_FLOOR) * coverage));
 
   const dimLabel = (key: string): string => L.dims[key as DimKey] ?? key;
   const sorted = [...breakdown].sort((a, b) => b.value - a.value);
-  const strengths = sorted.slice(0, 2).filter((b) => b.value >= 70).map((b) => `${dimLabel(b.key)}: ${b.note}`);
+  const line = (b: ScoreBreakdownItem): string => `${dimLabel(b.key)}: ${b.note}`;
+  // A skipped or thin answer makes the role-fit note a criticism: it is never
+  // a strength, whatever its value, and a skip is always named as a gap.
+  const roleFitIsCriticism = unanswered > 0 || s.emptyAnswers > 0;
+  // With most questions unanswered there is too little to call a dimension a
+  // strength ("on most answers" would describe one answer out of five).
+  const strengths = mostlyUnanswered ? [] : sorted
+    .slice(0, 2)
+    .filter((b) => b.value >= 70 && !(b.key === 'Role fit' && roleFitIsCriticism))
+    .map(line);
   if (strengths.length === 0) strengths.push(L.strengthFallback);
-  const gaps = [...sorted].reverse().slice(0, 2).filter((b) => b.value < 75).map((b) => `${dimLabel(b.key)}: ${b.note}`);
+  const gaps = [...sorted].reverse().slice(0, 2).filter((b) => b.value < 75).map(line);
+  const roleFit = breakdown.find((b) => b.key === 'Role fit')!;
+  if (unanswered > 0 && !gaps.includes(line(roleFit))) gaps.unshift(line(roleFit));
   if (gaps.length === 0) gaps.push(L.gapFallback);
 
+  // The summary is picked from the scaled overall. With most questions
+  // unanswered it is the skip count itself (it is also the session's note).
   const summary =
-    overall >= 85 ? L.summary.top
+    mostlyUnanswered ? roleFit.note
+    : overall >= 85 ? L.summary.top
     : overall >= 75 ? L.summary.strong
     : overall >= 60 ? L.summary.good
     : L.summary.base;

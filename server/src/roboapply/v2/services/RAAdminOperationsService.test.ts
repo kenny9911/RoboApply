@@ -1,7 +1,11 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ query: vi.fn(), orders: vi.fn(), invoices: vi.fn(), subscription: vi.fn(), upsert: vi.fn(), adjustment: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(), orders: vi.fn(), invoices: vi.fn(), subscription: vi.fn(), upsert: vi.fn(), adjustment: vi.fn(),
+  /** Every Stripe SDK client built while a test ran (the SDK is mocked: nothing reaches Stripe). */
+  constructed: [] as Array<{ key: string; config: unknown }>,
+}));
 vi.mock('../../../lib/prisma.js', () => ({ default: {
   $queryRawUnsafe: mocks.query, alipayOrder: { findMany: mocks.orders },
   seekerProfile: { findUnique: async () => ({ id: 'profile' }) },
@@ -9,22 +13,108 @@ vi.mock('../../../lib/prisma.js', () => ({ default: {
   roboApplyMission: { update: async () => ({}) }, adminAdjustment: { create: mocks.adjustment },
 } }));
 vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
-vi.mock('stripe', () => ({ default: class { invoices = { list: mocks.invoices }; } }));
+vi.mock('stripe', () => ({ default: class {
+  invoices = { list: mocks.invoices };
+  constructor(key: string, config: unknown) { mocks.constructed.push({ key, config }); }
+} }));
 vi.mock('../../../lib/rateCard.js', () => ({ getRateCard: async () => ({}), tierPriceUsd: () => 19, tierDailyCap: () => 3 }));
 
 import { actualMrrUsd, resolveRange, setUserPlan } from './RAAdminAnalyticsService.js';
 import { getOperationsOverview, getOperationsPayments, getOperationsUsers, summarizePayments } from './RAAdminOperationsService.js';
+import { resetStripeClientForTests, setStripeClientForTests } from '../../../platform/billing/stripeClient.js';
 
 const range = resolveRange('2026-10-01T00:00:00Z', '2026-11-01T00:00:00Z');
 const user = { id: 'u1', email: 'user@example.com', name: 'User', region: 'us', tier: 'premium', stripeCustomerId: null };
 let testId = 0;
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.constructed.length = 0;
+  resetStripeClientForTests();
+  setStripeClientForTests(undefined);
   vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_dummy');
+  vi.stubEnv('VERCEL_ENV', '');
+  vi.stubEnv('STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION', '');
   testId++;
   mocks.query.mockResolvedValue([user]);
   mocks.orders.mockResolvedValue([]);
   mocks.invoices.mockResolvedValue({ data: [], has_more: false });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  setStripeClientForTests(undefined);
+});
+
+// ST-0: the payments report used to build its own Stripe client from the raw
+// key, which bypassed the live-key guard. It now asks the one factory.
+describe('the payments report reads Stripe through the shared client factory', () => {
+  const stripeUser = { ...user, stripeCustomerId: 'cus_seeker' };
+  const invoice = { id: 'in_1', number: 'INV-1', customer: 'cus_seeker', currency: 'usd', status: 'paid', amount_paid: 2499, amount_due: 2499,
+    created: Date.parse('2026-10-02') / 1000, status_transitions: { paid_at: Date.parse('2026-10-02') / 1000 },
+    customer_address: { country: 'US' }, billing_reason: 'subscription_create' };
+
+  it('builds the client once through getStripe (shared options), and scans with its own short timeout and no retry per request', async () => {
+    mocks.query.mockResolvedValue([stripeUser]);
+    mocks.invoices.mockResolvedValue({ data: [invoice], has_more: false });
+    const result = await getOperationsPayments({ range, q: String(testId) });
+    expect(result.coverage.stripe).toBe('complete');
+    expect(result.rows[0]).toMatchObject({ id: 'in_1', provider: 'stripe', amountMinor: 2499, currency: 'USD' });
+    expect(mocks.constructed).toEqual([{ key: 'sk_test_dummy', config: { maxNetworkRetries: 2, appInfo: { name: 'RoboApply', url: 'https://www.roboapply.io' } } }]);
+    expect(mocks.invoices).toHaveBeenCalledTimes(1);
+    expect(mocks.invoices.mock.calls[0][1]).toEqual({ timeout: 6000, maxNetworkRetries: 0 });
+  });
+
+  it('no client is built for a refused key: a live key outside production reports not_configured and scans nothing', async () => {
+    mocks.query.mockResolvedValue([stripeUser]);
+    mocks.invoices.mockResolvedValue({ data: [invoice], has_more: false });
+    for (const key of ['sk_live_example', 'rk_live_example']) {
+      vi.stubEnv('STRIPE_SECRET_KEY', key);
+      testId++;
+      const result = await getOperationsPayments({ range, q: String(testId) });
+      expect(result.coverage.stripe, key).toBe('not_configured');
+      expect(result.rows).toEqual([]);
+    }
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    testId++;
+    expect((await getOperationsPayments({ range, q: String(testId) })).coverage.stripe).toBe('not_configured');
+    expect(mocks.constructed).toEqual([]);
+    expect(mocks.invoices).not.toHaveBeenCalled();
+  });
+
+  it('the same live key is used in production, and outside it only with the explicit override', async () => {
+    mocks.query.mockResolvedValue([stripeUser]);
+    mocks.invoices.mockResolvedValue({ data: [invoice], has_more: false });
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_live_example');
+    vi.stubEnv('VERCEL_ENV', 'production');
+    expect((await getOperationsPayments({ range, q: String(testId) })).coverage.stripe).toBe('complete');
+    vi.stubEnv('VERCEL_ENV', '');
+    vi.stubEnv('STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION', 'true');
+    testId++;
+    expect((await getOperationsPayments({ range, q: String(testId) })).coverage.stripe).toBe('complete');
+    expect(mocks.constructed.map((c) => c.key)).toEqual(['sk_live_example']);
+  });
+
+  it('without a key the coverage is not_configured, as before; with no Stripe customer in scope it is complete and nothing is asked', async () => {
+    mocks.query.mockResolvedValue([stripeUser]);
+    vi.stubEnv('STRIPE_SECRET_KEY', '');
+    expect((await getOperationsPayments({ range, q: String(testId) })).coverage.stripe).toBe('not_configured');
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_dummy');
+    mocks.query.mockResolvedValue([user]);
+    testId++;
+    expect((await getOperationsPayments({ range, q: String(testId) })).coverage.stripe).toBe('complete');
+    expect(mocks.constructed).toEqual([]);
+    expect(mocks.invoices).not.toHaveBeenCalled();
+  });
+
+  it('a client installed with setStripeClientForTests is the one the report uses', async () => {
+    mocks.query.mockResolvedValue([stripeUser]);
+    const list = vi.fn(async () => ({ data: [{ ...invoice, id: 'in_fake' }], has_more: false }));
+    setStripeClientForTests({ invoices: { list } } as never);
+    const result = await getOperationsPayments({ range, q: String(testId) });
+    expect(result.rows.map((r) => r.id)).toEqual(['in_fake']);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(mocks.constructed).toEqual([]);
+  });
 });
 
 describe('admin native-currency accounting', () => {

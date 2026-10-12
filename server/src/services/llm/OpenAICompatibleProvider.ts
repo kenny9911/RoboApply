@@ -4,6 +4,8 @@
  *   - MiniMax  (https://api.minimax.chat or region-specific endpoint)
  *   - Ollama   (http://localhost:11434/v1, local Qwen / Llama / etc.)
  *   - new-api  (QuantumNous/new-api self-hosted gateway)
+ *   - Qwen / GLM / Doubao (domestic vendors, WP-14; see domesticVendors.ts —
+ *     they add a per-vendor thinking switch with reasoning headroom)
  *
  * For OpenAI / OpenRouter / Kimi / DeepSeek we keep the dedicated
  * provider classes — they have provider-specific quirks (DeepSeek
@@ -21,6 +23,12 @@ import { resolveLlmRequestTimeoutMs, LLM_SDK_MAX_RETRIES, buildSdkRequestOptions
 import { shouldUseJsonObject } from './jsonMode.js';
 import { estimatePromptTokens, estimateTokensFromText } from './tokenEstimate.js';
 import { logger } from '../LoggerService.js';
+import {
+  maxTokensWithThinking,
+  resolveThinkingMode,
+  thinkingParams,
+  type DomesticVendor,
+} from './domesticVendors.js';
 
 export class OpenAICompatibleProvider implements LLMProvider {
   private client: OpenAI;
@@ -29,6 +37,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
   // Retained for the model-aware per-request timeout (see chat()). Only the
   // configured timeoutMs is meaningful here; base URL/proxy are baked into the client.
   private readonly extra?: ProviderExtra;
+  // Domestic vendor whose thinking switch this provider speaks (undefined for
+  // MiniMax / Ollama / new-api, which keep the no-quirks path).
+  private readonly thinkingVendor?: DomesticVendor;
 
   constructor(args: {
     apiKey: string;
@@ -37,9 +48,13 @@ export class OpenAICompatibleProvider implements LLMProvider {
     providerName: string;
     proxyKey?: string;
     timeoutMs?: number;
+    thinkingVendor?: DomesticVendor;
+    /** Send no X-Proxy-Key header even when LLM_PROXY_KEY is set (vendor-owned hosts). */
+    noProxyKey?: boolean;
   }) {
     this.extra = args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : undefined;
-    const proxyKey = args.proxyKey ?? process.env.LLM_PROXY_KEY;
+    this.thinkingVendor = args.thinkingVendor;
+    const proxyKey = args.noProxyKey ? undefined : (args.proxyKey ?? process.env.LLM_PROXY_KEY);
     this.client = new OpenAI({
       // Ollama doesn't require a real key but the SDK throws on empty —
       // use a placeholder. Anything works.
@@ -76,8 +91,16 @@ export class OpenAICompatibleProvider implements LLMProvider {
       params.temperature = 0.7;
     }
 
-    if (typeof options?.maxTokens === 'number' && Number.isFinite(options.maxTokens)) {
-      params.max_tokens = options.maxTokens;
+    // Domestic vendors: per-call override ?? vendor env switch; thinking ON
+    // reserves reasoning headroom on top of the answer budget.
+    const thinking = this.thinkingVendor
+      ? resolveThinkingMode(this.thinkingVendor, options?.thinkingMode)
+      : undefined;
+    if (this.thinkingVendor) Object.assign(params, thinkingParams(this.thinkingVendor, thinking));
+
+    const maxTokens = maxTokensWithThinking(options?.maxTokens, thinking, options?.reasoningMaxTokens);
+    if (maxTokens !== undefined) {
+      params.max_tokens = maxTokens;
     }
 
     // Custom OpenAI-compatible gateways may expose the standard qualitative
@@ -101,6 +124,20 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
     const content = response.choices?.[0]?.message?.content;
     if (!content) {
+      // A thinking model that hits the token cap mid-thought returns
+      // finish_reason='length' with empty content. That is deterministic for
+      // the budget, so it is marked non-retryable (withLLMRetry would burn
+      // every attempt on it otherwise).
+      if (response.choices?.[0]?.finish_reason === 'length') {
+        throw Object.assign(
+          new Error(
+            `No content in ${this.providerName} response: the ${params.max_tokens ?? 'default'}-token budget was ` +
+              'exhausted before any answer was emitted (finish_reason=length). Raise maxTokens or ' +
+              'LLM_THINKING_HEADROOM_TOKENS, or disable thinking for this call.',
+          ),
+          { nonRetryable: true },
+        );
+      }
       throw new Error(`No content in ${this.providerName} response`);
     }
 

@@ -5,6 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from './LoggerService.js';
+import { brandOwnEnv, brandStack, type EnvSource } from '../platform/brand/brandEnv.js';
+import type { BrandId } from '../platform/brand/registry.js';
+import { StorageUnavailableError, resumeUploadPolicy } from '../platform/residency/uploadPolicy.js';
+import { WriteBrandUnknownError, resolveOwnerWriteBrand, resolveWriteBrand } from '../platform/residency/writeBrand.js';
+
+export { StorageUnavailableError, WriteBrandUnknownError };
 
 export type ResumeOriginalFileProvider = 'local' | 's3';
 type ResumeOriginalFileProviderMode = ResumeOriginalFileProvider | 'none';
@@ -26,27 +32,109 @@ export interface ResumeOriginalFileRef {
   mimeType?: string | null;
 }
 
-class ResumeOriginalFileStorageService {
-  private readonly providerMode: ResumeOriginalFileProviderMode;
+/**
+ * Per-brand storage target (owner ruling D5; GOAPPLY_PARITY_PLAN.md §3.6).
+ * There are two stores, and a key says which one holds its object:
+ *
+ *   shared  `S3_*` (or AWS_* credentials), `RESUME_FILE_STORAGE_PROVIDER`
+ *           override, local disk outside production. RoboApply writes here
+ *           with today's keys, unchanged. GoApply writes here too when it has
+ *           no bucket of its own, under the `goapply/` key prefix.
+ *   cn      GoApply's own bucket: `CN_S3_*` read as one set (never mixed with
+ *           `S3_*`), used as soon as `CN_S3_BUCKET` is set. Keys start `cn/`.
+ *
+ * GoApply modes on top of that (platform/residency/uploadPolicy.ts):
+ *   - `CN_STORAGE_MODE=discard` → `discard`: no original is written.
+ *   - `CN_RESIDENCY_STRICT=true` without a complete mainland bucket of its own
+ *     → `unavailable`: writes throw `StorageUnavailableError` (503
+ *     storage_unavailable) and nothing goes to the shared bucket.
+ *   - `CN_S3_BUCKET` set but the set incomplete → `none`: nothing is stored
+ *     (the shared bucket is never the fallback of a half-set CN bucket).
+ *
+ * Reads and deletes route by key, without a brand context, so an object stays
+ * reachable (and purgeable) after the configuration changes: a `goapply/`
+ * object is still found in the shared store once GoApply gets its own bucket.
+ */
+type BrandStorageMode = ResumeOriginalFileProviderMode | 'discard' | 'unavailable';
+
+/** The store an object lives in. */
+type StoreId = 'shared' | 'cn';
+
+interface BrandStorageConfig {
+  brandId: BrandId;
+  mode: BrandStorageMode;
+  /** The store this brand writes to. */
+  store: StoreId;
+  bucket: string | null;
+  endpoint: string | null;
+  region: string;
+  forcePathStyle: boolean;
+  accessKeyId: string;
+  secretAccessKey: string;
+}
+
+/** Keys of GoApply objects in its own bucket start with this segment. */
+const CN_KEY_PREFIX = 'cn/';
+/** Keys of GoApply objects on the shared store start with this segment. */
+const GOAPPLY_SHARED_KEY_PREFIX = 'goapply/';
+
+export type S3ClientLike = Pick<S3Client, 'send'>;
+
+export interface ResumeOriginalFileStorageOptions {
+  env?: EnvSource;
+  /** Tests inject a fake client; production builds a real S3Client per brand. */
+  createS3Client?: (config: { region: string; endpoint?: string; forcePathStyle: boolean; credentials: { accessKeyId: string; secretAccessKey: string } }) => S3ClientLike;
+}
+
+export class ResumeOriginalFileStorageService {
+  private readonly env: EnvSource;
   private readonly prefix: string;
   private readonly localDir: string;
-  private readonly s3Bucket: string | null;
-  private readonly s3Client: S3Client | null;
+  private readonly clientFactory: NonNullable<ResumeOriginalFileStorageOptions['createS3Client']>;
+  private readonly configs = new Map<BrandId, BrandStorageConfig>();
+  private cnStore: BrandStorageConfig | null = null;
+  private readonly clients = new Map<StoreId, S3ClientLike>();
 
-  constructor() {
-    this.providerMode = this.resolveProviderMode();
+  constructor(options: ResumeOriginalFileStorageOptions = {}) {
+    this.env = options.env ?? process.env;
     this.prefix = this.resolvePrefix();
     this.localDir = this.resolveLocalDir();
-    this.s3Bucket = this.resolveS3Bucket();
-    this.s3Client = this.providerMode === 's3' ? this.createS3Client() : null;
+    this.clientFactory = options.createS3Client ?? ((config) => new S3Client(config));
+    // Resolve the shared store eagerly, as before, so a misconfigured bucket shows at boot.
+    const shared = this.configFor('roboapply');
+    if (shared.mode === 's3') this.clientFor('shared');
   }
 
-  getProviderMode(): ResumeOriginalFileProviderMode {
-    return this.providerMode;
+  /**
+   * The brand's mode (default: the brand of the current unit of work).
+   * `none` when the brand cannot be known (see `resolveWriteBrand`).
+   */
+  getProviderMode(brand?: BrandId): BrandStorageMode {
+    const id = this.writeBrand(brand);
+    return id ? this.configFor(id).mode : 'none';
   }
 
-  isConfigured(): boolean {
-    return this.providerMode !== 'none';
+  /**
+   * Whether an original file can be stored for the brand (default: the
+   * current brand). False when the brand cannot be known: a residency-critical
+   * write never guesses RoboApply.
+   */
+  isConfigured(brand?: BrandId): boolean {
+    const id = this.writeBrand(brand);
+    if (!id) return false;
+    const mode = this.configFor(id).mode;
+    return mode === 'local' || mode === 's3';
+  }
+
+  /**
+   * Throws `StorageUnavailableError` (503) when the brand's storage is required
+   * but missing (GoApply under `CN_RESIDENCY_STRICT` without a mainland bucket
+   * of its own). Upload routes call it before accepting a file.
+   */
+  assertAvailable(brand?: BrandId): void {
+    const id = this.writeBrand(brand);
+    if (!id) throw new WriteBrandUnknownError('Resume upload');
+    if (this.configFor(id).mode === 'unavailable') throw new StorageUnavailableError(id);
   }
 
   async saveFile(params: {
@@ -61,24 +149,43 @@ class ResumeOriginalFileStorageService {
      *  never co-mingle with recruiter resume originals. Defaults to the
      *  instance prefix (`resume-originals`). */
     keyspace?: string;
+    /** Brand that owns the file (default: the current unit of work's brand). */
+    brand?: BrandId;
   }): Promise<StoredResumeOriginalFile | null> {
-    if (this.providerMode === 'none') {
+    // The brand of the write: explicit, else the unit of work, else the owning
+    // user's stored brand. Fail closed without one: never guess RoboApply.
+    const brandId = await resolveOwnerWriteBrand(params.brand, params.userId, this.env);
+    if (!brandId) {
+      logger.error('RESUME_STORAGE', 'Refusing to store an original: no brand for this write', { size: params.size }, params.requestId);
+      throw new WriteBrandUnknownError('Original resume file');
+    }
+    const config = this.configFor(brandId);
+
+    if (config.mode === 'unavailable') {
+      logger.warn('RESUME_STORAGE', 'Refusing to store an original: the brand bucket is not configured', { brand: brandId }, params.requestId);
+      throw new StorageUnavailableError(brandId);
+    }
+    if (config.mode === 'discard') {
+      logger.info('RESUME_STORAGE', 'Original file not kept (brand storage rule)', { brand: brandId, size: params.size }, params.requestId);
+      return null;
+    }
+    if (config.mode === 'none') {
       return null;
     }
 
     const fileName = sanitizeStorageFilename(params.fileName);
-    const key = this.buildKey(params.userId, fileName, params.keyspace);
+    const key = this.buildKey(params.userId, fileName, params.keyspace, config);
     const mimeType = params.mimeType || 'application/octet-stream';
     const storedAt = new Date();
     const checksum = crypto.createHash('sha256').update(params.buffer).digest('hex');
 
-    if (this.providerMode === 'local') {
+    if (config.mode === 'local') {
       const absolutePath = path.join(this.localDir, key);
       await fs.mkdir(path.dirname(absolutePath), { recursive: true });
       await fs.writeFile(absolutePath, params.buffer);
     } else {
-      await this.getS3Client().send(new PutObjectCommand({
-        Bucket: this.getS3Bucket(),
+      await this.clientFor(config.store).send(new PutObjectCommand({
+        Bucket: this.bucketFor(config.store),
         Key: key,
         Body: params.buffer,
         ContentType: mimeType,
@@ -86,7 +193,8 @@ class ResumeOriginalFileStorageService {
     }
 
     logger.info('RESUME_STORAGE', 'Stored original resume file', {
-      provider: this.providerMode,
+      provider: config.mode,
+      brand: brandId,
       key,
       fileName,
       size: params.size,
@@ -94,7 +202,7 @@ class ResumeOriginalFileStorageService {
     }, params.requestId);
 
     return {
-      provider: this.providerMode,
+      provider: config.mode,
       key,
       fileName: params.fileName,
       mimeType,
@@ -119,8 +227,9 @@ class ResumeOriginalFileStorageService {
       return { buffer, fileName, mimeType };
     }
 
-    const response = await this.getS3Client().send(new GetObjectCommand({
-      Bucket: this.getS3Bucket(),
+    const store = storeOfKey(key);
+    const response = await this.clientFor(store).send(new GetObjectCommand({
+      Bucket: this.bucketFor(store),
       Key: key,
     }));
 
@@ -168,9 +277,10 @@ class ResumeOriginalFileStorageService {
       }
     }
 
+    const store = storeOfKey(key);
     try {
-      const r = await this.getS3Client().send(new HeadObjectCommand({
-        Bucket: this.getS3Bucket(),
+      const r = await this.clientFor(store).send(new HeadObjectCommand({
+        Bucket: this.bucketFor(store),
         Key: key,
       }));
       return {
@@ -208,8 +318,9 @@ class ResumeOriginalFileStorageService {
     if (!provider || !key) return null;
     if (provider !== 's3') return null;
 
+    const store = storeOfKey(key);
     const cmd = new GetObjectCommand({
-      Bucket: this.getS3Bucket(),
+      Bucket: this.bucketFor(store),
       Key: key,
       // Force inline rendering when the stored MIME is sensible — keeps the
       // admin's browser preview behavior identical to the existing
@@ -219,20 +330,23 @@ class ResumeOriginalFileStorageService {
         ? `inline; filename="${ref.fileName.replace(/"/g, '')}"`
         : undefined,
     });
-    return getSignedUrl(this.getS3Client(), cmd, { expiresIn: Math.max(60, Math.min(3600, expiresInSeconds)) });
+    return getSignedUrl(this.clientFor(store) as S3Client, cmd, { expiresIn: Math.max(60, Math.min(3600, expiresInSeconds)) });
   }
 
   /**
-   * Stream every object in the configured bucket. Yields pages so callers
-   * (the admin inventory CSV export) can compose row-by-row without buffering
-   * the whole listing into memory. Only supports the `s3` provider.
+   * Stream every object in the bucket the brand writes to (default RoboApply).
+   * Yields pages so callers (the admin inventory CSV export) can compose
+   * row-by-row without buffering the whole listing into memory. Only supports
+   * the `s3` provider. On the shared store the listing holds both brands'
+   * objects: filter with `brandOfKey`.
    *
    * Each yielded object has key, size (bytes), lastModified.
    */
-  async *listAllObjects(): AsyncGenerator<{ key: string; size: number; lastModified: Date | null }> {
-    if (this.providerMode !== 's3') return;
-    const client = this.getS3Client();
-    const Bucket = this.getS3Bucket();
+  async *listAllObjects(brand: BrandId = 'roboapply'): AsyncGenerator<{ key: string; size: number; lastModified: Date | null }> {
+    const config = this.configFor(brand);
+    if (config.mode !== 's3') return;
+    const client = this.clientFor(config.store);
+    const Bucket = this.bucketFor(config.store);
     let token: string | undefined;
     do {
       const r = await client.send(new ListObjectsV2Command({
@@ -253,15 +367,26 @@ class ResumeOriginalFileStorageService {
   }
 
   /**
-   * Inspect the configured bucket without exposing the keys. Used by the
-   * admin endpoint to surface what's reachable: bucket name, endpoint,
-   * provider mode. Never returns credentials.
+   * The provider a stored key was written with, for callers that kept only the
+   * key (application artifacts): local disk when the shared store is local
+   * disk, else S3. GoApply's own bucket is always S3.
    */
-  describeStorageProvider(): { mode: ResumeOriginalFileProviderMode; bucket: string | null; endpoint: string | null; prefix: string } {
+  providerOfKey(key: string): ResumeOriginalFileProvider {
+    if (storeOfKey(key) === 'cn') return 's3';
+    return this.configFor('roboapply').mode === 'local' ? 'local' : 's3';
+  }
+
+  /**
+   * Inspect the bucket the brand writes to (default RoboApply) without exposing the keys.
+   * Used by the admin endpoint to surface what's reachable: bucket name,
+   * endpoint, provider mode. Never returns credentials.
+   */
+  describeStorageProvider(brand: BrandId = 'roboapply'): { mode: BrandStorageMode; bucket: string | null; endpoint: string | null; prefix: string } {
+    const config = this.configFor(brand);
     return {
-      mode: this.providerMode,
-      bucket: this.s3Bucket,
-      endpoint: (process.env.S3_ENDPOINT || '').trim() || null,
+      mode: config.mode,
+      bucket: config.bucket,
+      endpoint: config.endpoint,
       prefix: this.prefix,
     };
   }
@@ -301,8 +426,9 @@ class ResumeOriginalFileStorageService {
     }
 
     try {
-      await this.getS3Client().send(new DeleteObjectCommand({
-        Bucket: this.getS3Bucket(),
+      const store = storeOfKey(key);
+      await this.clientFor(store).send(new DeleteObjectCommand({
+        Bucket: this.bucketFor(store),
         Key: key,
       }));
       return true;
@@ -315,31 +441,96 @@ class ResumeOriginalFileStorageService {
     }
   }
 
-  private resolveProviderMode(): ResumeOriginalFileProviderMode {
-    const explicit = (process.env.RESUME_FILE_STORAGE_PROVIDER || '').trim().toLowerCase();
+  private writeBrand(explicit?: BrandId): BrandId | null {
+    return resolveWriteBrand(explicit, this.env);
+  }
+
+  private configFor(brandId: BrandId): BrandStorageConfig {
+    const cached = this.configs.get(brandId);
+    if (cached) return cached;
+    const config = brandId === 'goapply' ? this.resolveGoApplyConfig() : this.resolveSharedConfig();
+    this.configs.set(brandId, config);
+    return config;
+  }
+
+  /** The shared store, as RoboApply uses it: unchanged from before the brand split. */
+  private resolveSharedConfig(): BrandStorageConfig {
+    const env = this.env;
+    const bucket = (env.S3_BUCKET || '').trim() || null;
+    const accessKeyId = (env.S3_ACCESS_KEY_ID || env.AWS_ACCESS_KEY_ID || '').trim();
+    const secretAccessKey = (env.S3_SECRET_ACCESS_KEY || env.AWS_SECRET_ACCESS_KEY || '').trim();
+    const base = {
+      brandId: 'roboapply' as BrandId,
+      store: 'shared' as StoreId,
+      bucket,
+      endpoint: (env.S3_ENDPOINT || '').trim() || null,
+      region: (env.S3_REGION || env.AWS_REGION || 'auto').trim(),
+      forcePathStyle: ['true', '1', 'yes'].includes((env.S3_FORCE_PATH_STYLE || '').trim().toLowerCase()),
+      accessKeyId,
+      secretAccessKey,
+    };
+    const explicit = (env.RESUME_FILE_STORAGE_PROVIDER || '').trim().toLowerCase();
     if (explicit === 's3' || explicit === 'local' || explicit === 'none') {
-      return explicit;
+      return { ...base, mode: explicit };
     }
+    if (bucket && accessKeyId && secretAccessKey) return { ...base, mode: 's3' };
+    return { ...base, mode: env.NODE_ENV === 'production' ? 'none' : 'local' };
+  }
 
-    const hasS3Credentials = Boolean(this.resolveS3Bucket())
-      && Boolean(process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID)
-      && Boolean(process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY);
-    if (hasS3Credentials) {
-      return 's3';
+  /** GoApply's own bucket: `CN_S3_*` only, read as one set. */
+  private resolveCnStore(): BrandStorageConfig {
+    if (this.cnStore) return this.cnStore;
+    const env = this.env;
+    const cn = (name: string) => brandOwnEnv('goapply', name, env) ?? '';
+    const bucket = cn('S3_BUCKET') || null;
+    const accessKeyId = cn('S3_ACCESS_KEY_ID');
+    const secretAccessKey = cn('S3_SECRET_ACCESS_KEY');
+    this.cnStore = {
+      brandId: 'goapply',
+      store: 'cn',
+      mode: bucket && accessKeyId && secretAccessKey ? 's3' : 'none',
+      bucket,
+      endpoint: cn('S3_ENDPOINT') || null,
+      region: cn('S3_REGION') || 'auto',
+      forcePathStyle: ['true', '1', 'yes'].includes(cn('S3_FORCE_PATH_STYLE').toLowerCase()),
+      accessKeyId,
+      secretAccessKey,
+    };
+    return this.cnStore;
+  }
+
+  /**
+   * Where GoApply writes: its own bucket when `CN_S3_BUCKET` starts one, else
+   * the shared store. The upload policy decides whether it may write at all
+   * (`discard`, or `unavailable` under the strict switch: there the policy has
+   * already checked that the own bucket is complete and on mainland storage).
+   */
+  private resolveGoApplyConfig(): BrandStorageConfig {
+    const env = this.env;
+    const own = brandStack('goapply', 'storage', env) === 'own';
+    const base: BrandStorageConfig = own ? this.resolveCnStore() : { ...this.configFor('roboapply'), brandId: 'goapply' };
+    const policy = resumeUploadPolicy('goapply', env);
+    if (policy.originals === 'discard') return { ...base, mode: 'discard' };
+    if (policy.originals === 'unavailable') return { ...base, mode: 'unavailable' };
+    if (own && base.mode !== 's3') {
+      logger.error('RESUME_STORAGE', 'CN_S3_BUCKET is set but the CN_S3_* set is incomplete; GoApply files are not stored (the shared bucket is not used for a half-set CN bucket)', {
+        bucket: Boolean(base.bucket),
+        accessKeyId: Boolean(base.accessKeyId),
+        secretAccessKey: Boolean(base.secretAccessKey),
+      });
     }
-
-    return process.env.NODE_ENV === 'production' ? 'none' : 'local';
+    return base;
   }
 
   private resolvePrefix(): string {
-    const raw = (process.env.RESUME_FILE_STORAGE_PREFIX || 'resume-originals')
+    const raw = (this.env.RESUME_FILE_STORAGE_PREFIX || 'resume-originals')
       .trim()
       .replace(/^\/+|\/+$/g, '');
     return raw || 'resume-originals';
   }
 
   private resolveLocalDir(): string {
-    const configured = (process.env.RESUME_FILE_STORAGE_LOCAL_DIR || '').trim();
+    const configured = (this.env.RESUME_FILE_STORAGE_LOCAL_DIR || '').trim();
     if (configured) {
       return path.resolve(configured);
     }
@@ -348,49 +539,63 @@ class ResumeOriginalFileStorageService {
     return path.resolve(__dirname, '..', '..', 'storage');
   }
 
-  private resolveS3Bucket(): string | null {
-    return (process.env.S3_BUCKET || '').trim() || null;
+  /** Connection settings of a store, whatever any brand's write rule says. */
+  private storeConfig(store: StoreId): BrandStorageConfig {
+    return store === 'cn' ? this.resolveCnStore() : this.configFor('roboapply');
   }
 
-  private createS3Client(): S3Client {
-    const accessKeyId = (process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '').trim();
-    const secretAccessKey = (process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '').trim();
-    const region = (process.env.S3_REGION || process.env.AWS_REGION || 'auto').trim();
-    const endpoint = (process.env.S3_ENDPOINT || '').trim() || undefined;
-    const forcePathStyle = ['true', '1', 'yes'].includes((process.env.S3_FORCE_PATH_STYLE || '').trim().toLowerCase());
-
-    if (!this.s3Bucket || !accessKeyId || !secretAccessKey) {
-      throw new Error('S3 original-file storage is selected but bucket/credentials are missing');
+  private clientFor(store: StoreId): S3ClientLike {
+    const existing = this.clients.get(store);
+    if (existing) return existing;
+    const config = this.storeConfig(store);
+    if (store === 'cn' && config.mode !== 's3') {
+      // A `cn/` key with no usable CN bucket: never look for it in the shared store.
+      throw new StorageUnavailableError('goapply');
     }
-
-    return new S3Client({
-      region,
-      endpoint,
-      forcePathStyle,
-      credentials: { accessKeyId, secretAccessKey },
-    });
-  }
-
-  private getS3Client(): S3Client {
-    if (!this.s3Client) {
+    if (config.mode !== 's3') {
       throw new Error('S3 original-file storage is not configured');
     }
-    return this.s3Client;
+    if (!config.bucket || !config.accessKeyId || !config.secretAccessKey) {
+      throw new Error('S3 original-file storage is selected but bucket/credentials are missing');
+    }
+    const client = this.clientFactory({
+      region: config.region,
+      endpoint: config.endpoint ?? undefined,
+      forcePathStyle: config.forcePathStyle,
+      credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+    });
+    this.clients.set(store, client);
+    return client;
   }
 
-  private getS3Bucket(): string {
-    if (!this.s3Bucket) {
+  private bucketFor(store: StoreId): string {
+    const bucket = this.storeConfig(store).bucket;
+    if (!bucket) {
+      if (store === 'cn') throw new StorageUnavailableError('goapply');
       throw new Error('S3 bucket is not configured');
     }
-    return this.s3Bucket;
+    return bucket;
   }
 
-  private buildKey(userId: string, fileName: string, keyspace?: string): string {
+  private buildKey(userId: string, fileName: string, keyspace: string | undefined, config: BrandStorageConfig): string {
     const prefix = (keyspace || this.prefix).replace(/^\/+|\/+$/g, '') || this.prefix;
     const ownerSegment = userId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'user';
     const dateSegment = new Date().toISOString().slice(0, 10);
-    return `${prefix}/${ownerSegment}/${dateSegment}/${crypto.randomUUID()}-${fileName}`;
+    // RoboApply keys are unchanged. A GoApply key names its store: `cn/` in
+    // its own bucket, `goapply/` on the shared one.
+    const brandSegment = config.brandId !== 'goapply' ? '' : config.store === 'cn' ? CN_KEY_PREFIX : GOAPPLY_SHARED_KEY_PREFIX;
+    return `${brandSegment}${prefix}/${ownerSegment}/${dateSegment}/${crypto.randomUUID()}-${fileName}`;
   }
+}
+
+/** The store an object key lives in: `cn/` keys in GoApply's own bucket, everything else in the shared store. */
+function storeOfKey(key: string): StoreId {
+  return key.startsWith(CN_KEY_PREFIX) ? 'cn' : 'shared';
+}
+
+/** The brand an object key belongs to (GoApply keys carry the `cn/` or the `goapply/` segment). */
+export function brandOfKey(key: string): BrandId {
+  return key.startsWith(CN_KEY_PREFIX) || key.startsWith(GOAPPLY_SHARED_KEY_PREFIX) ? 'goapply' : 'roboapply';
 }
 
 function sanitizeStorageFilename(fileName: string): string {
@@ -437,3 +642,31 @@ async function bodyToBuffer(body: unknown): Promise<Buffer> {
 }
 
 export const resumeOriginalFileStorageService = new ResumeOriginalFileStorageService();
+
+/** One probe per env object, so a configuration problem is logged once, not on every question. */
+const STORAGE_PROBES = new WeakMap<EnvSource, ResumeOriginalFileStorageService>();
+
+/**
+ * Whether a file of the brand (a resume original, a profile photo) can be kept
+ * under `env`: the brand's storage rule lets it, and the store it writes to is
+ * usable (a bucket, or local disk outside production). The same answer
+ * `isConfigured(brand)` gives on a service built from that env; no client is
+ * created and nothing is contacted.
+ *
+ * For the live process the answer is the module service's own (the one that
+ * would do the write). For any other env object one probe is built and kept
+ * for that object. Either way the configuration is read once, so a half-set
+ * `CN_S3_*` group is logged once and not on every profile request.
+ */
+export function originalStorageConfigured(brand: BrandId, env: EnvSource = process.env): boolean {
+  if (env === process.env) return resumeOriginalFileStorageService.isConfigured(brand);
+  let probe = STORAGE_PROBES.get(env);
+  if (!probe) {
+    probe = new ResumeOriginalFileStorageService({
+      env,
+      createS3Client: () => ({ send: (async () => ({})) as unknown as S3ClientLike['send'] }),
+    });
+    STORAGE_PROBES.set(env, probe);
+  }
+  return probe.isConfigured(brand);
+}

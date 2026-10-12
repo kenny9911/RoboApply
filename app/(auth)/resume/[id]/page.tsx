@@ -7,9 +7,9 @@
 //           Skills), with inline per-bullet AI + a 3-option summary rewrite +
 //           AI skill suggestions
 //   right = live "paper" preview that re-renders as you type
-// Plus a floating Coach rail (cycling tips), a Tailor-for-a-job modal
-// (pick → analyze → review diff → apply → tailored variant), and a Download
-// modal.
+// Plus a floating Coach rail (cycling tips), the Tailor sheet (tailor
+// sessions: pick a saved job or paste the posting → setup → Verify details →
+// Use this resume), and a Download modal.
 //
 // Data + state model:
 //   • `useResume(id)` (existing) → seeds local `structured` parsed from
@@ -18,9 +18,11 @@
 //     note below).
 //   • All edits mutate `structured`; the preview re-renders live.
 //   • A 1.2s debounce re-serializes `structured` → markdown and PATCHes
-//     (`usePatchResumeMutation`) only when the markdown actually changed.
+//     (`usePatchResumeMutation`) only when the USER changed something
+//     (hooks/resume/useEditorAutosave: compared with what the loaded resume
+//     serializes to, so opening an upload never rewrites it).
 //   • Inline AI: `useResumeRewrite` (bullet / summary / skills).
-//   • Tailor: `useResumeTailorDiff` + `useCreateResumeMutation`.
+//   • Tailor: `<TailorSheet>` (components/features/tailor; one `tailor` credit per run).
 //   • Coach: `useResumeCoachTips`.
 //
 // Sections: Identity / Summary / Experience / Education / Skills are fully
@@ -30,16 +32,23 @@
 //
 // Autosave rehydration: `usePatchResumeMutation.onSuccess` writes the PATCH
 // response back into the detail cache, which changes `resume` identity. The
-// hydration effect therefore guards: it only re-parses server markdown when
-// it differs from what this editor last serialized (first load / external
-// change) — an autosave echo never clobbers in-flight keystrokes or remounts
-// rows.
+// hydration in useEditorAutosave therefore guards: it only re-parses server
+// markdown when it differs from what this editor last sent (first load /
+// external change) — an autosave echo never clobbers in-flight keystrokes or
+// remounts rows.
+//
+// WP-65 (preview pane): fit to one page (GoApply: 1–2 pages) with undo, the
+// section order, the GoApply personal details (籍贯 / 政治面貌) and the device
+// photo — placed by the export renderer only, never in the resume text — and
+// "Ask the Assistant about this resume". The brand's details / photo / page
+// rules come from GET /builder/config.
 //
 // Layout: the (auth) layout wraps children in `.main-inner` (padded, max-width
 // 1180). The editor is a full-bleed split, so we break out of that padding with
 // a negative-margin wrapper that spans the viewport width of the main column.
 
 import {
+  Suspense,
   use,
   useCallback,
   useEffect,
@@ -52,14 +61,30 @@ import { useTranslations } from 'next-intl';
 
 import {
   useResume,
+  useResumeList,
   usePatchResumeMutation,
   useResumeRewrite,
   useResumeCoachTips,
   useDeleteResumeMutation,
+  usePatchResumeLayoutMutation,
 } from '../../../../hooks/useResumes';
-import { DeleteResumeConfirm } from '../../../../components/resumes/DeleteResumeConfirm';
 import {
-  parseResumeMarkdown,
+  AskAssistantButton,
+  FitToPageControl,
+  LayoutPanel,
+  ResumeDetailsPanel,
+  SectionOrderPanel,
+  docLanguageOf,
+  layoutPatch,
+  personalLineFor,
+  resolveLayout,
+} from '../../../../components/features/resume';
+import { useBuilderConfig } from '../../../../hooks/resume/useResumeBuilder';
+import { useResumePhoto } from '../../../../hooks/resume/useResumePhoto';
+import { TailorLaunchHost, TailorSheet } from '../../../../components/features/tailor';
+import { DeleteResumeConfirm } from '../../../../components/resumes/DeleteResumeConfirm';
+import layoutStyles from '../../../../components/features/resume/ResumeHub.module.css';
+import {
   serializeResumeMarkdown,
   blankExperience,
   blankEducation,
@@ -67,7 +92,11 @@ import {
   type StructuredExperience,
   type StructuredEducation,
 } from '../../../../lib/resumeStructure';
-import { analyzeResume } from '../../../../lib/resumeAnalyzer';
+import { analyzeResume, resumePlaceholders } from '../../../../lib/resumeAnalyzer';
+import { useLatestResumeCheck } from '../../../../hooks/resume/useResumeCheck';
+import { useEditorAutosave } from '../../../../hooks/resume/useEditorAutosave';
+import { useCreditGate } from '../../../../hooks/shared/useCreditGate';
+import { CreditNotice } from '../../../../components/v3/primitives';
 import {
   EditorToolbar,
   EditorSection,
@@ -77,12 +106,9 @@ import {
   SkillsEditor,
   ResumePaper,
   CoachPanel,
-  TailorModal,
   DownloadModal,
   YOUNG_HELPERS,
 } from '../../../../components/v3/resume-editor';
-
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 export default function ResumeEditorPage({
   params,
@@ -96,12 +122,26 @@ export default function ResumeEditorPage({
   const { data: resume, isLoading, isError } = useResume(id);
   const patch = usePatchResumeMutation(id);
   const rewrite = useResumeRewrite(id);
+  // AI consent (TASK_PLAN.md §2.2): the server reports whether AI may run for
+  // this user; AI actions hide only once it says no (it refuses them anyway).
+  const resumeCheck = useLatestResumeCheck(id);
+  const aiEnabled = resumeCheck.data?.aiAvailable !== false;
   const del = useDeleteResumeMutation();
   const { data: coachData } = useResumeCoachTips(id);
+  const layoutMut = usePatchResumeLayoutMutation(id);
+  // WP-36b: template / page / spacing / accent / date format, saved per resume.
+  const defaultPage = resume?.defaultPage ?? 'letter';
+  const layout = useMemo(() => resolveLayout(resume?.layout ?? null, defaultPage), [resume?.layout, defaultPage]);
+  const tb = useTranslations('resumeBuilder.editor');
+  // WP-65: per-brand details, photo and page count (GoApply: 籍贯 / 政治面貌, photo, up to 2 pages).
+  const builderConfig = useBuilderConfig();
+  const personalFields = builderConfig.data?.personalFields ?? [];
+  const photoOffered = builderConfig.data?.photo.offered ?? false;
+  const maxPages = builderConfig.data?.maxPages ?? 1;
+  const photo = useResumePhoto(id);
+  const placedPhoto = photoOffered && layout.photo ? photo.photo : null;
 
-  const [structured, setStructured] = useState<StructuredResume | null>(null);
   const [resumeName, setResumeName] = useState('');
-  const [saveState, setSaveState] = useState<SaveState>('idle');
   const [coachOpen, setCoachOpen] = useState(true);
   const [tailorOpen, setTailorOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
@@ -109,65 +149,56 @@ export default function ResumeEditorPage({
   const [skillSuggestions, setSkillSuggestions] = useState<string[]>([]);
   const [skillsBusy, setSkillsBusy] = useState(false);
 
-  const lastSerializedRef = useRef('');
-  const skipNextAutoSaveRef = useRef(true);
-  // Which resume id the editor state was hydrated from.
-  const hydratedIdRef = useRef<string | null>(null);
-  // True while `structured` differs from the last-serialized markdown.
-  const dirtyRef = useRef(false);
   // One-shot focus request for a freshly inserted bullet (consumed by
   // BulletRow's mount — a ref, so setting it never re-renders).
   const pendingBulletFocusRef = useRef<{ expId: string; idx: number } | null>(
     null,
   );
 
-  // Hydrate from server — first load, resume switch, or a REAL external
-  // content change. Autosave echoes (the PATCH response carrying exactly what
-  // we just serialized) and refetches racing local edits are ignored so
-  // typing is never interrupted and row ids/focus survive.
-  useEffect(() => {
-    if (!resume) return;
-    const sameDoc = hydratedIdRef.current === resume.id;
-    if (sameDoc && resume.resumeMarkdown === lastSerializedRef.current) return;
-    if (sameDoc && dirtyRef.current) return;
-    hydratedIdRef.current = resume.id;
-    setStructured(parseResumeMarkdown(resume.resumeMarkdown));
-    setResumeName(resume.name);
-    lastSerializedRef.current = resume.resumeMarkdown;
-    dirtyRef.current = false;
-    skipNextAutoSaveRef.current = true;
-  }, [resume]);
+  // AI provenance (WP-36b): remember every AI-written text the editor was
+  // offered; once one of them lands in the saved resume, the next save tells
+  // the server, so exports carry the AI marks (CN-E-07). Skills shorter than
+  // 4 characters are too common to attribute.
+  const aiTextsRef = useRef<Set<string>>(new Set());
+  const aiReportedRef = useRef(false);
+  // Every inline AI edit (a bullet action, a summary rewrite, skill
+  // suggestions) spends one `rewrite` credit on the server. The gate keeps
+  // "N left" true, does not send a request that is known to have no credit,
+  // and opens the out-of-credits sheet on a 402.
+  const { run: spendRewrite, summary: rewriteCredits } = useCreditGate('rewrite');
+  const runAiRewrite = useCallback(
+    async (body: Parameters<typeof rewrite.mutateAsync>[0]) => {
+      const spent = await spendRewrite(() => rewrite.mutateAsync(body));
+      // The sheet explains; callers show their own "did not work" state.
+      if (!spent.ok) throw new Error(spent.reason);
+      const res = spent.value;
+      const texts = [res.rewrite, ...(res.options ?? []).map((o) => o.text), ...(res.skills ?? [])];
+      for (const text of texts) if (text && text.trim().length >= 4) aiTextsRef.current.add(text.trim());
+      return res;
+    },
+    [rewrite, spendRewrite],
+  );
 
-  // Debounced auto-save of structured edits.
-  useEffect(() => {
-    if (!structured || !resume) return;
-    if (skipNextAutoSaveRef.current) {
-      skipNextAutoSaveRef.current = false;
-      return;
-    }
-    const serialized = serializeResumeMarkdown(structured);
-    dirtyRef.current = serialized !== lastSerializedRef.current;
-    if (!dirtyRef.current) return;
+  // Document state + debounced autosave (hooks/resume/useEditorAutosave): the
+  // resume is saved only after the user changed it — opening an uploaded
+  // resume never rewrites it.
+  const saveMarkdown = useCallback(
+    async (serialized: string) => {
+      const aiLanded =
+        !aiReportedRef.current && [...aiTextsRef.current].some((text) => serialized.includes(text));
+      await patch.mutateAsync(aiLanded ? { resumeMarkdown: serialized, aiAssisted: true } : { resumeMarkdown: serialized });
+      if (aiLanded) aiReportedRef.current = true;
+    },
+    [patch],
+  );
+  const { structured, setStructured, saveState, hydrations } = useEditorAutosave(resume, saveMarkdown);
 
-    setSaveState('saving');
-    const handle = setTimeout(async () => {
-      // Pre-commit before the PATCH resolves: the mutation's onSuccess writes
-      // the response into the query cache, and the hydration effect compares
-      // against this ref — committing after the await would race that effect.
-      const prev = lastSerializedRef.current;
-      lastSerializedRef.current = serialized;
-      dirtyRef.current = false;
-      try {
-        await patch.mutateAsync({ resumeMarkdown: serialized });
-        setSaveState('saved');
-      } catch {
-        lastSerializedRef.current = prev;
-        dirtyRef.current = true;
-        setSaveState('error');
-      }
-    }, 1200);
-    return () => clearTimeout(handle);
-  }, [structured, resume, patch]);
+  // The name follows the server on each hydration (first load, resume switch,
+  // external change) — never on an autosave echo, which would undo typing.
+  useEffect(() => {
+    if (resume) setResumeName(resume.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on hydration, not on every refetch
+  }, [hydrations]);
 
   // Debounced rename.
   useEffect(() => {
@@ -194,7 +225,20 @@ export default function ResumeEditorPage({
       return null;
     }
   }, [structured]);
-  const strength = analysis?.score ?? resume?.matchScoreCached ?? 72;
+  // Null when the resume cannot be analysed: the meter is then hidden. It never
+  // falls back to a job-fit number of this version or to a made-up one (D3).
+  const strength = analysis?.score ?? null;
+
+  // Lines that still carry a blank an AI suggestion left ("[X]", "[n=__]").
+  const placeholderLines = useMemo(() => (structured ? resumePlaceholders(structured) : []), [structured]);
+
+  // A tailored version with details still to check: where "Verify details"
+  // opens for it. The hub list carries the session id (the detail view does
+  // not); without it the link goes to the hub, which lists the same action.
+  const unverifiedClaims = resume?.unverifiedClaims ?? 0;
+  const hubList = useResumeList();
+  const verifySessionId = unverifiedClaims > 0 ? (hubList.data?.resumes.find((r) => r.id === id)?.tailorSessionId ?? null) : null;
+  const verifyHref = unverifiedClaims > 0 ? (verifySessionId ? `/resume?tailorSession=${encodeURIComponent(verifySessionId)}` : '/resume') : null;
 
   // Analyzer anchors → editor section DOM ids (exp-<id> passes through: the
   // experience cards carry that id directly).
@@ -207,6 +251,7 @@ export default function ResumeEditorPage({
       'section-experience': 'experience',
       'section-education': 'education',
       'section-skills': 'skills',
+      'section-projects': 'extra-sections',
     };
     const domId = anchor.startsWith('exp-') ? anchor : sectionMap[anchor];
     if (!domId) return;
@@ -214,6 +259,16 @@ export default function ResumeEditorPage({
       .getElementById(domId)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
+
+  // /resume/[id]?focus=section-… (links from the resume check report): jump
+  // once the structured editor has rendered.
+  const focusHandledRef = useRef(false);
+  useEffect(() => {
+    if (focusHandledRef.current || !structured) return;
+    focusHandledRef.current = true;
+    const focus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('focus');
+    if (focus) window.setTimeout(() => jumpToIssue(focus), 0);
+  }, [structured, jumpToIssue]);
 
   // ── structured mutators ──
   const updateStructured = useCallback(
@@ -431,7 +486,7 @@ export default function ResumeEditorPage({
   async function suggestSkills() {
     setSkillsBusy(true);
     try {
-      const res = await rewrite.mutateAsync({ mode: 'skills' });
+      const res = await runAiRewrite({ mode: 'skills' });
       setSkillSuggestions(res.skills ?? []);
     } catch {
       /* non-fatal */
@@ -456,8 +511,15 @@ export default function ResumeEditorPage({
 
   return (
     // Break out of .main-inner padding so the split pane is full-bleed like the
-    // prototype. The (auth) main column is the positioning context.
-    <div style={{ margin: '-28px -32px -80px' }}>
+    // prototype. The (auth) main column is the positioning context. The inset
+    // follows the shell's padding per width (styles/v3-resume.css
+    // .rb-editor-bleed): a fixed -32px was wider than the phone's 14px gutter
+    // and scrolled the whole page sideways.
+    <div className="rb-editor-bleed">
+      {/* Runs the tailor flow for this resume from `?tailor=<jobId>` (WP-36a; mounted at the Wave 3 gate). */}
+      <Suspense fallback={null}>
+        <TailorLaunchHost resumeId={id} />
+      </Suspense>
       <div className="rb-editor">
         <EditorToolbar
           name={resumeName}
@@ -472,11 +534,38 @@ export default function ResumeEditorPage({
           onTailor={() => setTailorOpen(true)}
           onDelete={() => setDeleteOpen(true)}
           onBack={() => router.push('/resume')}
+          resumeId={id}
+          aiEnabled={aiEnabled}
         />
+
+        {/* Not ready to send yet: unchecked details of a tailored version, and blanks left by an AI suggestion. */}
+        {verifyHref ? (
+          <p className={layoutStyles.editorNotice} role="status" data-notice="unverified">
+            <span>{t('export.unverified', { count: unverifiedClaims })}</span>
+            <a className={layoutStyles.editorNoticeAction} href={verifyHref}>
+              {t('export.verify_cta')}
+            </a>
+          </p>
+        ) : null}
+        {placeholderLines.length > 0 ? (
+          <p className={layoutStyles.editorNotice} role="status" data-notice="placeholders">
+            <span>{t('export.placeholders', { count: placeholderLines.length })}</span>
+            <button type="button" className={layoutStyles.editorNoticeAction} onClick={() => jumpToIssue(placeholderLines[0]!.anchor)}>
+              {t('export.placeholders_show')}
+            </button>
+          </p>
+        ) : null}
 
         <div className="rb-split">
           {/* LEFT — structured editor */}
           <div className="rb-edit-pane">
+            {/* The cost of an AI edit, before the click. */}
+            {aiEnabled ? (
+              <div className={layoutStyles.creditLine} data-credit="rewrite">
+                <span>{t('ai_edit_cost')}</span>
+                <CreditNotice bucket={rewriteCredits} />
+              </div>
+            ) : null}
             {/* Identity */}
             <EditorSection eyebrow="01" title={t('section.identity')} anchorId="identity">
               <div className="rb-field-grid">
@@ -553,7 +642,8 @@ export default function ResumeEditorPage({
               <SummaryEditor
                 value={structured.summary}
                 onChange={(v) => updateStructured({ ...structured, summary: v })}
-                runRewrite={(body) => rewrite.mutateAsync(body)}
+                runRewrite={runAiRewrite}
+                aiEnabled={aiEnabled}
               />
             </EditorSection>
 
@@ -672,7 +762,8 @@ export default function ResumeEditorPage({
                         onFocusHandled={() => {
                           pendingBulletFocusRef.current = null;
                         }}
-                        runRewrite={(body) => rewrite.mutateAsync(body)}
+                        runRewrite={runAiRewrite}
+                        aiEnabled={aiEnabled}
                         targetJobId={resume.targetJobId}
                       />
                     ))}
@@ -794,9 +885,9 @@ export default function ResumeEditorPage({
             <EditorSection
               eyebrow="05"
               title={t('section.skills')}
-              aiLabel={t('skills.suggest')}
+              aiLabel={aiEnabled ? t('skills.suggest') : undefined}
               aiBusy={skillsBusy}
-              onAi={suggestSkills}
+              onAi={aiEnabled ? suggestSkills : undefined}
               anchorId="skills"
             >
               <SkillsEditor
@@ -859,8 +950,45 @@ export default function ResumeEditorPage({
                 <span>{t('preview.page')}</span>
               </div>
             </div>
+            <FitToPageControl resumeId={id} maxPages={maxPages} photo={Boolean(placedPhoto)} />
+            <div className="rb-preview-bar">
+              <AskAssistantButton resumeId={id} enabled={aiEnabled} />
+            </div>
+            <details className={layoutStyles.layoutDetails}>
+              <summary className={layoutStyles.layoutSummary}>{tb('order')}</summary>
+              <SectionOrderPanel resume={structured} onChange={updateStructured} />
+            </details>
+            {personalFields.length > 0 || photoOffered ? (
+              <details className={layoutStyles.layoutDetails}>
+                <summary className={layoutStyles.layoutSummary}>{tb('details')}</summary>
+                <ResumeDetailsPanel
+                  layout={resume.layout}
+                  personalFields={personalFields}
+                  photoOffered={photoOffered}
+                  photo={photo}
+                  saving={layoutMut.isPending}
+                  onPatch={(change) => layoutMut.mutate(change)}
+                />
+              </details>
+            ) : null}
+            <details className={layoutStyles.layoutDetails}>
+              <summary className={layoutStyles.layoutSummary}>{t('layout.title')}</summary>
+              <LayoutPanel
+                value={layout}
+                defaultPage={defaultPage}
+                saving={layoutMut.isPending}
+                error={layoutMut.isError}
+                onChange={(change) => layoutMut.mutate(layoutPatch(change))}
+              />
+            </details>
             <div className="rb-paper-wrap">
-              <ResumePaper resume={structured} />
+              <ResumePaper
+                resume={structured}
+                layout={layout}
+                personalLine={personalFields.length ? personalLineFor(resume.layout?.personal, docLanguageOf(layout.headingLanguage, resume.resumeMarkdown)) : null}
+                photo={placedPhoto}
+                photoAlt={tb('photoAlt')}
+              />
             </div>
           </div>
         </div>
@@ -874,13 +1002,14 @@ export default function ResumeEditorPage({
         />
       ) : null}
 
-      {/* Tailor modal */}
+      {/* Tailor (toolbar): the tailor-session flow. With no job in the URL the
+          user first picks a saved job or pastes the posting (INT-10). */}
       {tailorOpen ? (
-        <TailorModal
+        <TailorSheet
+          open
           resumeId={id}
-          resumeName={resumeName}
           onClose={() => setTailorOpen(false)}
-          onCreated={(variantId) => {
+          onOpenResume={(variantId) => {
             setTailorOpen(false);
             router.push(`/resume/${variantId}`);
           }}
@@ -893,6 +1022,11 @@ export default function ResumeEditorPage({
           resumeId={id}
           resumeName={resumeName}
           resumeMarkdown={serializeResumeMarkdown(structured)}
+          unverifiedClaims={unverifiedClaims}
+          verifyHref={verifyHref}
+          placeholderLines={placeholderLines.map((l) => l.text)}
+          aiAssisted={resume.aiAssisted ?? false}
+          photo={placedPhoto}
           onClose={() => setDownloadOpen(false)}
         />
       ) : null}

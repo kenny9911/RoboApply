@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Questions</title>
+  <meta property="og:site_name" content="Demo Studio">
+</head>
+<body>
+  <div class="applicationSteps"><span>Candidate Profile</span><span class="currentStep">Questions</span></div>
+  <form id="applyForm" method="post">
+    <fieldset class="field">
+      <legend>Do you have a valid work permit for Singapore? *</legend>
+      <label><input type="radio" name="q_permit" value="Y" required> Yes</label>
+      <label><input type="radio" name="q_permit" value="N"> No</label>
+    </fieldset>
+    <div class="field"><label for="q_source">Where did you find this job?</label><select id="q_source" name="q_source"><option value="">No Selection</option><option>LinkedIn</option><option>Job board</option><option>Friend</option></select></div>
+    <div class="field"><label for="q_why">What interests you about this role?</label><textarea id="q_why" name="q_why"></textarea></div>
+    <div class="field"><input type="checkbox" id="q_privacy" name="q_privacy"><label for="q_privacy">I have read the data privacy statement</label></div>
+    <div class="buttons"><button type="button">Back</button><button type="button">Next</button></div>
+  </form>
+</body>
+</html>

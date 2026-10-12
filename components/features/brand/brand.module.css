@@ -1,0 +1,153 @@
+/* components/features/brand/brand.module.css — brand presentation pieces
+ * (WP-12): the wrong-market nudge banner and the brand wordmark.
+ * Tokens only (ARCHITECTURE.md §10.2). Colours follow the brand tokens, which
+ * styles/brands/goapply.css redefines under html[data-brand='goapply']. */
+
+/* ── Wrong-market nudge ───────────────────────────────────────────────────
+ * An inline banner at the top of the page, never a modal: it does not go
+ * through the popup gate and never blocks the page. */
+.nudge {
+  border-bottom: 1px solid var(--rule);
+  background: var(--grad-soft);
+  color: var(--text);
+}
+
+.nudgeInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--sp-2) var(--sp-4);
+}
+
+.nudgeMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  color: var(--text);
+}
+
+.nudgeText {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.nudgeTitle {
+  font-weight: 600;
+  margin-right: var(--sp-1);
+}
+
+.nudgeBody {
+  color: var(--text-2);
+}
+
+.nudgeActions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.nudgeCta,
+.nudgeDismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-lg);
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-pill);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease-out);
+}
+
+.nudgeCta {
+  border: 0;
+  background: var(--action);
+  color: var(--action-ink);
+}
+.nudgeCta:hover {
+  background: var(--action-hover);
+}
+
+.nudgeDismiss {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--text);
+}
+.nudgeDismiss:hover {
+  background: var(--surface-2);
+}
+
+.nudgeCta:focus-visible,
+.nudgeDismiss:focus-visible,
+.wordmark:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (max-width: 480px) {
+  .nudgeActions {
+    width: 100%;
+  }
+  .nudgeCta,
+  .nudgeDismiss {
+    flex: 1 1 0;
+  }
+}
+
+/* ── Wordmark ─────────────────────────────────────────────────────────── */
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--control-lg);
+  color: var(--text);
+  text-decoration: none;
+  border-radius: var(--r-sm);
+}
+
+.wordmarkMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: var(--brand-plane);
+  color: var(--brand-mark);
+}
+
+.sm .wordmarkMark {
+  width: 28px;
+  height: 28px;
+}
+.md .wordmarkMark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.wordmarkName {
+  font-weight: 700;
+  letter-spacing: var(--ls-title);
+}
+.sm .wordmarkName {
+  font-size: var(--fs-subtitle);
+}
+.md .wordmarkName {
+  font-size: var(--fs-title);
+}

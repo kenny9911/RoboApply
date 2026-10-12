@@ -3,7 +3,12 @@
 // ResumeCard — one card in the library grid (.rb-card). Source:
 // RoboApply_V3/resume.jsx ResumeCard. Renders a faux "paper" preview, the
 // variant name + a derived version pill, a tailored-for line (or a "base"
-// muted line), and a meta row with the cached match score + last-edited.
+// muted line), and a meta row with the last-edited time.
+//
+// No fit number here. A resume version's fit for its target job is the "With
+// this version" number, shown only in tailoring and read live there
+// (MARKET_STRATEGY §2.2). The stored copy (`matchScoreCached`) was frozen at
+// the last model call, carried no label, kind or date, and is not printed.
 //
 // Data: a single `RAResumeVariantSummary` from `resumes.list()`. The prototype
 // carries `sections` + `version` which the summary shape does NOT have:
@@ -11,6 +16,8 @@
 //   • `sections` is dropped — it's display-only fluff with no contract field.
 // Clicking the card routes to the editor (`/resumes/[id]`) — the page owns the
 // push so Lane F's route stays the only coupling point.
+
+import { useTranslations } from 'next-intl';
 
 import type { RAResumeVariantSummary } from '../../../lib/api/v2/types';
 import { IconTrash } from '../primitives';
@@ -23,8 +30,6 @@ interface Props {
   editedLabel: string;
   /** Localized fallback when the variant isn't tailored to a job. */
   baseLabel: string;
-  /** Localized "/100" suffix unit. */
-  scoreUnit: string;
   onOpen: () => void;
   /** Open the delete-confirm for this variant. Omit to hide the control. */
   onDelete?: () => void;
@@ -32,24 +37,17 @@ interface Props {
   deleteLabel?: string;
 }
 
-function scoreColor(score: number): string {
-  if (score >= 90) return 'var(--ok)';
-  if (score >= 80) return 'var(--action)';
-  return 'var(--warn)';
-}
-
 export function ResumeCard({
   resume,
   version,
   editedLabel,
   baseLabel,
-  scoreUnit,
   onOpen,
   onDelete,
   deleteLabel,
 }: Props) {
+  const t = useTranslations('resume');
   const tailored = Boolean(resume.targetJobTitle || resume.targetJobCompany);
-  const score = resume.matchScoreCached;
 
   return (
     <div className="rb-card-wrap">
@@ -60,15 +58,16 @@ export function ResumeCard({
           <div className="rb-mini-name">{resume.name}</div>
           <div className="rb-mini-line" style={{ width: '60%' }} />
           <div className="rb-mini-spacer" />
-          <div className="rb-mini-section">EXPERIENCE</div>
+          {/* Section names in the interface language (they were fixed English words). */}
+          <div className="rb-mini-section">{t('section.experience')}</div>
           <div className="rb-mini-line" style={{ width: '85%' }} />
           <div className="rb-mini-line" style={{ width: '95%' }} />
           <div className="rb-mini-line" style={{ width: '70%' }} />
           <div className="rb-mini-spacer" />
-          <div className="rb-mini-section">EDUCATION</div>
+          <div className="rb-mini-section">{t('section.education')}</div>
           <div className="rb-mini-line" style={{ width: '75%' }} />
         </div>
-        {tailored ? <div className="rb-mini-stamp">TAILORED</div> : null}
+        {tailored ? <div className="rb-mini-stamp">{t('card.tailored_stamp')}</div> : null}
       </div>
 
       <div className="rb-card-body">
@@ -88,13 +87,6 @@ export function ResumeCard({
         )}
 
         <div className="rb-card-meta">
-          {score !== null ? (
-            <span className="rb-card-score" style={{ color: scoreColor(score) }}>
-              {Math.round(score)}
-              <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{scoreUnit}</span>
-            </span>
-          ) : null}
-          {score !== null ? <span className="rb-card-divider">·</span> : null}
           <span>{editedLabel}</span>
         </div>
       </div>

@@ -20,6 +20,12 @@
 //   • Past sessions sit at the top as a lane, not behind a header dropdown:
 //     repeating a practice is the single highest-intent action a returning
 //     candidate takes, and it prefills the whole brief in one click.
+//
+// Two things the screen only offers when they exist:
+//   • the Format chip (video or voice) — `formatChoice` is false where the
+//     practice runs in writing, so no video or voice option is shown there;
+//   • the "Get credits" link — `canGetCredits` is false where nothing is on
+//     sale, so a credit shortfall never points at a page that sells nothing.
 
 import Link from 'next/link';
 import {
@@ -35,8 +41,9 @@ import {
 import { useTranslations } from 'next-intl';
 
 import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
-import { mockCreditsForMinutes } from '../../../lib/mockInterviewCredits';
+import { canAffordMinutes, longestAffordableMinutes, mockCreditsForMinutes } from '../../../lib/mockInterviewCredits';
 import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
+import { CN_FORMAT_DURATIONS, isCnFormatType, useLocalizeType } from '../../features/practice-cn';
 import type { IERequirements } from '../../../lib/api/interviewEngine';
 import type {
   RAMockFormat,
@@ -60,6 +67,10 @@ import {
 import { MarketRequirementsPanel, type PreviewState } from './MarketRequirementsPanel';
 import styles from './PracticeSetupFlow.module.css';
 
+/** Where practice packs and plans are sold: the plan picker, like the report's
+ *  "get more" link (features/practice/PracticeReportEnd PRACTICE_PLANS_HREF). */
+const PRACTICE_PLANS_HREF = '/settings/billing#plans';
+
 /** Browse the catalog, or paste the job post itself. */
 export type RoleSourceMode = 'role' | 'jd';
 
@@ -71,6 +82,16 @@ const SEARCH_CAP = 12;
 
 /** Lengths always offered, plus whatever the chosen focus recommends. */
 const BASE_DURATIONS = [15, 30, 45, 60];
+
+/**
+ * The lengths offered for an interview type, shortest first. GoApply's
+ * AI-interview practice runs 20–30 minutes, so only those lengths are offered
+ * for it; every other type gets the base lengths plus its own.
+ */
+export function practiceDurationOptions(type: Pick<RAMockType, 'id' | 'minutes'> | null | undefined): number[] {
+  if (isCnFormatType(type?.id)) return [...CN_FORMAT_DURATIONS];
+  return Array.from(new Set([...BASE_DURATIONS, ...(type ? [type.minutes] : [])])).sort((a, b) => a - b);
+}
 
 /** Recent sessions shown in the lane before "show all". */
 const RECENT_LANE_LIMIT = 3;
@@ -105,6 +126,11 @@ interface Props {
 
   format: RAMockFormat;
   onFormatChange: (value: RAMockFormat) => void;
+  /**
+   * False hides the Format chip and its tray: there is no video or voice to
+   * choose where the practice runs in writing. Default true.
+   */
+  formatChoice?: boolean;
   language: string;
   onLanguageChange: (value: string) => void;
   durationMinutes: number;
@@ -120,6 +146,8 @@ interface Props {
   webSources: Array<{ title: string; url: string }>;
   sampleQuestions: string[];
   groundedOn?: 'jd' | 'market' | 'role';
+  /** False hides the market-requirements preview entirely. Default true: it is shown on both brands. */
+  showPreview?: boolean;
   canPreview: boolean;
   onPreview: () => void;
   onRetryPreview: () => void;
@@ -132,9 +160,31 @@ interface Props {
    *  interview service, or anything else. */
   startError: 'network' | 'busy' | 'generic' | null;
   insufficientCredits: { balance: number; required: number } | null;
+  /**
+   * False when there is nothing to buy here (no practice pack on sale, no plan
+   * that raises the allowance): the shortfall notice then states the numbers
+   * without a "Get credits" link. Default true.
+   */
+  canGetCredits?: boolean;
   canLaunch: boolean;
   starting: boolean;
   onStart: () => void;
+
+  // ── WP-43 slots (practice from a job, notices, recording) ──
+  /** Under the intro: the job banner and one-line notices. */
+  topSlot?: ReactNode;
+  /** Next to the intro copy: e.g. the "Practice questions" link. */
+  introAside?: ReactNode;
+  /** In the launch dock, above Start: the recording row. */
+  dockSlot?: ReactNode;
+  /** Replaces the Start label (e.g. the written practice). */
+  startLabel?: string;
+  /**
+   * Wraps the Start button (it stays the same button). GoApply inside WeChat
+   * uses it for the one-time "tell me when my report is ready" prompt
+   * (SubscribeOnTap); everywhere else the button renders as is.
+   */
+  wrapStart?: (button: ReactNode) => ReactNode;
 }
 
 /** Roving-tabindex arrow handling shared by every radiogroup on this screen. */
@@ -245,6 +295,7 @@ export function PracticeSetupFlow({
   recommendedTypeIds,
   format,
   onFormatChange,
+  formatChoice = true,
   language,
   onLanguageChange,
   durationMinutes,
@@ -258,6 +309,7 @@ export function PracticeSetupFlow({
   webSources,
   sampleQuestions,
   groundedOn,
+  showPreview = true,
   canPreview,
   onPreview,
   onRetryPreview,
@@ -267,12 +319,20 @@ export function PracticeSetupFlow({
   canAfford,
   startError,
   insufficientCredits,
+  canGetCredits = true,
   canLaunch,
   starting,
   onStart,
+  topSlot,
+  introAside,
+  dockSlot,
+  startLabel,
+  wrapStart,
 }: Props) {
   const t = useTranslations('practice');
-  const { localizeCategory, localizeRole, localizeType } = useMockRoleLabels();
+  const { localizeCategory, localizeRole } = useMockRoleLabels();
+  // Type labels, with GoApply's AI-interview practice under its own name (practiceCn.format.*).
+  const localizeType = useLocalizeType();
 
   const [tray, setTray] = useState<TrayKey | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -307,18 +367,14 @@ export function PracticeSetupFlow({
     );
   }, [types, recommendedTypeIds]);
 
-  const durationOptions = useMemo(
-    () => Array.from(new Set([...BASE_DURATIONS, ...(selectedType ? [selectedType.minutes] : [])])).sort((a, b) => a - b),
-    [selectedType],
-  );
+  const durationOptions = useMemo(() => practiceDurationOptions(selectedType), [selectedType]);
 
   // The longest interview the current balance actually covers — offered as the
   // one-click repair inside the shortfall notice.
   const affordableDuration = creditsRemaining === undefined
     ? null
-    : [...durationOptions]
-        .reverse()
-        .find((minutes) => creditsRemaining + 1e-9 >= mockCreditsForMinutes(minutes, creditMinutes)) ?? null;
+    : longestAffordableMinutes(durationOptions, creditsRemaining, creditMinutes);
+  const shorterDuration = affordableDuration !== null && affordableDuration !== durationMinutes ? affordableDuration : null;
 
   const creditShortage = insufficientCredits ?? (
     !canAfford && creditsRemaining !== undefined
@@ -378,10 +434,15 @@ export function PracticeSetupFlow({
   }, [tray]);
 
   // Losing the role source collapses the plan; an open tray would be pointing
-  // at controls that are no longer on screen.
+  // at controls that are no longer on screen. The same goes for the Format
+  // tray once there is no format to choose.
   useEffect(() => {
     if (!hasRoleSource) setTray(null);
   }, [hasRoleSource]);
+
+  useEffect(() => {
+    if (!formatChoice) setTray((current) => (current === 'mode' ? null : current));
+  }, [formatChoice]);
 
   function toggleTray(key: TrayKey) {
     setTray((current) => (current === key ? null : key));
@@ -394,7 +455,7 @@ export function PracticeSetupFlow({
 
   const languageLabel = INTERVIEW_LOCALES.find((locale) => locale.code === language)?.label ?? language;
 
-  const chips: Array<{
+  const allChips: Array<{
     key: TrayKey;
     icon: ReactNode;
     label: string;
@@ -437,6 +498,8 @@ export function PracticeSetupFlow({
       suggested: false,
     },
   ];
+  // No Format chip where there is no video or voice to choose (the written practice).
+  const chips = formatChoice ? allChips : allChips.filter((chip) => chip.key !== 'mode');
 
   const trayTitle: Record<TrayKey, string> = {
     interviewer: t('setup.interviewer.title'),
@@ -464,7 +527,10 @@ export function PracticeSetupFlow({
       <header className={styles.intro}>
         <h1>{t('setup.flow.title')}</h1>
         <p>{t('setup.flow.sub')}</p>
+        {introAside ? <div className={styles.introAside}>{introAside}</div> : null}
       </header>
+
+      {topSlot}
 
       {recentSessions.length > 0 ? (
         <section className={styles.lane} aria-labelledby="practice-recent-heading">
@@ -734,7 +800,7 @@ export function PracticeSetupFlow({
                   />
                 ) : null}
 
-                {tray === 'mode' ? (
+                {tray === 'mode' && formatChoice ? (
                   <OptionGrid
                     label={trayTitle.mode}
                     value={format}
@@ -743,7 +809,9 @@ export function PracticeSetupFlow({
                     options={(['video', 'voice'] as const).map((value) => ({
                       id: value,
                       title: t(`setup.format.${value}.title`),
-                      sub: t(`setup.format.${value}.desc`),
+                      // WP-43: honest format lines (no "eye contact noted":
+                      // only the answers are scored, never the face).
+                      sub: t(`mode.${value}.desc`),
                       badge: value === 'video' ? t('setup.format.video.tag') : undefined,
                     }))}
                   />
@@ -758,7 +826,7 @@ export function PracticeSetupFlow({
                     onCommit={() => closeTray(true)}
                     options={durationOptions.map((minutes) => {
                       const cost = mockCreditsForMinutes(minutes, creditMinutes);
-                      const unaffordable = creditsRemaining !== undefined && creditsRemaining + 1e-9 < cost;
+                      const unaffordable = creditsRemaining !== undefined && !canAffordMinutes(minutes, creditsRemaining, creditMinutes);
                       return {
                         id: minutes,
                         title: t('setup.type.minutes', { minutes }),
@@ -786,6 +854,8 @@ export function PracticeSetupFlow({
           </>
         ) : null}
 
+        {dockSlot}
+
         {startError ? (
           <p role="alert" className={styles.alert}>
             {startError === 'network'
@@ -798,15 +868,20 @@ export function PracticeSetupFlow({
 
         {creditShortage ? (
           <div role="alert" className={styles.alert}>
-            <span>{t('setup.insufficientCredits', creditShortage)}</span>
-            <span className={styles.alertActions}>
-              {affordableDuration !== null && affordableDuration !== durationMinutes ? (
-                <button type="button" className={styles.laneGhost} onClick={() => onDurationChange(affordableDuration)}>
-                  {t('setup.flow.useShorter', { minutes: affordableDuration })}
-                </button>
-              ) : null}
-              <Link className={styles.laneGhost} href="/settings#billing">{t('setup.getCredits')}</Link>
-            </span>
+            {/* "Add credits" is only said, and only linked, where credits can be had. */}
+            <span>{t(canGetCredits ? 'setup.insufficientCredits' : 'setup.insufficientCreditsNoPurchase', creditShortage)}</span>
+            {shorterDuration !== null || canGetCredits ? (
+              <span className={styles.alertActions}>
+                {shorterDuration !== null ? (
+                  <button type="button" className={styles.laneGhost} onClick={() => onDurationChange(shorterDuration)}>
+                    {t('setup.flow.useShorter', { minutes: shorterDuration })}
+                  </button>
+                ) : null}
+                {canGetCredits ? (
+                  <Link className={styles.laneGhost} href={PRACTICE_PLANS_HREF}>{t('setup.getCredits')}</Link>
+                ) : null}
+              </span>
+            ) : null}
           </div>
         ) : null}
 
@@ -825,45 +900,49 @@ export function PracticeSetupFlow({
             )}
           </p>
 
-          <button
-            type="button"
-            className={styles.start}
-            disabled={!canLaunch || !canAfford || starting}
-            onClick={onStart}
-          >
-            {starting ? t('setup.launch.starting') : t('setup.launch.start')}
-          </button>
+          {(wrapStart ?? ((button: ReactNode) => button))(
+            <button
+              type="button"
+              className={styles.start}
+              disabled={!canLaunch || !canAfford || starting}
+              onClick={onStart}
+            >
+              {starting ? t('setup.launch.starting') : (startLabel ?? t('setup.launch.start'))}
+            </button>,
+          )}
         </div>
       </div>
 
-      <div className={styles.previewShell}>
-        <button
-          type="button"
-          className={styles.previewToggle}
-          aria-expanded={previewOpen}
-          aria-controls="practice-preview"
-          onClick={() => setPreviewOpen((value) => !value)}
-        >
-          <IconChevron size={14} aria-hidden className={previewOpen ? styles.chevronUp : undefined} />
-          {t('setup.flow.previewToggle')}
-        </button>
+      {showPreview ? (
+        <div className={styles.previewShell}>
+          <button
+            type="button"
+            className={styles.previewToggle}
+            aria-expanded={previewOpen}
+            aria-controls="practice-preview"
+            onClick={() => setPreviewOpen((value) => !value)}
+          >
+            <IconChevron size={14} aria-hidden className={previewOpen ? styles.chevronUp : undefined} />
+            {t('setup.flow.previewToggle')}
+          </button>
 
-        {previewOpen ? (
-          <div id="practice-preview" className={styles.previewBody}>
-            <MarketRequirementsPanel
-              compact
-              state={previewState}
-              requirements={requirements}
-              webSources={webSources}
-              sampleQuestions={sampleQuestions}
-              groundedOn={groundedOn}
-              canPreview={canPreview}
-              onPreview={onPreview}
-              onRetry={onRetryPreview}
-            />
-          </div>
-        ) : null}
-      </div>
+          {previewOpen ? (
+            <div id="practice-preview" className={styles.previewBody}>
+              <MarketRequirementsPanel
+                compact
+                state={previewState}
+                requirements={requirements}
+                webSources={webSources}
+                sampleQuestions={sampleQuestions}
+                groundedOn={groundedOn}
+                canPreview={canPreview}
+                onPreview={onPreview}
+                onRetry={onRetryPreview}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

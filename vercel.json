@@ -6,21 +6,28 @@
     "api/index.ts": {
       "maxDuration": 300,
       "memory": 2048,
-      "includeFiles": "{server/**,node_modules/@napi-rs/canvas*/**,node_modules/pdfjs-dist/{package.json,legacy/build/**,standard_fonts/**,cmaps/**,wasm/**}}"
+      "includeFiles": "{server/**,content/legal/**,node_modules/@napi-rs/canvas*/**,node_modules/pdfjs-dist/{package.json,legacy/build/**,standard_fonts/**,cmaps/**,wasm/**}}"
     }
   },
   "rewrites": [
     { "source": "/api/v1/:path*", "destination": "/api/index" }
   ],
   "crons": [
-    { "path": "/api/v1/cron/daily-matcher", "schedule": "0 5 * * *" },
-    { "path": "/api/v1/cron/digest", "schedule": "0 * * * *" },
-    { "path": "/api/v1/cron/submitter", "schedule": "0 * * * *" },
-    { "path": "/api/v1/cron/catchup", "schedule": "*/15 9-15 * * *" },
-    { "path": "/api/v1/cron/cache-cleanup", "schedule": "0 3 * * 0" },
     { "path": "/api/v1/cron/billing-renewal-reminder", "schedule": "0 6 * * *" },
-    { "path": "/api/v1/cron/billing-friday-nudge", "schedule": "0 16 * * 5" },
     { "path": "/api/v1/cron/account-purge", "schedule": "0 4 * * *" },
-    { "path": "/api/v1/cron/interview-cleanup", "schedule": "*/15 * * * *" }
+    { "path": "/api/v1/cron/interview-cleanup", "schedule": "*/15 * * * *" },
+    { "path": "/api/v1/cron/jobs-plan", "schedule": "0 2 * * *" },
+    { "path": "/api/v1/cron/jobs-ingest", "schedule": "*/10 * * * *" },
+    { "path": "/api/v1/cron/jobs-boards", "schedule": "*/5 * * * *" },
+    { "path": "/api/v1/cron/queue-drain", "schedule": "*/5 * * * *" },
+    { "path": "/api/v1/cron/jobs-maintain", "schedule": "30 3 * * *" },
+    { "path": "/api/v1/cron/score-precompute", "schedule": "*/15 * * * *" },
+    { "path": "/api/v1/cron/job-alerts", "schedule": "*/15 * * * *" },
+    { "path": "/api/v1/cron/reminders", "schedule": "0 * * * *" },
+    { "path": "/api/v1/cron/lifecycle-emails", "schedule": "15 * * * *" },
+    { "path": "/api/v1/cron/ready-weekly", "schedule": "5 * * * *" },
+    { "path": "/api/v1/cron/seo-rebuild", "schedule": "0 4 * * *" },
+    { "path": "/api/v1/cron/contacts-sync", "schedule": "45 4 * * *" },
+    { "path": "/api/v1/cron/compliance-daily", "schedule": "0 5 * * *" }
   ]
 }

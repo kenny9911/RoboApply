@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1.7
+#
+# GoApply mainland stack (CN-1) — the routing gateway (WP-76).
+#
+# nginx in front of the two app containers, mirroring vercel.json: /api/v1/*
+# goes to the API, everything else to the Next server. TLS terminates at the
+# Aliyun SLB in front of this Service (deploy/cn/k8s/gateway.yaml).
+#
+# The image bakes deploy/cn/nginx.conf in, so ACK pulls one image from ACR and
+# needs no ConfigMap. Unprivileged nginx (uid 101) listening on 8080.
+#
+#   docker build -f deploy/cn/Dockerfile.gateway -t goapply-gateway .
+#   docker run --rm goapply-gateway nginx -t       # config syntax check (resolves the
+#                                                  # upstream names, so run it on the
+#                                                  # compose network: see compose.yaml)
+
+ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:1.28-alpine
+FROM ${NGINX_IMAGE}
+
+COPY deploy/cn/nginx.conf /etc/nginx/nginx.conf
+# IPv6 listener only where the kernel has IPv6 (nginx.conf includes what this
+# writes to /tmp/nginx-listen.d at start). The image's /docker-entrypoint.sh
+# runs /docker-entrypoint.d/*.sh before nginx.
+COPY --chmod=0755 deploy/cn/gateway-listen-ipv6.sh /docker-entrypoint.d/15-goapply-listen-ipv6.sh
+
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]

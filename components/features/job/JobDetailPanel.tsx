@@ -1,0 +1,469 @@
+'use client';
+
+// JobDetailPanel — one job's detail: header, Overview, Company, People and
+// the "Get ready for this job" checklist (PRODUCT_PLAN.md §5.5 F-JOB-01…08;
+// TASK_PLAN.md WP-34). Two consumers share it:
+//   - the feed's desktop split view, `/jobs?job=<id>` (WP-33)  → mode 'split'
+//   - the full page `/jobs/[id]` (app/(auth)/jobs/[id]/page.tsx) → mode 'page'
+// The panel loads its own data from `jobId` (lib/api/jobs.ts via hooks/job);
+// callers pass nothing else, so the feed never fetches detail on its behalf.
+//
+// D1: "Apply on company site" opens the employer's page; the user applies
+// there. The job moves to Applied at once with an inline "Undo · I didn't
+// apply" (rulings R1/C11), offered only when this click changed something
+// (`alreadyApplied` false). When no resume is tailored for the job, the
+// first click offers "Tailor first" once per job (until "Don't ask again"),
+// and only while the brand's text model is usable (`ai.text`). Similar jobs
+// show only while `jobs.recommendations` is on (on by default on both brands;
+// GoApply's off switch is CN_RECRUITMENT_INFO_MODE=off).
+//
+// A job with no application link (one the user typed in) has no "Apply on
+// company site"; the header offers "I applied" instead, which only records
+// what the user tells us. The line that points at that button goes away once
+// the job is marked applied (the button is gone by then).
+//
+// A job whose posting is gone (MARKET_STRATEGY 1.5 "Closure"): the server
+// asks the employer's applicant tracking system when the page is opened, so
+// a posting it no longer lists arrives closed. The page then says so, says
+// when the job was last seen listed, and offers no apply button (never a
+// link to a dead page). When the apply click itself finds the posting gone
+// (409 `job_closed`), the page is read again and shows the same. The tab the
+// click opens follows the server's answer, never the link the page was sent:
+// useJobActions is handed no link, so it opens an empty tab inside the click
+// (pop-up blockers allow that), points it at the answered link, and closes it
+// when the click is refused. A person is never sent to a dead page. In a
+// browser with one window (WeChat's and other apps' built-in browsers) no
+// empty tab is opened; the page goes to the answered link itself (feed
+// cardModel `applyTabOpener`, the card's own rule).
+//
+// GoApply: the market block (JobMetaCn) carries the job's pay, dates and
+// source in place of the header's own lines, so it sits above the tabs and
+// stays on screen on Company and People too. Elsewhere the market block stays
+// in the Overview tab.
+//
+// GoApply: <WechatShareCard> sets the card WeChat shows when this job is
+// shared from inside WeChat — the job's title and company, its place and the
+// pay as the post lists it (left out when the post lists none). It renders
+// nothing and does nothing outside WeChat.
+
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
+
+import { Btn, Tabs, tabPanelProps, toast, type TabItem } from '../../v3/primitives';
+import { CompanyTab } from '../company';
+import { MarketJobMeta, cnApplyCopy, marketMetaCoversBasics, marketPayLineText, marketPayWords, readCnMeta, withListing, withOwnImport } from '../market';
+import { jobListing } from '../../../lib/api/jobs';
+import { WechatShareCard } from '../notify-cn';
+import { useJob, useApplyIntercept } from '../../../hooks/job';
+import { useJobFit } from '../../../hooks/match';
+import { useJobActions } from '../../../hooks/shared/useJobActions';
+import { applyTabOpener } from '../feed/cardModel';
+import { useCapabilities, useFlag, useHiringContactsMode, type FlagKey } from '../../../lib/flags';
+import { useBrand } from '../../../lib/brand';
+import { apiErrorCode, apiErrorDetails } from '../../../lib/api/contracts/wire';
+import { RoboApiError } from '../../../lib/api/client';
+import { cn } from '../../../lib/utils';
+import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
+import { ApplyInterceptSheet } from './ApplyInterceptSheet';
+import { GetReadyChecklist } from './GetReadyChecklist';
+import { JobHeader, JobHeaderActions } from './JobHeader';
+import { JobOverview } from './JobOverview';
+import { PeopleTab } from './PeopleTab';
+import { SimilarJobs, jobDetailHref } from './SimilarJobs';
+import { payLine, shareDescription, validDate } from './format';
+import styles from './job.module.css';
+
+export interface JobDetailPanelProps {
+  jobId: string;
+  /** 'split' = beside the feed list (desktop); 'page' = the whole page. */
+  mode: 'split' | 'page';
+  /** Split view only: close the panel (the feed drops `?job=`). */
+  onClose?: () => void;
+}
+
+type TabId = 'overview' | 'company' | 'people';
+
+/** The V2 news flag; resolves false until the flag resolver knows the key (INT). */
+const COMPANY_NEWS_FLAG = 'companyNews' as FlagKey;
+
+function Skeleton({ mode }: { mode: JobDetailPanelProps['mode'] }) {
+  const t = useTranslations('jobDetail');
+  return (
+    <div className={cn(styles.panel, mode === 'page' ? styles.page : styles.split)} aria-busy="true" data-testid="job-loading">
+      <div className={styles.header}>
+        <span className={styles.skeleton} />
+        <span className={styles.skeleton} />
+        <span className={styles.skeleton} />
+      </div>
+      <div className={cn(styles.skeleton, styles.skeletonTall)} />
+      <p className={styles.muted} role="status">
+        {t('loading')}
+      </p>
+    </div>
+  );
+}
+
+function useOpenJob(mode: JobDetailPanelProps['mode']): (jobId: string) => void {
+  const router = useRouter();
+  const pathname = usePathname();
+  return (jobId: string) => {
+    if (mode === 'split') {
+      // Read the query at click time (no useSearchParams: the feed page may be static).
+      const next = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+      next.set('job', jobId);
+      router.replace(`${pathname ?? '/jobs'}?${next.toString()}`, { scroll: false });
+    } else {
+      router.push(jobDetailHref(jobId));
+    }
+  };
+}
+
+/** How long the header waits for the page data after an undo before showing what it has. */
+const UNDO_RESYNC_MS = 8_000;
+
+function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse; mode: JobDetailPanelProps['mode']; onClose?: () => void; refetch: () => void }) {
+  const t = useTranslations('jobDetail');
+  const format = useFormatter();
+  const brand = useBrand();
+  const { job, company, checklist, tracker } = detail;
+  const copilot = useFlag('copilot');
+  const extension = useFlag('extension');
+  const interviewBank = useFlag('interviewBank');
+  const agent = useFlag('agent');
+  const referralCodes = useFlag('cn.referralCodes');
+  const aiText = useFlag('ai.text');
+  const recommendations = useFlag('jobs.recommendations');
+  const hiring = useHiringContactsMode();
+  const { flags } = useCapabilities();
+  // Company news follows its flag only, on both brands (D5).
+  const showNews = flags?.[COMPANY_NEWS_FLAG] === true;
+  const tCn = useTranslations('jobsCn');
+  // Who published the posting and where the apply button leads (the contract's `source` / `apply`).
+  const listing = jobListing(detail);
+  const applyCopy = brand.market === 'cn' ? cnApplyCopy(listing) : null;
+  // No link is handed over: the tab follows the server's answer to the click (see the header).
+  const actions = useJobActions(job.id, { source: 'job_detail', opener: applyTabOpener });
+  const intercept = useApplyIntercept(job.id, !!checklist.tailoredResumeId);
+  const openJob = useOpenJob(mode);
+  const [tab, setTab] = useState<TabId>('overview');
+  const [askOpen, setAskOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  // Undo is offered only for a move to Applied this panel just made.
+  const [undoable, setUndoable] = useState(false);
+
+  // Keep "Why this job" in step with the fit block: when the full comparison
+  // finishes after the page loaded from the cache, reload the page data once.
+  const fitQ = useJobFit(job.id);
+  const synced = useRef(false);
+  useEffect(() => {
+    const live = fitQ.data;
+    if (!live || synced.current) return;
+    if (!detail.fit || live.kind !== detail.fit.kind || live.score !== detail.fit.score) {
+      synced.current = true;
+      refetch();
+    }
+  }, [fitQ.data, detail.fit, refetch]);
+
+  const open = job.status === 'open';
+  // The apply click found the posting gone (409 job_closed): nothing moved to Applied. Read the page again,
+  // once per such answer; it now arrives closed and says so, in place of a generic error.
+  const closedByClick = apiErrorDetails<{ code?: string }>(actions.error)?.code === 'job_closed';
+  const closedSeen = useRef<unknown>(null);
+  useEffect(() => {
+    if (!closedByClick || closedSeen.current === actions.error) return;
+    closedSeen.current = actions.error;
+    refetch();
+  }, [closedByClick, actions.error, refetch]);
+  // The closure was found by asking the employer's job board for this page (not by our regular reads).
+  const checkedNow = !open && job.listing?.via === 'ats_api';
+  // One rule for both brands (D5): hiring contacts and people you know when the
+  // contacts mode is on for this user and this job, or GoApply's 内推码.
+  const peopleTab = (hiring !== 'off' && detail.people.mode !== 'off') || referralCodes;
+  // `?tab=people|company` (the Assistant's People link, F-NET) opens that tab
+  // once per job. Read after mount, not during render, so SSR and hydration
+  // agree. People waits until the tab exists for this user (the contacts mode
+  // may resolve after mount); without it the panel stays on Overview.
+  const queryTab = useRef<string | null>(null);
+  useEffect(() => {
+    if (queryTab.current === job.id || typeof window === 'undefined') return;
+    const want = new URLSearchParams(window.location.search).get('tab');
+    if (want === 'people' && !peopleTab) return;
+    queryTab.current = job.id;
+    if (want === 'company' || want === 'people') setTab(want);
+  }, [job.id, peopleTab]);
+  const tabs: TabItem<TabId>[] = [
+    { id: 'overview', label: t('tabs.overview') },
+    { id: 'company', label: t('tabs.company') },
+    ...(peopleTab ? [{ id: 'people' as const, label: t('tabs.people') }] : []),
+  ];
+  const idBase = `job-${job.id}-${mode}`;
+  const saved = tracker != null;
+  // After "Undo · I didn't apply" the page data is read again; until it arrives the header does not go on
+  // saying "In your applications" from the data it had before the undo (FIX-3).
+  const [undone, setUndone] = useState(false);
+  useEffect(() => setUndone(false), [detail]);
+  useEffect(() => {
+    if (!undone) return undefined;
+    const id = setTimeout(() => setUndone(false), UNDO_RESYNC_MS);
+    return () => clearTimeout(id);
+  }, [undone]);
+  const appliedOnServer = checklist.applied && !undone;
+  const applied = appliedOnServer || actions.lastApplied != null;
+
+  const applyNow = async () => {
+    const res = await actions.applyOnCompanySite();
+    setUndoable(!!res && res.alreadyApplied !== true);
+  };
+
+  const apply = () => {
+    if (aiText && intercept.shouldAsk) {
+      setAskOpen(true);
+      void intercept.markShown();
+      return;
+    }
+    void applyNow();
+  };
+
+  const iApplied = () => {
+    setUndoable(!appliedOnServer);
+    void actions.markApplied();
+  };
+
+  const undo = async () => {
+    await actions.undoApplied();
+    setUndoable(false);
+    setUndone(true);
+    refetch();
+  };
+
+  const share = async () => {
+    const res = await actions.share();
+    if (!res) return;
+    try {
+      await navigator.clipboard.writeText(res.url);
+      toast({ message: t('actions.shareCopied'), tone: 'ok' });
+      setShareUrl(null);
+    } catch {
+      setShareUrl(res.url);
+    }
+  };
+
+  const goPeople = () => {
+    setTab('people');
+  };
+
+  const lastSeen = validDate(job.lastSeenAt);
+  const locale = useLocale();
+
+  // Pay for the share card, only as the post lists it: GoApply's verbatim pay
+  // text, else the post's own pay text, else its listed figures. None → left out.
+  const cnPay = readCnMeta(detail.marketMeta)?.salary;
+  const listedPay = payLine(job.pay, locale);
+  // Words go through the market's rule, so the share card never says 面议 on GoApply.
+  const payAsListed =
+    (cnPay?.disclosed ? cnPay.text : null) ??
+    (marketPayWords(brand.market, job)?.trim() || null) ??
+    (marketPayLineText(brand.market, job.pay?.text) || null) ??
+    (listedPay
+      ? listedPay.kind === 'exact'
+        ? t('header.payExact', { amount: listedPay.amount, period: t(`header.period.${listedPay.period}`) })
+        : listedPay.kind === 'range'
+          ? t('header.payRange', { min: listedPay.min, max: listedPay.max, period: t(`header.period.${listedPay.period}`) })
+          : listedPay.kind === 'from'
+            ? t('header.payFrom', { min: listedPay.min, period: t(`header.period.${listedPay.period}`) })
+            : t('header.payUpTo', { max: listedPay.max, period: t(`header.period.${listedPay.period}`) })
+      : null);
+  const noApplyLink = open && !job.applyUrl;
+  const ownImport = job.source.kind === 'user_import';
+  // The market block replaces the header's pay, date and source lines: keep it on every tab.
+  const metaAboveTabs = marketMetaCoversBasics(brand.market, detail.marketMeta);
+
+  const headerActions = (
+    <>
+      <JobHeaderActions>
+        {open && job.applyUrl && !applied ? (
+          <Btn variant="primary" onClick={apply} disabled={actions.pending === 'apply'} data-testid="apply-button">
+            {applyCopy ? tCn(applyCopy.labelKey, { name: applyCopy.name }) : t('actions.apply')}
+          </Btn>
+        ) : null}
+        {noApplyLink && !applied ? (
+          <Btn variant="primary" onClick={iApplied} disabled={actions.pending === 'markApplied'} data-testid="i-applied-button">
+            {t('actions.iApplied')}
+          </Btn>
+        ) : null}
+        {saved && !appliedOnServer ? (
+          <Btn aria-pressed="true" onClick={() => void actions.unsave()} disabled={actions.pending === 'unsave'} title={t('actions.unsave')}>
+            {t('actions.saved')}
+          </Btn>
+        ) : saved ? (
+          <Btn disabled>{t('actions.inApplications')}</Btn>
+        ) : (
+          <Btn aria-pressed="false" onClick={() => void actions.save()} disabled={actions.pending === 'save'}>
+            {t('actions.save')}
+          </Btn>
+        )}
+        <Btn variant="ghost" onClick={() => void share()} disabled={actions.pending === 'share'}>
+          {t('actions.share')}
+        </Btn>
+        {copilot ? (
+          <Btn variant="ghost" onClick={() => actions.askAboutJob()}>
+            {t('actions.ask')}
+          </Btn>
+        ) : null}
+      </JobHeaderActions>
+      {open && job.applyUrl && !applied ? (
+        <p className={styles.hint} data-testid="apply-hint">
+          {applyCopy ? tCn(applyCopy.hintKey, { name: applyCopy.name }) : t('actions.applyHint')}
+        </p>
+      ) : null}
+      {noApplyLink && !(ownImport && applied) ? (
+        <p className={styles.hint} data-testid="no-apply-link">
+          {ownImport ? t('actions.noApplyLinkYours') : t('actions.noApplyLink')}
+        </p>
+      ) : null}
+      {actions.lastApplied && undoable ? (
+        <div className={styles.undoBar} role="status" data-testid="undo-bar">
+          <span>{t('actions.movedToApplied')}</span>
+          <button type="button" className={styles.linkBtn} onClick={() => void undo()} disabled={actions.pending === 'undoApplied'}>
+            {t('actions.undo')}
+          </button>
+        </div>
+      ) : null}
+      {shareUrl ? (
+        <div className={styles.shareBox}>
+          <label htmlFor={`${idBase}-share`}>{t('actions.shareLabel')}</label>
+          <input id={`${idBase}-share`} className={styles.shareInput} readOnly value={shareUrl} onFocus={(e) => e.currentTarget.select()} />
+        </div>
+      ) : null}
+      {actions.error && !closedByClick ? (
+        <p className={styles.alert} role="alert">
+          {t('actions.error')}
+        </p>
+      ) : null}
+    </>
+  );
+
+  return (
+    <article className={cn(styles.panel, mode === 'page' ? styles.page : styles.split)} data-testid="job-detail" data-mode={mode} data-job-status={job.status}>
+      {brand.market === 'cn' ? (
+        <WechatShareCard
+          title={`${job.title} · ${company.name || job.companyName}`}
+          description={shareDescription({ location: job.location, payAsListed })}
+          path={jobDetailHref(job.id)}
+        />
+      ) : null}
+      <JobHeader detail={detail} mode={mode} onClose={onClose} actions={headerActions} />
+
+      {!open ? (
+        <section className={styles.notice} role="status" data-testid="job-closed">
+          <h2 className={styles.sectionTitle}>{t('closed.title')}</h2>
+          {checkedNow ? (
+            <p className={styles.body} data-testid="job-closed-checked">
+              {t('closed.boardCheck')}
+            </p>
+          ) : null}
+          {lastSeen ? (
+            <p className={styles.body} data-testid="job-last-listed">
+              {t('closed.lastListed', { date: format.dateTime(lastSeen, { dateStyle: 'medium' }) })}
+            </p>
+          ) : null}
+          {tracker ? <p className={styles.muted}>{t('closed.kept')}</p> : null}
+        </section>
+      ) : null}
+
+      {!open && recommendations ? <SimilarJobs jobId={job.id} title={t('closed.similarTitle')} onOpen={openJob} /> : null}
+
+      <div className={styles.layout}>
+        <div className={styles.main}>
+          {metaAboveTabs ? <MarketJobMeta jobId={job.id} meta={withListing(withOwnImport(detail.marketMeta, ownImport), listing)} variant="detail" /> : null}
+          <Tabs ariaLabel={t('tabs.label')} idBase={idBase} tabs={tabs} value={tab} onChange={setTab} />
+          <div {...tabPanelProps(idBase, 'overview')} hidden={tab !== 'overview'}>
+            {tab === 'overview' ? <JobOverview detail={detail} marketMeta={!metaAboveTabs} /> : null}
+          </div>
+          <div {...tabPanelProps(idBase, 'company')} hidden={tab !== 'company'}>
+            {tab === 'company' ? <CompanyTab jobId={job.id} company={company} showNews={showNews} onOpenJob={openJob} /> : null}
+          </div>
+          {peopleTab ? (
+            <div {...tabPanelProps(idBase, 'people')} hidden={tab !== 'people'}>
+              {tab === 'people' ? <PeopleTab detail={detail} /> : null}
+            </div>
+          ) : null}
+        </div>
+        <aside className={styles.rail}>
+          <GetReadyChecklist
+            detail={detail}
+            flags={{ interviewBank, extension, agent, people: peopleTab, ai: aiText }}
+            pending={actions.pending}
+            onSave={() => void actions.save()}
+            onTailor={() => actions.tailor()}
+            onPractice={() => actions.practice()}
+            onApply={apply}
+            onIApplied={iApplied}
+            onPeople={goPeople}
+          />
+        </aside>
+      </div>
+
+      {open && recommendations ? <SimilarJobs jobId={job.id} onOpen={openJob} /> : null}
+
+      <ApplyInterceptSheet
+        open={askOpen}
+        onClose={() => setAskOpen(false)}
+        onTailor={() => {
+          setAskOpen(false);
+          actions.tailor();
+        }}
+        onApplyNow={() => {
+          setAskOpen(false);
+          void applyNow();
+        }}
+        onNever={() => {
+          setAskOpen(false);
+          void intercept.neverAsk();
+          void applyNow();
+        }}
+      />
+    </article>
+  );
+}
+
+export function JobDetailPanel({ jobId, mode, onClose }: JobDetailPanelProps) {
+  const t = useTranslations('jobDetail');
+  const q = useJob(jobId);
+
+  if (q.isPending) return <Skeleton mode={mode} />;
+  if (q.isError || !q.data) {
+    const notFound = apiErrorCode(q.error) === 'not_found' || (q.error instanceof RoboApiError && q.error.status === 404);
+    return (
+      <div className={cn(styles.panel, mode === 'page' ? styles.page : styles.split)} data-testid={notFound ? 'job-not-found' : 'job-error'}>
+        <section className={styles.section} role="alert">
+          {notFound ? (
+            <>
+              <h2 className={styles.sectionTitle}>{t('notFound.title')}</h2>
+              <p className={styles.body}>{t('notFound.body')}</p>
+              {mode === 'split' && onClose ? (
+                <Btn onClick={onClose}>{t('close')}</Btn>
+              ) : (
+                <Link className={styles.linkBtn} href="/jobs">
+                  {t('notFound.back')}
+                </Link>
+              )}
+            </>
+          ) : (
+            <>
+              <p className={styles.body}>{t('error')}</p>
+              <div className={styles.actions}>
+                <Btn onClick={() => void q.refetch()}>{t('retry')}</Btn>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    );
+  }
+  return <Loaded detail={q.data} mode={mode} onClose={onClose} refetch={() => void q.refetch()} />;
+}
+
+export default JobDetailPanel;

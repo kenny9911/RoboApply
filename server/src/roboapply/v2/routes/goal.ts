@@ -5,6 +5,9 @@
 //   GET  /  -> { goal: RACareerGoal | null }
 //   PUT  /  -> { goal: RACareerGoal }   (upsert; matches frontend contract)
 //   PATCH /  -> { goal: RACareerGoal }   (alias of PUT; spec §5.1 used PATCH)
+//
+// The goal card's surface only. Search filters live in the search profiles
+// (WP-20, /api/v1/roboapply/search-profiles); see RACareerGoalService.
 
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../lib/raAuth.js';

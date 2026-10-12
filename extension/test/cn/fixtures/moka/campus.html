@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>示例科技校园招聘</title><meta property="og:site_name" content="示例科技"></head>
+<body>
+<div id="root" class="moka-apply">
+  <header class="job-header">
+    <h1 class="job-title">后端开发工程师（2026届）</h1>
+    <div class="org-name">示例科技</div>
+    <span class="job-location">上海</span>
+  </header>
+  <div class="job-description">负责服务端开发。熟悉至少一门后端语言。</div>
+  <form class="ant-form ant-form-vertical apply-form">
+    <div class="form-section">
+      <div class="section-title">简历附件</div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="resume" class="ant-form-item-required">附件简历</label></div>
+        <div class="ant-form-item-control"><span class="ant-upload"><input id="resume" type="file" accept=".pdf,.doc,.docx" style="display:none"><button type="button" class="ant-btn">上传简历</button></span></div>
+      </div>
+    </div>
+    <div class="form-section">
+      <div class="section-title">基本信息</div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="name" class="ant-form-item-required">姓名</label></div>
+        <div class="ant-form-item-control"><input id="name" class="ant-input" type="text"></div>
+      </div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="mobile" class="ant-form-item-required">手机号码</label></div>
+        <div class="ant-form-item-control"><input id="mobile" class="ant-input" type="text"></div>
+      </div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="email" class="ant-form-item-required">邮箱</label></div>
+        <div class="ant-form-item-control"><input id="email" class="ant-input" type="text"></div>
+      </div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="gender" class="ant-form-item-required">性别</label></div>
+        <div class="ant-form-item-control">
+          <div class="ant-select"><div class="ant-select-selector"><span class="ant-select-selection-search"><input id="gender" role="combobox" aria-controls="rc_select_gender_list" class="ant-select-selection-search-input" autocomplete="off"></span><span class="ant-select-selection-placeholder">请选择</span></div></div>
+          <div class="ant-select-dropdown"><div id="rc_select_gender_list" role="listbox"><div role="option">男</div><div role="option">女</div></div></div>
+        </div>
+      </div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="birthday">出生日期</label></div>
+        <div class="ant-form-item-control"><div class="ant-picker"><input id="birthday" readonly placeholder="请选择日期"></div></div>
+      </div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="nativePlace">籍贯</label></div>
+        <div class="ant-form-item-control"><input id="nativePlace" class="ant-input" type="text"></div>
+      </div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="political">政治面貌</label></div>
+        <div class="ant-form-item-control">
+          <div class="ant-select"><div class="ant-select-selector"><span class="ant-select-selection-search"><input id="political" role="combobox" aria-controls="rc_select_political_list" class="ant-select-selection-search-input" autocomplete="off"></span></div></div>
+          <div class="ant-select-dropdown"><div id="rc_select_political_list" role="listbox"><div role="option">中共党员</div><div role="option">共青团员</div><div role="option">群众</div></div></div>
+        </div>
+      </div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="studentOrigin">生源地</label></div>
+        <div class="ant-form-item-control"><input id="studentOrigin" class="ant-input" type="text"></div>
+      </div>
+    </div>
+    <div class="form-section">
+      <div class="section-title">教育经历</div>
+      <div class="edu-item">
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu0_school" class="ant-form-item-required">学校名称</label></div><div class="ant-form-item-control"><input id="edu0_school" class="ant-input"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu0_degree" class="ant-form-item-required">学历</label></div><div class="ant-form-item-control">
+          <div class="ant-select"><div class="ant-select-selector"><span class="ant-select-selection-search"><input id="edu0_degree" role="combobox" aria-controls="rc_select_edu0_list" class="ant-select-selection-search-input"></span></div></div>
+          <div class="ant-select-dropdown"><div id="rc_select_edu0_list" role="listbox"><div role="option">大专</div><div role="option">本科</div><div role="option">硕士研究生</div><div role="option">博士研究生</div></div></div>
+        </div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu0_major" class="ant-form-item-required">专业</label></div><div class="ant-form-item-control"><input id="edu0_major" class="ant-input"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu0_start">入学时间</label></div><div class="ant-form-item-control"><input id="edu0_start" class="ant-input" placeholder="例如 2022-09"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu0_end">毕业时间</label></div><div class="ant-form-item-control"><input id="edu0_end" class="ant-input" placeholder="例如 2026-06"></div></div>
+      </div>
+      <div class="edu-item">
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu1_school">学校名称</label></div><div class="ant-form-item-control"><input id="edu1_school" class="ant-input"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu1_degree">学历</label></div><div class="ant-form-item-control">
+          <div class="ant-select"><div class="ant-select-selector"><span class="ant-select-selection-search"><input id="edu1_degree" role="combobox" aria-controls="rc_select_edu1_list" class="ant-select-selection-search-input"></span></div></div>
+          <div class="ant-select-dropdown"><div id="rc_select_edu1_list" role="listbox"><div role="option">大专</div><div role="option">本科</div><div role="option">硕士研究生</div><div role="option">博士研究生</div></div></div>
+        </div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu1_major">专业</label></div><div class="ant-form-item-control"><input id="edu1_major" class="ant-input"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu1_start">入学时间</label></div><div class="ant-form-item-control"><input id="edu1_start" class="ant-input" placeholder="例如 2022-09"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="edu1_end">毕业时间</label></div><div class="ant-form-item-control"><input id="edu1_end" class="ant-input" placeholder="例如 2026-06"></div></div>
+      </div>
+      <button type="button" class="ant-btn ant-btn-dashed">添加教育经历</button>
+    </div>
+    <div class="form-section">
+      <div class="section-title">其他</div>
+      <div class="ant-form-item">
+        <div class="ant-form-item-label"><label for="photo">个人照片</label></div>
+        <div class="ant-form-item-control"><span class="ant-upload"><input id="photo" type="file" accept="image/*" style="display:none"></span></div>
+      </div>
+    </div>
+    <div class="apply-footer">
+      <button type="button" class="ant-btn">保存草稿</button>
+      <div class="apply-submit"><button type="submit" class="ant-btn ant-btn-primary">提交申请</button></div>
+    </div>
+  </form>
+</div>
+</body>
+</html>

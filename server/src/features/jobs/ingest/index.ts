@@ -1,0 +1,94 @@
+// server/src/features/jobs/ingest/index.ts — public surface of the inventory pipeline (WP-16b).
+//
+// Seams other areas call:
+//   - ingestForProfile(searchProfileId, budgetMs)   onboarding O6 (WP-30 / WP-31)
+//   - bankClients                                   WP-54's contacts-sync reads opted-in
+//                                                   recruiters from the bank DBs through it
+//   - rapidApiSearchParams / rapidApiCountry        the planner seam WP-42 asserts (country=tw)
+//   - registerSourceAdapter (re-exported from ../sources) for WP-42's `ats_public`
+
+import prisma from '../../../lib/prisma.js';
+import { getCurrentBrandOrDefault } from '../../../platform/brand/index.js';
+import {
+  bankForMarket,
+  bankMarket,
+  bankTlsSatisfied,
+  bankTransport,
+  getBankClient,
+  isBankEnabled,
+  listEnabledBanks,
+} from '../../../roboapply/v2/lib/raBankClients.js';
+import { adaptersForBrand } from './providers.js';
+import { emptyTally, ingestForProfileWith, type TargetedIngestResult } from './run.js';
+import { ingestAllowed } from './cron.js';
+// Importing quota.ts registers the quota listener and the call gate with both RapidAPI clients.
+import { hydrateProviderQuota } from './quota.js';
+
+export { runJobsIngest, runJobsMaintain, runJobsPlan, ingestAllowed } from './cron.js';
+/** A provider's daily call limit from env (admin "Limits" page reads it here, never from a copy). */
+export { dailyCallLimit, effectiveDailyLimit, effectiveDailyLimitFor, quotaDailyCap, quotaReserve } from './config.js';
+// The licensed feed's plan gate and its daily posting budget (MKT-5A): one definition, read by the admin area.
+export { FEED_MIN_MONTHLY_JOBS, feedDailyJobs, feedDailyJobsFor, feedJobsReserve, feedQuotaDailyJobs } from './config.js';
+export type { QuotaReading } from './config.js';
+// One budget per metered provider (MKT-3A): the plan's quota as the provider states it, and what it allows.
+export {
+  MAINLAND_CALLABLE,
+  answerForMarket,
+  flushProviderQuota,
+  hydrateProviderQuota,
+  providerQuotaSnapshots,
+  quotaAllows,
+  quotaParkUntil,
+  quotaRetryAt,
+  quotaSnapshot,
+  recordQuotaObservation,
+  registerQuotaListeners,
+  FEED_PLAN_PROVIDER,
+  feedGate,
+  feedGateForMarket,
+  providerJobsToday,
+} from './quota.js';
+// The dedupe repair of a group after one of its rows was archived (read at run time by jobs/liveness).
+export { applyDedupe } from './upsert.js';
+export { JOBS_INGEST_WORK_KINDS, workers } from './workers.js';
+export { rapidApiCountry, rapidApiSearchParams } from './adapters/rapidApi.js';
+export { bankPublicPageState, readBankEmployerSignals, isSyncableBankJob } from './adapters/bank.js';
+export { adaptersForBrand, ingestProvidersForBrand, knownIngestProvidersForBrand, listEnabledAdaptersFor, sourcesForBrand } from './providers.js';
+export { readSourceStatuses, sourceStatusKey } from './status.js';
+export type { SourceRunStatus, SourceStatusDoc } from './status.js';
+// MKT-1C: the provider quota snapshot contract (AppConfig `jobs.providerQuota.v1`). Types, constants and
+// pure functions only; the writer is quota.ts (MKT-3A) and the admin reader MKT-3F. Exported at the M1 gate.
+export { PROVIDER_QUOTA_CONFIG_KEY, PROVIDER_QUOTA_STATES, PROVIDER_QUOTA_VERSION, daysToReset, parseProviderQuota, serializeProviderQuota, usageKey } from './quotaContract.js';
+export type { ProviderQuotaDocument, ProviderQuotaSnapshot, ProviderQuotaState } from './quotaContract.js';
+export { registerSourceAdapter, getSourceAdapter } from '../sources/index.js';
+export type { JobSourceAdapter, JobSourceDescription, IngestProvider, IngestQueryParams, SourceQuery, SourceFetchResult } from '../sources/index.js';
+export type { TargetedIngestResult } from './run.js';
+
+/**
+ * The recruiter-bank client seam (read-only Prisma clients for RoboHire /
+ * GoHire). Honors the kill switches, the cross-tenant guard and the GoHire
+ * TLS rule. A bank read over HTTPS (`bankTransport` 'api' or 'syndication') has no client:
+ * `getBankClient` answers null for it. WP-54 must still read consent only
+ * from the bank's opt-in records.
+ */
+export const bankClients = {
+  getBankClient,
+  isBankEnabled,
+  listEnabledBanks,
+  bankForMarket,
+  bankMarket,
+  bankTlsSatisfied,
+  bankTransport,
+} as const;
+
+/**
+ * Targeted ingest for onboarding (O6): plans the search profile's queries and
+ * runs the due ones within `budgetMs` in the current brand; the rest are
+ * queued. Never calls a provider whose key or budget is missing.
+ */
+export async function ingestForProfile(searchProfileId: string, budgetMs: number): Promise<TargetedIngestResult> {
+  const brand = getCurrentBrandOrDefault();
+  if (!ingestAllowed(brand)) return { ...emptyTally(), planned: 0, deferred: 0 };
+  await hydrateProviderQuota(prisma);
+  return ingestForProfileWith({ db: prisma, brand, adapters: adaptersForBrand(brand) }, searchProfileId, budgetMs);
+}

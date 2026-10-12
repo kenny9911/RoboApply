@@ -1,0 +1,526 @@
+/* components/features/profile/profile.module.css — /profile, the completion
+ * card and the #sensitive settings section (WP-19). Clarity tokens only; light
+ * and dark come from the tokens. Mobile first: one column, 44 px controls;
+ * from 761 px the page gets a section rail and two-column field grids. */
+
+.page {
+  display: grid;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+.layout {
+  display: grid;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.rail {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    position: sticky;
+    top: var(--sp-5);
+  }
+}
+.railLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  text-decoration: none;
+}
+.railLink:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.railLink:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.sections {
+  display: grid;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+/* ── Section card ─────────────────────────────────────────────────────── */
+.card {
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  scroll-margin-top: var(--sp-5);
+}
+@media (min-width: 761px) {
+  .card {
+    padding: var(--sp-5);
+  }
+}
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.cardTitle {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  line-height: var(--lh-subtitle);
+  font-weight: 600;
+}
+.cardIntro {
+  margin: 0 0 var(--sp-4);
+  max-width: 68ch;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta);
+  font-weight: 500;
+}
+.tagMissing {
+  background: var(--warn-subtle);
+  color: var(--text);
+}
+.tagOptional {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.tagDone {
+  background: var(--ok-subtle);
+  color: var(--text);
+}
+
+/* ── Fields ───────────────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  gap: var(--sp-3) var(--sp-4);
+  min-width: 0;
+}
+@media (min-width: 761px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.field {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+.hint {
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta);
+}
+.error {
+  color: var(--danger);
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-lg);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+.textarea {
+  min-height: 96px;
+  padding: var(--sp-2) var(--sp-3);
+  line-height: var(--lh-body);
+  resize: vertical;
+}
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  outline: none;
+  border-color: var(--action);
+  box-shadow: var(--focus-ring);
+}
+.input[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+@media (min-width: 761px) {
+  .input,
+  .select {
+    min-height: var(--control-md);
+  }
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--control-lg);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--action);
+}
+
+.fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.legend {
+  padding: 0;
+  margin-bottom: var(--sp-2);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--control-lg);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+.choice:has(input:checked) {
+  border-color: var(--action);
+  background: var(--action-subtle);
+}
+.choice:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+.choice input {
+  accent-color: var(--action);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.actions :global(.btn) {
+  min-height: var(--control-lg);
+}
+.status {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+/* ── Rows (education, work, countries, family) ───────────────────────── */
+.rows {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.rowHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.rowTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.rowMeta {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  overflow-wrap: anywhere;
+}
+.rowActions {
+  display: flex;
+  gap: var(--sp-1);
+}
+.rowActions :global(.btn) {
+  min-height: var(--control-lg);
+}
+.bullets {
+  margin: 0;
+  padding-left: var(--sp-5);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+}
+.empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+/* ── Chips (skills, titles) ──────────────────────────────────────────── */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  list-style: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0 0 0 var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-meta);
+}
+.chipRemove {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--control-lg);
+  min-height: var(--control-lg);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.chipRemove:hover {
+  color: var(--text);
+}
+.chipRemove:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.inline {
+  display: flex;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.inline > .input {
+  flex: 1 1 auto;
+}
+
+.placeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-1) var(--sp-3);
+}
+@media (min-width: 761px) {
+  .placeGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ── Completion card ─────────────────────────────────────────────────── */
+.completion {
+  padding: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--grad-panel);
+  color: var(--text);
+}
+@media (min-width: 761px) {
+  .completion {
+    padding: var(--sp-5);
+  }
+}
+.completionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.completionTitle {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+}
+.meter {
+  width: 100%;
+  height: 8px;
+  margin: var(--sp-3) 0;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  overflow: hidden;
+}
+.meterFill {
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--action);
+  transition: width var(--dur-base) var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .meterFill {
+    transition: none;
+  }
+}
+.steps {
+  display: grid;
+  gap: var(--sp-1);
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 761px) {
+  .steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-1) var(--sp-4);
+  }
+}
+.step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-height: var(--control-lg);
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  text-decoration: none;
+}
+a.step:hover {
+  background: var(--surface-2);
+}
+a.step:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.stepName {
+  font-weight: 500;
+}
+
+/* ── Resume sync review ──────────────────────────────────────────────── */
+.diff {
+  display: grid;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.diffRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: start;
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.diffRow input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--action);
+}
+.diffLabel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+.diffValues {
+  display: grid;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+@media (min-width: 761px) {
+  .diffValues {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--sp-3);
+  }
+}
+.diffKey {
+  color: var(--text-muted);
+}
+
+.spaced {
+  margin-top: var(--sp-5);
+}

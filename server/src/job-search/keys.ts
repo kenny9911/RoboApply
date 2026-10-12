@@ -1,5 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import prisma from '../lib/prisma.js';
+import { DEFAULT_BRAND, parseBrandId, type BrandId } from '../platform/brand/registry.js';
+import { getCurrentBrandOrDefault } from '../platform/brand/index.js';
 
 export const JOB_SEARCH_SCOPE = 'jobs:search';
 const KEY_PATTERN = /^rajs_[a-f0-9]{64}$/;
@@ -77,7 +79,13 @@ export class JobSearchKeys {
     if (!result.count) throw new JobSearchAccessError('not_found', 404, 'API key not found.');
   }
 
-  async authenticate(authorization: string | undefined) {
+  /**
+   * `brandId` is the brand of the host the key was sent to. A key works only
+   * on its owner's brand: a RoboApply key is not valid on GoApply and a GoApply
+   * key is not valid on RoboApply (each brand has its own sources and its own
+   * accounts). An owner with no stored brand is a RoboApply account.
+   */
+  async authenticate(authorization: string | undefined, brandId: BrandId = getCurrentBrandOrDefault().id) {
     const token = authorization?.match(/^Bearer (\S+)$/i)?.[1];
     if (!token || !KEY_PATTERN.test(token)) {
       throw new JobSearchAccessError('invalid_api_key', 401, 'A valid job-search Bearer API key is required.');
@@ -86,12 +94,13 @@ export class JobSearchKeys {
       where: { key: hashSearchKey(token) },
       select: {
         id: true, userId: true, scopes: true, isActive: true, status: true,
-        expiresAt: true, user: { select: { isActive: true } },
+        expiresAt: true, user: { select: { isActive: true, brand: true } },
       },
     });
+    const ownerBrand = record ? parseBrandId(record.user.brand) ?? DEFAULT_BRAND : null;
     if (!record || !record.isActive || record.status !== 'active' ||
         !record.user.isActive || (record.expiresAt && record.expiresAt <= new Date()) ||
-        !record.scopes.includes(JOB_SEARCH_SCOPE)) {
+        !record.scopes.includes(JOB_SEARCH_SCOPE) || ownerBrand !== brandId) {
       throw new JobSearchAccessError('invalid_api_key', 401, 'This API key is invalid, expired, or revoked.');
     }
     return { userId: record.userId, apiKeyId: record.id };

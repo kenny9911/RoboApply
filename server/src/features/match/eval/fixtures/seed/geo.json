@@ -1,0 +1,18 @@
+{
+  "_synthetic": true,
+  "_note": "Places and pay bands for the evaluation fixtures (MKT-1D). The pay bands are round synthetic figures, chosen only so that ordinary postings read as plausible pay and one hard negative does not. They are not market data and are never shown to a user.",
+  "referenceDate": "2026-10-01",
+  "countries": {
+    "US": { "name": "United States", "city": "Austin", "cityText": "Austin, TX", "currency": "USD", "payFactor": 1 },
+    "GB": { "name": "United Kingdom", "city": "London", "cityText": "London", "currency": "GBP", "payFactor": 0.7 },
+    "DE": { "name": "Germany", "city": "Berlin", "cityText": "Berlin", "currency": "EUR", "payFactor": 0.8 },
+    "SG": { "name": "Singapore", "city": "Singapore", "cityText": "Singapore", "currency": "SGD", "payFactor": 1.2 },
+    "CA": { "name": "Canada", "city": "Toronto", "cityText": "Toronto, ON", "currency": "CAD", "payFactor": 1.2 },
+    "AU": { "name": "Australia", "city": "Sydney", "cityText": "Sydney NSW", "currency": "AUD", "payFactor": 1.3 },
+    "TW": { "name": "台灣", "city": "Taipei", "cityText": "台北市", "currency": "TWD", "payFactor": 14 },
+    "JP": { "name": "日本", "city": "Tokyo", "cityText": "東京都", "currency": "JPY", "payFactor": 80 }
+  },
+  "cn": { "name": "中国", "currency": "CNY", "cities": ["上海", "北京", "深圳", "杭州", "成都", "广州"] },
+  "annualPayUsd": { "intern_newgrad": 30000, "entry": 60000, "mid": 90000, "senior": 130000, "lead_staff": 170000, "director_exec": 220000 },
+  "cnMonthlyPayCny": { "intern_newgrad": 4000, "entry": 12000, "mid": 22000, "senior": 35000, "lead_staff": 50000, "director_exec": 70000 }
+}

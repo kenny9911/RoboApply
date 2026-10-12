@@ -1,0 +1,32 @@
+[
+  {
+    "id": "5f1e2d3c-0000-4a4a-9b9b-111111111111",
+    "text": "Product Designer",
+    "categories": { "commitment": "Full-time", "department": "Design", "location": "Taipei", "team": "Product", "allLocations": ["Taipei", "Remote - Taiwan"] },
+    "country": "TW",
+    "workplaceType": "hybrid",
+    "createdAt": 1758844800000,
+    "description": "<div>Design our mobile app.</div>",
+    "descriptionPlain": "Design our mobile app.",
+    "lists": [{ "text": "Requirements", "content": "<li>3+ years of product design</li><li>Figma</li>" }],
+    "additional": "<div>We do not provide work visa sponsorship for this role.</div>",
+    "additionalPlain": "We do not provide work visa sponsorship for this role.",
+    "hostedUrl": "https://jobs.lever.co/pinecloud/5f1e2d3c-0000-4a4a-9b9b-111111111111",
+    "applyUrl": "https://jobs.lever.co/pinecloud/5f1e2d3c-0000-4a4a-9b9b-111111111111/apply",
+    "salaryRange": { "currency": "TWD", "interval": "per-month-salary", "min": 60000, "max": 90000 },
+    "salaryDescriptionPlain": "NT$60,000 – NT$90,000 per month"
+  },
+  {
+    "id": "5f1e2d3c-0000-4a4a-9b9b-222222222222",
+    "text": "Customer Success Manager",
+    "categories": { "commitment": "Contract", "location": "Singapore" },
+    "country": "SG",
+    "workplaceType": "unspecified",
+    "createdAt": 1759017600000,
+    "description": "<div>Own accounts across APAC.</div>",
+    "descriptionPlain": "Own accounts across APAC.",
+    "lists": [],
+    "hostedUrl": "https://jobs.lever.co/pinecloud/5f1e2d3c-0000-4a4a-9b9b-222222222222",
+    "applyUrl": "https://jobs.lever.co/pinecloud/5f1e2d3c-0000-4a4a-9b9b-222222222222/apply"
+  }
+]

@@ -12,6 +12,7 @@
 // frontend localizes via t(); they are NOT translated by the LLM.
 
 import type { InterviewScore, ScoreBreakdownItem } from './interviewScorer.js';
+import type { CnPracticeReport } from '../../features/cn/interview/index.js';
 
 /** Fixed scoring taxonomy. Labels are localized on the frontend via t(`report.dim.${key}`). */
 export type DimensionKey =
@@ -154,6 +155,12 @@ export interface RichInterviewReport {
    * `degraded` stays false).
    */
   tooShort?: boolean;
+  /**
+   * GoApply practices only (WP-66, cnRubricBranch.ts): communication / logic /
+   * behaviour, STAR completeness and filler-word counts. Absent on RoboApply
+   * sessions and on reports persisted before WP-66.
+   */
+  cn?: CnPracticeReport;
 }
 
 /** The Phase-A placeholder shape persisted synchronously before LLM enrichment. */

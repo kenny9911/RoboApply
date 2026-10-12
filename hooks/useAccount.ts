@@ -2,16 +2,23 @@
 
 // hooks/useAccount.ts
 //
-// TanStack Query bindings for the /account page (profile · billing · usage ·
-// security · danger zone). All calls route through `accountApi` (lib/api/
-// account.ts). Query keys namespaced `['account', …]`. Mirrors the
-// hooks/useActivity.ts style: small surface, queries + mutations, invalidate
-// the affected keys on success.
+// TanStack Query bindings for the account API (profile · plan · practice
+// credits · invoices · security · danger zone). All calls route through
+// `accountApi` (lib/api/account.ts). Query keys namespaced `['account', …]`.
+//
+// The legacy checkout hooks (useCheckout, useAlipayCheckout, usePortal,
+// useCancelPlan) were deleted by INT-12: checkout, the billing portal and
+// cancel live in hooks/credits (usePlanCheckout, useBillingActions,
+// useCancelSubscription; WP-21b). `useBillingPlan` stays: PlanBadge,
+// QuarterlySuggestion and useSubscriptionState read it.
 
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
+  type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -23,13 +30,10 @@ import type {
   AccountUsageResponse,
   BillingHistoryResponse,
   BillingPlanResponse,
-  CancelPlanResponse,
   ChangePasswordBody,
   CreditsResponse,
   DeleteAccountResponse,
-  PurchasableTier,
   SignOutAllResponse,
-  StripeRedirect,
   UpdateNameResponse,
   WipeDataResponse,
 } from '../lib/api/account';
@@ -59,10 +63,14 @@ export function useAccountProfile(): UseQueryResult<AccountProfile, Error> {
   });
 }
 
-export function useBillingPlan(region?: 'cn' | 'other' | null): UseQueryResult<BillingPlanResponse, Error> {
+export function useBillingPlan(
+  region?: 'cn' | 'other' | null,
+  options: { enabled?: boolean } = {},
+): UseQueryResult<BillingPlanResponse, Error> {
   return useQuery({
     queryKey: accountKeys.plan(region),
     queryFn: () => accountApi.plan(region ?? undefined),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -73,10 +81,17 @@ export function useCredits(): UseQueryResult<CreditsResponse, Error> {
   });
 }
 
-export function useBillingHistory(): UseQueryResult<BillingHistoryResponse, Error> {
-  return useQuery({
+/**
+ * Invoices and receipts, newest first, a page at a time (ST-10). The next
+ * page is asked for with the cursor the server sent; `nextCursor: null` (or
+ * none at all, from an older server) is the end.
+ */
+export function useBillingHistory(): UseInfiniteQueryResult<InfiniteData<BillingHistoryResponse, string | null>, Error> {
+  return useInfiniteQuery({
     queryKey: accountKeys.history(),
-    queryFn: () => accountApi.history(),
+    queryFn: ({ pageParam }) => accountApi.history(pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 }
 
@@ -146,47 +161,6 @@ export function useWipeData(): UseMutationResult<WipeDataResponse, Error, void> 
       // ['v2','tracker'|'home'], ['v3','today'|'activity'|'queue'|'pipeline'].
       qc.invalidateQueries({ queryKey: ['v2'] });
       qc.invalidateQueries({ queryKey: ['v3'] });
-    },
-  });
-}
-
-export interface CheckoutVars {
-  tier: PurchasableTier;
-  /** Same-origin relative path to return to after a SUCCESSFUL payment. */
-  next?: string;
-  /** Same-origin relative path to return to if the user CANCELS Stripe checkout.
-   *  Omit to keep the signup default (/choose-plan). In-app /plans passes /plans
-   *  so a cancelled upgrade returns to the page it started on. */
-  cancelNext?: string;
-}
-
-export function useCheckout(): UseMutationResult<StripeRedirect, Error, CheckoutVars> {
-  return useMutation({
-    mutationFn: (v: CheckoutVars) => accountApi.checkout(v.tier, v.next, v.cancelNext),
-  });
-}
-
-export function useAlipayCheckout(): UseMutationResult<StripeRedirect, Error, CheckoutVars> {
-  return useMutation({
-    mutationFn: (v: CheckoutVars) => accountApi.alipayCheckout(v.tier, v.next),
-  });
-}
-
-export function usePortal(): UseMutationResult<StripeRedirect, Error, void> {
-  return useMutation({
-    mutationFn: () => accountApi.portal(),
-  });
-}
-
-export function useCancelPlan(): UseMutationResult<CancelPlanResponse, Error, void> {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => accountApi.cancel(),
-    onSuccess: () => {
-      // Prefix match → invalidates every region variant (['account','plan',*]).
-      qc.invalidateQueries({ queryKey: ['account', 'plan'] });
-      qc.invalidateQueries({ queryKey: accountKeys.credits() });
-      qc.invalidateQueries({ queryKey: accountKeys.profile() });
     },
   });
 }

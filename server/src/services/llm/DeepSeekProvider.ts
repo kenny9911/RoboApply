@@ -40,7 +40,7 @@ const DEFAULT_DEEPSEEK_REASONING_HEADROOM_TOKENS = 8_000;
  * DEEPSEEK_REASONING_MAX_TOKENS, else the default. Read at call time so an env
  * reload takes effect without a restart.
  */
-function resolveReasoningHeadroomTokens(explicit?: number): number {
+export function resolveReasoningHeadroomTokens(explicit?: number): number {
   if (typeof explicit === 'number' && Number.isFinite(explicit) && explicit > 0) {
     return explicit;
   }
@@ -55,6 +55,25 @@ function envThinkingMode(): boolean | undefined {
   if (['1', 'true', 'enabled', 'on', 'yes'].includes(n)) return true;
   if (['0', 'false', 'disabled', 'off', 'no'].includes(n)) return false;
   return undefined;
+}
+
+/**
+ * Whether thinking is ON for one DeepSeek call (shared by chat() and the
+ * tool-streaming path): reasoning-only models always think; toggleable models
+ * default to thinking unless the per-call override or tuning turns it off;
+ * unknown models follow the override (undefined = API default).
+ */
+export function resolveDeepSeekThinking(
+  model: string,
+  callOverride?: 'enabled' | 'disabled',
+  tunedMode?: 'enabled' | 'disabled',
+): boolean | undefined {
+  const tuningOverride = tunedMode !== undefined ? tunedMode === 'enabled' : envThinkingMode();
+  const call = callOverride !== undefined ? callOverride === 'enabled' : undefined;
+  const effective = call ?? tuningOverride;
+  if (modelMatches(model, REASONING_MODELS)) return true;
+  if (modelMatches(model, THINKING_TOGGLE_MODELS)) return effective ?? true;
+  return effective;
 }
 
 export class DeepSeekProvider implements LLMProvider {

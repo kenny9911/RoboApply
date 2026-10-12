@@ -1,38 +1,50 @@
 'use client';
 
-// PipelineBoard — the kanban grid (.pipeline-grid). Owns:
+// PipelineBoard — the "By stage" grid (.pipeline-grid). Owns:
 //   • the data read (usePipelineBoard) + the move mutation (usePatchPipelineStatus),
-//   • bucketing entries into columns via the shared column model,
+//   • bucketing entries into the brand's columns (RoboApply C1 ladder,
+//     GoApply cn ladder; ./columns.ts),
 //   • drag state (which card is the source) shared across columns,
 //   • loading / empty / error states.
 //
 // Each column's count comes from `statusCounts` (server-derived) summed over the
 // column's member statuses, so `count(visible) = Σ column counts` holds. Cards
-// within a column are ordered by most-recent activity (updatedAt desc).
+// within a column are ordered by most-recent activity (updatedAt desc). With
+// seven to nine columns the grid scrolls sideways inside its own bounded
+// region on narrow screens.
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { RATrackerEntryView, RATrackerStatus } from '../../../lib/api/v2';
+import type { TrackerEntryView, TrackerStatus } from '../../../lib/api/contracts/tracker';
+import { useBrand } from '../../../lib/brand';
 import {
   usePipelineBoard,
   usePatchPipelineStatus,
 } from '../../../hooks/usePipelineBoard';
-import { PIPELINE_COLUMNS, columnIndexForStatus } from './columns';
+import { columnsFor, columnIndexForStatus, type TrackerMarket } from './columns';
 import { PipelineColumn } from './PipelineColumn';
 import { Btn } from '../primitives';
+import styles from './pipeline.module.css';
 
-export function PipelineBoard() {
+export interface PipelineBoardProps {
+  /** Open an application's details (the card's name is a button). */
+  onOpen?: (id: string) => void;
+}
+
+export function PipelineBoard({ onOpen }: PipelineBoardProps = {}) {
   const t = useTranslations('applications');
+  const columns = columnsFor(useBrand().market as TrackerMarket);
   const { data, isLoading, isError, refetch, isFetching } = usePipelineBoard();
   const patchStatus = usePatchPipelineStatus();
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const gridStyle = { gridTemplateColumns: `repeat(${columns.length}, minmax(200px, 1fr))` };
 
   // Bucket the visible (non-hidden) entries into their columns.
   const buckets = useMemo(() => {
-    const cols: RATrackerEntryView[][] = PIPELINE_COLUMNS.map(() => []);
+    const cols: TrackerEntryView[][] = columns.map(() => []);
     if (data) {
       for (const e of data.entries) {
-        const idx = columnIndexForStatus(e.status);
+        const idx = columnIndexForStatus(e.status, columns);
         if (idx !== null) cols[idx].push(e);
       }
       for (const list of cols) {
@@ -40,18 +52,18 @@ export function PipelineBoard() {
       }
     }
     return cols;
-  }, [data]);
+  }, [data, columns]);
 
   // Per-column counts from the server statusCounts (summed over members).
   const counts = useMemo(() => {
-    return PIPELINE_COLUMNS.map((col) =>
+    return columns.map((col) =>
       data
         ? col.members.reduce((sum, m) => sum + (data.statusCounts[m] ?? 0), 0)
         : 0,
     );
-  }, [data]);
+  }, [data, columns]);
 
-  function handleMove(id: string, status: RATrackerStatus) {
+  function handleMove(id: string, status: TrackerStatus) {
     setDraggingId(null);
     // No-op if the card is already in that exact status.
     const current = data?.entries.find((e) => e.id === id);
@@ -62,8 +74,8 @@ export function PipelineBoard() {
   // ── Loading ────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="pipeline-grid" aria-busy="true">
-        {PIPELINE_COLUMNS.map((col) => (
+      <div className={`pipeline-grid ${styles.board}`} style={gridStyle} aria-busy="true">
+        {columns.map((col) => (
           <div key={col.status} className="pipe-col">
             <div className="pipe-head">
               <div
@@ -152,11 +164,13 @@ export function PipelineBoard() {
 
   // ── Board ────────────────────────────────────────────────────────────────
   return (
-    <div className="pipeline-grid">
-      {PIPELINE_COLUMNS.map((col, idx) => (
+    <div className={`pipeline-grid ${styles.board}`} style={gridStyle}>
+      {columns.map((col, idx) => (
         <PipelineColumn
           key={col.status}
           column={col}
+          columns={columns}
+          onOpen={onOpen}
           entries={buckets[idx]}
           count={counts[idx]}
           draggingId={draggingId}

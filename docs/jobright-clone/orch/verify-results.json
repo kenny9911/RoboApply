@@ -1,0 +1,1560 @@
+{
+ "areas": [
+  {
+   "key": "ra-auth-onboarding",
+   "verified": [
+    "Test accounts created (all prefix claude-verify-, for cleanup): claude-verify-ra-auth-onboarding-1791654864081@example.com (UI signup, onboarding done), claude-verify-ra-auth-onboarding-explore-1791656013100@example.com (stuck at stage tour), claude-verify-ra-auth-onboarding-skip-1791656738935@example.com (left early at confirm; password changed). Scripts, logs and 207 screenshots: /Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone/.verify/ra-auth-onboarding/ (shots/ subfolder).",
+    "Signup via real UI (1280): empty submit, invalid email, weak password (rule checklist ticks live), age box unchecked ('Confirm that you are 16 or older to continue.'), show/hide password, marketing box unchecked by default, success -> /onboarding/situation in ~9 s; session cookie ra_session_token is httpOnly + SameSite=Lax. Server also rejects missing/false age consent (422 age_consent_required), weak password (422) and bad email (400).",
+    "Duplicate signup (upper-cased email) -> 'An account with this email already exists. Sign in instead.'",
+    "zh-TW signup shows the PDPA notice row (twPdpaNotice, required) and blocks submit without it; ja signup has no PDPA row; signup/login/forgot-password fully translated in zh-TW and ja (no raw keys, no English).",
+    "Sign out from avatar menu -> /login, cookie cleared, old token returns 401; /jobs and /settings then redirect to /login?next=...",
+    "Login: button disabled when empty; wrong password and unknown email both give the same 'That email and password did not match' message (no enumeration); correct login honours next=/settings; external next=https://example.com/evil is ignored (-> /jobs); /auth/me returns 200 with user + onboarding block.",
+    "Forgot password page renders, unknown email gets the neutral 'If ... has an account, a reset link is on its way' message; /reset-password/[token], /verify-email/[token] and /login/2fa render.",
+    "Onboarding urgent branch ('As soon as possible' + Experienced professional), 5 steps: situation (Next disabled until both answered, no Skip) -> basics (taxonomy typeahead incl. keyboard pick, broad-title hint with child chips, custom title via Enter, 'Pick up to 3 titles', required-field errors, country chips, city add/remove, 'Pick up to 5 cities in total', per-country sponsorship question, remote checkbox, live market snapshot with count/pay/skills/source line, city-level snapshot) -> resume (wrong file type error, paste <200 chars error, fictional PDF upload parsed in ~93 s, 'Ready: Mara Ellingsworth', reuse door after reload) -> matching (5 phases ticked by real server events over ~57 s) -> confirm (level/LinkedIn validation, extra title chip, alert frequency, heard-from 'Other' note) -> /jobs.",
+    "Onboarding explore branch ('In the next few months' + Student), 7 steps: Internship preselected, explore heading, snapshot N=0 message for Product manager in Taiwan, goal (single-select, 'Pick one, or skip this step.'), preferences (TWD default currency from first country, 'Pick up to 5 industries', invalid/negative pay error, skills, sizes, work models), resume by pasted text (~47 s), matching, confirm zero-results diagnostics with 'Change what you're looking for' link.",
+    "Skip path: basics Skip -> goal Skip -> preferences Skip -> resume 'Skip — use my answers only' -> matching shows 'No resume added' (skipped line) -> confirm.",
+    "Resume mid-way: reload on every step stays on that step; /onboarding index always returns to the furthest saved step; jumping ahead (/onboarding/confirm at stage situation) is redirected back; Back keeps saved answers on situation, basics, goal and preferences; finished account is redirected from /onboarding to /jobs.",
+    "'Finish later' -> /jobs with 'Finish setting up — N steps left' banner, 'Continue setup' returns to the right step, banner disappears after exactly two 'Hide for now' dismissals and the 'You have 1 setup step left' line shows in Settings > Account; login of an unfinished account lands on /jobs (no forced routing).",
+    "First-visit tour content, 375 layout, Start -> POST /onboarding/complete -> stage done, not shown again after reload — verified ONLY with a browser-side patch of the popup gate (see finding); 'Get started' checklist shows afterwards.",
+    "Onboarding 375 px + light/dark on situation, basics, goal, preferences, resume, confirm: no horizontal overflow, readable contrast; signup/login/forgot-password 375 + dark clean.",
+    "Onboarding screens in zh-TW and ja (situation, basics, goal, preferences, resume, confirm): translated, no raw keys (only brand names in Latin).",
+    "Settings: all 13 RoboApply sections open by hash without console or network errors at 1280 (account, security, notifications, billing, credits, privacy, appearance, search, assistant, connections, referrals, sensitive, danger).",
+    "Settings > Account: pronouns, years slider, phone, location saved through the Save bar and persist after reload; 'Send confirmation email' -> 204 and 'Sent. Check your inbox.'",
+    "Settings > Security: mismatch and wrong-current-password errors, real password change ('Your password was changed.', old password 401, new 200), signing out another session row, 'Sign out everywhere' -> /login and the token is dead.",
+    "Settings > Notifications: email switches and digest select PATCH and persist after reload; tips default shows 'Default where you are: off'.",
+    "Settings > Privacy: 'New request' inline form opens/cancels, 'Prepare my data' -> 202 and 'We are preparing your file', retention table renders.",
+    "Settings > Appearance: Light/Dark applies and survives reload; Settings > Your search: Edit filters dialog opens and closes with Esc, Rename field, block-company field; Settings > Assistant: hide/show floating button.",
+    "Settings > Danger: 'Delete job data' dialog (type DELETE) and 'Delete account' dialog (type email + required reason) open and cancel; nothing was deleted; /auth/me still 200.",
+    "Billing: /settings#billing, /settings/billing, /settings/billing/history ('No invoices yet') and credits list render; no payment attempted.",
+    "Language switch: Account chips to 繁體中文 and 日本語 apply at once (html lang, robo_locale cookie, survives reload); sidebar, settings nav and all 13 sections translate; topbar language menu switches back to English and persists."
+   ],
+   "notVerified": [
+    "Two-step sign-in section: not rendered. GET /api/v1/roboapply/account/2fa returns available:false (no TOTP sealing key configured), and the component hides itself by design; enrol, recovery codes and the /login/2fa challenge with a real code could not be exercised.",
+    "Plan sheet and Stripe test checkout: Settings > Plan and billing says 'No plans are on sale right now' and /pricing shows 'Price not set yet / Not open yet' for every plan — no STRIPE_PRICE_* is set in this stack (OPS-A9), so there is no plan sheet to open.",
+    "First-visit tour on an unmodified build: only seen with a browser-side patch; behaviour on a production build (no StrictMode double effect) not checked because builds were out of scope.",
+    "Email verification link and completing a password reset from an emailed link: no inbox access; only bogus tokens were tried.",
+    "Google and LINE sign-in: no credentials configured, the buttons are absent (as designed).",
+    "Student price 'Send code': not sent (would email a school address); only the disabled state for an invalid address was checked.",
+    "Data export download: request accepted (202, 'preparing' state); the finished file was not waited for.",
+    "Delete account and Delete job data: dialogs opened and cancelled only, per instructions.",
+    "Resume step: drag-and-drop, Word upload, the LinkedIn-PDF door as a separate upload, the 15 MB and 10-per-day limits, and the GoHire parse consent (not offered here) were not exercised.",
+    "Matching error state ('Try again / Continue anyway') and the 120 s background-continuation notice: never triggered (runs finished in 6–59 s).",
+    "Locales other than en, zh-TW and ja (ko, es, fr, pt, de, zh) were not checked in this area.",
+    "Connections import: section states 'Importing connections is not available yet' (hiringContacts mode), so nothing to exercise."
+   ],
+   "n": 18
+  },
+  {
+   "key": "ra-jobs-tracker",
+   "verified": [
+    "Test account: claude-verify-ra-jobs-tracker-1791654808@example.com (userId cmv2p0ivd0000kdcff9wpp6h8), created via signup API, onboarded through the real UI (situation -> basics -> resume PDF upload -> matching -> confirm). Scripts s01..s42 + screenshots are in /Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone/.verify/ra-jobs-tracker/. Cleanup notes for the orchestrator: my test left one job report (reason 'expired', note 'Verification test report - please ignore.') on real job cmv2epg6wt3nowjmfmltmm3s3, two hidden jobs, a private imported job cmv2qfrns017pkdcf5mcywies ('Northwind Freight Labs (fictional)'), a removed import cmv2qd6tc016skdcfq38wrjt1, 5 tracker entries, 2 offers, 1 copilot thread.",
+    "/jobs For you: feed loads (20 per page), infinite scroll 20 -> 40 -> 54 with 'That's every job your search finds right now' end line, 54 unique ids, no console errors.",
+    "Job card anatomy: tier label + NN / 100 + 'Quick estimate' marker, gap line ('What's missing') and overlap line, 'This is not your chance of getting hired.' on 54/54 cards, source line on 54/54 cards, pay or 'Pay not listed', posted + last-checked dates, 'Why this job' disclosure with evidence quotes and the 'never on age, gender...' line.",
+    "Sort: Recommended / Newest / Your best fits / Highest pay each re-query and order correctly (newest by date, best fit by score, highest pay with unlisted pay last); sort is reflected in the URL (?sort=).",
+    "Tier view: Great fits only / Good fits and better / Everything each filter correctly when given time to settle (see finding about the lag/409).",
+    "Quick filters: Level, Job type, Work model (Hybrid -> zero-results panel with '+N jobs' relax suggestions), Date posted (Past 24 hours -> 1 job), Pay (min $200,000 + only jobs that list pay -> chips '$200,000 a year or more' + 'Lists pay'), Location (add city Chicago -> 'Chicago · Within 25 mi'), Cancel leaves filters unchanged, removing a chip works, All filters drawer opens with every section (Basic / Pay and sponsorship / Interests / Companies), search typeahead ('python' -> chip and 17 results), Clear all.",
+    "'How ranking works' link opens /help/ranking with the four factors, weights, tiers and the 'what ranking never uses' list (content matches the weights shown on the job detail).",
+    "Save for later on a card and on job detail (button flips to Saved, Get-started checklist goes to 1 of 3, 'Saved: Done' in the job checklist).",
+    "Not interested: reason sheet (8 reasons + free text) -> 'Change your search too?' filter-diff sheet with the exact ops and 'N jobs would still show'; 'Save this change' patches the saved search and refreshes the feed; 'Just hide this job' removes only the card. Verified with reasons Wrong level and This company.",
+    "Report a problem: 7 reasons + details, POST 204, sheet closes.",
+    "Already applied (card menu) and Apply on company site (job detail): intercept sheet 'Tailor your resume first?' -> 'Apply with my current resume' opens the employer URL in a new tab (https://www.builtinnyc.com/job/software-engineer-foundations/11534460), job moves to Applied with inline 'Undo · I didn't apply'; Undo (DELETE /jobs/:id/applied 200) restores the previous state and keeps Saved. Same from a feed card (card shows 'Moved to Applied. You submit the application on their site.' + Undo; Undo toast 'Moved back out of Applied.').",
+    "Job detail /jobs/[id]: header, AI summary labelled as AI, full post, 'Skills in the post' with Required / Nice to have, 'How your resume compares' (tier, score, honesty line, AI-labelled Summary / Why you fit / What you're missing), 'What we compared' five weighted parts with evidence quotes from resume and post, Keyword check (title, years, education, skills, keywords), Get-ready checklist with credit notices, Similar jobs, Share (copies https://www.roboapply.io/jobs/<id> to the clipboard).",
+    "Company tab (facts 'Not listed' when unknown, with source + as-of line, open jobs count) and People tab (LinkedIn deep link opens in new tab with rel=noopener, clear 'We don't look anyone up or contact anyone' copy, message-draft form).",
+    "'Ask about this job' opens the Assistant drawer with job context chips; a real question was answered correctly in about 30 s with the AI label and credit notice.",
+    "Explore tab: 22 kinds of work with counts and source/as-of line; counts match POST /search-profiles/count; clicking a category loads that category's feed.",
+    "Added by you: import by URL (https://boards.greenhouse.io/spacex/jobs/8880858002 -> 'Check the details' form, missing company flagged, save -> 'Job added'), import by typed text (required-field validation, saved in about 60 s, fit analysis 97/100 on its detail page, pay parsed as $170,000 - $195,000 a year, 'Added by you / Only you can see this job'), Save to tracker, Remove with inline confirm (DELETE 204).",
+    "Applications /applications: By stage board, move by stage select, drag-and-drop between columns, By date view with week counters, List view, Offers tab; drawer: stage, how it ended (They said no -> moves to Rejected), dates (applied / interview / follow-up / deadline), salary, notes, Save changes ('Saved.' toast), history with every change, add note to history, files section empty state, offer form with validation ('Use numbers only for amounts.'), offer totals; offer comparison table for two offers with 'How the totals are worked out' (hourly x 40 x 52, signing bonus first year only, equity never valued); Add a job dialog (validation + creates entry in chosen stage); CSV export (200, text/csv, correct rows).",
+    "Saved search: rename the main search in /settings#search; instant alert 'Up to 1 a day' and weekly email summary saved (higher instant options disabled on Free); 'Save as a new search' is disabled on Free with the note 'Your plan keeps up to 1 saved search.' (API confirms 403 saved_search_limit).",
+    "Job alert end to end: after enabling the instant alert an inbox item '2 new jobs for \"Senior SWE US (verify)\"' arrived; bell badge shows 1 unread; bell panel and /inbox list it; opening it marks it read and lands on /jobs?from=alert. Empty inbox state also verified. /settings#notifications shows per-search alert controls, channel switches, 'Tips and reminders: default where you are: off', quiet hours line.",
+    "Locales: /jobs and a job detail in zh-TW and ja - all UI chrome, card labels, menus, filter popovers, fit breakdown labels, keyword check and checklist are translated; pay and dates are localized (年薪 US$19萬–US$22萬, 年収 $19万–$22万, 2026年10月10日); a fit analysis generated while in ja came back in Japanese.",
+    "Dark mode at 1280 on /jobs, job detail, /applications and the drawer: readable contrast, no broken surfaces, no horizontal overflow.",
+    "375px: mobile bottom nav, job cards, filter sheets (Location, All filters), card menu, job detail and the kanban board render and are usable apart from the top-bar overflow reported below."
+   ],
+   "notVerified": [
+    "Saved search create and delete: the Free plan allows 1 saved search ('Save as a new search' is disabled, API 403 saved_search_limit, upgradable:false), so only rename and alert settings could be exercised.",
+    "Reminder delivery (follow-up / interview / deadline messages in the inbox): dates were saved and appear in history, but the messages are produced by cron and none arrived during the session.",
+    "'Files sent' in the application drawer with real files: only the empty state was seen (no export or extension attachment was made in this area).",
+    "AI actions inside Applications: 'Write a summary' (By date), 'Explain the differences' (Offers), 'Draft a negotiation message', 'Write a follow-up' were not run.",
+    "People tab 'Write a draft' message generation and 'Practice for this job' / 'Tailor my resume' / 'Write a cover letter' flows (other areas); only their entry points and links were checked.",
+    "Apply from a feed card: the new tab opened and the job moved to Applied with a working Undo, but I closed the tab while it was still about:blank, so the employer URL was confirmed only from the job detail flow.",
+    "NL 'Turn into filters' success path (it returned 503 here, see finding).",
+    "Feed UI state right after the 429 rate limit (no screenshot taken at that moment).",
+    "Dark mode at 375px and dark mode in zh-TW / ja were not captured; dark was checked at 1280 in English only.",
+    "Language switch through the top-bar language menu: locales were set with the robo_locale cookie and by browser Accept-Language (which auto-selected zh-TW); the menu itself was not clicked.",
+    "Whether the saved-search overwrite was caused by the queued onboarding.match job is inferred from code and timing, not proven by a second reproduction.",
+    "GoApply brand was not part of this area."
+   ],
+   "n": 19
+  },
+  {
+   "key": "ra-resume-letters",
+   "verified": [
+    "Signup via API for two accounts (claude-verify-ra-resume-letters-1791654815@example.com, claude-verify-ra-resume-letters-b-1791658528@example.com); /resume reachable without finishing onboarding",
+    "Hub /resume empty state, create cards, upload modal; PDF upload (parsed in ~10 s) and .txt upload (24 s via UI, 134 s via API) both create a base resume and open the editor; first resume becomes Primary; slot counter '1 of 5 / 2 of 5'",
+    "Hub functions: Make primary (POST /primary 200), target title save (PATCH 200), delete dialog with typed confirm (opened, cancelled), Resumes/Cover letters tabs",
+    "Editor /resume/[id]: summary edit autosaves and persists; bullet AI rewrite (Improve the writing, Add numbers, Try another, Use this, Discard); 'Show 3 rewrites' for summary; 'Suggest skills from your bullets'; all AI output stayed within resume facts (Add numbers uses [X]/[n=__] placeholders instead of invented figures)",
+    "Editor Template and layout (template, font, spacing, paper size, accent) saved via PATCH /layout; Section order move persisted; 'Fit on one page' answered 'Already fits on 1 page. Nothing changed.'",
+    "Export from editor: PDF (5.3 KB, 1 page, text layer readable), DOCX (11 KB, valid Word file), Plain text, Markdown all download non-empty; DOCX/PDF carry AI-generated markers in file properties; menu states 'AI wrote part of this resume'",
+    "Resume check /resume/[id]/check: run (26 s and 17 s), grade + score + rule count, severity filters, issue cards with why/how, 'Show me around' tour, fix panel 'Write an AI version' (88 s) → 'Use this' applies to the resume (POST /apply 200, 'Updated in your resume'), 'You changed this resume after the check' banner, re-check with comparison block; resume_check credit 0→1 on success, rewrite credit charged per AI version",
+    "Builder /resume/new: 8-step wizard with validation (empty title / empty name blocked), AI 'Suggest bullet points from my notes' and 'Suggest a summary' (grounded in the notes only, labelled 'Written by AI from your notes'), Review, Create resume → opens editor with correct content, targetTitle set",
+    "Tailor from job detail ('Tailor my resume' → /resume?tailor=<jobId>): resume picker → setup (sections, Quick/Full, instruction, missing-skill ticks, credit line) → generation (78 s) → result with Verify details claims, Changes list, 'Use this resume' disabled until claims are checked; tailor credit 0→1 only after success",
+    "Tailor from the editor ('Tailor for a job' → paste a job post): setup → generation (98 s) → Verify details (Yes, keep / Remove / I did something similar with edit + Save) → Compare tab → 'Use this resume' → session finalized, version saved as kind tailored_for_jd, 'Saved. This version is in your resumes.' with Open this resume / Done",
+    "Unverified tailored version: PDF/DOCX export disabled in the Download dialog and refused by the API (409 unverified_claims count 9); after verification PDF/DOCX download works",
+    "Out-of-credits sheet for tailoring (3rd attempt, 'Today's credits for this are used up · Tailored resumes · Wait until… / Continue without it', no charge, no purchase attempted)",
+    "Cover letters: job detail 'Write a cover letter' → /resume/letters?job=… form (resume select, tone, length) → letter generated (164 s) → editor /resume/letters/[id]: manual edit persisted after reload, Sources tab (per-sentence citation to resume / job post), Versions tab, Copy text (clipboard verified), Download PDF (5 KB) and Word (10 KB, AI markers), 'Rewrite with AI' quick change (17 s, free, 19 left), 'Write a new version' (32 s); cover_letter credit 0→1→2 only on success; 3rd attempt shows the out-of-credits sheet with no charge",
+    "D3 check on AI text: cover letter v1/v2/v3, summary rewrites, bullet rewrites, builder suggestions and both English tailor sessions contained only facts present in the fictional resume; D1 copy present and correct ('RoboApply never sends this letter', 'You send the application there')",
+    "zh-TW: hub (empty + one resume), upload modal, parsing/done states, editor, tailor picker/setup/generating/result UI are translated with no raw i18n keys; ja and de sweep of hub, letters hub, letter editor, builder, check and editor found no raw keys and no untranslated UI strings",
+    "Dark theme: UI toggle works and persists (roboapply:theme:v4); hub, editor and check render with readable contrast at 1280 and 375",
+    "No React hydration errors or page errors on any resume/letters page; the only console errors were the failed API calls listed in findings; no brand leak (no GoApply wording) seen"
+   ],
+   "notVerified": [
+    "Tailor launched from the hub's own resume list after a first tailor, the hub 'Versions for specific jobs' list and its 'Verify details' link: blocked by the GET /v2/resumes 500 (critical finding); the session was re-opened by direct URL /resume?tailorSession=<id> instead",
+    "Cover letter generation in the first account: blocked by the same 500 (form stuck on 'Loading your resumes…'); verified in a second account before it tailored for a feed job",
+    "Cover letter from a pasted job post on /resume/letters and cover letters in zh-TW: cover_letter credits (2/day) were used up on the job-based letter and regeneration",
+    "Artifact recording with a tracker entry (export with trackerEntryId from Ready to apply / tracker drawer): no application entry was created in this area; only confirmed that editor exports send none",
+    "Import from LinkedIn PDF: not exercised (same upload endpoint family; no LinkedIn-format fixture)",
+    "Fit-score before/after in the tailor result and the keyword grid: never rendered (fit rescore timed out in all 3 sessions)",
+    "'Fit on one page' actually shrinking a resume: only the 'Already fits on 1 page' path was seen (test resumes are one page)",
+    "Photo placement on export and the 'Photo and personal details' panel (shown in zh-TW): not exercised",
+    "Out-of-credits sheet with an upgrade option: plans are not upgradable in this environment (upgradable=false), so the sheet only offers 'Wait' and 'Continue without it'; no purchase was attempted by design",
+    "Delete resume to completion and the 5-slot limit notice: delete dialog was opened and cancelled; only 3 base resumes were created",
+    "Whether the issue-fix 500s come from database contention with other parallel verification sessions or from a code fault: could not be determined from logs (the failure is not logged)",
+    "Test data left for cleanup: users claude-verify-ra-resume-letters-1791654815@example.com and claude-verify-ra-resume-letters-b-1791658528@example.com with 5 base resumes, 3 tailored versions (one still in review), 1 cover letter; session cookies are in /Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone/.verify/ra-resume-letters/cookie.txt and cookie-b.txt"
+   ],
+   "n": 23
+  },
+  {
+   "key": "ra-assistant-ready-practice-public",
+   "verified": [
+    "Test account: created claude-verify-ra-arpp-1791654819@example.com via the signup API, then completed onboarding through the real UI (situation -> basics -> PDF resume upload -> matching -> confirm -> /jobs). Scripts, JSON results and screenshots are in /Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone/.verify/ra-assistant-ready-practice-public/ (shots/ subfolder).",
+    "ASSISTANT full page /assistant: empty state and cheat-sheet chips fill the composer; a message streams and finishes; Stop ends the turn with 'Stopped.'; credit line counts down (30 -> 20 over the session). Evidence a1.json, shots/asst-q1-remote-jobs.png, asst-q2-stopped.png.",
+    "ASSISTANT never claimed to apply: asked 'apply to the best matching job for me and submit my application' -> 'I can't submit applications for you ... you'll need to apply on the employer's site'. No applied/submitted claim in any of ~12 answers (a1.json, a4.json, a5.json).",
+    "ASSISTANT filter-diff: 'change my filters ...' produced a 'Suggested change to your search' card with per-field Remove/Add rows and sourced before/after counts (0 -> 1512). Feed and saved search were unchanged until Apply (feed/query 0 items before and after the proposal); after Apply the saved search changed and the feed returned jobs. Repeated in zh-TW (adds 'posted within 7 days', profile gained postedWithinDays:7). Evidence a2.json, loc1.json, shots/a2-filter-diff-proposed.png.",
+    "ASSISTANT from job detail via the 'Ask about this job' button: thread created with contextJobId, fit question answered with a fit_analysis card grounded in the resume and the post, ends with 'not a prediction of your hiring outcome'. Evidence a4.json, shots/a4-rail-fit-answer.png.",
+    "ASSISTANT proposal cards show cost before running: tailor card 'Uses 1 credit, only when you confirm. Uses 1 of your 2 left today' with Tailor / Not now (Not now -> 'Not done.'); cover-letter card same wording, confirmed run finished in 155 s -> 'Done. Open the letter' linking /resume/letters/<id>.",
+    "ASSISTANT feedback thumbs: Helpful toggles aria-pressed and POSTs 204; Not helpful opens a reason form (Wrong or made up / Did not answer / Too long / Something else), sending shows 'Thanks for the feedback.'",
+    "ASSISTANT saved threads: /assistant lists earlier chats with titles and dates; opening one restores all user and assistant messages (visual1.out threadOpened). Settings > Assistant shows 'What the Assistant remembers ... 0 of 50 saved' and the floating-button toggle.",
+    "ASSISTANT rail opens from the top bar 'Ask' button as a dialog labelled 'RoboApply Assistant' with New chat / Chats / What you can ask / Open full page.",
+    "READY TO APPLY intro and setup wizard: profile step, calibrate step (rating 'Not right' requires a reason; Continue before 3 ratings is refused with 'Rate 3 jobs to finish this step'), answers step (saved, sensitive questions marked 'AI never answers this question'), weekly settings (target, minimum tier, cover-letter mode, file name) saved, extension step skipped -> weekly list.",
+    "READY kit: 'Add to Ready to apply' from job detail; Prepare shows a cost sheet first ('Uses 1 kit; you have 3 left this week. Uses 1 tailoring credit ... Nothing is sent to any company'); kit became 'Ready for you' in ~70 s; kit review shows Before score, 'Verify details' (3 claims; Use this resume disabled until all are kept/removed), 8 changes, saved answers with Copy buttons, PDF/Word download.",
+    "READY 'Open application': opens a new tab, POST /agent/queue/:id/open returns the apply URL, the job moves to Applied (visible on /applications, 'Applied just now'); 'Undo · I didn't apply' restores the kit and /applications goes back to 0. Evidence kit4.json, shots/kit-after-open-application.png, applications-after-open.png, kit-after-undo.png.",
+    "PEOPLE tab on job detail: LinkedIn people-search deep link opens in a new tab; copy says 'We don't look anyone up or contact anyone'. Outreach draft (LinkedIn note) generated in 28 s, 218/300 chars, with Copy / Open LinkedIn / I sent it and 'RoboApply never sends messages. You send it yourself.'",
+    "PRACTICE: setup screen (role browser, interviewer/focus/format/length/language pickers with credit cost per length), start of a 15-minute voice session -> 'Getting your interview ready' (with 'If this step fails, you won't be charged' and a 'taking longer than usual' line at ~58 s) -> device check. With no microphone it shows 'Microphone: Not working - The microphone didn't start ... Try again', Join disabled, no crash, no console error; credit balance unchanged afterwards. Evidence p2-voice.out, shots/practice-Voice-final.png.",
+    "PRACTICE question bank /practice/questions and company page /practice/questions/general-intuition-and-medal render with honest sourcing copy (content empty, see findings).",
+    "INVITE /invite renders the 'Confirm your account to get your link' state, rules, yearly cap and 'no cash value' copy. /extension and /extension/uninstalled render ('The extension is not available yet').",
+    "PUBLIC signed out, 200 with no console errors at 1280 and 375: /, /zh-TW, /ja, /pricing, /tools, /tools/resume-check, /tools/resume-job-match, /tools/job-alerts, /legal and all six legal docs, /security, /help, /help/ranking, /about, /cancel, /developers/job-search, seven /features/* pages. Unknown URL returns 404 with a 'That page does not exist' page. No horizontal overflow on public pages at 375.",
+    "PUBLIC theme toggle: 'Switch to dark' sets data-theme=dark (bg rgb(23,22,34), text rgb(245,243,252)) and persists across /pricing, /tools, /help, /legal/privacy, /security, /about; dark at 375 has no overflow. Authed dark mode on /assistant, /ready, kit review renders with readable contrast (shots/dark-*.png).",
+    "PUBLIC resume check without an account: empty submit shows 'Choose a resume file.'; fictional .txt resume returned a result in 24 s ('Excellent', 18 rules, 'Not reviewed by a person, and not a prediction'), 3 -> 2 free checks, signup/login links carry next=. Matcher returned a row-by-row checklist in 31 s.",
+    "PUBLIC help form validation (not sent): empty and invalid input show 'Enter a valid email address.' / 'Write at least 10 characters.'",
+    "robots.txt (200, private app paths disallowed, AI crawlers also blocked from /job/), sitemap.xml (index -> /sitemaps/static.xml with 23 URLs and hreflang alternates incl. zh-CN -> goapply.top), llms.txt 200.",
+    "LOCALES: /assistant, /ready, /ready/setup, /practice, /practice/questions, /invite, /extension in zh-TW and ja show no English leftovers and no raw keys (except the kit page, see findings); the Assistant answered in Traditional Chinese with a fully translated filter-diff card. Landing, pricing, tools, help, legal, security, 404 are translated in zh-TW and ja when loaded directly.",
+    "D1 copy: every Ready/kit/people/assistant surface states the user submits ('You submit each application yourself', 'Nothing is sent to any company'). No copy implying the product submits was found."
+   ],
+   "notVerified": [
+    "Invite link, share and reward flow: /invite requires a confirmed email ('Confirm your account to get your link'); the test address is @example.com and no verification link appeared in the dev logs.",
+    "Extension pairing screens (status card, pair code): /extension only shows 'The extension is not available yet' in this environment.",
+    "Practice beyond the device check, and any practice report page: headless Chromium has no microphone, so Join stays disabled; the account has no finished session, so no report exists to open.",
+    "Practice TEXT mode: RoboApply's format picker offers only 'Video call' and 'Voice only'.",
+    "Assistant memory add/delete: only the empty Settings > Assistant section (0 of 50) was seen; no MemoryAdd card was triggered. Thread delete was not clicked.",
+    "Running the Assistant's tailor proposal (dismissed with Not now to keep the daily tailoring credit for the kit); the cover-letter proposal was run instead.",
+    "Filter-diff post-apply controls (Better / Not quite revert): the card never reached its applied state in two attempts (see the transaction-timeout finding).",
+    "Help/support form real submission: only validation was exercised, to avoid sending mail to support@roboapply.io.",
+    "Kit with a cover letter: the job did not ask for one ('No cover letter in this kit' under 'only when the post asks').",
+    "Cancel-link email on /cancel and Stripe checkout: not exercised (no real payment or email).",
+    "Performance was not judged as a bug: with other sessions hitting the same stack, /ready stayed on 'Loading…' for 20-40 s, saves took 5-12 s, and Assistant first text arrived after 12-135 s (provider timeouts of 1.5 min were retried server-side). One load of /onboarding redirected to /login although the session was valid; it did not recur and was not investigated.",
+    "The landing figure '1,700+ open roles / 1,700+ added in the last 7 days' matches the index-stats API (1700 both) and the Assistant's count of 1512 US full-time jobs, but was not checked against the database; the brief mentioned ~380 intl jobs."
+   ],
+   "n": 29
+  },
+  {
+   "key": "goapply",
+   "verified": [
+    "Landing page (zh, 1280 + 375, light + dark at 1280): GoApply wordmark, Chinese copy, no 'RoboApply' text, no USD/H-1B/EEO, footer shows only the six legal documents + AI model line (no ICP/PSB/EDI numbers since unconfigured); D1 copy present ('每份申请都由你自己提交'). Screens: .verify/goapply/shots/pub_-1280.png, landing-light-375.png, landing-dark-1280.png",
+    "/pricing: fee schedule with every paid item marked '暂未开放 / 价格尚未设定', free plan ¥0, no purchase button; /settings/billing says '付费会员暂未开放' (shots/pub_pricing-1280.png)",
+    "Phone OTP sign-up end to end via the UI: 3 consent boxes unticked by default, '获取验证码' and '登录 / 注册' stay disabled until all 3 are ticked and the phone is valid, code read from the dev console line '[sms:dev] … 验证码：', wrong code gives '验证码不正确，还可尝试 4 次。' (422), right code lands on /onboarding/consent",
+    "Email path under '其他方式': submit without consents is blocked ('请先勾选上方协议'); with consents the account is created and lands on /onboarding/consent",
+    "Consent screen G1: nothing pre-ticked; the three required items block '下一步'; 个性化推荐 must be explicitly set to 开启 or 关闭 ('请为个性化推荐选择…后继续'); un-ticking cross-border re-blocks; AI and marketing toggles are separate and optional",
+    "Onboarding G2–G7 with AI on (应届生 → 届别 2027/6月 → 本科/学校 typeahead with 985/211/双一流 tags/专业 → 求职期望 with role typeahead, province→city, GB/T 4754 industries, salary 15-25K·14薪 with min>max validation → tags 央国企/外企/户口 → resume PDF upload (~50 s) → matching → confirm → first-value tour → first landing /campus). Back navigation keeps answers",
+    "Onboarding with AI consent OFF (社招 branch, education skippable): resume step shows '简历读取未开启…手动填写资料 / 开启 AI 处理', confirm page says jobs are sorted by date, first landing is /jobs; /assistant shows an 'AI 处理已关闭' explanation with a link to settings; /practice shows 'AI 练习需要你同意 AI 处理'",
+    "App shell navigation in Chinese at 1280 (职位, 校招日历, 待投递, 投递记录, 简历, 面试练习, 我的资料, 内推码, 邀请好友, 设置) and all 28 signed-in routes crawled; no 'RoboApply' string, no raw i18n keys, no '$' prices found in zh",
+    "Campus calendar /campus empty state ('暂无符合条件的项目。项目经工作人员对照企业官网核实后才会出现在这里。') with 届别/岗位/城市 filters, light and dark",
+    "Job feed /jobs zero-result state with CNY filter chip ('每月 ¥15,000 及以上'), /jobs/explore categories all '没有在招职位' with source line",
+    "Job import by pasted text: fraud fixture (培训贷 / 先交钱) saved with the warning '请仔细核查这个职位 — 这些说法在招聘骗局中很常见' and quoted evidence; a legitimate job saved after retries",
+    "Job detail for an imported job: AI summary + fit analysis (94/100) with 'AI 辅助生成' badges, '这不是你被录用的概率', evidence quotes, keyword check; 人脉 tab has no LinkedIn links; '前往公司官网申请' asks about tailoring first, then opens the employer URL in a new tab (closed), job moves to the applications record with an Undo link that works",
+    "Tracker /applications with the Chinese stage ladder (已保存, 已申请, 测评, 笔试, AI 面试, 面试中, 录用, 已签约, 未录用): moved a card to 笔试, drawer with history, Offer tab empty state",
+    "Resume tailoring for a job (~50 s): options dialog, AI result with 'AI 辅助生成的文件' badge, 'Verify details' gating ('使用这份简历' disabled until each new claim is confirmed), before/after score with source line",
+    "Chinese resume builder /resume/new: 11 steps incl. 求职意向 (salary 不写/面议/写明金额), 实习/项目 STAR/校园/技能证书 (CET-4/6)/获奖/自我评价, and '照片和个人信息' where 籍贯, 政治面貌 and photo are optional, unticked, and stated as never sent to AI or used for ranking; photo kept only in the browser; resume created and opened in the editor with 籍贯/政治面貌 in the preview",
+    "Resume check ran (24 s) and returned a checklist score; resume PDF export downloaded (46 KB); WeChat-browser banner ('微信内无法下载文件…在浏览器中打开') appears next to resume download when the UA contains MicroMessenger",
+    "Practice in text mode: '这里暂未开放语音练习，所以这次练习以文字方式进行', 5-question text session with AI follow-ups and 'AI 辅助生成' badge, GoApply 'AI 面试练习结果' report with three aspects, STAR check and source lines",
+    "求职助手 Assistant: answers in Chinese, shows 'AI 辅助生成' and '由 AI 辅助生成。使用前请逐行核对。', explicitly refuses to submit an application or contact anyone, shows the daily credit counter",
+    "内推码 page: submission with a WeChat id is rejected ('请去掉手机号、微信号、邮箱和链接。'), a clean code is accepted as '等待审核', then deleted",
+    "Settings: 授权管理 lists required consents (locked) and every optional consent separately with 开启/关闭; 更换手机号 completed end to end (code to old number + code to new number, '手机号已更换为 198****7852，其他设备已退出登录'); credits, appearance (dark theme toggle), danger zone",
+    "Logout → protected route redirects to /login?next=… → phone OTP login → /auth/me 200 with brand=goapply",
+    "Account deletion from 危险操作 for both test accounts (login afterwards returns account_deleted)",
+    "English spot check (jobs, job detail, campus, applications, practice, referrals, settings, pricing, resume builder, assistant, profile): no Chinese UI strings left, no raw keys, ¥ kept",
+    "Dark mode at 1280 on jobs, practice, resume builder, applications, consents, campus, landing, signup, pricing, legal: readable, no overflow"
+   ],
+   "notVerified": [
+    "GoApply with all CN credentials absent (no AI, phone, WeChat entry points; invite-only sign-up; footer): the running stack is the dev preview profile and I was told not to restart or change env",
+    "Guard tests (CN_LLM_PROVIDER=openrouter must fail; upload without CN_S3_* fails closed): need env changes/restart",
+    "Cover letter generation: blocked by the resume-list 500 on the main account (form says '请先添加一份简历'); the AI-off account cannot use it by design",
+    "Job feed, job cards, filters, 'Not interested', alerts with real jobs: GoApply has zero jobs locally; only empty states were checked",
+    "Campus calendar entries, subscribe/reminder flow, source and last-verified lines: calendar is empty",
+    "待投递 kit review and 'Open application': setup cannot get past step 2 (see finding)",
+    "Job import by URL (Firecrawl) and the denylist 'paste the text' path: only pasted-text import was exercised",
+    "Offer comparison with two offers, 三方 signing details: only the empty state and stage ladder were checked",
+    "Photo upload in the resume builder and the photo in an exported file: toggle and copy checked, no image uploaded",
+    "AI-label metadata inside exported files and DOCX/text/Markdown exports: only a base-resume PDF was downloaded and read",
+    "WeChat login, WeChat Pay/Alipay, SMS via a real provider, email delivery, password reset, 2FA, voice/video interview, browser extension pairing: switched off or not configured on this profile",
+    "Invite link flow /r/<code> and referral reward: the link field had not loaded when checked; not followed through",
+    "Interview question bank contributions and company question pages: empty states only",
+    "English locale: spot-checked 12 pages for leftover Chinese and raw keys; flows were not re-run in English",
+    "Dark mode at 375px on the landing page: no theme control is reachable on mobile landing; dark at 375 was checked only inside the app shell",
+    "Test data left behind: both accounts were deleted through the UI (soft delete). Phone account id cmv2p4udk006jkdcfno5ny0nq (placeholder email u-acfa94440bd0cefb497a0107@users.goapply.invalid, phone +8619991654932 then +8619891657852) does not carry the claude-verify- prefix; email account id cmv2qxaeq01hfkdcf428c7yaz (claude-verify-goapply-1791657991@example.com). Imported jobs cmv2pvtu600u2kdcff1kmi2vi and cmv2pq89k00sbkdcf7c29uq0w, three resumes, one tracker entry and one practice session belonged to the phone account"
+   ],
+   "n": 22
+  }
+ ],
+ "rawCount": 111,
+ "triage": {
+  "groups": [
+   {
+    "id": "G1-shell-i18n",
+    "title": "App shell, API client, global providers, error pages, locale bundles",
+    "owns": [
+     "components/v3/shell/",
+     "styles/v3.css",
+     "styles/workspace.css",
+     "app/globals.css",
+     "lib/api/client.ts",
+     "app/providers.tsx",
+     "app/error.tsx",
+     "app/global-error.tsx",
+     "app/not-found.tsx",
+     "i18n/messages/",
+     "i18n/staging/nav.en.json",
+     "i18n/staging/common.en.json",
+     "i18n/staging/errors.en.json"
+    ],
+    "findings": [
+     {
+      "severity": "high",
+      "title": "Topbar does not collapse at 375px: every signed-in page is 583-664px wide and scrolls sideways (both brands, reported by 4 agents)",
+      "repro": "Viewport 375x812, sign in, open /jobs, /settings, /resume, /ready, /applications or /assistant on either brand. Read document.documentElement.scrollWidth.",
+      "observed": "scrollWidth 583-643 vs 375. .top-actions spans x~59..598: the 255px search pill ('Search jobs, companies... Cmd-K') stays visible next to the mobile search icon and overlaps the page title; Ask, bell, theme, language and avatar are off-screen. At 1280 both the pill and the icon button show. Same in dark.",
+      "expected": "At <=760px the pill is hidden and only the icon button shows; no horizontal page scroll; avatar menu reachable. At desktop only the pill shows.",
+      "evidence": "Confirmed in code: Topbar.tsx:69 `className=\"search max-[760px]:hidden\"` and :83 `icon-btn hidden max-[760px]:grid` are Tailwind v4 layered utilities, while `.search{display:flex}` / `.icon-btn{display:grid}` (styles/v3.css:208,235; styles/workspace.css:85-89) are imported unlayered in app/globals.css:3,9, so the unlayered rules always win. Screens: .verify/ra-jobs-tracker/36-mobile-jobs-vp.png, .verify/goapply/shots/m375-app_jobs.png. After the fix re-measure: smaller residual overflows were also seen on the /jobs chip row (right=405), settings section nav (451) and practice category chip (381) - those belong to G3/G2/G6.",
+      "likelyFiles": [
+       "components/v3/shell/Topbar.tsx",
+       "styles/v3.css",
+       "styles/workspace.css",
+       "app/globals.css",
+       "components/v3/shell/shell.module.css"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "API client turns an envelope with data:null into the envelope object; /jobs/report crashes for every user with no report (both brands, 3 agents)",
+      "repro": "Sign in as a user who never ran the competitiveness report. Open /jobs/report (or click 'You and what employers ask' on /jobs).",
+      "observed": "Error boundary replaces the page; console 'IntlError: FORMATTING_ERROR: Invalid time value at ReportPage'. GET /match/competitiveness/latest returns {success:true,data:null}; the page receives the whole envelope as the report and calls format.dateTime(new Date(undefined)). 'Try again' repeats the crash. The error boundary text is English on zh pages.",
+      "expected": "An envelope with data:null unwraps to null, so the page shows its start state with the run button. Applies to every endpoint that may return data:null.",
+      "evidence": "Confirmed: lib/api/client.ts:385 `return (data?.data ?? data) as T;` - nullish coalescing falls back to the envelope. Fix by detecting the envelope ('success' in data / 'data' in data) instead of `??`. Screens: .verify/ra-jobs-tracker/33--jobs-report.png, .verify/goapply/shots/jobs-report-crash.png.",
+      "likelyFiles": [
+       "lib/api/client.ts",
+       "app/error.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "All client-formatted times use the brand default time zone (UTC on RoboApply), not the viewer's",
+      "repro": "Machine in UTC+8 at 02:55 on Oct 11. Use up tailoring credits; open a resume check report; open a cover letter's Versions tab; open the out-of-credits sheet.",
+      "observed": "'None left today. More on Oct 11' (it already is Oct 11), 'Wait until 12:00 AM' (real refill 08:00 local), 'Checked Oct 10, 2026, 6:08 PM' for a check run at 02:08 Oct 11, letter versions 'Oct 10, 7:06 PM'; other surfaces that format locally say Oct 11.",
+      "expected": "Times in the viewer's time zone, consistently (or the zone is stated).",
+      "evidence": "Confirmed: app/providers.tsx:108-109 passes `timeZone={brand.defaultTimezone}` to NextIntlClientProvider; lib/brand/registry.generated.ts:157 is 'UTC' for RoboApply (Asia/Shanghai for GoApply). Every format.dateTime call inherits it. Screens: .verify/ra-resume-letters/shots/31-out-of-credits.png, 11-check-report-1280.png, 43-versions.png. Mind SSR/hydration when switching to the browser zone.",
+      "likelyFiles": [
+       "app/providers.tsx"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "404 and error pages: React 'script tag' console error, English-only text, only 'Go to Jobs' for signed-out visitors",
+      "repro": "Open /no-such-page signed out and signed in (/onboarding/bogus); repeat on goapply.localhost with zh.",
+      "observed": "Console: 'Encountered a script tag while rendering React component' on every 404 (3 agents). Page text 'That page does not exist ... Go to Jobs' in English with html lang=zh; no site header; the only action sends a visitor to /login?next=/jobs. app/error.tsx text is hard-coded English.",
+      "expected": "Clean console; localized 404 and error text; a home link for visitors.",
+      "evidence": "public2.out log lines; .verify/goapply/shots/m375-404.png; shots/pub2-no-such-page-claude-verify-1280.png.",
+      "likelyFiles": [
+       "app/not-found.tsx",
+       "app/error.tsx",
+       "app/global-error.tsx",
+       "i18n/staging/errors.en.json"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Locale bundle leftovers in zh / zh-TW / ja",
+      "repro": "Set language to zh-TW or ja and open /jobs and a job detail; open /applications board; on GoApply open /settings.",
+      "observed": "zh-TW mixes half-width colon and curly quotes ('缺少的地方: ...', '來自職缺說明: \"...\"') with full-width forms elsewhere; normalized location 'Anywhere' stays English; board column aria-label 'Applied, 1 jobs' (no plural); API copy 'Up to 1 saved searches on this plan'; /en landing on GoApply has a Chinese <title> and most app pages are titled only with the brand name.",
+      "expected": "Consistent full-width punctuation in zh-TW, translated 'Anywhere', ICU plurals.",
+      "evidence": "s35.cjs zh-TW and ja dumps; screenshots 35-zh-TW-detail-1280.png, 35-ja-jobs-1280.png. Bundle-only edits; if a string turns out to be server-produced, hand it to the owning group.",
+      "likelyFiles": [
+       "i18n/messages/zh-TW.json",
+       "i18n/messages/ja.json",
+       "i18n/messages/zh.json",
+       "i18n/messages/en.json"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Avatar shows the literal placeholder 'RA' until /auth/me returns (also on GoApply)",
+      "repro": "Reload any signed-in page on goapply.localhost and watch the avatar while /auth/me is pending.",
+      "observed": "Avatar reads 'RA' (RoboApply initials) for several seconds, then 'UU' for a nameless phone user.",
+      "expected": "A neutral placeholder (icon or skeleton), not another brand's initials.",
+      "evidence": "Confirmed: components/v3/shell/AvatarMenu.tsx:43 `if (!src) return 'RA';`. Screen .verify/goapply/shots/practice-setup.png.",
+      "likelyFiles": [
+       "components/v3/shell/AvatarMenu.tsx"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "G2-auth-onboarding-settings",
+    "title": "Auth pages, RoboApply onboarding (client + server), settings and account",
+    "owns": [
+     "components/features/onboarding/",
+     "components/features/auth/",
+     "components/auth/",
+     "hooks/onboarding/",
+     "lib/ui/popupGate.ts",
+     "app/(onboarding)/",
+     "app/(auth)/settings/",
+     "components/v3/preferences/",
+     "components/v3/account/",
+     "components/features/settings/",
+     "components/features/growth/",
+     "server/src/features/onboarding/",
+     "server/src/features/profile/",
+     "server/src/roboapply/routes/auth.ts",
+     "styles/v3-preferences.css",
+     "styles/v3-account.css",
+     "styles/auth.css",
+     "i18n/staging/onboarding.en.json",
+     "i18n/staging/auth.en.json",
+     "i18n/staging/settings.en.json",
+     "i18n/staging/accountV2.en.json",
+     "i18n/staging/profile.en.json",
+     "i18n/staging/invite.en.json",
+     "i18n/staging/growth.en.json"
+    ],
+    "findings": [
+     {
+      "severity": "high",
+      "title": "Onboarding writes 'Anywhere in {country}' as a zero-radius location row, so a new user's saved search matches remote jobs only or nothing (3 agents)",
+      "repro": "New account. Basics: title 'Software engineer' (or 'Product Designer'), Full-time, United States, leave 'Anywhere in United States' (no city). Finish onboarding, open /jobs.",
+      "observed": "Saved search gets locations:[{label:'US',country:'US',radiusKm:0}] plus country:'US'. Feed returns 7 remote-only jobs (0 for Product Designer; confirm says 'We didn't find strong fits yet') although the snapshot said '63 open roles ... in United States'. Removing the 'US - Same city' chip gives 54 jobs.",
+      "expected": "'Anywhere in {country}' stores only the country (no locations entry), so every job in that country shows.",
+      "evidence": "Confirmed: server/src/features/onboarding/mapping.ts:90-94 maps city-less countries to `{label: c, country: c, radiusKm: 0}`. Screens .verify/ra-jobs-tracker/09-jobs-foryou-1280-tall.png, 15-foryou-no-location-tall.png. Existing profiles that already carry the row are handled by the G3 finding on the feed predicate.",
+      "likelyFiles": [
+       "server/src/features/onboarding/mapping.ts",
+       "server/src/features/onboarding/mapping.test.ts"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "Confirm headline 'We found N jobs that fit you - counts jobs at Good fit or better' is not a fit count; it flips between numbers and shows 1,586 for a user with no resume (D3)",
+      "repro": "A) Urgent path with resume: reach /onboarding/confirm, read the h1, reload. B) Skip every step including resume and reach confirm.",
+      "observed": "A) 62, then 30 after reload, then 62 again. B) 'We didn't find strong fits yet' for ~3 s, then 'We found 1,586 jobs that fit you' although matching compared 0 jobs. POST /search-profiles/count returns the same number with fitTier good, great or absent.",
+      "expected": "One stable number that really is the count at Good fit or better (from the onboarding match result), or wording 'jobs match your search'; never called a fit when no resume was compared.",
+      "evidence": "Confirmed: ConfirmStep.tsx:76-78 uses `useFilterCount({...filters, fitTier:'good'})` and falls back to matched.jobCount; server/src/features/feed/sql.ts:315 treats fitTier as view-only (never SQL), so the count is the unfiltered search size. Fix inside this group: take the count from the onboarding match result (match.ts) and change the wording when nothing was compared. Screens shots/06-confirm-initial-1280.png, shots/15-skip-confirm-1280.png.",
+      "likelyFiles": [
+       "components/features/onboarding/steps/ConfirmStep.tsx",
+       "server/src/features/onboarding/match.ts",
+       "server/src/features/onboarding/contract.ts",
+       "i18n/staging/onboarding.en.json"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "First-visit tour never appears and onboarding stays at stage 'tour' (popup gate drops the grant when the mount effect runs twice)",
+      "repro": "Finish /onboarding/confirm with 'Show my jobs' -> /jobs. Wait 15 s, reload, wait again.",
+      "observed": "No dialog; /auth/me.onboarding stays {step:'tour', completed:false}; POST /onboarding/complete never fires; the tips dock that needs completed=true never unlocks.",
+      "expected": "The 4-card overlay shows once; Start or close moves the stage to done. The gate must grant a key again when the same requester re-asks inside the arbitration window.",
+      "evidence": "Confirmed in lib/ui/popupGate.ts: decide() (line 111-142) resolves one winner per batch; usePopupGate (line 241-248) sets live=false on cleanup, so under React strict mode (next.config.mjs reactStrictMode) the first request wins with live=false and the second request of the same key is resolved false. Agent's browser-side patch granting the second request showed the tour and completed onboarding. Likely dev-only, but any effect re-run inside the window loses the grant; verify on a production build too. Screens shots/07-jobs-tour-1280.png, shots/08-tour-1280-light.png.",
+      "likelyFiles": [
+       "lib/ui/popupGate.ts",
+       "components/features/onboarding/TourOverlay.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "A late background 'onboarding.match' queue job overwrote the user's edited saved search with the onboarding answers (likely cause)",
+      "repro": "Close the tab during onboarding step 'Finding jobs' (server queues onboarding.match from phase 'saving'). Reopen, finish onboarding, edit the main search (Clear all). Wait for queue-drain to reach the item.",
+      "observed": "After Clear all (profile version 29->30) the next load showed version 31 with exactly the onboarding answers and no client write; a queue-drain run started in between.",
+      "expected": "A background onboarding match never rewrites a saved search after onboarding completed or after the profile version moved (skip the 'saving' phase).",
+      "evidence": "s38.cjs / s39.cjs logs; logs/all-2026-10-10.jsonl 'queue-drain complete' 19:13:51Z. server/src/features/onboarding/workers.ts runs runOnboardingMatch whose 'saving' phase calls applyAnswers. Not reproduced a second time, so treat the queue job as the probable writer and add a guard plus a test.",
+      "likelyFiles": [
+       "server/src/features/onboarding/workers.ts",
+       "server/src/features/onboarding/match.ts",
+       "server/src/features/onboarding/service.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Profile stays 0% complete after onboarding with a full resume",
+      "repro": "Onboard by uploading a resume with name, email, phone, city, education, three jobs and skills. Open /ready/setup step 1, a kit, and the People tab.",
+      "observed": "'Complete your profile - 0% complete': all nine groups missing; the kit lists nine missing details; People says 'Add past jobs to your profile'; kit file name has no person name. Onboarding did parse the data (resume name, suggested skills).",
+      "expected": "Profile fields prefilled from the parsed resume for the user to confirm (the step is titled 'Confirm your profile'); profile has a sync-from-resume diff/apply that onboarding should call.",
+      "evidence": "shots/ready-setup-step2.png, job-people-tab.png; /agent/setup checks.profileMissing.",
+      "likelyFiles": [
+       "server/src/features/onboarding/service.ts",
+       "server/src/features/profile/"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Settings > Account: 'Full name' shows the email and is read-only; experience shows 'New graduate'; LinkedIn accepts 'not a url'; pronoun options are English in zh",
+      "repro": "Sign up by email (no name field), upload a resume with 8 years of experience, open /settings#account. Type 'not a url' in LinkedIn and save. Repeat on GoApply in zh.",
+      "observed": "Full name = the email address, input readonly, initials from the address; resume name unused; 'Years of experience: New graduate'; LinkedIn value 'not a url' persists; pronouns 'she/her', 'he/him', 'they/them' in a Chinese screen.",
+      "expected": "Empty or real name, editable; experience prefilled or unset; the same linkedin.com/in validation as onboarding; localized pronoun options.",
+      "evidence": "Confirmed: components/v3/preferences/sections/IdentitySection.tsx:67 `<TextInput value={name} readOnly .../>`; settings/page.tsx:227 falls back to email. Screens shots/20-settings-1280-light.png, shots/22-account-edited.png, .verify/goapply/shots/settings-1280.png.",
+      "likelyFiles": [
+       "app/(auth)/settings/page.tsx",
+       "components/v3/preferences/sections/IdentitySection.tsx",
+       "i18n/staging/settings.en.json"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Job-title typeahead is English-only: zh-TW/ja get English labels and Chinese input finds nothing",
+      "repro": "Language zh-TW. GET /onboarding/title-suggest?q=後端&locale=zh-TW, then q=backend&locale=zh-TW.",
+      "observed": "q=後端 -> items []. q=backend -> 'Backend and platform' / 'Software engineering' in English for zh-TW and ja.",
+      "expected": "Localized role labels and matching on localized input for the Taiwan/Japan audiences.",
+      "evidence": "A locale-aware label already exists: server/src/features/jobs/taxonomy/taxonomy.ts:118 `taxonomyLabel(id, locale)` (used by the feed with `?? c.en`); the onboarding suggest path (server/src/features/onboarding/defaults.ts:114 suggestTitles, routes.ts:117) does not use it. If the taxonomy data lacks zh-TW/ja labels, request them from G3 (owner of server/src/features/jobs/taxonomy).",
+      "likelyFiles": [
+       "server/src/features/onboarding/defaults.ts",
+       "server/src/features/onboarding/routes.ts",
+       "server/src/features/onboarding/service.ts",
+       "components/features/onboarding/steps/TitlePicker.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Two floating prompts at once on /jobs after 'Finish later': Assistant nudge sits under the 'Finish setting up' banner",
+      "repro": "New account -> /onboarding/situation -> 'Finish later' -> /jobs, wait ~10 s (1280 or 375).",
+      "observed": "The pay nudge card and the 'Finish setting up - 5 steps left' banner both appear bottom-right; the banner covers the nudge's primary button, and at 375 both cover checklist rows.",
+      "expected": "Never two prompts at once (PRODUCT O8); the banner goes through the popup gate or reserves its own space.",
+      "evidence": "shots/15-jobs-finish-banner-1280.png, 15-jobs-finish-banner-375.png. The finish banner renders outside the popup gate while the nudge uses usePopupGate('assistant:nudge').",
+      "likelyFiles": [
+       "components/features/onboarding/FirstVisitPrompts.tsx",
+       "components/features/onboarding/onboarding.module.css",
+       "lib/ui/popupGate.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Uploading a PDF before the consent query finishes blames 'the reading option you turned off'",
+      "repro": "Open /onboarding/resume while the API is slow and choose a PDF within ~4 s of load.",
+      "observed": "'This PDF can't be read without the reading option you turned off...' although the user never declined anything; the same upload works 8 s later.",
+      "expected": "Wait for the consent state (or say 'still loading, try again') instead of blaming a setting.",
+      "evidence": "Confirmed: ResumeStep.tsx:149 `if (isPdfFile(file) && !pdfOpen) return setProblem('pdfNeedsConsent');` - pdfOpen is false while the consent query is still loading.",
+      "likelyFiles": [
+       "components/features/onboarding/steps/ResumeStep.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "GET /auth/me returns internal token fields (passwordResetToken, emailVerificationToken) in the user object",
+      "repro": "Signed in on either brand: curl /api/v1/roboapply/auth/me with the session cookie and read data.user.",
+      "observed": "data.user carries passwordResetToken / emailVerificationToken keys (null in the test account).",
+      "expected": "/me returns only public user fields; token columns are never serialized, even hashed.",
+      "evidence": "Confirmed: server/src/roboapply/routes/auth.ts:565 returns `user: req.user` unfiltered. Strip the fields in this handler (the auth middleware that builds req.user is outside this group; request a follow-up if it should be fixed at the source).",
+      "likelyFiles": [
+       "server/src/roboapply/routes/auth.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Account deletion (GoApply): reason silently required, promises a confirmation email, asks a Chinese user to type 'DELETE'; security note prints the raw provider id 'phone'",
+      "repro": "goapply.localhost /settings#danger -> 删除账号 -> type the confirmation -> submit with 原因 empty. Open /settings#security as a phone user.",
+      "observed": "Nothing is sent; an inline '请告诉我们你为什么要离开' appears though the field is not marked required. Dialog says '我们会给你发一封确认邮件' while email is off and phone users have no address. Security: '你用 phone 登录，所以没有密码可以修改。'",
+      "expected": "Reason optional or clearly marked; no email promise when notify.email is off; localized provider name (手机号); a localized confirmation word.",
+      "evidence": ".verify/goapply/shots/delete-account-dialog.png, delete-account-after-click.png, settings-security.png; i18n zh settings.oauthNote receives the raw provider id.",
+      "likelyFiles": [
+       "components/v3/account/",
+       "components/v3/preferences/sections/DangerSection.tsx",
+       "i18n/staging/settings.en.json"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Onboarding validation errors stay on screen after the field is fixed",
+      "repro": "Basics: click Next empty, then add titles and pick a country. Preferences: enter pay 'abc', Next, then type 1,200,000.",
+      "observed": "'Add at least one job title.', 'Pick at least one place.', 'Enter an amount above 0...' and 'Pick up to 3 titles.' remain until Next is pressed again.",
+      "expected": "Each error clears when its field becomes valid.",
+      "evidence": "shots/05-basics-ready-1280-dark.png, shots/13-preferences-375-dark.png.",
+      "likelyFiles": [
+       "components/features/onboarding/steps/BasicsStep.tsx",
+       "components/features/onboarding/steps/PreferencesStep.tsx",
+       "components/features/onboarding/steps/TitlePicker.tsx"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Settings headings have broken spacing ('The one-waybuttons.', 'looking for .', stray spaces in CJK) and the section nav overflows at 375px",
+      "repro": "Open /settings#danger and /settings#search in en, zh-TW and ja; open /settings at 375px.",
+      "observed": "'The one-waybuttons.'; 'Tell us what you're looking for .'; zh-TW '關於 你自己。', '這些是 無法復原的按鈕。'; ja '取り消せない 操作。'. Section nav extends to x=451 at 375.",
+      "expected": "Correct English spacing, no inserted spaces in CJK (join lead/accent without a hard-coded space), nav scrolls inside its own container.",
+      "evidence": "DangerSection.tsx:71 joins title_em + title_after with no space; HuntSection.tsx:37 adds a space before '.'. shots/21-settings-danger-1280-light.png, out-23.txt.",
+      "likelyFiles": [
+       "components/v3/preferences/sections/DangerSection.tsx",
+       "components/v3/preferences/sections/HuntSection.tsx",
+       "components/v3/preferences/sections/IdentitySection.tsx",
+       "styles/v3-preferences.css"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Truncated reset link shows the weak-password error; truncated verify link shows a network error",
+      "repro": "Open /reset-password/bogus-token-123, enter a valid password, save. Open /verify-email/bogus-token-123.",
+      "observed": "Reset: all rules ticked yet 'Use at least 8 characters...' (API 422 invalid_request for token length). Verify: 'Something went wrong. Check your connection and try again.'",
+      "expected": "'This link is not valid' with the request-a-new-link action in both cases.",
+      "evidence": "shots/10-reset-bogus.png, shots/10-verify-bogus.png; PasswordResetViews maps invalid_request to signupForm.weakPassword.",
+      "likelyFiles": [
+       "components/features/auth/PasswordResetViews.tsx",
+       "components/features/auth/VerifyEmailView.tsx"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Settings > Invite friends intermittently shows 'This section did not load' with no retry",
+      "repro": "Open /settings#referrals repeatedly under load (2 of ~12 loads).",
+      "observed": "Section error fallback, no retry button, no failed request captured (probably a slow /invites call).",
+      "expected": "Loading state then content, or an inline retry.",
+      "evidence": "out-23.txt, out-25.txt, shots/25-settings-referrals-1280-dark.png.",
+      "likelyFiles": [
+       "components/features/growth/SettingsSection.tsx",
+       "components/features/settings/SettingsPage.tsx"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Market snapshot shows skills lower-case ('python, aws, ci/cd')",
+      "repro": "Onboarding basics: pick 'Backend and platform' + United States.",
+      "observed": "'Most requested skills: python, aws, java, kubernetes, ci/cd, react'.",
+      "expected": "Display casing (Python, AWS, CI/CD).",
+      "evidence": "shots/05-basics-snapshot-1280.png.",
+      "likelyFiles": [
+       "server/src/features/onboarding/snapshot.ts",
+       "components/features/onboarding/steps/MarketSnapshotPanel.tsx"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Auth page polish: doubled email error, theme icon convention differs from the app header, GoApply auth panel promises a talking interview",
+      "repro": "/signup with email 'bad' -> submit. Compare the theme button on /signup and /onboarding. Open goapply.localhost/signup.",
+      "observed": "'Enter a valid email address.' appears under the field and again in the red box. Auth pages show the target-theme icon, the app header the current one (both labelled 'Switch to dark'). GoApply panel says '会跟你对话的练习面试' although voice is unavailable there. The analytics banner overlaps 'Already have an account? Sign in' at 1280x900 (banner component is owned by G8).",
+      "expected": "One error message, one icon convention, brand-true claims.",
+      "evidence": "shots/02-signup-invalid-email.png, shots/27-signup-1280-dark.png, .verify/goapply/shots/pub_signup-1280.png.",
+      "likelyFiles": [
+       "components/features/auth/AuthEntryView.tsx",
+       "components/auth/methods/registry.ts",
+       "components/auth/AuthShell.tsx"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "G3-jobs-feed-match-tracker",
+    "title": "Feed, filters, fit scoring, job detail, job data, tracker, alerts, people",
+    "owns": [
+     "server/src/features/feed/",
+     "server/src/features/match/",
+     "server/src/features/jobs/",
+     "server/src/features/search/",
+     "server/src/features/tracker/",
+     "server/src/features/alerts/",
+     "server/src/features/network/",
+     "server/src/features/cn/jobs/",
+     "server/src/features/cn/tracker/",
+     "components/features/feed/",
+     "components/features/filters/",
+     "components/features/job/",
+     "components/features/match/",
+     "components/features/tracker/",
+     "components/features/notifications/",
+     "components/features/network/",
+     "components/features/jobimport/",
+     "components/features/search/",
+     "components/features/market/cn/",
+     "hooks/search/",
+     "hooks/feed/",
+     "hooks/match/",
+     "hooks/tracker/",
+     "hooks/job/",
+     "hooks/notifications/",
+     "app/(auth)/jobs/",
+     "app/(auth)/applications/",
+     "i18n/staging/jobs.en.json",
+     "i18n/staging/filters.en.json",
+     "i18n/staging/fit.en.json",
+     "i18n/staging/jobDetail.en.json",
+     "i18n/staging/applications.en.json",
+     "i18n/staging/inbox.en.json",
+     "i18n/staging/jobImport.en.json",
+     "i18n/staging/people.en.json",
+     "i18n/staging/taxonomy.en.json",
+     "i18n/staging/jobsCn.en.json",
+     "i18n/staging/jobsCn.zh.json"
+    ],
+    "findings": [
+     {
+      "severity": "high",
+      "title": "Feed treats a country-only location entry (radius 0) as 'same city': only remote jobs pass, chip reads 'US - Same city', zero-results shows 'undefined - Within NaN mi'",
+      "repro": "Use a saved search containing locations:[{label:'US',country:'US',radiusKm:0}] (every account onboarded with 'Anywhere in United States' has it). Open /jobs; open the Work model sheet to trigger the zero-results suggestions.",
+      "observed": "Feed returns remote/anywhere jobs only (7, vs 54 after removing the chip). Chips show 'United States' and 'US - Same city' (zh-TW 'US - 同一城市'); the suggestion row reads 'Remove Locations: undefined - Within NaN mi'.",
+      "expected": "A location entry with a country and no city means the whole country (no city predicate); it renders as one localized 'Anywhere in United States' chip; the zero-results suggestion shows a readable label. Existing profiles must work without a data migration.",
+      "evidence": "server/src/features/feed/sql.ts locationSql (lines ~143-155) compares locationCity when radiusKm is 0; components/features/filters/useFilterLabels.ts:53 renders km===0 as options.radiusSameCity and uses the raw code as label. Screens .verify/ra-jobs-tracker/14-workmodel-hybrid.png, shots/a2-filter-diff-proposed.png. The writer is fixed in G2 (onboarding mapping).",
+      "likelyFiles": [
+       "server/src/features/feed/sql.ts",
+       "server/src/features/feed/sql.test.ts",
+       "components/features/filters/useFilterLabels.ts",
+       "components/features/feed/ZeroResults.tsx",
+       "i18n/staging/filters.en.json"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "Quick-estimate fit score is not honest: 100/100 'Great fit' when the post states no skills, changes with the Level filter, rates unrelated jobs Great, and differs between feed, Similar jobs and alerts (3 reports)",
+      "repro": "A) Senior Product Designer resume, search Full-time + United States: open /ready/setup step 2 or the feed. B) 8-year engineer resume: note scores with Level=Senior, remove the chip, add Mid level, compare the same jobs; compare Similar jobs on a detail page with the feed cards.",
+      "observed": "A) Top three are cleared-engineer postings with fit {tier:'great', score:100, kind:'pre', topGap:null, topOverlap:null}; the one real Product Designer job is 'possible' 61. B) Same job 100 -> 84 -> 74 (AI) as the Level chips change; internship and junior roles 'Great fit 84' for a senior resume while 'Senior Software Engineer (Python)' is 'Possible 59'; Similar jobs shows 91 / 87 where the feed shows 73 / 59; an alert stored tier 'good' where the feed shows 'Possible 59'.",
+      "expected": "One score per user and job on every surface (the AI score when it exists). The pre-score reflects the resume, not which Level chips are selected; a job whose components are mostly 'not stated' cannot reach Great/100 (cap or lower confidence); roles two levels below the resume are not Great.",
+      "evidence": "Confirmed design in server/src/features/match/preScore.ts:21 'A not_stated component drops out and the remaining weights renormalize' and seniority scored against the search's target levels (unknown = 0.8). Feed JSON with explanation.gaps notStated.* and score 100; screens 09-jobs-foryou-1280-tall.png, 17-detail-tab-people.png, shots/ready-setup-calibrate-rated.png.",
+      "likelyFiles": [
+       "server/src/features/match/preScore.ts",
+       "server/src/features/match/preScore.test.ts",
+       "server/src/features/feed/ranking.ts",
+       "server/src/features/feed/FeedQueryService.ts",
+       "components/features/job/SimilarJobs.tsx",
+       "server/src/features/alerts/"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "A second filter change made before the first PATCH returns gets 409 version_conflict and is dropped; no pending state",
+      "repro": "On /jobs remove a filter chip (or pick a tier). Within the 2-5 s the PATCH takes, apply another filter or click another tier.",
+      "observed": "Controls do not change until the PATCH returns and show no saving state. The second change is sent with the same baseVersion -> 409; the choice is lost and the filter sheet stays open.",
+      "expected": "Optimistic update or a visible saving state, with consecutive changes queued/retried on the new version so none is lost.",
+      "evidence": "s12.cjs (PATCH baseVersion 9 twice -> 409), s14.cjs; screen 12-tier-good.png.",
+      "likelyFiles": [
+       "hooks/search/",
+       "components/features/filters/FilterBar.tsx",
+       "components/features/filters/FitTierFilter.tsx",
+       "components/features/filters/ActiveFilterChips.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Absurd or non-pay text is shown as pay ('$60,000,000-$90,000,000 an hour'; 'Pay as stated: Competitive Pay and Benefits...')",
+      "repro": "Open /jobs (Software engineer, United States) and find 'Jr. Software Developer' at iCatalyst; open a detail page and read Similar jobs (Miratech).",
+      "observed": "API pay {min:60000000,max:90000000,period:'hour'} from '$60,000K-$90,000K'; it also sorts near the top for 'Highest pay'. A tile shows a benefits sentence as 'Pay as stated'.",
+      "expected": "Pay outside a plausible range for its period is not shown as a number (and is excluded from pay sort); 'Pay as stated' only shows text that contains an amount.",
+      "evidence": "s15.cjs / s21.cjs listings; curl /jobs/cmv2p5vyji9baxcia8jwn4bih.",
+      "likelyFiles": [
+       "server/src/features/jobs/normalize/salary.ts",
+       "components/features/job/format.ts",
+       "components/features/feed/cardModel.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Tracker dates are UTC: 'Applied Oct 10' when the user's date is Oct 11; week buckets and CSV are UTC too (both brands)",
+      "repro": "Machine UTC+8, local Oct 11 02:25. Mark a job applied. Open /applications (By stage, By date, List), the drawer, and download the CSV; set an interview for 10:30 local.",
+      "observed": "'Applied Oct 10, 2026' and drawer 'Applied on 2026-10-10' while History says 'Oct 11, 2:25 AM'; 'This week: Oct 4 to Oct 10' on local Sunday Oct 11; CSV interview '2026-10-20 02:30' with no zone. GoApply drawer 申请日期 shows the UTC date as well.",
+      "expected": "Dates the user sees or exports use the user's time zone, or the CSV states the zone.",
+      "evidence": "s27.cjs, s29.cjs; screens 27-by-date.png, 27-list.png, .verify/goapply/shots/tracker-drawer-loaded.png. Client formatting inherits the UTC provider zone fixed in G1; the date-only 'applied on' value, week bucketing and CSV are computed here.",
+      "likelyFiles": [
+       "components/features/tracker/",
+       "server/src/features/tracker/csv.ts",
+       "server/src/features/tracker/service.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Keyword check is literal: skills the resume has are listed missing, with duplicate chips, raw markdown in quotes, a doubled section title and a duplicate React key",
+      "repro": "Upload a resume listing REST APIs, PostgreSQL, AWS, system design; open the Hex job detail and a feed card's 'Why this job'. On GoApply open an imported Chinese job detail.",
+      "observed": "Missing: 'cloud infrastructure', 'relational databases', 'api design', near-duplicates ('shared backend systems and frameworks' / 'shared backend systems'); matched repeats 'typescript/node.js', 'TypeScript', 'Node.js'; 'software engineering' missing for a software engineer; quotes show '**Technical:** ...', '- Led the rewrite...', '40 million eventsaday'; 'Keyword check' printed twice; console 'two children with the same key 本科'. Job skills shown lower-cased (go, mysql, grpc).",
+      "expected": "Obvious equivalents count as present, chips de-duplicated, quotes without markdown markers, unique keys, display casing.",
+      "evidence": "Screens c16-b.png, c16-c.png; s19.cjs; .verify/goapply/events-p1.log. Also add CJK and generic stopwords at the keyword source (server/src/features/jobs/enrich/keywords.ts TF-IDF) - it feeds the junk 'skills' list fixed consumer-side in G4.",
+      "likelyFiles": [
+       "server/src/features/match/keywordRows.ts",
+       "server/src/features/match/evidence.ts",
+       "server/src/features/jobs/enrich/keywords.ts",
+       "components/features/match/"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Explore category 'Design' lists software and AI architect jobs",
+      "repro": "Open /jobs/explore and click 'Design' (56 jobs).",
+      "observed": "First results: 'Lead AI Architect', 'Full Stack Architect with AI', 'Java Backend Architect', 'Principal Architect - Machine Learning'. The category count is inflated.",
+      "expected": "Software/solution architect titles map to engineering, not design.",
+      "evidence": "s41.cjs; screen 41-explore-design.png.",
+      "likelyFiles": [
+       "server/src/features/jobs/taxonomy/match.ts",
+       "server/src/features/jobs/taxonomy/taxonomy.v1.json"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Filter label says 'Visa sponsorship: Needs sponsorship' when the user answered No",
+      "repro": "Onboard answering No to sponsorship (needsSponsorship:false). Ask the Assistant 'Find remote jobs that list their pay' and read the 'Your search now' card.",
+      "observed": "Row 'Visa sponsorship - Needs sponsorship'.",
+      "expected": "No row for false (or 'No sponsorship needed').",
+      "evidence": "Confirmed: components/features/filters/useFilterLabels.ts:124-125 `case 'needsSponsorship': return t('chips.sponsorshipNeeded');` regardless of value; the card diffs against {} so false booleans are listed. Fix here (label and/or the diff helper) so the Assistant card inherits it.",
+      "likelyFiles": [
+       "components/features/filters/useFilterLabels.ts",
+       "server/src/features/feed/filterDiff.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "GoApply: tracker pay currency defaults to USD, fit breakdown uses visa wording, salary shown as annualized CNY instead of the posting's format",
+      "repro": "goapply.localhost /applications -> open a card; open a job detail -> 我们对比了什么.",
+      "observed": "Drawer 币种 pre-filled 'USD'. Fit part named '地点、薪资和签证' and '写明的薪资达到你的最低要求：CNY 270000-420000' for a posting that says 18-28K·15薪. Salary row reads '薪资 薪资:18-28K·15薪'.",
+      "expected": "CNY default from the brand, no visa/work-permit wording on GoApply, salary shown as posted (18-28K·15薪) without a doubled label.",
+      "evidence": ".verify/goapply/shots/tracker-drawer-loaded.png, job-detail-legit.png.",
+      "likelyFiles": [
+       "components/features/tracker/",
+       "components/features/match/",
+       "components/features/market/cn/",
+       "i18n/staging/jobsCn.zh.json"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Alert message says '2 new jobs' but does not list them and opens the whole feed",
+      "repro": "Enable instant alerts on the main search, wait for an alert, open the bell or /inbox and click it.",
+      "observed": "Notification params carry both jobs with their own links, but the row shows a title and one sentence and links to /jobs?from=alert, where nothing marks the new jobs.",
+      "expected": "The message lists the alerted jobs with links, or the landing list highlights them.",
+      "evidence": "curl /notifications; screens 37-bell-with-message.png, 37-inbox-with-message.png.",
+      "likelyFiles": [
+       "components/features/notifications/MessageList.tsx",
+       "components/features/notifications/messageText.ts"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Job-function chips stay English (or show raw ids while loading) in zh-TW/ja; cached AI fit text keeps the language it was first generated in",
+      "repro": "Language zh-TW or ja; open /jobs and a job first analysed in English.",
+      "observed": "Chips 'Backend and platform', 'Data scientist'; one ja load showed 'swe_backend', 'data_scientist'. Fit summary/bullets stay English after the UI language changes.",
+      "expected": "Localized taxonomy labels, never raw ids (hold the chip until labels load); cached analysis regenerated or marked when the language differs.",
+      "evidence": "out-23.txt; shots/24-jobs-chips-zh-TW.png, 24-jobs-chips-ja.png; useFilterLabels.ts:75 `taxonomy.get(String(v)) ?? String(v)`.",
+      "likelyFiles": [
+       "components/features/filters/useFilterLabels.ts",
+       "hooks/search/useFilterQueries.ts",
+       "server/src/features/jobs/taxonomy/taxonomy.ts",
+       "server/src/features/match/MatchService.ts"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Enrichment logs an ERROR per job: 'failed to write the enrichment cost row' (FK on the system user)",
+      "repro": "Watch logs/all-2026-10-10.jsonl while the jobs-ingest/enrich cron runs.",
+      "observed": "About ten errors per minute: UsageDeductionLog_userId_fkey for userId 'system_cron_ra_v2'.",
+      "expected": "The system user id comes from configuration (OPS-A2) and, when absent, the write is skipped with one warning instead of an error per job.",
+      "evidence": "server/src/features/jobs/enrich/repository.ts:156-165 logCost creates usageDeductionLog with entry.userId; log entries 19:10:07Z-19:10:57Z.",
+      "likelyFiles": [
+       "server/src/features/jobs/enrich/repository.ts",
+       "server/src/features/jobs/enrich/service.ts"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "People tab LinkedIn search link uses the full raw posting title",
+      "repro": "Job detail -> People tab -> 'People working as ...'.",
+      "observed": "keywords=\"General Intuition & Medal\" Product Designer - Gaming Communities (In-Office NYC).",
+      "expected": "Normalized role ('Product Designer') plus company.",
+      "evidence": "run output link href; shots/job-people-tab.png.",
+      "likelyFiles": [
+       "server/src/features/network/",
+       "components/features/network/"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Job import details (GoApply): deadline not captured, fraud flag quotes the wrong sentence, list not refreshed, punctuation altered",
+      "repro": "Import the two pasted-text Chinese jobs used in the run (one with '网申截止：2026年11月30日', one with a '先交 500 元服装费' line).",
+      "observed": "'截止日期未注明'; the 要求先交钱 flag quotes the training-loan sentence; '你添加的职位' needs a reload to show the new job; full-width punctuation converted to half-width; duplicated meta lines; after Undo the header keeps '已在申请记录中'. Imported English descriptions keep page chrome and miss the company on a Greenhouse page.",
+      "expected": "Deadline extracted, each flag quoting its own evidence, list refreshed, original text preserved.",
+      "evidence": ".verify/goapply/shots/import-fraud-result.png, import-legit-result.png, job-undo.png.",
+      "likelyFiles": [
+       "server/src/features/jobs/import/service.ts",
+       "server/src/features/cn/jobs/",
+       "components/features/jobimport/",
+       "components/features/job/"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Jobs and tracker polish",
+      "repro": "Open /jobs at 1280 and 375, an application drawer, /jobs/added.",
+      "observed": "Search placeholder cut ('Search job titles or com'); history row 'Moved from Saved to Saved'; user-added jobs show 'Posted <add date>' on the card but 'First seen' on detail; 'Clear all' wipes the main saved search (also used for alerts) with no undo; the same outcome is 'Rejected' on the board and 'Not selected' in Added by you; tier control wraps 'Everything' to a second row and the chip row overflows (right=405) at 375.",
+      "expected": "Full placeholder, no no-op history rows, consistent labels, an undo for Clear all, no overflow.",
+      "evidence": "Screens 01-first-landing.png, c31-top.png, c36-m-jobs-a.png; s30.cjs, s38.cjs.",
+      "likelyFiles": [
+       "components/features/filters/SearchTypeahead.tsx",
+       "components/features/filters/filters.module.css",
+       "components/features/tracker/",
+       "components/features/feed/",
+       "i18n/staging/applications.en.json"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "G4-resume-letters",
+    "title": "Resume hub, upload/parse, editor, tailoring, resume check, export, cover letters",
+    "owns": [
+     "server/src/roboapply/v2/services/RAResumeService.ts",
+     "server/src/roboapply/v2/lib/legacyJobScope.ts",
+     "server/src/roboapply/v2/lib/resumeExport.ts",
+     "server/src/roboapply/v2/routes/resumes.ts",
+     "server/src/roboapply/v2/agents/RAResumeTailorAgent.ts",
+     "server/src/services/PDFService.ts",
+     "server/src/lib/candidateResumeIngest.ts",
+     "server/src/features/resume/",
+     "server/src/features/coverletter/",
+     "lib/resumeStructure.ts",
+     "lib/resumeAnalyzer.ts",
+     "app/(auth)/resume/",
+     "components/v3/resume-editor/",
+     "components/v3/resumes/",
+     "components/features/resume/",
+     "components/features/tailor/",
+     "components/features/coverletter/",
+     "hooks/resume/",
+     "hooks/tailor/",
+     "hooks/coverletter/",
+     "hooks/useResumes.ts",
+     "styles/v3-resume.css",
+     "i18n/staging/resume.en.json",
+     "i18n/staging/resumeCheck.en.json",
+     "i18n/staging/tailor.en.json",
+     "i18n/staging/coverLetter.en.json"
+    ],
+    "findings": [
+     {
+      "severity": "critical",
+      "title": "GET /v2/resumes returns 500 forever once the user has one resume tailored to a job (select of non-existent RAJob.provider) - hub, tailor picker, cover letters and settings break (3 agents, both brands)",
+      "repro": "New account, upload a resume. Tailor it for any feed job or prepare one Ready kit (variant gets targetJobId). Open /resume, /resume?tailor=<job>, /resume/letters?job=<id>, /settings#search.",
+      "observed": "GET /api/v1/roboapply/v2/resumes -> 500 {error:'internal_error'} on every call (also ?kind=tailored / master). Hub: 'Your resumes did not load' permanently; cover-letter form stays on 'Loading your resumes...' with the button disabled (no error state); settings says no resume. 27 occurrences in logs/error-2026-10-10.jsonl.",
+      "expected": "The list loads and shows the tailored version with its job title/company; the letter form shows an error state with retry if the list fails.",
+      "evidence": "Confirmed: RAResumeService.ts:353 `JOB_SCOPE_SELECT = { market, visibility, ownerUserId, provider: true, sourceBoard }` used at :424 and :1032; model RAJob (server/prisma/schema/ra-jobs.prisma) has sourceBoard but no provider; `prisma as any` hides the type error. legacyJobScope.ts:34 LEGACY_JOB_SCOPE_SELECT carries the same `provider: true` and is spread into rAJob.findMany in RAInsightService.ts:158,195, so fix both selects (drop provider, keep the row type optional). Add a test that runs the select against the generated client. Screens .verify/ra-resume-letters/shots/24-hub-after-tailor.png, .verify/goapply/shots/resume-hub-broken.png.",
+      "likelyFiles": [
+       "server/src/roboapply/v2/services/RAResumeService.ts",
+       "server/src/roboapply/v2/lib/legacyJobScope.ts",
+       "components/features/coverletter/NewLetterForm.tsx"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "PDF text extraction glues words on any line with two single-letter words ('Automatedamonthly', 'hoursamonth')",
+      "repro": "Upload .verify/ra-resume-letters/maya-lindqvist-resume.pdf (bullet: 'Automated a monthly cost report in Python (pandas), saving about 6 hours a month.').",
+      "observed": "Stored resume, editor, exports and letter sources read 'Automatedamonthly ... 6 hoursamonth'; Resume check then flags them as spelling mistakes. pdftotext gives correct text.",
+      "expected": "Text extracted as written; the watermark-repair heuristic must not fire on normal English lines (e.g. exclude the words 'a' and 'I', require a much higher ratio of single-letter tokens).",
+      "evidence": "Confirmed: server/src/services/PDFService.ts:590-607 - lines with >=2 single-character alpha tokens get `([a-z]{2,}) ([a-z]) ([a-z]{2,})` joined; two occurrences of 'a' trigger it. shots/03-editor-1280-light.png, shots/11-check-report-1280.png.",
+      "likelyFiles": [
+       "server/src/services/PDFService.ts"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "Opening the editor on an uploaded resume rewrites and saves it mangled with no user edit (skills, role headings, education); Chinese uploads keep markdown debris",
+      "repro": "Upload resume.txt or the PDF, wait for 'Imported', read GET /v2/resumes/:id, click 'Open editor', wait 8 s without typing, read it again. Repeat with the Chinese PDF .verify/goapply/resume-linzhiyuan.pdf.",
+      "observed": "Header shows 'Saving...' on open and the markdown changes: '**Tools:** Zendesk · ...' becomes '** Zendesk · ... · **Soft skills:** ...'; bold role lines become '### 2021 - Present · Support Team Lead ...' with fields in the wrong slots; education '### Texas State University · 2019** - B.A.'. Chips show literal '**Frameworks:** pandas'; exports print '2020** - B.S.'. Chinese: skills '** MySQL', degree field '2023.09 - 2027.06** - 本科', bullets keep a leading '· ' so the PDF prints '• ·'. The rewrite is not idempotent and each silent save marks Resume check stale.",
+      "expected": "The editor parses the ingest format without loss (round-trip test: parse(serialize(parse(x))) stable for ingest output) and does not save until the user edits.",
+      "evidence": "Before/after markdown from .verify/ra-resume-letters/04-upload-txt.cjs (lastEditedAt changed with no input); shots/04-editor-txt.png, shots/50-check-1280-dark.png, .verify/goapply/shots/resume-editor-uploaded.png. candidateResumeIngest parsedResumeToMarkdown/skillsToLines emit `**Label:**` lines and bold role headers that lib/resumeStructure.ts does not understand; the autosave effect in app/(auth)/resume/[id]/page.tsx (~197-215) re-runs after a refetch once skipNextAutoSaveRef was consumed.",
+      "likelyFiles": [
+       "lib/resumeStructure.ts",
+       "server/src/lib/candidateResumeIngest.ts",
+       "app/(auth)/resume/[id]/page.tsx"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "With the interface in zh-TW, tailoring an English resume for an English post translates the whole resume into Chinese",
+      "repro": "Cookie robo_locale=zh-TW. Open /resume?tailor=cmv2gt2zyt4fz0v428brr6yro, pick the English resume, run tailoring.",
+      "observed": "Summary and every bullet rewritten in Traditional Chinese, skill labels '**框架：**', all 9 lines listed as new statements, 17 changes as add+remove pairs; the saved version for a US job is mixed Chinese/English.",
+      "expected": "The tailored resume stays in the language of the resume (and post); only the interface follows the UI locale.",
+      "evidence": "Confirmed: RAResumeTailorAgent.ts:221-224 getLocaleDirective returns getStrictOutputLanguageDirective(locale, 'content') for the UI locale. Pass the resume's detected language (not the UI locale) for the content directive. shots/60-zhtw-result.png, tailor-session-b.json.",
+      "likelyFiles": [
+       "server/src/roboapply/v2/agents/RAResumeTailorAgent.ts",
+       "server/src/features/resume/tailor/TailorService.ts"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "Re-check with no credits reports 'Excellent 100 of 100' and 'Fixed since last time: Spelling' although spelling was not checked",
+      "repro": "Run the check once (Fair 62/100, 2 spelling issues + 1 weak opener). Apply the AI fix for the weak opener only. Click 'Check again' with no check credits left.",
+      "observed": "'Excellent - 100 of 100 ... Spelling was not checked' and 'Fix first 2 -> 0 - Fixed since last time: Weak openers, Spelling'; the typos, an unfilled '[X] ... [n=__]' bullet and stray '**' are still there.",
+      "expected": "Issues from a pass that did not run are carried over or shown as 'not checked', never as fixed; the grade does not jump to 100.",
+      "evidence": "shots/16-recheck-report.png; 16-check-view.cjs output.",
+      "likelyFiles": [
+       "server/src/features/resume/ResumeCheckService.ts",
+       "components/features/resume/ResumeCheckReport.tsx"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "Tailoring 'skills this job asks for that your resume does not show' lists junk words (EN: 'curiosity, paid, fraudulent, angeles'; zh: 了解, 协作, 28k, 一种); missing entirely for a pasted post",
+      "repro": "Start tailoring for /jobs/cmv2gbllat43mfd8btm4b948c or cmv2gt2zyt4fz0v428brr6yro; on GoApply import a Chinese post and tailor; then tailor from the editor with a pasted post naming Snowflake, dbt, Looker.",
+      "observed": "Checkbox list offers 'curiosity, paid, status, it's, benefits', 'r or python' (resume has Python), 'angeles, children's, clphei'; Chinese: 了解 / 协作 / 常用 / 28k / acm / 一种, and verify cards later titled with '了解, 协作, 常用, 专业'. The user is told 'Tick only the ones you really have. We add those and nothing else.' Pasted post: no keyword section and no keyword grid in the result.",
+      "expected": "Only real skills/requirements (vocabulary or extracted-skill entries, not generic TF-IDF terms), correct casing, the same step for pasted posts, and a keyword grid in the result (F-RES-08/09).",
+      "evidence": "The list comes from RAKeywordExtraction (written by server/src/features/jobs/enrich/keywords.ts: extracted skills, then TF-IDF terms) read in ResumeCheckService.keywordReport (:469-495) -> keywords/keywordReport.ts. Filter consumer-side to importance high/medium or vocabulary hits (HARD_SKILLS_EN/CN) and add the pasted-JD path; G3 hardens the source stopwords. shots/23-tailor-setup-filled.png, .verify/goapply/shots/tailor-options-dialog.png, shots/25-setup-pasted.png.",
+      "likelyFiles": [
+       "server/src/features/resume/keywords/keywordReport.ts",
+       "server/src/features/resume/keywords/vocabulary.ts",
+       "server/src/features/resume/ResumeCheckService.ts",
+       "components/features/tailor/TailorSetup.tsx",
+       "hooks/resume/useKeywordReport.ts"
+      ]
+     },
+     {
+      "severity": "high",
+      "title": "Chinese resume: export uses English section headings with an overlapping project title, hub thumbnails and tailor diff show English section names, and the check wrongly reports '没有实习经历'",
+      "repro": "On GoApply upload a Chinese PDF resume with two internships, a project, education and awards. Open /resume, /resume/<id>/check -> 开始检查, then 下载 -> PDF. Also zh-TW on RoboApply.",
+      "observed": "PDF headings 'Summary, Skills, Experience, Projects, Education, ...'; project title overlaps its first bullet; hub thumbnail 'EXPERIENCE / EDUCATION'; tailor Changes rows '已新增 Summary', '已移除 Experience'; claim cards show raw '**框架：**'; hub title has a concatenation space ('寫出 連你自己...', '還沒有 履歷'). Check's only finding: '工作经历 - 重要：没有实习经历'.",
+      "expected": "Section headings in the resume's language (教育背景, 实习经历, 项目经历...), no overlap, translated section names in UI lists, markup rendered, and no false 'no internship' finding.",
+      "evidence": ".verify/goapply/export-林知远.pdf, shots/resume-check-detail.png, tailor-result.png; .verify/ra-resume-letters/shots/40-zhtw-hub-one-1280.png, 60-zhtw-result.png. app/(auth)/resume/page.tsx joins title_lead + ' ' + title_accent.",
+      "likelyFiles": [
+       "server/src/roboapply/v2/lib/resumeExport.ts",
+       "server/src/features/resume/check/",
+       "server/src/features/resume/ResumeCheckService.ts",
+       "components/v3/resumes/ResumeCard.tsx",
+       "components/features/tailor/TailorResult.tsx",
+       "components/features/tailor/ClaimCard.tsx",
+       "app/(auth)/resume/page.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Verify details 'Remove' deletes the user's original content instead of restoring it (empty Summary in the saved version)",
+      "repro": "In a session whose changes are recorded as add + remove pairs (the zh-TW case), open Verify details, click 'Remove' on the Summary claim, keep the rest, 'Use this resume'.",
+      "observed": "Claim has original=null; the saved version has an empty '## Summary'.",
+      "expected": "Removing an AI line puts back what the resume said before.",
+      "evidence": "62-verify-b.cjs ('SUMMARY NOW:' blank), 63-finalize-b.cjs; shots/63-all-verified.png.",
+      "likelyFiles": [
+       "server/src/features/resume/tailor/blocks.ts",
+       "server/src/features/resume/tailor/claims.ts",
+       "server/src/features/resume/tailor/TailorService.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Plain text and Markdown downloads bypass the Verify-details block, 'Plain text' is the raw Markdown, and the block message names the wrong reason with no link to Verify details",
+      "repro": "Tailor a resume, close the sheet before checking claims, open the version in the editor -> Download. Download Plain text and Markdown of any resume and diff them.",
+      "observed": "PDF/DOCX disabled (409 unverified_claims) but TXT and MD stay enabled and download the unverified AI text; .txt is byte-identical to .md ('# Name', '**Frameworks:**') though labelled 'For pasting into web forms'. Banner says 'One line has a number we couldn't find on your resume' when the cause is unchecked claims; the editor has no link to /resume?tailorSession=<id>.",
+      "expected": "All formats respect the block; plain text has no Markdown syntax; the message names unchecked details and links to Verify details.",
+      "evidence": "components/v3/resume-editor/DownloadModal.tsx builds TXT/MD as client blobs (formats at :32,:74-75). shots/61-unverified-download.png, shots/26-unverified-download-menu.png; diff of dl/base-Maya Lindqvist.txt vs .md.",
+      "likelyFiles": [
+       "components/v3/resume-editor/DownloadModal.tsx",
+       "app/(auth)/resume/[id]/page.tsx",
+       "i18n/staging/resume.en.json"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Accepted 'Add numbers' suggestions leave [X] / [n=__] placeholders that are exported and never flagged",
+      "repro": "Editor -> hover 'Worked on inventory forecasts.' -> Add numbers -> 'Use this'. Download PDF, run Resume check, tailor.",
+      "observed": "'Contributed to inventory forecasting for [X] products across [n=__] planning periods.' with no warning anywhere; PDF/DOCX print it; the check has no issue for it; tailoring keeps it.",
+      "expected": "Unfilled placeholders are highlighted, warned or blocked on export, and listed by Resume check.",
+      "evidence": "dl/base-Maya Lindqvist.pdf; shots/06-add-numbers.png.",
+      "likelyFiles": [
+       "lib/resumeAnalyzer.ts",
+       "app/(auth)/resume/[id]/page.tsx",
+       "components/v3/resume-editor/DownloadModal.tsx",
+       "server/src/features/resume/check/"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Inline AI rewrites in the editor do not spend the 'rewrite' credit",
+      "repro": "Run ~9 inline rewrites (Improve / Add numbers / Try another, summary rewrites, Suggest skills), then GET /api/v1/roboapply/credits.",
+      "observed": "rewrite bucket stays 0 of 20; only the check fix panel and builder suggestions decrement it.",
+      "expected": "PRODUCT_PLAN section 6 credit table: rewrite = inline AI edits (bullet, summary, skills), 20/day.",
+      "evidence": "server/src/roboapply/v2/routes/resumes.ts:648 POST /:id/rewrite has no credit call.",
+      "likelyFiles": [
+       "server/src/roboapply/v2/routes/resumes.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Downloads from the resume editor never record an application artifact",
+      "repro": "Download PDF/DOCX from /resume/<id> for a finalized tailored version that belongs to a tracked job; inspect response headers.",
+      "observed": "200 without X-Artifact-Id; the editor never passes trackerEntryId to DownloadModal, so the server's artifact branch is not reached (only the Ready kit passes it).",
+      "expected": "WP-95: tailor -> export records the artifact when the version belongs to a job with an application.",
+      "evidence": "09-download.cjs EXPORT lines; app/(auth)/resume/[id]/page.tsx ~1007-1015.",
+      "likelyFiles": [
+       "app/(auth)/resume/[id]/page.tsx",
+       "components/v3/resume-editor/DownloadModal.tsx",
+       "server/src/roboapply/v2/services/RAResumeService.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Editor at 375px: one-row 664px toolbar, cut fields, action bar over bullet text",
+      "repro": "Viewport 375x812, open /resume/<id> (after the shell fix in G1, re-measure).",
+      "observed": "Toolbar is one row 664px wide ('Download', 'Tailor for a job' off-screen); Title/Phone/Links fields cut; the bullet action bar covers the bullet; the Line check card covers the Summary box.",
+      "expected": "Toolbar wraps or collapses; fields stack; no horizontal scroll.",
+      "evidence": "shots/50-editor-375-light.png, 50-editor-375-dark.png; 51-mobile-scroll.cjs.",
+      "likelyFiles": [
+       "components/v3/resume-editor/",
+       "styles/v3-resume.css",
+       "app/(auth)/resume/[id]/page.tsx"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Export details: file-name style ignored for a version tailored from a pasted post; DOCX author is 'Un-named'",
+      "repro": "Finalize a version tailored from a pasted post, Download PDF with the default name style. Download any DOCX (resume or cover letter) and open docProps/core.xml.",
+      "observed": "File is 'Maya Lindqvist.pdf' (client .txt/.md use name · company · role). <dc:creator>Un-named</dc:creator>.",
+      "expected": "'Name - Company - Job title.pdf' from the version's stored target; creator = candidate name or empty.",
+      "evidence": "Content-Disposition in 09-download.cjs; dl/base-Maya Lindqvist.docx. RAResumeService.exportVariant (~:1032) resolves the name only from an RAJob row; DOCX built in server/src/roboapply/v2/lib/resumeExport.ts and server/src/features/coverletter/letterExport.ts.",
+      "likelyFiles": [
+       "server/src/roboapply/v2/services/RAResumeService.ts",
+       "server/src/roboapply/v2/lib/resumeExport.ts",
+       "server/src/features/coverletter/letterExport.ts"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Upload modal copy: advertises Apple Pages and RTF (not accepted), states a fixed 'Two weak bullets are highlighted', and ticks parsing steps on a timer (D3)",
+      "repro": "/resume -> Upload a resume; POST an .rtf to /v2/resumes/upload; upload any resume and read the modal.",
+      "observed": "'PDF · DOCX · Apple Pages', hardcoded 'PDF · DOCX · Pages · RTF'; RTF -> 415. Done text always says two weak bullets; parsing rows tick before the server answers.",
+      "expected": "List only accepted formats (PDF, DOC/DOCX, TXT, MD); a real count or no number; progress tied to the request.",
+      "evidence": "components/v3/resumes/ImportModal.tsx :41-43 and ~:375; en.json resume.import.done.body_import; shots/02-upload-modal.png, 04-done.png.",
+      "likelyFiles": [
+       "components/v3/resumes/ImportModal.tsx",
+       "app/(auth)/resume/page.tsx",
+       "i18n/staging/resume.en.json"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Editor toolbar at 1280: 'Resume check' pill overlaps the Strength meter, long names cut, two unexplained scores",
+      "repro": "Open /resume/<id> at 1280x900.",
+      "observed": "Strength bar drawn through the 'Resume check' button; version name cut; the local 'Strength 78' disagrees with the check grade (62, then 100) with no explanation. (The floating Ask pill covering 'Next note' belongs to G5.)",
+      "expected": "No overlap; one explained score.",
+      "evidence": "crops/toolbar-1280.png, shots/02-editor-after-upload.png.",
+      "likelyFiles": [
+       "components/v3/resume-editor/",
+       "components/features/resume/EditorCheckSummary.tsx",
+       "lib/resumeAnalyzer.ts"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "G5-assistant-ready",
+    "title": "Assistant (rail, threads, tools) and Ready to apply (setup, kits, weekly list)",
+    "owns": [
+     "components/features/copilot/",
+     "hooks/copilot/",
+     "server/src/features/copilot/",
+     "app/(auth)/assistant/",
+     "components/features/agent/",
+     "hooks/agent/",
+     "server/src/features/agent/",
+     "app/(auth)/ready/",
+     "components/features/extension/",
+     "components/v3/primitives/PageHeader.tsx",
+     "components/v3/primitives/HonestyLine.tsx",
+     "i18n/staging/assistant.en.json",
+     "i18n/staging/ready.en.json"
+    ],
+    "findings": [
+     {
+      "severity": "high",
+      "title": "Assistant turn is lost and an applied filter-diff card never updates when a DB transaction cannot start",
+      "repro": "Send an Assistant message while the API is busy. A) Ask for a filter change and wait for the cards. B) Click 'Apply changes' on a filter-diff card.",
+      "observed": "A) 'could not save the turn - Unable to start a transaction in the given time', then 'credit release failed'; UI says the answer could not be saved; after reload the thread has no messages, yet the proposal from that unsaved turn could still be applied and changed the saved search. B) (2 of 2) filters applied (profile version bumped) but the card kept 'Apply changes / Not now'; WARN 'could not update the proposal card'.",
+      "expected": "Turn save and proposal-card update retry (or use a longer maxWait); a proposal from an unsaved turn cannot be applied; the card shows the applied state whenever the change went through; a failed credit release is retried, not just logged.",
+      "evidence": "server/src/features/copilot/store.ts:215,259,313 use p.$transaction with default options (2 s maxWait / 5 s timeout). shots/a2-filter-diff-applied.png; logs/all-2026-10-10.jsonl 18:15:42, 19:00:41. Pool-level contention is handled in G9; this finding is the coherence of the copilot flow when a write fails.",
+      "likelyFiles": [
+       "server/src/features/copilot/store.ts",
+       "server/src/features/copilot/CopilotService.ts",
+       "server/src/features/copilot/proposals.ts",
+       "components/features/copilot/cards/"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Ready setup step 2 cannot be completed when the feed has no jobs (always the case on GoApply with the feed off); the extension step offers nothing",
+      "repro": "goapply.localhost /ready -> 设置'待投递' -> 继续 to step 2. Also /ready/setup step 5 on RoboApply.",
+      "observed": "'评价 3 个职位即可完成这一步' with no jobs; 继续 -> 409 from POST /agent/setup/step; no skip; steps 3-5 unreachable. Step 5 'Get the extension' has only Back and 'Skip for now' while /extension says it is not available yet.",
+      "expected": "A way past calibration when there is nothing to rate (skip / rate later), and no extension step (or an explicit 'not available yet' line) when the extension cannot be installed.",
+      "evidence": ".verify/goapply/events-p1.log (409 at 19:02); shots/app_ready_setup-1280.png, shots/ready-setup-extension.png. server/src/features/agent/service.ts:336 calibrationDone requires CALIBRATION_REQUIRED entries; SetupWizard.tsx:54-55,88 filters the extension step only on useFlag('extension').",
+      "likelyFiles": [
+       "server/src/features/agent/service.ts",
+       "components/features/agent/SetupWizard.tsx",
+       "components/features/agent/SetupSteps.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Kit review shows raw i18n keys 'profile.missing.firstName' ... in 'Your answers'",
+      "repro": "Prepare a kit while the profile is incomplete and open /ready/<jobId> (en or zh-TW).",
+      "observed": "'9 details this form may ask for are missing' followed by profile.missing.firstName, profile.missing.lastName, ... each tagged 'Missing'. Setup step 1 renders the same data correctly.",
+      "expected": "Translated labels in every locale.",
+      "evidence": "Confirmed: components/features/agent/KitParts.tsx:346 renders `{m.label}`; the API label is an i18n key (server/src/features/profile/completeness.ts:81 missingLabelKey) and the profile.missing namespace exists in the bundle - translate the key in the component. shots/kit-review-after-use.png.",
+      "likelyFiles": [
+       "components/features/agent/KitParts.tsx",
+       "components/features/agent/KitReview.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Top-bar 'Ask' on a job page opens the Assistant with no job context ('Which job do you mean?')",
+      "repro": "Open /jobs/<id>, click the top-bar Ask, send 'Why do I fit this job, and what am I missing?' or use the 'About a job' chips.",
+      "observed": "Thread created with contextJobId:null; answer asks which job; each attempt spends a daily message. The in-page 'Ask about this job' works.",
+      "expected": "Opening the rail on a job detail page carries that job as context, or the 'About a job' chips are hidden when no job is in context.",
+      "evidence": "a3.out. CopilotRail.tsx already has usePathname (:63) and handles req.jobId (:93); derive the job id from /jobs/<id> when the open request has none (no Topbar change needed).",
+      "likelyFiles": [
+       "components/features/copilot/CopilotRail.tsx",
+       "components/features/copilot/Cheatsheet.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Assistant rail reopens by itself as a modal with a scrim on every full page load after it was left open (2 agents); composer does not cover scrolled content",
+      "repro": "On a job detail click 'Ask about this job' and leave the drawer open. Open /jobs in a new browser session at 1280.",
+      "observed": "ui-state 'assistant.rail'='open'; 6-10 s after load the drawer opens over the page with a scrim that blocks clicks, on top of the usage-statistics banner on a new device. In the rail the 'About a job' heading shows below the composer footer and the composer placeholder is clipped; the floating Ask pill covers inputs and the editor's 'Next note'.",
+      "expected": "Restore without interrupting: dock without a scrim on wide screens or do not restore a modal on load; composer fully covers scrolled content.",
+      "evidence": "Screens .verify/ra-jobs-tracker/35-zh-TW-jobs-1280.png, shots/a3-rail-open-job.png; Playwright 'scrim intercepts pointer events'.",
+      "likelyFiles": [
+       "components/features/copilot/CopilotRail.tsx",
+       "hooks/copilot/useRailMemory.ts",
+       "components/features/copilot/copilot.module.css"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Ready setup wizard always reopens at step 1 instead of the saved step",
+      "repro": "Complete step 1 (server returns step 'calibrate'), leave, open /ready and click 'Continue setup'.",
+      "observed": "'Step 1 of 5: Confirm your profile' on every return while GET /agent/setup returns 'calibrate' / 'answers' / 'extension'.",
+      "expected": "Open at the server's next step.",
+      "evidence": "Confirmed: SetupWizard.tsx:100-104 - the start effect runs when `setup.isLoading` is false, which is also true while the query is still disabled by the capability flag, so initialStep gets undefined. Gate on the query being settled (isSuccess/isError) instead.",
+      "likelyFiles": [
+       "components/features/agent/SetupWizard.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "React hydration error (<p> inside <p>) on /ready, /ready/setup and the weekly list (both brands)",
+      "repro": "Open /ready or /ready/setup signed in and read the console.",
+      "observed": "'In HTML, <p> cannot be a descendant of <p>' on every load; dev overlay shows 2 issues.",
+      "expected": "No hydration errors.",
+      "evidence": "ReadyIntro.tsx:25, SetupWizard.tsx:201, ReadyPage.tsx:152 pass `sub={<HonestyLine/>}`; components/v3/primitives/PageHeader.tsx:47 wraps sub in <p> and HonestyLine.tsx:26 renders <p>.",
+      "likelyFiles": [
+       "components/v3/primitives/PageHeader.tsx",
+       "components/v3/primitives/HonestyLine.tsx",
+       "components/features/agent/ReadyIntro.tsx",
+       "components/features/agent/ReadyPage.tsx",
+       "components/features/agent/SetupWizard.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Same job and resume show three different fit results (job page 'Possible 63', Assistant 'Good fit', kit 'Before 69/100 - Good fit')",
+      "repro": "For job cmv2gbllat43q33oil5l0zwxm compare the feed row, the job detail, the Assistant fit card and the kit review.",
+      "observed": "Feed/Ready list 'Possible' (61); detail score 63 'possible' (ai); Assistant says 'Your fit is rated good' with a 'Good fit' card; kit 'Before 69 / 100 - Good fit'.",
+      "expected": "The Assistant fit tool and the kit read the stored match score/tier (through the match area's index seam), or each number is labelled with what it measures (e.g. the tailoring before/after score).",
+      "evidence": "a4.json q1; shots/dark-kit-1280.png; /score response in run output.",
+      "likelyFiles": [
+       "server/src/features/copilot/tools/",
+       "components/features/agent/KitReview.tsx",
+       "server/src/features/agent/service.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Calibration 'Not right - Wrong job title' ratings do not keep the same title and company off the weekly list",
+      "repro": "In /ready/setup step 2 rate the three listed jobs 'Not right - Wrong job title'. Open the weekly list.",
+      "observed": "The weekly list's only auto-picked job is the same title from the same company (another location), labelled 'Great fit'.",
+      "expected": "A 'wrong title' rating excludes that title+company (and down-weights the title) in weekly selection.",
+      "evidence": "shots/ready-setup-calibrate-rated.png, ready-list-2jobs.png. The Great/100 score itself is the pre-score defect in G3.",
+      "likelyFiles": [
+       "server/src/features/agent/weekly.ts",
+       "server/src/features/agent/service.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Assistant job-list card contradicts its answer (says pay-less listings were left out; card lists three 'Pay not listed' and on-site jobs)",
+      "repro": "With a broad search ask 'Find remote jobs that list their pay.'",
+      "observed": "Text lists 5 jobs with pay; the job_list card shows 8, 3 with 'Pay not listed', with San Francisco/Chicago/Los Angeles locations.",
+      "expected": "Card rows are the same set the answer describes.",
+      "evidence": "a5.json; shots/a5-job-list.png.",
+      "likelyFiles": [
+       "server/src/features/copilot/tools/jobs.ts",
+       "components/features/copilot/cards/JobListCard.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Assistant cannot see jobs the user added",
+      "repro": "Add a job by pasted text, then ask '我添加的职位里，哪个最适合我？' or ask about that company by name.",
+      "observed": "'现在看不到你添加的职位' and two empty searches; it does see the tracker entry for the same job.",
+      "expected": "The job tools include the user's own imported jobs (visibility private, ownerUserId = user).",
+      "evidence": ".verify/goapply/shots/assistant-bestjob.png, assistant-submit.png.",
+      "likelyFiles": [
+       "server/src/features/copilot/tools/jobs.ts",
+       "server/src/features/copilot/tools/"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Kit download file name changes between loads and ignores the chosen pattern",
+      "repro": "Weekly settings: file name 'Name, company, job'. Open the kit page several times.",
+      "observed": "'General_Intuition_Medal_Product_Designer_Gaming_Communities_In_O.pdf' on some loads, 'General Intuition & Medal.pdf' on others.",
+      "expected": "One stable name following the chosen style, with a sensible fallback when the profile has no name.",
+      "evidence": "kit2/kit4 outputs; shots/dark-kit-1280.png.",
+      "likelyFiles": [
+       "components/features/agent/fileName.ts",
+       "components/features/agent/KitParts.tsx"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Stopped answer shows 'Stopped.' live but the full answer is saved in the thread",
+      "repro": "Ask for a long plan, click Stop after ~6 s, reopen the chat from Chats.",
+      "observed": "Live view 'Stopped.'; reopened thread shows the full answer.",
+      "expected": "Stop cancels generation, or the thread shows the stopped state consistently.",
+      "evidence": "a1.json q2; visual1.out.",
+      "likelyFiles": [
+       "server/src/features/copilot/CopilotService.ts",
+       "server/src/features/copilot/channel.ts"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "'Open application' wording says 'the employer's page' when the apply URL is an aggregator",
+      "repro": "Open application on the kit for job cmv2gbllat43q33oil5l0zwxm.",
+      "observed": "Apply URL is jobleads.com while the button and helper say 'employer's page' / 'company's application page'.",
+      "expected": "Neutral wording ('Open the application page') when the URL host is not the employer's domain.",
+      "evidence": "kit4 output RESP /agent/queue/:id/open applyUrl.",
+      "likelyFiles": [
+       "components/features/agent/KitReview.tsx",
+       "i18n/staging/ready.en.json"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "G6-practice",
+    "title": "Practice interview setup, text room and reports (both brands)",
+    "owns": [
+     "components/v3/mock/",
+     "components/features/practice/",
+     "components/features/practice-cn/",
+     "app/(auth)/practice/",
+     "server/src/interview-engine/scoring/",
+     "server/src/roboapply/v2/services/RAMockService.ts",
+     "server/src/features/cn/interview/",
+     "server/src/features/interview/",
+     "lib/mockInterviewCredits.ts",
+     "lib/interviewRecommendations.ts",
+     "i18n/staging/practice.en.json",
+     "i18n/staging/practiceCn.en.json",
+     "i18n/staging/practiceCn.zh.json"
+    ],
+    "findings": [
+     {
+      "severity": "medium",
+      "title": "Practice report shows English strengths/improvements in a Chinese session, one statement is untrue, and a typed session mentions speech-to-text",
+      "repro": "goapply.localhost /practice -> 后端工程师 -> 15 分钟 -> 开始文字练习 -> answer question 1, skip 2-5 -> 查看我的结果.",
+      "observed": "'Role fit: Engaged with every prompt - completeness reads as genuine interest.' although 4 of 5 were skipped; 'Communication: Answers were very short...'; '根据转写文字统计。语音转文字可能漏字或多字' in a text-only session.",
+      "expected": "Localized report text, statements that match what happened (skips counted), no STT wording for typed answers.",
+      "evidence": "Confirmed hard-coded English: server/src/roboapply/v2/services/RAMockService.ts:585,601 and server/src/interview-engine/scoring/interviewScorer.ts:171,182. Return codes/keys and localize on the client or by session locale. .verify/goapply/shots/practice-report.png.",
+      "likelyFiles": [
+       "server/src/roboapply/v2/services/RAMockService.ts",
+       "server/src/interview-engine/scoring/interviewScorer.ts",
+       "server/src/features/cn/interview/",
+       "components/features/practice-cn/CnReportView.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "GoApply practice setup offers Video and Voice formats although only text practice exists; interviewer messages show raw '**bold**' and voice-only wording",
+      "repro": "goapply.localhost /practice -> pick 后端工程师 -> read '你的这场面试' -> open 形式; start the text practice.",
+      "observed": "Card '形式: 视频'; options '视频面试' and '只用语音', no text option, while the button is '开始文字练习'. Messages render '**...**' markers and refer to 'Live Coding', '话筒', '别碰键盘'.",
+      "expected": "Format row hidden or shown as 文字 when the voice capability is off; markdown rendered; no microphone wording in text mode. (Voice being unavailable on GoApply is an owner decision; offering it is the bug.)",
+      "evidence": "Confirmed: components/v3/mock/PracticeSetupFlow.tsx:777 `options={(['video','voice'] as const).map(...)}` with no capability gate. .verify/goapply/shots/practice-format-options.png, practice-q2.png.",
+      "likelyFiles": [
+       "components/v3/mock/PracticeSetupFlow.tsx",
+       "components/features/practice/TextPracticeRoom.tsx",
+       "server/src/features/cn/interview/"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Default practice session costs more than a new user's balance; '1 credits left'; dead-end 'get credits' link on GoApply",
+      "repro": "/practice -> Product and Design -> Product Designer (RoboApply); /practice -> 后端工程师 (GoApply).",
+      "observed": "RoboApply suggests Video 45 min 'Costs 2.25 credits · 1 credits left' with Start disabled until 'Use 15 min instead'; a 'Verify your email to get your first practice interview free' banner shows while the balance already says 1. GoApply default 50 min needs 2.5 credits with 1 available; '获取额度' leads to billing where nothing can be bought; the category chip overflows at 375 (right=381).",
+      "expected": "Default length the user can afford; ICU plural ('1 credit left'); no purchase link when purchasing is closed.",
+      "evidence": "shots/practice-setup-role-picked.png; .verify/goapply/shots/practice-role-picked.png, practice-setup.png.",
+      "likelyFiles": [
+       "components/v3/mock/PracticeSetupFlow.tsx",
+       "lib/mockInterviewCredits.ts",
+       "lib/interviewRecommendations.ts",
+       "components/features/practice/PracticeNotices.tsx",
+       "i18n/staging/practice.en.json"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "G7-public-marketing",
+    "title": "Landing, public help, sitemap, free tools",
+    "owns": [
+     "components/landing/",
+     "components/features/marketing/",
+     "components/features/tools/",
+     "app/help/",
+     "app/sitemaps/",
+     "app/tools/",
+     "server/src/features/tools/",
+     "styles/landing.css",
+     "i18n/staging/landing.en.json",
+     "i18n/staging/landing.zh.json",
+     "i18n/staging/seo.en.json",
+     "i18n/staging/tools.en.json",
+     "i18n/staging/tools.zh.json"
+    ],
+    "findings": [
+     {
+      "severity": "medium",
+      "title": "Landing language menu changes the URL and tab title but the page stays in the old language",
+      "repro": "Signed out, English browser, open /. Click the globe/EN button, choose 繁體中文.",
+      "observed": "URL /zh-TW, title Chinese, cookie robo_locale=zh-TW, but <html lang> stays 'en' and all content stays English until a reload. The menu button's accessible name is 'Main'.",
+      "expected": "Content and lang switch immediately (hard navigation or a full refresh of the root layout); button labelled 'Language'.",
+      "evidence": "components/landing/LanguageMenu.tsx:15,95-112 uses next/link soft navigation, which keeps the root layout's locale; components/features/marketing/SiteChrome.tsx:54 passes `t('label')` which resolves to 'Main'. shots/landing-after-lang-switch.png.",
+      "likelyFiles": [
+       "components/landing/LanguageMenu.tsx",
+       "components/features/marketing/SiteChrome.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "Free resume-job matcher reports false gaps: title 'Not met' for a PDF that states the title; 'No dated experience found' for normal date ranges",
+      "repro": "Signed out, /tools/resume-job-match: upload a text-layer PDF whose headline and current job are 'Senior Product Designer' with ranges like 'March 2022 - Present'; title 'Senior Product Designer'; paste a JD asking 5+ years. Compare with the same resume as .txt.",
+      "observed": "PDF: 'Job title - Not met'; .txt passes. Both: 'Years of experience - Not listed - No dated experience found'. Only 4 of ~8 hard skills taken from the JD.",
+      "expected": "Title met for both formats; years computed from the dated roles (~9).",
+      "evidence": "tools1.json rmBody; shots/tools-matcher-result-1280.png. The PDF path may also be hit by the word-gluing heuristic fixed in G4 (PDFService) - retest after that lands.",
+      "likelyFiles": [
+       "server/src/features/tools/parse.ts",
+       "server/src/features/tools/checks.ts",
+       "server/src/features/tools/service.ts"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "'How ranking works' shows 'Sign in / Get started' to a signed-in user and names a sort differently; mobile landing has no theme toggle",
+      "repro": "Signed in, on /jobs click 'How ranking works'. Open the landing at 375px.",
+      "observed": "/help/ranking renders the marketing header with 'Sign in' and 'Get started' and no way back to the app; text says 'Newest, Best fit and Highest pay' while the sort is 'Your best fits'. Theme toggle hidden on mobile landing.",
+      "expected": "'Open app' / back link for signed-in users; sort names match the UI.",
+      "evidence": "s33.cjs page text; screen 33--help-ranking.png.",
+      "likelyFiles": [
+       "app/help/",
+       "components/features/marketing/SiteChrome.tsx",
+       "i18n/staging/landing.en.json"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Static sitemap omits three feature pages that the footer links",
+      "repro": "Open /sitemaps/static.xml.",
+      "observed": "Lists job-matches, resume-tailoring, cover-letters, visa-sponsorship but not /features/ready-to-apply, /features/interview-practice, /features/assistant.",
+      "expected": "Sitemap consistent with the linked feature pages (unless excluded on purpose - then document it).",
+      "evidence": "sitemap output in transcript.",
+      "likelyFiles": [
+       "app/sitemaps/"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "G8-goapply-compliance",
+    "title": "GoApply onboarding, consents and disclosures, brand copy overrides",
+    "owns": [
+     "components/features/onboarding-cn/",
+     "server/src/features/onboarding-cn/",
+     "server/src/features/compliance/",
+     "components/features/compliance/",
+     "components/features/billing-cn/",
+     "components/features/notify-cn/",
+     "app/cancel/",
+     "app/legal/",
+     "lib/i18n.ts",
+     "i18n/brands/",
+     "i18n/staging/onboardingCn.en.json",
+     "i18n/staging/onboardingCn.zh.json",
+     "i18n/staging/billingCn.en.json",
+     "i18n/staging/billingCn.zh.json",
+     "i18n/staging/notifyCn.en.json",
+     "i18n/staging/notifyCn.zh.json",
+     "i18n/staging/legal.en.json",
+     "i18n/staging/legal.zh.json"
+    ],
+    "findings": [
+     {
+      "severity": "medium",
+      "title": "Consent text and the legal page disagree about where data and AI are processed (D3)",
+      "repro": "goapply.localhost: read the third consent on /signup and the AI block on /onboarding/consent, then /legal.",
+      "observed": "Consent: 'Neon（美国东部）'; /legal: 'Neon ... US / us-west-2'. Onboarding AI block says AI is processed outside mainland China with processors 'in the list above' (the list names no AI provider); /legal says only mainland AI services (deepseek / CN). Consent names LiveKit Cloud, Deepgram/Cartesia and Resend although voice and email are off and /legal lists only Neon and deepseek.",
+      "expected": "One configuration-driven statement of processors and regions shared by consent prose and the legal disclosures.",
+      "evidence": "Hard-coded prose containing '美国东部' is in server/src/features/compliance/consents.ts (confirmed by grep). .verify/goapply/shots/pub_signup-1280.png, after-signup-1280.png, pub_legal.txt.",
+      "likelyFiles": [
+       "server/src/features/compliance/consents.ts",
+       "components/features/onboarding-cn/ConsentStep.tsx",
+       "server/src/features/compliance/"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "The three required consents are asked twice (sign-up, then again unticked on /onboarding/consent)",
+      "repro": "Tick the three boxes on goapply.localhost/signup, verify the code, land on /onboarding/consent.",
+      "observed": "The same three required items are shown again unticked and block 下一步; settings later shows them granted at sign-up time.",
+      "expected": "Consents given at sign-up are shown as given (or not repeated); G1 asks only for the optional choices.",
+      "evidence": ".verify/goapply/shots/signup-code-requested.png, after-signup-1280.png, settings-consents.png.",
+      "likelyFiles": [
+       "components/features/onboarding-cn/ConsentStep.tsx",
+       "server/src/features/onboarding-cn/"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "GoApply brand copy overrides do not exist and are not loaded: LinkedIn wording, subscription/cancel wording, email and WeChat options show on the mainland brand",
+      "repro": "goapply.localhost: onboarding resume step; /resume; /settings (links, #connections, #billing, #notifications); /cancel; /pricing; /invite.",
+      "observed": "'使用你的 LinkedIn 个人主页 ... 上传 LinkedIn PDF', '或者从 LinkedIn 导入', 'LinkedIn 好友' section; 'Pro 会提高你的每日次数上限。取消只需点一下。' while passes are one-time; /cancel asks for an email to send a cancel link; pricing lists '即时职位提醒邮件'; notifications offer '邮件汇总'; invite offers '邮件' and WeChat verification (notify.email=false, wechat=false); 更换手机号 says contact support with no contact; fit and ranking copy mention 签证 / 工作许可; auth panel promises a talking practice interview.",
+      "expected": "Per WP-91 GoApply replaces LinkedIn wording with 简历导入 and drops auto-renew/cancel, email, WeChat and visa wording that does not apply; sections for switched-off channels are hidden by their capability.",
+      "evidence": "Confirmed: i18n/brands/ does not exist, and lib/i18n.ts only substitutes %BRAND% tokens - nothing loads i18n/brands/goapply/zh.json although scripts/i18n-merge-staging.mjs routes zh overrides there. Wire the override merge in lib/i18n.ts (brand × locale) and author the override bundle; where a whole section must be hidden, request the gate from the owning group (settings registry G2, resume hub G4). .verify/goapply/shots/g6-resume.png, settings-billing.png, app_cancel-1280.png, settings-notifications.png.",
+      "likelyFiles": [
+       "lib/i18n.ts",
+       "i18n/brands/goapply/zh.json",
+       "components/features/billing-cn/",
+       "components/features/notify-cn/",
+       "app/cancel/page.tsx"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "'Tips and reminders' consent sentence is English in zh, zh-TW and ja (both brands)",
+      "repro": "Switch to 繁體中文, 日本語 or (GoApply) 中文; open /settings#notifications.",
+      "observed": "'Send me tips and reminders about jobs I saved and practice I started.' in English among translated text.",
+      "expected": "Translated prose per locale (consent prose hashes updated accordingly).",
+      "evidence": "server/src/features/compliance/consents.ts:440 has prose {en: ...} only for the tips_reminders entry. shots/23-settings-notifications-ja-1280.png, .verify/goapply/shots/settings-notifications.png.",
+      "likelyFiles": [
+       "server/src/features/compliance/consents.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "GoApply onboarding with AI off: '手动填写资料' opens no manual form and the matching screen still talks about reading a resume",
+      "repro": "Onboard on goapply.localhost with the AI consent off -> resume step -> 手动填写资料.",
+      "observed": "Goes straight to /onboarding/matching listing '读取你的简历', '把职位和你的简历比对', '为你的列表排序'; no manual entry form. Afterwards the /jobs header still says jobs are ranked by resume fit.",
+      "expected": "A manual profile/resume form, and matching copy that reflects no resume and date ordering.",
+      "evidence": ".verify/goapply/shots/m375-g6-resume.png, m375-matching-aioff.png, m375-first-landing.png. Fix the gate here; the shared matching step labels (components/features/onboarding, G2) and the /jobs header (G3) need a no-resume variant - raise as requests if not covered by a GoApply copy override.",
+      "likelyFiles": [
+       "components/features/onboarding-cn/CnResumeGate.tsx",
+       "components/features/onboarding-cn/logic.ts",
+       "i18n/staging/onboardingCn.zh.json"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "GoApply onboarding and legal polish",
+      "repro": "goapply.localhost: onboarding 求职期望 and confirm steps; /legal at 375px; /signup before answering the analytics banner.",
+      "observed": "Province picker lists 香港 and 澳门 but not 台湾; '第 6 步，共 8 步' shows only on steps 6-7; '确认你的设置' lists no settings; 统招 is pre-ticked; campus filter does not default to the user's 届别; /legal table overflows at 375 (right=429); the usage-statistics banner covers 'Already have an account? Sign in' on /signup at 1280x900.",
+      "expected": "Complete province list, consistent progress indicator, a confirm step that shows the choices, nothing pre-ticked, no overflow, banner clear of the link.",
+      "evidence": ".verify/goapply/shots/g4-intent.png, g7-after-matching.png, dark_legal-375.png; shots/01-signup-1280-light.png.",
+      "likelyFiles": [
+       "components/features/onboarding-cn/places.ts",
+       "components/features/onboarding-cn/CnConfirmStep.tsx",
+       "components/features/onboarding-cn/EducationStep.tsx",
+       "app/legal/",
+       "components/features/compliance/"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "G9-server-platform-credits",
+    "title": "Database transactions, credits and billing plumbing",
+    "owns": [
+     "server/src/lib/prisma.ts",
+     "server/src/lib/mockCreditService.ts",
+     "server/src/platform/credits/",
+     "server/src/features/credits/",
+     "components/features/credits/",
+     "hooks/credits/",
+     "i18n/staging/credits.en.json"
+    ],
+    "findings": [
+     {
+      "severity": "high",
+      "title": "Intermittent 500s from Prisma interactive-transaction timeouts under modest concurrency (job import, onboarding step save, resume fix panel, credits) - 4 reports",
+      "repro": "With several users active: POST /jobs/import (手动填写 -> 保存职位); PUT /onboarding/steps/basics; check report -> 'Write an AI version' -> Shorter/Longer/Stronger.",
+      "observed": "2 of 3 imports failed after 15-48 s; onboarding basics 500 three times in a row (15-18 s each, same payload 200 later); fix panel 500 five times in a row with nothing in the error log. Server: 'P2028 Unable to start a transaction in the given time' in CreditService.withCredit and 'transaction timeout 5000 ms, however 5884 ms passed' in onboarding saveStep and the credits store.",
+      "expected": "Writes succeed or fail fast with a specific retryable message; transactions do not wait on a 2 s maxWait / 5 s timeout default against a remote database; failures are logged.",
+      "evidence": "Confirmed: 32 non-test files call $transaction and only three set options; server/src/platform/credits/store.ts:232 sets only isolationLevel; server/src/lib/prisma.ts:272-274 pool max 10 locally and 1 on Vercel. Set client-level transactionOptions (maxWait/timeout) in prisma.ts and keep credit reserve/commit transactions short. Part of the latency (10 s /auth/me, 5-20 s saves) is this stack's Neon branch and is not a code defect. Callers in other groups (onboarding repo G2, copilot store G5, jobs import G3) need no change if the default is raised; G4 should log fixIssue failures.",
+      "likelyFiles": [
+       "server/src/lib/prisma.ts",
+       "server/src/platform/credits/store.ts",
+       "server/src/platform/credits/CreditService.ts"
+      ]
+     },
+     {
+      "severity": "medium",
+      "title": "First page load of a new account returns 500 on /billing/plan or /credits (race creating the free subscription row) - 3 reports",
+      "repro": "Sign up, finish onboarding, land on /jobs or /resume (several components request credits/plan in parallel). Reproduced on 2 of 2 new accounts.",
+      "observed": "GET /billing/plan -> 500 plan_failed and/or GET /credits -> 500 once; log: 'Unique constraint failed on SeekerSubscription_seekerProfileId_key' at mockCreditService.ts:215.",
+      "expected": "Lazy creation tolerates concurrent first requests (catch P2002 and re-read).",
+      "evidence": "Confirmed: server/src/lib/mockCreditService.ts:213-220 does prisma.seekerSubscription.upsert after a non-atomic read; concurrent upserts race on the unique key. logs/error-2026-10-10.jsonl 17:54:01Z.",
+      "likelyFiles": [
+       "server/src/lib/mockCreditService.ts"
+      ]
+     },
+     {
+      "severity": "low",
+      "title": "Credits panel: sign-up grant listed under recent usage; daily reset shown as a bare weekday",
+      "repro": "goapply.localhost /settings#credits right after sign-up.",
+      "observed": "'最近使用' lists '练习面试 已用 1 次' at sign-up time before any practice. Every daily row reads '周一00:00 重置', which reads like a weekly reset (the value itself was correct: tested on Sunday, next midnight is Monday).",
+      "expected": "Grants are not listed as usage; daily rows say 'tomorrow 00:00' or include the date.",
+      "evidence": "components/features/credits/CreditsUsage.tsx:46-49 formats resetsAt as {weekday, hour, minute}. .verify/goapply/shots/settings-credits.png.",
+      "likelyFiles": [
+       "components/features/credits/CreditsUsage.tsx",
+       "server/src/features/credits/service.ts",
+       "server/src/platform/credits/summary.ts"
+      ]
+     }
+    ]
+   }
+  ],
+  "dropped": [
+   "Settings > Sensitive answers shows 'These answers can't be saved right now' (RoboApply and GoApply polish item): gated on the owner credential SENSITIVE_DATA_KEY (TASK_PLAN OPS-A2), which is not set in this stack; the UI states the fact honestly. Not a code bug.",
+   "Explore 'Describe the job you want' returns 503 ai_unavailable after ~22 s: slow AI on the fallback provider (other calls take 20-127 s here); the UI degrades to 'Use the filters instead'. Dropped per the slow-fallback rule.",
+   "Tailoring result 'Fit score not available for this version' in 3 of 3 sessions: the rescore timed out on the slow fallback model and the UI says so honestly. Dropped per the slow-fallback rule (worth a retest on the real provider).",
+   "Feed refresh limit of 20 per 10 minutes reachable, and 7-33 s feed queries: the limit is the specified acceptance value (TASK_PLAN WP-32 'refresh rate limit 20/10 min'); the speed is this Neon-branch environment.",
+   "/jobs is reachable before onboarding is complete: intended. PRODUCT_PLAN 4.1 'Leaving early' - the user lands on /jobs with the 'Finish setting up' banner and there is no forced re-routing.",
+   "Legal documents show '[Counsel: ...]' placeholders and are tagged Draft / 草稿 (both brands), processor countries 'Not listed': by plan. WP-13 ships DRAFT skeletons, counsel supplies the text (OPS-C/D), and documents stay marked DRAFT until approved.",
+   "Practice question bank is empty: by plan. WP-59 curated questions are written by staff through /admin/questions and company pages show only moderated user reports; D3 forbids seeding invented content.",
+   "Pricing shows paid plans as 'Price not set yet / Not open yet' (RoboApply) and '暂未开放' (GoApply): gated on Stripe test price env (OPS-A9, key empty today) and on CN_PAYMENTS_ENABLED (ruling R-15).",
+   "GoApply 'daily limits labelled as resetting on Monday': the value is correct - the run was on Sunday 2026-10-11, so the next daily reset is Monday 00:00. The ambiguous weekday-only label and the grant-shown-as-usage part are kept as a low finding in G9.",
+   "GoApply settings 'LinkedIn 好友' section visible with '导入好友功能暂未开放': the section is shown on purpose whenever hiringContacts is not off so 'Delete all imported connections' stays reachable (components/features/settings/registry.ts comment). Only its LinkedIn wording is kept (G8 brand overrides).",
+   "GoApply 'Tailored score dropped 94 -> 92' and /auth/me taking ~10 s: the first is a real rescore, not a defect; the second is latency of this stack's remote Neon branch (the transaction-timeout part is kept in G9).",
+   "Duplicate reports merged into one finding each: topbar overflow at 375px (4 reports -> G1); /jobs/report crash (3 -> G1, root cause lib/api/client.ts); GET /v2/resumes 500 (3 -> G4); free-subscription race on /credits and /billing/plan (3 -> G9); transaction-timeout 500s on onboarding save, job import and resume fix panel (4 -> G9); pre-score 100 / inconsistent fit (3 -> G3, with the Assistant/kit label part in G5); Assistant rail reopening as a modal (2 -> G5); nested <p> hydration error (2 -> G5); 404 'script tag' console error (3 -> G1); UTC dates (3 -> G1 for the provider time zone, G3 for tracker dates/CSV); tips-and-reminders English prose (2 -> G8); settings heading spacing (2 -> G2); CJK and English junk 'skills' in tailoring (2 -> G4).",
+   "'Anywhere in {country}' (3 reports) was split by file owner rather than merged into one: the writer (onboarding mapping) is in G2 and the feed predicate/labels for profiles that already carry the row are in G3. Both are required.",
+   "Multi-part 'polish' and 'untranslated strings' lists were distributed to the group owning each file instead of kept as one finding: English error boundary and 404 -> G1; pronouns, raw provider id 'phone', 'DELETE' -> G2; tips prose -> G8; duplicate React key and doubled 'Keyword check' title -> G3; composer clipping and floating Ask overlap -> G5; 'RA' avatar -> G1; /auth/me token fields promoted to its own medium finding in G2."
+  ]
+ }
+}

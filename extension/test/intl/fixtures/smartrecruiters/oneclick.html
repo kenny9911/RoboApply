@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Customer Success Manager at Example Co</title>
+  <meta property="og:title" content="Customer Success Manager at Example Co">
+</head>
+<body>
+  <header>
+    <h1 data-test="job-title">Customer Success Manager</h1>
+    <p data-test="job-location">Denver, CO, United States</p>
+  </header>
+  <oc-oneclick-form>
+    <section data-test="personal-information">
+      <h2>Personal information</h2>
+      <spl-input name="firstName" label="First name" required>
+        <template shadowrootmode="open">
+          <label for="first-name-input">First name<span aria-hidden="true">*</span></label>
+          <input id="first-name-input" type="text" required autocomplete="given-name">
+        </template>
+      </spl-input>
+      <spl-input name="lastName" label="Last name" required>
+        <template shadowrootmode="open">
+          <label for="last-name-input">Last name<span aria-hidden="true">*</span></label>
+          <input id="last-name-input" type="text" required autocomplete="family-name">
+        </template>
+      </spl-input>
+      <spl-input name="email" label="Email" required>
+        <template shadowrootmode="open">
+          <label for="email-input">Email<span aria-hidden="true">*</span></label>
+          <input id="email-input" type="email" required>
+        </template>
+      </spl-input>
+      <spl-input name="confirmEmail" label="Confirm your email" required>
+        <template shadowrootmode="open">
+          <label for="confirm-email-input">Confirm your email<span aria-hidden="true">*</span></label>
+          <input id="confirm-email-input" type="email" required>
+        </template>
+      </spl-input>
+      <spl-autocomplete name="location" label="City">
+        <template shadowrootmode="open">
+          <input id="city-input" type="text" aria-label="City">
+        </template>
+      </spl-autocomplete>
+      <spl-phone-field name="phoneNumber" label="Phone number">
+        <template shadowrootmode="open">
+          <label for="phone-number-input">Phone number</label>
+          <input id="phone-number-input" type="tel">
+        </template>
+      </spl-phone-field>
+    </section>
+    <section data-test="resume-section">
+      <h3>Resume</h3>
+      <input type="file" id="resume-upload-input" data-test="resume-upload-input" accept=".pdf,.doc,.docx">
+      <spl-button>
+        <template shadowrootmode="open"><button type="button">Choose a file</button></template>
+      </spl-button>
+    </section>
+    <section data-test="social">
+      <spl-input name="linkedin" label="LinkedIn profile">
+        <template shadowrootmode="open">
+          <label for="linkedin-input">LinkedIn profile</label>
+          <input id="linkedin-input" type="url">
+        </template>
+      </spl-input>
+      <spl-textarea name="hiringManagerMessage" label="Message to the hiring team">
+        <template shadowrootmode="open">
+          <label for="hiring-manager-message-input">Message to the hiring team</label>
+          <textarea id="hiring-manager-message-input" maxlength="2000"></textarea>
+        </template>
+      </spl-textarea>
+    </section>
+    <spl-checkbox name="privacy" label="I have read the privacy notice">
+      <template shadowrootmode="open">
+        <input id="privacy-input" type="checkbox" required><label for="privacy-input">I have read the privacy notice</label>
+      </template>
+    </spl-checkbox>
+    <spl-button data-test="footer-submit">
+      <template shadowrootmode="open"><button type="submit">Submit</button></template>
+    </spl-button>
+  </oc-oneclick-form>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head><title>Sample Labs - Support Specialist</title></head>
+<body>
+<div class="main-header-logo"><img alt="Sample Labs logo" src="data:,"></div>
+<div class="posting-headline"><h2>Support Specialist</h2><div class="posting-categories"><div class="location">Remote</div></div></div>
+<form class="application-form" id="application-form" method="POST">
+  <ul>
+    <li class="application-question resume"><label><div class="application-label">Resume/CV<span class="required">✱</span></div><div class="application-field"><input type="file" name="resume" id="resume-upload-input"></div></label></li>
+    <li class="application-question"><label><div class="application-label">Full name<span class="required">✱</span></div><div class="application-field"><input type="text" name="name" required></div></label></li>
+    <li class="application-question"><label><div class="application-label">Email<span class="required">✱</span></div><div class="application-field"><input type="email" name="email" required></div></label></li>
+    <li class="application-question"><label><div class="application-label">Current location</div><div class="application-field"><input type="text" name="location" id="location-input"></div></label></li>
+    <li class="application-question custom-question">
+      <div class="application-label"><div class="text">How did you hear about this job?</div></div>
+      <div class="application-field"><select name="cards[c2][field0]"><option value="">Select...</option><option>Job board</option><option>Friend</option><option>Company website</option></select></div>
+    </li>
+    <li class="application-question custom-question">
+      <div class="application-label"><div class="text">Will you now or in the future require visa sponsorship?<span class="required">✱</span></div></div>
+      <div class="application-field"><ul data-qa="multiple-choice">
+        <li><label><input type="radio" name="cards[c2][field1]" value="Yes" required> Yes</label></li>
+        <li><label><input type="radio" name="cards[c2][field1]" value="No"> No</label></li>
+      </ul></div>
+    </li>
+    <li class="application-question custom-question">
+      <div class="application-label"><div class="text">What are your salary expectations?<span class="required">✱</span></div></div>
+      <div class="application-field"><input type="text" name="cards[c2][field2]" required></div>
+    </li>
+    <li class="application-question custom-question">
+      <div class="application-label"><div class="text">How many years of customer support experience do you have?</div></div>
+      <div class="application-field"><input type="text" name="cards[c2][field3]"></div>
+    </li>
+    <li class="application-question custom-question">
+      <div class="application-label"><div class="text">Which tools have you used?</div></div>
+      <div class="application-field"><ul data-qa="checkboxes">
+        <li><label><input type="checkbox" name="cards[c2][field4]" value="Zendesk"> Zendesk</label></li>
+        <li><label><input type="checkbox" name="cards[c2][field4]" value="Intercom"> Intercom</label></li>
+      </ul></div>
+    </li>
+    <li class="application-question custom-question">
+      <div class="application-label"><div class="text">Describe a time you calmed down an upset customer.<span class="required">✱</span></div></div>
+      <div class="application-field"><textarea name="cards[c2][field5]" required></textarea></div>
+    </li>
+  </ul>
+  <button type="submit" class="template-btn-submit" data-qa="btn-submit">Submit application</button>
+</form>
+</body>
+</html>

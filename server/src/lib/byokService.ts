@@ -14,6 +14,10 @@
 import { prisma } from './prisma.js';
 import { encryptField, decryptField } from './crypto.js';
 import { logger } from '../services/LoggerService.js';
+import { getCurrentBrandId } from './requestContext.js';
+import type { EnvSource } from '../platform/brand/brandEnv.js';
+import { getBrand, isBrandId } from '../platform/brand/registry.js';
+import { llmDomesticOnlyApplies } from '../platform/llm/brandPolicy.js';
 
 // ---------------------------------------------------------------------------
 // Provider catalog
@@ -32,6 +36,26 @@ export const BYOK_PROVIDERS = [
 ] as const;
 
 export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
+
+/**
+ * Whether personal API keys are used on a brand. Both brands: yes (D5:
+ * GoApply follows RoboApply). GoApply: no only behind the domestic-only wall
+ * (`CN_LLM_DOMESTIC_ONLY=true`, or `CN_RESIDENCY_STRICT=true`), where its AI
+ * must stay on mainland endpoints and a user key could point anywhere.
+ */
+export function isByokAllowedForBrand(brandId: string | undefined | null, env: EnvSource = process.env): boolean {
+  if (!brandId || !isBrandId(brandId)) return true;
+  return !llmDomesticOnlyApplies(getBrand(brandId), env);
+}
+
+/** Thrown when a GoApply unit of work tries to store a personal key behind the domestic-only wall. */
+export class ByokNotAllowedError extends Error {
+  readonly code = 'feature_disabled' as const;
+  constructor() {
+    super('Personal API keys are not available on this site.');
+    this.name = 'ByokNotAllowedError';
+  }
+}
 
 export function isByokProvider(value: unknown): value is ByokProvider {
   return typeof value === 'string' && (BYOK_PROVIDERS as readonly string[]).includes(value);
@@ -186,6 +210,15 @@ export interface ResolvedByok {
  * active, with the API key decrypted in-memory. Returns null when no
  * row matches — callers should fall back to platform credentials.
  *
+ * - Behind the domestic-only wall (CN_LLM_DOMESTIC_ONLY) GoApply does not
+ *   use BYOK: a user key could route a GoApply user's data to an offshore
+ *   provider, so a GoApply unit of work gets null there. Otherwise both
+ *   brands resolve a personal key the same way.
+ * - A failed LOOKUP (DB error, pool timeout) is logged and returns null: the
+ *   platform route serves the call, as it did before every request carried a
+ *   user context. Only a row that exists but cannot be DECRYPTED throws —
+ *   silently using the platform key then would hide a broken user key.
+ *
  * Caller is responsible for making the LLM call with the returned key
  * and stamping `byok=true` on the resulting log row.
  */
@@ -194,12 +227,23 @@ export async function resolveByok(
   provider: ByokProvider,
 ): Promise<ResolvedByok | null> {
   if (!userId) return null;
+  if (!isByokAllowedForBrand(getCurrentBrandId())) return null;
+  let row: { id: string; encryptedKey: string; baseUrl: string | null; isActive: boolean } | null;
   try {
-    const row = await prisma.userLLMKey.findUnique({
+    row = await prisma.userLLMKey.findUnique({
       where: { userId_provider: { userId, provider } },
       select: { id: true, encryptedKey: true, baseUrl: true, isActive: true },
     });
-    if (!row || !row.isActive) return null;
+  } catch (err) {
+    logger.warn('BYOK', 'lookup failed; serving the call on the platform route', {
+      userId,
+      provider,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+  if (!row || !row.isActive) return null;
+  try {
     const apiKey = decryptField(row.encryptedKey);
     return { rowId: row.id, apiKey, baseUrl: row.baseUrl };
   } catch (err) {
@@ -291,6 +335,7 @@ export interface UpsertByokInput {
 }
 
 export async function upsertByok(input: UpsertByokInput): Promise<void> {
+  if (!isByokAllowedForBrand(getCurrentBrandId())) throw new ByokNotAllowedError();
   const baseValidation = validateBaseUrl(input.provider, input.baseUrl);
   if (!baseValidation.ok) {
     throw new Error(baseValidation.error);

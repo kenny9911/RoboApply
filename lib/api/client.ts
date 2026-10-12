@@ -12,8 +12,24 @@ import { API_BASE } from '../config';
 import { LOCALE_COOKIE } from '../localeConfig';
 import { isProtectedPath } from '../proxyPaths';
 
+/**
+ * `GET /api/v1/public/brand` — the requesting host's brand and its resolved
+ * capabilities (R-04, R-24). Read by lib/flags.ts `useCapabilities()`.
+ * FND-7's area wrapper `lib/api/brand.ts` may wrap it; keep the path here.
+ */
+export const PUBLIC_BRAND_PATH = '/api/v1/public/brand';
+
+/** Dev/preview brand override cookie, set by proxy.ts from `?__brand=` (lib/brand/runtime.ts). */
+const BRAND_OVERRIDE_COOKIE = 'ra_brand_override';
+
 export type RoboErrorCode =
   | 'auth_expired'
+  // The session belongs to the other product brand (requireAuth 401). Same
+  // recovery as a dead session: drop the cookie, sign in on this site.
+  | 'auth_other_brand'
+  // Login: the password matched an account of the other brand (409, with
+  // `payload.details.otherBrandUrl`).
+  | 'account_other_brand'
   | 'account_disabled'
   | 'subscription_locked'
   | 'quota_exceeded'
@@ -26,6 +42,11 @@ export type RoboErrorCode =
   | 'account_deleted'
   | 'not_found'
   | 'rate_limited'
+  // 503 with `Retry-After` / `details.retryAfterSec`: a credit reserve found the
+  // database busy and reserved NOTHING, so the same request can be sent again
+  // (server/src/platform/http.ts). Kept apart from `server_error`, where the
+  // request may have been processed. The message is `credits.busy`.
+  | 'credits_busy'
   | 'server_error'
   | 'network_error'
   | 'unknown';
@@ -69,6 +90,10 @@ function normalizeCode(
     case 'AUTH_REQUIRED':
     case 'auth_expired':
       return 'auth_expired';
+    case 'auth_other_brand':
+      return 'auth_other_brand';
+    case 'account_other_brand':
+      return 'account_other_brand';
     case 'ACCOUNT_DISABLED':
     case 'account_disabled':
       return 'account_disabled';
@@ -92,6 +117,8 @@ function normalizeCode(
       return 'not_a_seeker_account';
     case 'account_deleted':
       return 'account_deleted';
+    case 'credits_busy':
+      return 'credits_busy';
     // Transport codes this module sets on itself (a fetch that threw, a 5xx).
     // Without these they fall through to 'unknown' and a caller cannot tell a
     // connection that died mid-flight — where the request may well have been
@@ -119,15 +146,79 @@ function normalizeCode(
 // covers its own subtree, and only at mount.
 //
 // This is the global safety net: the first `auth_expired` that surfaces on a
-// protected route drops the dead credentials and hard-navigates to /login
-// with a return path. Guarded because a stranded page tends to fire a burst
-// of parallel 401s (auth/me + session + resumes + config…).
+// protected route runs the registered session cleanups (below), drops the
+// dead credentials and hard-navigates to /login with a return path. Guarded
+// because a stranded page tends to fire a burst of parallel 401s (auth/me +
+// session + resumes + config…).
 let authExpiredRecoveryFired = false;
+
+// ─── Session cleanups ───────────────────────────────────────────────────────
+//
+// Things this browser must forget when a session ends here: the web-push
+// subscription of the account that is leaving, unsent resume-builder drafts.
+// They live in feature code (hooks/pwa, hooks/resume), which `lib` must not
+// import, so the app shell REGISTERS them (components/v3/shell/
+// signOutCleanup.ts) and this module only runs what is registered.
+//
+// Order matters: a cleanup may still need the session (deleting the push row
+// is an authenticated call), so the stale-session recovery below runs them
+// BEFORE it clears the cookie. They can never hold the recovery back: each
+// one is isolated (a throw or a rejection is swallowed) and the whole batch is
+// given SESSION_CLEANUP_TIMEOUT_MS.
+
+export type SessionCleanup = () => void | Promise<void>;
+
+/** Upper bound for all registered cleanups together before the session is cleared anyway. */
+export const SESSION_CLEANUP_TIMEOUT_MS = 4000;
+
+const sessionCleanups = new Set<SessionCleanup>();
+
+/** Register a cleanup; returns the function that removes it again. */
+export function registerSessionCleanup(cleanup: SessionCleanup): () => void {
+  sessionCleanups.add(cleanup);
+  return () => {
+    sessionCleanups.delete(cleanup);
+  };
+}
+
+/**
+ * Run every registered cleanup. Never rejects; resolves when all have
+ * settled or after `timeoutMs`, whichever is first.
+ */
+export async function runSessionCleanups(timeoutMs: number = SESSION_CLEANUP_TIMEOUT_MS): Promise<void> {
+  if (sessionCleanups.size === 0) return;
+  const work = Promise.all(
+    [...sessionCleanups].map(async (cleanup) => {
+      try {
+        await cleanup();
+      } catch {
+        // One failing cleanup never stops the others or the sign-out.
+      }
+    }),
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  await Promise.race([work.then(() => undefined), timeout]);
+  if (timer) clearTimeout(timer);
+}
 
 function recoverFromExpiredSession(): void {
   if (authExpiredRecoveryFired) return;
   authExpiredRecoveryFired = true;
 
+  // Nothing registered (a page outside the app shell): keep the recovery
+  // synchronous. Otherwise the cleanups go first; their own API calls 401 like
+  // everything else on a dead session, and land on the guard above.
+  if (sessionCleanups.size === 0) {
+    clearExpiredSessionAndLeave();
+    return;
+  }
+  void runSessionCleanups().then(clearExpiredSessionAndLeave, clearExpiredSessionAndLeave);
+}
+
+function clearExpiredSessionAndLeave(): void {
   // Drop the localStorage bearer fallback too — left in place it would ride
   // along on every request after re-login and mask the fresh cookie.
   try {
@@ -183,15 +274,60 @@ function getBearerToken(): string | null {
  * forwarded `opts.cookie` string in a server (RSC) context.
  */
 function getLocaleFromCookie(cookieStr?: string): string | null {
+  return readCookie(LOCALE_COOKIE, cookieStr);
+}
+
+/** Read one cookie from the forwarded string (RSC) or `document.cookie` (browser). */
+function readCookie(name: string, cookieStr?: string): string | null {
   const source =
     cookieStr ?? (typeof document !== 'undefined' ? document.cookie : '');
   if (!source) return null;
   const match = source
-    .split('; ')
-    .find((row) => row.startsWith(`${LOCALE_COOKIE}=`));
+    .split(/;\s*/)
+    .find((row) => row.startsWith(`${name}=`));
   if (!match) return null;
-  const value = decodeURIComponent(match.slice(LOCALE_COOKIE.length + 1));
-  return value || null;
+  try {
+    const value = decodeURIComponent(match.slice(name.length + 1));
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Development only: echo the `ra_brand_override` cookie as `X-RA-Brand` so
+ * the API serves the brand the page is showing (ARCHITECTURE.md §1.5).
+ * Express accepts the header on dev/preview hosts only, and production
+ * bundles never send it (same-origin requests carry the real Host).
+ */
+export function devBrandHeader(cookieStr?: string): string | null {
+  if (process.env.NODE_ENV === 'production') return null;
+  const value = readCookie(BRAND_OVERRIDE_COOKIE, cookieStr);
+  return value === 'roboapply' || value === 'goapply' ? value : null;
+}
+
+/**
+ * Take the payload out of the server's `{ success, data }` envelope.
+ *
+ * `data: null` is an answer — "no report yet", "no active plan" — and the
+ * caller must receive `null`. The unwrap used to be `body?.data ?? body`, and
+ * `??` cannot tell "this body has no data key" from "the data is null", so a
+ * null payload came back as the whole envelope and pages rendered
+ * `{ success, data }` as if it were the resource (/jobs/report crashed on it).
+ *
+ *   { success, data: X }     → X, whatever X is (null, 0, false, '' included)
+ *   { data: X }, X not null  → X (a bare wrapper some older routes send)
+ *   anything else            → the body unchanged (no data key, an array, a
+ *                              resource that merely has a nullable `data` field)
+ */
+export function unwrapEnvelope(body: unknown): unknown {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return body;
+  const record = body as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(record, 'data')) return body;
+  const payload = record.data;
+  if (payload !== null && payload !== undefined) return payload;
+  // A null payload only counts when the body really is an envelope.
+  return typeof record.success === 'boolean' ? null : body;
 }
 
 export async function request<T>(
@@ -211,6 +347,12 @@ export async function request<T>(
   if (!headers['X-Robo-Locale']) {
     const locale = getLocaleFromCookie(opts.cookie);
     if (locale) headers['X-Robo-Locale'] = locale;
+  }
+
+  // Dev-only brand override echo (never in production builds).
+  if (!headers['X-RA-Brand']) {
+    const devBrand = devBrandHeader(opts.cookie);
+    if (devBrand) headers['X-RA-Brand'] = devBrand;
   }
 
   // Browser path: forward localStorage bearer as a fallback in case the
@@ -260,8 +402,10 @@ export async function request<T>(
     // Dead/absent session on a page that requires one → force re-login.
     // Public pages (landing, /login itself) just see the rejection: their
     // logged-out rendering is the correct outcome there.
+    // A session from the other brand is just as unusable here: the server
+    // rejects it on every call while the proxy still sees a cookie.
     if (
-      error.code === 'auth_expired' &&
+      (error.code === 'auth_expired' || error.code === 'auth_other_brand') &&
       typeof window !== 'undefined' &&
       isProtectedPath(window.location.pathname)
     ) {
@@ -269,7 +413,7 @@ export async function request<T>(
     }
     throw error;
   }
-  return (data?.data ?? data) as T;
+  return unwrapEnvelope(data) as T;
 }
 
 export const roboApi = {

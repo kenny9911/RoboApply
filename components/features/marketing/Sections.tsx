@@ -1,0 +1,405 @@
+'use client';
+
+// Shared marketing sections (WP-40): FAQ list, the labelled Example sample,
+// the feature-card grid, the index counters, quick search and the pricing
+// summary. Both brands' home pages render the same sections over their own
+// data (owner ruling D5); a brand passes its own copy namespace where the
+// words differ (plan names, example cities).
+//
+// Honesty (D3, PRODUCT §9.3): samples always carry the "Example" label and a
+// note that the data is made up; counters render only real counts from the
+// API (rounded down, source + "updated hourly"), and nothing when unknown;
+// prices come only from GET /billing/plans.
+
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
+
+import { usePlans } from '../../../hooks/credits/usePlans';
+import { useBrand } from '../../../lib/brand';
+import { formatMoney } from '../../../lib/pricing';
+import { SourceNote } from '../common';
+import { featuresFor, type FeatureDef } from './catalog';
+import { useBrowseEnabled, useIndexStats, useSignupHref } from './hooks';
+import { HERO_COUNT_MIN, browseHref } from './links';
+import { SignupLink } from './SignupLink';
+import { useFeatureVisible } from './SiteChrome';
+import styles from './marketing.module.css';
+
+// ── FAQ ─────────────────────────────────────────────────────────────────
+
+export interface FaqItem {
+  q: string;
+  a: string;
+}
+
+export function Faq({ title, items, id }: { title: string; items: FaqItem[]; id?: string }) {
+  return (
+    <section className={styles.section} id={id} aria-labelledby={id ? `${id}-title` : undefined}>
+      <div className={`${styles.wrap} ${styles.narrow}`}>
+        <h2 className={styles.h2} id={id ? `${id}-title` : undefined}>
+          {title}
+        </h2>
+        <div className={styles.faq}>
+          {items.map((item) => (
+            <article key={item.q} className={styles.faqItem}>
+              <h3>{item.q}</h3>
+              <p className={styles.body}>{item.a}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Example frame ─────────────────────────────────────────────────────────
+
+/** A sample box that always says "Example" and that its data is made up. */
+export function ExampleFrame({ title, children, tabs }: { title: string; children: ReactNode; tabs?: ReactNode }) {
+  const t = useTranslations('landing.example');
+  return (
+    <figure className={styles.sample} data-example="" aria-label={`${t('label')}: ${title}`}>
+      <div className={styles.sampleHead}>
+        <span className={styles.h3}>{title}</span>
+        <span className={styles.exampleChip}>{t('label')}</span>
+      </div>
+      {tabs}
+      <div className={styles.sampleBody}>{children}</div>
+      <figcaption className={styles.sampleNote}>{t('note')}</figcaption>
+    </figure>
+  );
+}
+
+const SAMPLE_TABS = ['find', 'understand', 'fix', 'practice'] as const;
+type SampleTab = (typeof SAMPLE_TABS)[number];
+
+/** The home page's interactive Example: one made-up job through the four verbs. */
+export function HomeExample() {
+  const t = useTranslations('landing.home.sample');
+  const [tab, setTab] = useState<SampleTab>('understand');
+  const baseId = useId();
+  const panelId = `${baseId}-panel`;
+  const tabs = (
+    <div className={styles.tabs} role="tablist" aria-label={t('tabsLabel')}>
+      {SAMPLE_TABS.map((key) => (
+        <button
+          key={key}
+          type="button"
+          role="tab"
+          id={`${baseId}-${key}`}
+          aria-selected={tab === key}
+          aria-controls={panelId}
+          className={styles.tab}
+          onClick={() => setTab(key)}
+        >
+          {t(`tabs.${key}`)}
+        </button>
+      ))}
+    </div>
+  );
+  return (
+    <ExampleFrame title={t('title')} tabs={tabs}>
+      <div role="tabpanel" id={panelId} aria-labelledby={`${baseId}-${tab}`} className={styles.form}>
+        <p className={styles.sampleRole}>
+          {t('role')} · {t('company')}
+        </p>
+        {tab === 'find' ? (
+          <>
+            <p className={styles.sampleLine}>{t('find.line1')}</p>
+            <p className={styles.sampleLine}>{t('find.line2')}</p>
+            <p className={styles.sampleOverlap}>{t('find.line3')}</p>
+          </>
+        ) : null}
+        {tab === 'understand' ? (
+          <>
+            <p className={styles.sampleGap}>{t('understand.gap')}</p>
+            <p className={styles.sampleOverlap}>{t('understand.overlap')}</p>
+            <p className={styles.muted}>{t('understand.fitLine')}</p>
+          </>
+        ) : null}
+        {tab === 'fix' ? (
+          <>
+            <p className={styles.sampleLine}>{t('fix.line1')}</p>
+            <p className={styles.sampleGap}>{t('fix.line2')}</p>
+          </>
+        ) : null}
+        {tab === 'practice' ? (
+          <>
+            <p className={styles.sampleLine}>{t('practice.line1')}</p>
+            <p className={styles.sampleLine}>{t('practice.line2')}</p>
+            <p className={styles.sampleOverlap}>{t('practice.line3')}</p>
+          </>
+        ) : null}
+      </div>
+    </ExampleFrame>
+  );
+}
+
+// ── Feature cards ────────────────────────────────────────────────────────
+
+function FeatureCard({ def }: { def: FeatureDef }) {
+  const t = useTranslations(`landing.features.${def.brand}.${def.key}`);
+  const visible = useFeatureVisible(def);
+  if (!visible) return null;
+  return (
+    <Link href={`/features/${def.slug}`} className={styles.card} data-feature-link={def.slug}>
+      <span className={styles.stepNumber}>{t('eyebrow')}</span>
+      <span className={styles.h3}>{t('title')}</span>
+    </Link>
+  );
+}
+
+/**
+ * One card per feature page of the brand (marketing catalog). A gated
+ * feature shows only while its capability is known to be on (fail closed).
+ */
+export function FeatureGrid() {
+  const tf = useTranslations('landing.features.common');
+  const brand = useBrand();
+  return (
+    <section className={styles.sectionAlt} id="features" aria-labelledby="home-features-title">
+      <div className={styles.wrap}>
+        <h2 className={styles.h2} id="home-features-title">
+          {tf('allFeatures')}
+        </h2>
+        <div className={styles.grid3}>
+          {featuresFor(brand.id).map((def) => (
+            <FeatureCard key={def.slug} def={def} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Index counters ──────────────────────────────────────────────────────
+
+/**
+ * Real counts from the public index, rounded down to 2 significant figures by
+ * the API, cached hourly. Hidden while unknown and below HERO_COUNT_MIN.
+ */
+export function IndexCounters() {
+  const t = useTranslations('landing.home.counters');
+  const format = useFormatter();
+  const { data } = useIndexStats();
+  const open = data?.openRoles ?? null;
+  if (!open || open.value < HERO_COUNT_MIN) return null;
+  const week = data?.addedThisWeek ?? null;
+  return (
+    <section className={styles.section} aria-labelledby="index-counters-title" data-index-counters="">
+      <div className={styles.wrap}>
+        <h2 className={styles.h2} id="index-counters-title">
+          {t('title')}
+        </h2>
+        <div className={styles.counters}>
+          <p className={styles.counterValue}>{t('openRoles', { count: format.number(open.value) })}</p>
+          {week && week.value > 0 ? <p className={styles.counterValue}>{t('addedThisWeek', { count: format.number(week.value) })}</p> : null}
+        </div>
+        <p className={styles.sourceNote}>{t('method')}</p>
+        <SourceNote sourced={open} className={styles.sourceNote} />
+      </div>
+    </section>
+  );
+}
+
+// ── Quick search ─────────────────────────────────────────────────────────
+
+export interface QuickSearchProps {
+  /** The brand's countries. One country (GoApply: mainland China) needs no picker. */
+  countries: readonly string[];
+  /** Example text for the two inputs when the shared examples do not fit the market. */
+  examples?: { role: string; city: string };
+}
+
+/**
+ * Title, country, city, remote. Routes to the public browse page when browse
+ * pages are live (`seo.browse`), to signup otherwise (PRODUCT F-MKT-02).
+ * Nothing typed here goes into the signup URL.
+ */
+export function QuickSearch({ countries, examples }: QuickSearchProps) {
+  const t = useTranslations('landing.search');
+  const router = useRouter();
+  const locale = useLocale();
+  const browse = useBrowseEnabled();
+  const signup = useSignupHref('home:search');
+  const [role, setRole] = useState('');
+  const [country, setCountry] = useState('');
+  const [city, setCity] = useState('');
+  const [remote, setRemote] = useState(false);
+  const [error, setError] = useState(false);
+  const ids = useId();
+  const names = (() => {
+    try {
+      return new Intl.DisplayNames([locale], { type: 'region' });
+    } catch {
+      return null;
+    }
+  })();
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!browse) {
+      router.push(signup);
+      return;
+    }
+    const href = browseHref({ role, city, country, remote });
+    if (!href) {
+      setError(true);
+      return;
+    }
+    setError(false);
+    router.push(href);
+  }
+
+  return (
+    <section className={styles.section} aria-labelledby={`${ids}-title`}>
+      <div className={styles.wrap}>
+        <h2 className={styles.h2} id={`${ids}-title`}>
+          {t('title')}
+        </h2>
+        <form className={styles.searchForm} onSubmit={submit} role="search" aria-labelledby={`${ids}-title`} noValidate>
+          <label className={styles.field}>
+            <span className={styles.label}>{t('role')}</span>
+            <input
+              className={styles.input}
+              name="role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              placeholder={examples?.role ?? t('rolePlaceholder')}
+              autoComplete="off"
+              maxLength={80}
+              aria-invalid={error || undefined}
+            />
+          </label>
+          {countries.length > 1 ? (
+            <label className={styles.field}>
+              <span className={styles.label}>{t('country')}</span>
+              <select className={styles.select} name="country" value={country} onChange={(e) => setCountry(e.target.value)}>
+                <option value="">{t('anyCountry')}</option>
+                {countries.map((c) => (
+                  // Region names come from the runtime's own locale data, which differs between
+                  // Node and browsers ("Hong Kong SAR China" vs "Hong Kong"): keep the server text.
+                  <option key={c} value={c} suppressHydrationWarning>
+                    {names?.of(c) ?? c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label className={styles.field}>
+            <span className={styles.label}>{t('city')}</span>
+            <input
+              className={styles.input}
+              name="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder={examples?.city ?? t('cityPlaceholder')}
+              autoComplete="off"
+              maxLength={60}
+              disabled={remote}
+            />
+          </label>
+          <label className={styles.check}>
+            <input type="checkbox" checked={remote} onChange={(e) => setRemote(e.target.checked)} />
+            {t('remote')}
+          </label>
+          <button type="submit" className={styles.ctaPrimary}>
+            {t('submit')}
+          </button>
+        </form>
+        {error ? (
+          <p className={styles.error} role="alert">
+            {t('roleRequired')}
+          </p>
+        ) : null}
+        {!browse ? <p className={styles.muted}>{t('signupNote')}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+// ── Pricing summary (home) ───────────────────────────────────────────────
+
+export interface PricingSummaryProps {
+  from: string;
+  /** Copy namespace (same keys in each): the home's own words for its plans. */
+  ns?: 'landing.home.pricing' | 'landing.cnHome.pricing';
+  /** Anchor id of the section. */
+  id?: string;
+  /**
+   * A line under the heading, in place of the section's own. Without it the
+   * section says `notOpen` of its namespace by itself while the plans API
+   * answers `paymentsOpen: false`, on either brand (D5).
+   */
+  note?: ReactNode;
+}
+
+/**
+ * Free + the preselected paid plan, priced from GET /billing/plans. A plan
+ * name with no translation yet falls back to the catalog's own label.
+ *
+ * Every plan of either catalog has an amount (MARKET_STRATEGY M-13: prices are
+ * catalog defaults, no plan is ever "price not set"), so the card never says a
+ * price is missing. Before the answer (the server HTML, the first paint, a
+ * failed request), and for a response that carries no amount, the paid card
+ * shows its name and no price line: nothing is said about a price that is not
+ * known (D3). `/pricing` follows the same rule (PricingPage leaves such a plan out).
+ */
+export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricing', note = null }: PricingSummaryProps) {
+  const t = useTranslations(ns);
+  const tc = useTranslations('credits');
+  const tnav = useTranslations('landing.cta');
+  const locale = useLocale();
+  const brand = useBrand();
+  const { data } = usePlans();
+  const pro = data?.plans.find((p) => p.key === (data.defaultSelection ?? 'pro_monthly')) ?? null;
+  // Before the plans arrive the card names the catalog's usual preselection; the price waits for the answer.
+  const proKey = pro?.key ?? 'pro_monthly';
+  const proPrice =
+    pro && pro.amountMinor !== null
+      ? tc(`price.${pro.kind === 'subscription' ? (pro.interval === 'week' ? 'week' : pro.interval === 'quarter' ? 'quarter' : 'month') : 'once'}`, {
+          price: formatMoney(locale, pro.amountMinor, pro.currency),
+        })
+      : null;
+  // The price is listed and nothing can be bought (no rail is ready, or the kill switch): say so, as /pricing
+  // and the plan sheet do. Only on the API's own `false`: before the answer or after a failed read, nothing is claimed.
+  const closedNote = note ?? (data?.paymentsOpen === false ? t('notOpen') : null);
+  return (
+    <section className={styles.sectionAlt} id={id} aria-labelledby="home-pricing-title" data-pricing-summary="">
+      <div className={styles.wrap}>
+        <div className={styles.sectionHead}>
+          <p className={styles.eyebrow}>{t('eyebrow')}</p>
+          <h2 className={styles.h2} id="home-pricing-title">
+            {t('title')}
+          </h2>
+          <p className={styles.body}>{t('sub')}</p>
+          {closedNote ? (
+            <p className={styles.body} data-payments-closed="">
+              {closedNote}
+            </p>
+          ) : null}
+        </div>
+        <div className={styles.grid2}>
+          <article className={styles.card}>
+            <h3 className={styles.h3}>{tc(`plans.${brand.id}.free`)}</h3>
+            <p className={styles.price}>{formatMoney(locale, 0, brand.currency)}</p>
+            <p className={styles.body}>{t('freeNote')}</p>
+            <SignupLink from={from} variant="secondary">
+              {tnav('start')}
+            </SignupLink>
+          </article>
+          <article className={`${styles.card} ${styles.cardFeatured}`}>
+            <h3 className={styles.h3}>{tc.has(`plans.${brand.id}.${proKey}`) ? tc(`plans.${brand.id}.${proKey}`) : (pro?.defaultLabel ?? '—')}</h3>
+            {proPrice ? <p className={styles.price}>{proPrice}</p> : null}
+            <p className={styles.body}>{t('proNote')}</p>
+            <a className={styles.inlineLink} href="/pricing">
+              {t('seeAll')}
+            </a>
+          </article>
+        </div>
+      </div>
+    </section>
+  );
+}

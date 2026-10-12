@@ -1,0 +1,666 @@
+// server/src/features/feed/contract.ts
+//
+// The job feed (ARCHITECTURE.md §2.6, §3.4, §4.8; TASK_PLAN.md WP-32, WP-33;
+// public part WP-78). Mounts: /api/v1/roboapply/feed (seeker, capability
+// `jobs.feed` per route) and /api/v1/public/feed (visitor list).
+//
+// Honesty (D3): FeedItem badges come only from real fields; pay is "Pay not
+// listed" (null), never 0; "Direct from employer" only when
+// `fromRecruiterBank && employerVerified && !isAgency`; applicant counts only
+// when sourced; sponsorship badge only from a quoted signal. Every aggregate
+// and public count filters `visibility='public' AND isCanonical AND
+// archivedAt IS NULL AND market = brand.market`.
+//
+// Source and apply contract (GOAPPLY_PARITY_PLAN §5; consumed by the web cards,
+// the job page and the feed header): every item carries `apply { url, target }`,
+// `source { name, original, url, lastVerifiedAt, via }` and `salary` (null when
+// the posting states no pay); the query response carries `sources { gohire,
+// employerBoards }` on GoApply and `thin`. The rules are in feed/sourceLine.ts.
+// D1: `apply.url` is a link the user opens; nothing is submitted for them.
+//
+// Dates (MARKET_STRATEGY 1.5 "Dates"; JI-10): three separate facts travel on
+// every item. `postedAt` is the EMPLOYER'S date and nothing else: it is null
+// whenever the stored date is one we assigned (`postedAtEstimated`), so no
+// reader can print an estimate as "posted". `firstSeenAt` is when we first
+// read the posting and `lastSeenAt` when a source last confirmed it listed
+// ("last verified"). `isNew` rests on `firstSeenAt` only (`isNewPosting`).
+//
+// Sponsorship (JI-11): a job-level badge rests on the posting's own quote, or
+// is the labelled reading of a provider that is named (`sponsorshipSignalOf`).
+// Who sees a label that is ours to choose is one rule for the card and the job
+// page (`sponsorshipLabelsShown`): an international row, a person who needs
+// sponsorship in the job's country. A company's sponsorship history is a
+// company fact and never a job badge.
+
+import { z } from 'zod';
+import type { MatchExplanation } from '../compliance/contract.js';
+import { PROVIDER_META } from '../jobs/normalize/index.js';
+import type { FilterSet, FilterSetPatch } from '../search/contract.js';
+import type { ApplyLink, SalaryLine, SourceFacts } from './sourceLine.js';
+
+export type { ApplyLink, ApplyTarget, SalaryLine, SourceFacts, SourceKind, SourceVia } from './sourceLine.js';
+// The rules behind those fields (pure; the bank rule reads the two posting-page settings), for every area that
+// shows a job (job page, alerts, Ready to apply, the GoApply card meta).
+export {
+  EMPLOYER_BOARD_SOURCES,
+  GOHIRE_SOURCE_BOARD,
+  applyLinkOf,
+  cnListable,
+  cnListableWhere,
+  bankListable,
+  bankListableWhere,
+  CREDIT_LINE_BOARDS,
+  creditLineHeld,
+  creditLineHeldWhere,
+  itemOwesCreditLine,
+  heldBankBoards,
+  hasApplyLink,
+  hasPayFigure,
+  httpUrl,
+  salaryLineOf,
+  sourceFactsOf,
+  sourceKindOf,
+  viaOf,
+} from './sourceLine.js';
+
+const Id = z.string().min(1).max(64);
+
+export const FEED_SORTS = ['recommended', 'newest', 'best_fit', 'highest_pay', 'deadline'] as const;
+export type FeedSort = (typeof FEED_SORTS)[number];
+export const FIT_TIER_LABELS = ['great', 'good', 'possible', 'unlikely'] as const;
+export type FitTier = (typeof FIT_TIER_LABELS)[number];
+
+// ── POST /feed/query ─────────────────────────────────────────────────────
+
+/** Longest `relevance` text a query or a preview accepts. */
+export const FEED_RELEVANCE_MAX_CHARS = 240;
+/** `relevance`: optional free text, trimmed, at most 240 characters (longer is refused, never cut). */
+export const FeedRelevanceSchema = z.string().trim().max(FEED_RELEVANCE_MAX_CHARS).optional();
+
+export const FeedQueryBodySchema = z
+  .object({
+    searchProfileId: Id.optional(),
+    /**
+     * `deadline` is GoApply only: jobs whose posting states a 网申 close date
+     * (soonest first), then the rest newest first.
+     */
+    sort: z.enum(FEED_SORTS).default('recommended'),
+    q: z.string().trim().max(200).optional(),
+    /** Partial FilterSet applied on top of the profile for this query only (validated by search.parseFilterSet). */
+    overrides: z.record(z.string(), z.unknown()).optional(),
+    cursor: z.string().max(512).optional(),
+    /** View filter: hide weaker fits (counts returned in `hiddenByTier`). */
+    fitTier: z.enum(['all', 'good', 'great']).optional(),
+    /**
+     * Free text the list may be ORDERED by ("climate startups Rust"). It is
+     * never a filter and nothing is claimed to be checked against it. It is
+     * part of the query text of the lexical and dense retrieval legs (beside a
+     * typed `q`, which alone filters), and part of the session's identity. The
+     * legs run for Recommended and Best fit; Newest, Highest pay and Deadline
+     * accept the text and do not use it.
+     */
+    relevance: FeedRelevanceSchema,
+  })
+  .strict();
+
+/**
+ * How the list was ordered. `recency` = date posted + filters only: GoApply
+ * users who turned 个性化推荐 off or have not chosen yet (PIPL Art. 24), where
+ * no fit score is used or shown. `query_match` = the same users with a typed
+ * query or a text to rank by: the list is in the fused order of the recency
+ * and lexical legs (how closely a posting matches the words), still with no
+ * profile, no user vector and no fit.
+ */
+export type FeedOrder = 'personalized' | 'recency' | 'query_match';
+
+export interface FitBadge {
+  tier: FitTier;
+  /** 0–100, shown as "87 / 100". */
+  score: number;
+  /** `pre` = deterministic "Quick estimate"; `ai` = scorer v3. */
+  kind: 'pre' | 'ai';
+  topGap: string | null;
+  topOverlap: string | null;
+  /**
+   * How much of the rubric the fit rests on (estimate v2). A quick estimate
+   * with `low` confidence is not listed by the "Good or better" and "Great"
+   * views. Sent with every fit; a reader treats a missing value as unknown.
+   */
+  confidence?: 'high' | 'medium' | 'low';
+  /** One reason when the confidence is low (`no_skills_listed`, `no_level_stated`, `no_role_evidence`, `no_resume`, `few_details`); null otherwise. */
+  confidenceReason?: string | null;
+}
+
+export interface FeedItem {
+  jobId: string;
+  title: string;
+  company: {
+    id: string | null;
+    name: string;
+    logoUrl: string | null;
+    /** Only with a provenance entry in RACompany.facts (D3); null renders "Not listed". */
+    sizeBand?: { value: string; source: string; asOf: string } | null;
+  };
+  location: string | null;
+  workModel: 'remote' | 'hybrid' | 'onsite' | null;
+  employmentType: string | null;
+  seniority: string | null;
+  /** Null = "Pay not listed" (never 0). */
+  pay: { min: number | null; max: number | null; currency: string; period: 'year' | 'month' | 'week' | 'day' | 'hour'; text: string | null } | null;
+  /** CN "N薪" when the posting states it. */
+  payMonths?: number | null;
+  /**
+   * The posting's own date as the employer or its source states it. Null when
+   * the posting states none, and null when the stored date is one we assigned
+   * (`postedAtEstimated`): an estimate never travels under this name.
+   */
+  postedAt: string | null;
+  /**
+   * True when the posting's own date is not known and the stored one is ours
+   * (the day we first saw the job, the day the user added it, an open-data
+   * set's update date). The card then says when we first saw the job and when
+   * it was last checked, never "Posted {date}".
+   */
+  postedAtEstimated?: boolean;
+  /**
+   * When we first read this posting (ours, never the employer's). "New" rests
+   * on it. Always sent by the server (typed optional so an object built
+   * elsewhere is still a FeedItem).
+   */
+  firstSeenAt?: string | null;
+  /** When a source last confirmed the posting listed: "Last checked {date}" / "last verified". */
+  lastSeenAt: string | null;
+  /**
+   * First seen by us since the viewer's previous visit to the list, or, where
+   * no such visit is known, in the last NEW_WINDOW_HOURS hours
+   * (`isNewPosting`). Never derived from `postedAt`: a posting an employer
+   * published months ago and we read for the first time today is new here,
+   * and its card still shows its true posted date. A field of its own, not a
+   * badge of `badges` (that list is facts from the post, capped at three).
+   * Always sent by the server.
+   */
+  isNew?: boolean;
+  /**
+   * Source line, e.g. aggregator + original host, or `{sourceName}`, with the
+   * facts every mainland card shows (来源 / 原始链接 / 最后核验): `original`
+   * (the original publisher: the employer for an employer-board row), `url`
+   * (the original posting link), `lastVerifiedAt` (when we last saw it live)
+   * and `via` ('bank' | 'ats' | 'import'; absent for an aggregator row).
+   * The four facts are always sent by the server (typed optional so an object
+   * built elsewhere is still a FeedItem; readers default them to null).
+   */
+  source: { name: string; kind: 'provider' | 'bank' | 'ats_public' | 'user_import' } & Partial<SourceFacts>;
+  /**
+   * The posting's own apply link, which the user opens (D1: we never submit).
+   * `target`: 'gohire' = the GoHire posting page (a GoHire bank row),
+   * 'employer' = the employer's own careers site or ATS page (an employer-board
+   * row), null = not known (a user's own import, an aggregator's link). The
+   * whole value is null when the row has no usable link. Always sent.
+   */
+  apply?: ApplyLink | null;
+  /**
+   * Pay as the posting states it, in one place for the card: `text` is the
+   * line as posted ("18-28K·15薪") where there is one. Null when the posting
+   * states no pay ("薪资未披露" / "Pay not listed"; never 面议, never 0).
+   * Always sent; agrees with `pay` (which stays for existing readers).
+   */
+  salary?: SalaryLine | null;
+  fromRecruiterBank: boolean;
+  employerVerified: boolean;
+  isAgency: boolean;
+  /**
+   * At most 3, fixed priority, only from real fields (PRODUCT F-FEED-05/07).
+   * `label` is a stable key the UI translates (for `market_tag` the tag id,
+   * e.g. 'soe'); `quote` is the posting's own words where the badge rests on
+   * one. `sponsorship_provider` carries no quote: it is a provider's reading
+   * and names that provider (`provider`). `new` and `closing_soon` are
+   * reserved and never emitted here (no urgency; "New" is the field `isNew`).
+   */
+  badges: FeedBadge[];
+  /** Null when nothing could be compared, or (GoApply) when personalisation is off. */
+  fit: FitBadge | null;
+  tracker: { status: string } | null;
+  /**
+   * GoApply 网申 close date / 届别, only as the posting states them.
+   * `applyClosesAt` is the stated date (yyyy-mm-dd, China time) with its
+   * quote; null when the posting states none (RAJob.expiresAt is never shown:
+   * it is often an estimate).
+   */
+  campus?: { applyClosesAt: string | null; applyClosesQuote?: string | null; classYears: number[] } | null;
+  /** 0-based position in the feed session (impressions beacon); null outside a session. */
+  position?: number | null;
+  /**
+   * Market card lines from `marketHooks.cardMeta()`, keyed by hook set
+   * (`cn` → JobMetaCn, `ats_public` → JobMetaTw). Left off when no market
+   * hook has anything to add (most RoboApply cards).
+   */
+  cardMeta?: MarketCardMeta;
+  /**
+   * "Why this job" lines (PIPL Art. 24, `explainMatch`): present wherever a
+   * fit is shown, and on GoApply lists ordered by date (which say so).
+   */
+  explanation?: FeedExplanation;
+  /**
+   * The same role at the same company posted for other places, collapsed into
+   * this card ("also in N more locations"). `count` is how many other places
+   * (one posting each, every place different from this card's and from each
+   * other). `jobIds` holds them, at most 10, and `locations[i]` is the place
+   * of `jobIds[i]`, so each can be opened by name. A card holds at most 10
+   * other postings: a further place of the role is a card of its own, so
+   * `count` equals `jobIds.length`. Left off when there is none; a reader
+   * treats a missing value as "no other postings".
+   */
+  alsoIn?: { count: number; locations: string[]; jobIds: string[] };
+}
+
+/**
+ * The compliance area's `MatchExplanation` as a card carries it. The server
+ * always sends `mode` 'personalized' or 'non_personalized'; it is typed as a
+ * string here so a card object built from parsed JSON (where a literal has
+ * widened to string) still is a FeedItem. Readers narrow it (the web adapter
+ * `itemExtras` returns a `MatchExplanation`).
+ */
+export type FeedExplanation = Omit<MatchExplanation, 'mode'> & { mode: MatchExplanation['mode'] | (string & {}) };
+
+/** `marketHooks.cardMeta()` output: one record per applicable hook set. */
+export type MarketCardMeta = Record<string, Record<string, unknown>>;
+
+export const FEED_BADGE_KINDS = [
+  'direct_from_employer',
+  'sponsorship',
+  /** A provider's own reading that the job offers visa sponsorship: labelled as such, with the provider's name and no quote. */
+  'sponsorship_provider',
+  'no_sponsorship',
+  'clearance_required',
+  'citizens_only',
+  'market_tag',
+  'agency',
+  'remote',
+  'pay_listed',
+  'benefits_listed',
+  'new',
+  'closing_soon',
+] as const;
+export type FeedBadgeKind = (typeof FEED_BADGE_KINDS)[number];
+export interface FeedBadge {
+  kind: FeedBadgeKind;
+  label: string;
+  quote?: string;
+  /** `sponsorship_provider` only: the display name of the provider whose reading this is ("Active Jobs DB"). */
+  provider?: string;
+}
+
+// ── "New" and the sponsorship signal: one rule for the card and the job page ──
+
+/** Without a known previous visit, a posting first seen within this many hours is new. */
+export const NEW_WINDOW_HOURS = 48;
+
+/**
+ * Is this posting new to the viewer? `firstSeenAt` (when we first read it) is
+ * after `newSince` (the viewer's previous visit to the list) when the caller
+ * knows one, else within the last NEW_WINDOW_HOURS hours. The employer's
+ * posted date plays no part. A missing or future first-seen date is not new.
+ */
+export function isNewPosting(firstSeenAt: Date | string | null | undefined, now: Date, newSince?: Date | null): boolean {
+  if (!firstSeenAt) return false;
+  const seen = new Date(firstSeenAt).getTime();
+  if (!Number.isFinite(seen) || seen > now.getTime()) return false;
+  const since = newSince instanceof Date && Number.isFinite(newSince.getTime()) ? newSince.getTime() : now.getTime() - NEW_WINDOW_HOURS * 3_600_000;
+  return seen > since;
+}
+
+/** `RAJob.sponsorshipSource` of a provider's reading is this prefix + the provider id (ingest writes it; MARKET_TASK_PLAN "Sponsorship source"). */
+export const PROVIDER_SPONSORSHIP_PREFIX = 'provider:';
+
+/** What a job says about visa sponsorship, and on whose word. */
+export type SponsorshipSignal =
+  /** The posting's own words. */
+  | { basis: 'quote'; status: 'offered' | 'not_offered'; quote: string }
+  /** A provider's reading that the job offers sponsorship; `provider` is that provider's display name. */
+  | { basis: 'provider'; status: 'offered'; provider: string };
+
+/** The display name of the provider a `sponsorshipSource` names; null for anything else (a raw id is never shown). */
+export function sponsorshipProviderName(sponsorshipSource: string | null | undefined): string | null {
+  if (typeof sponsorshipSource !== 'string' || !sponsorshipSource.startsWith(PROVIDER_SPONSORSHIP_PREFIX)) return null;
+  const id = sponsorshipSource.slice(PROVIDER_SPONSORSHIP_PREFIX.length).trim();
+  const meta = Object.prototype.hasOwnProperty.call(PROVIDER_META, id) ? PROVIDER_META[id as keyof typeof PROVIDER_META] : null;
+  return meta?.aggregatorName?.trim() || null;
+}
+
+/**
+ * The one rule for a job-level sponsorship label (JI-11), for every surface:
+ *   (a) a status with the posting's own quote → that status, quoted;
+ *   (b) 'offered' with no quote, stored as a provider's reading whose provider
+ *       has a display name → the provider's reading, named, never worded as (a);
+ *   (c) a provider's 'not_offered' alone → nothing (a negative needs the
+ *       posting's words);
+ *   (d) anything else → nothing.
+ * A company's sponsorship history is never an input here.
+ */
+export function sponsorshipSignalOf(row: { sponsorship?: string | null; sponsorshipEvidence?: string | null; sponsorshipSource?: string | null }): SponsorshipSignal | null {
+  const quote = typeof row.sponsorshipEvidence === 'string' ? row.sponsorshipEvidence.trim() : '';
+  if (quote) return row.sponsorship === 'offered' || row.sponsorship === 'not_offered' ? { basis: 'quote', status: row.sponsorship, quote } : null;
+  if (row.sponsorship !== 'offered') return null;
+  const provider = sponsorshipProviderName(row.sponsorshipSource);
+  return provider ? { basis: 'provider', status: 'offered', provider } : null;
+}
+
+/**
+ * A person's own answers about visa sponsorship: the search-profile answer
+ * and the per-country work-authorization answers (the match area's
+ * `MatchUser` carries both under these names).
+ */
+export interface SponsorshipReader {
+  needsSponsorship: boolean | null;
+  workAuth: ReadonlyArray<{ country: string; sponsorship: 'now' | 'later' | 'no' | null }>;
+}
+
+/** Does this person need sponsorship for a job in `country`? (The per-country answer wins over the search-profile answer.) */
+export function needsSponsorshipFor(reader: SponsorshipReader | null, country: string | null): boolean {
+  if (!reader) return false;
+  const entry = country ? reader.workAuth.find((w) => w.country === country) : undefined;
+  if (entry && entry.sponsorship) return entry.sponsorship === 'now' || entry.sponsorship === 'later';
+  return reader.needsSponsorship === true;
+}
+
+/**
+ * Is a sponsorship label that is OURS to choose shown on this row to this
+ * reader? One rule for the card and the job page: only on an international
+ * row, and only to a person who needs sponsorship in the job's country. The
+ * card applies it to every sponsorship badge; the job page applies it to the
+ * provider's reading (the posting's own quoted statement is a fact of the
+ * posting and stays on the page for every reader, as before). GoApply rows
+ * (market cn) never carry one.
+ */
+export function sponsorshipLabelsShown(row: { market: string; locationCountry?: string | null }, reader: SponsorshipReader | null): boolean {
+  return row.market === 'intl' && needsSponsorshipFor(reader, row.locationCountry ?? null);
+}
+
+export interface FeedQueryResponse {
+  items: FeedItem[];
+  cursor: string | null;
+  endOfFeed: boolean;
+  /** Jobs hidden by the fit-tier view filter: "Hiding {n} weaker fits." */
+  hiddenByTier: number;
+  sessionId: string;
+  /**
+   * `recency` when personalisation is off (GoApply): sorted by date posted and filters only; `query_match`
+   * when such a list has a typed query or a text to rank by (see `FeedOrder`). Always sent.
+   */
+  order?: FeedOrder;
+  /**
+   * The sort actually applied (`recommended`/`best_fit` fall back to `newest` when `order` is `recency`). For a
+   * `query_match` list it is `newest` too: its first window is in the fused order of its query, the older
+   * windows that follow are by date. Always sent.
+   */
+  sort?: FeedSort;
+  /**
+   * Where the postings this query can reach come from, for the feed header
+   * (GoApply: "来自 N 家企业招聘官网", or "来自 GoHire 与 N 家企业招聘官网" when
+   * `gohire` is true). Counted from the rows themselves (public rows matching
+   * the filters, inside the list's age window): `employerBoards` is the number
+   * of distinct employer boards, `gohire` whether any GoHire bank row is
+   * listed. Sent on market `cn`; left off when it could not be counted (never
+   * a guess, D3) and on other markets.
+   */
+  sources?: FeedSources;
+  /**
+   * True when the whole list holds fewer results than `FEED_THIN_BELOW`: the
+   * web shows the source header and, on GoApply, the search links to other
+   * sites. It is about the list, not the page or the part read so far: on
+   * GoApply it is known from the first page (the matching public rows are
+   * counted); elsewhere it turns true once the list has reached its age floor
+   * short. False while more results may still come and nothing counts them.
+   * Always sent.
+   */
+  thin?: boolean;
+  /**
+   * Sent on the FIRST page of a query that carried `relevance`, and nowhere
+   * else: whether that text took part in choosing and ordering the list (a
+   * lexical or dense leg was asked with it and returned rows). False when no
+   * posting matched the words, for a list that runs no legs (Newest, Highest
+   * pay, Deadline) and with FEED_HYBRID=off. A reader that says "Ranked by …"
+   * leaves the line out when this is false; absent means "not told" (a later
+   * page, a query with no such text).
+   */
+  relevanceApplied?: boolean;
+}
+
+export interface FeedSources {
+  gohire: boolean;
+  employerBoards: number;
+}
+
+// ── GET /feed/counts ─────────────────────────────────────────────────────
+
+export interface FeedCountsResponse {
+  forYou: number;
+  saved: number;
+  external: number;
+  applied: number;
+}
+
+// ── Hide / unhide / report ───────────────────────────────────────────────
+
+export const JobParamsSchema = z.object({ id: Id });
+
+export const HIDE_REASONS = [
+  'wrong_title',
+  'wrong_level',
+  'wrong_location',
+  'pay_too_low',
+  'company',
+  'already_applied',
+  'not_interested',
+  'other',
+] as const;
+export const HideJobBodySchema = z.object({ reasonCode: z.enum(HIDE_REASONS), detail: z.string().max(500).optional() }).strict();
+export interface FilterDiffProposal {
+  searchProfileId: string;
+  baseVersion: number;
+  ops: Array<{ op: 'add' | 'remove' | 'set'; path: string; value: unknown }>;
+  /**
+   * The same change as a FilterSetPatch, ready for
+   * `PATCH /search-profiles/:id { baseVersion, filtersPatch }` (one PATCH).
+   */
+  patch: FilterSetPatch;
+  /** Job count after the change (capped at 5,000; null when it could not be counted). */
+  countAfter: number | null;
+}
+export interface HideJobResponse {
+  proposedFilterDiff: FilterDiffProposal | null;
+  /** Reasons with no one-step filter change open an editor instead (ARCH §4.9). */
+  editor?: 'location' | 'seniority' | null;
+}
+
+/** GoApply adds 招转培 / 培训贷 / 收费 reasons. */
+export const REPORT_REASONS = ['expired', 'scam', 'wrong_info', 'duplicate', 'agency', 'offensive', 'training_loan', 'pay_to_work', 'fee_required', 'other'] as const;
+export const ReportJobBodySchema = z.object({ reason: z.enum(REPORT_REASONS), note: z.string().max(1000).optional() }).strict();
+
+// ── Telemetry and calibration ────────────────────────────────────────────
+
+export const ImpressionsBodySchema = z
+  .object({
+    sessionId: Id,
+    positions: z
+      .array(z.object({ jobId: Id, position: z.number().int().min(0).max(10_000), ms: z.number().int().min(0).max(3_600_000) }).strict())
+      .min(1)
+      .max(100),
+  })
+  .strict();
+
+export const RATING_REASONS = ['wrong_titles', 'wrong_level', 'wrong_location', 'missing_skills', 'jobs_old', 'unwanted_companies'] as const;
+export const FeedRatingBodySchema = z
+  .object({ score: z.number().int().min(0).max(10), reasons: z.array(z.enum(RATING_REASONS)).max(6).default([]), note: z.string().max(1000).optional() })
+  .strict();
+
+// ── Explore, NL query, new-count, skills-check ───────────────────────────
+
+export const ExploreQuerySchema = z.object({ locale: z.string().max(8).optional() });
+export interface ExploreCategory {
+  taxonomyId: string;
+  label: string;
+  /** Live count (public canonical rows of the brand's market). */
+  count: number;
+  /** The same count with its provenance (D3): live public postings in this market. */
+  sourced: { value: number; source: 'aggregate'; asOf: string; method: string };
+}
+export interface ExploreResponse {
+  categories: ExploreCategory[];
+  asOf: string;
+}
+
+export const NlQueryBodySchema = z.object({ text: z.string().trim().min(2).max(500), searchProfileId: Id.optional() }).strict();
+export interface NlQueryResponse {
+  diff: FilterDiffProposal;
+  /**
+   * One English sentence pair built from `rankedBy` and `unmatched` ("Ranked by closeness to: … . Not checked as
+   * requirements: … ."), in the user's words; nothing is claimed to be checked. Empty when both are empty. A
+   * client that translates builds its own lines from the two lists.
+   */
+  explanation: string;
+  unmatched: string[];
+  /**
+   * The topics of the request the list may be ordered by ("climate startups",
+   * "Rust"): at most 5, each at most 60 characters. Never a filter, and never
+   * a phrase about pay, visa, benefits, hours, time zone or commute (those stay
+   * in `unmatched` only). The client sends them back as `relevance` on
+   * `POST /feed/query`, where they are part of the query text of the lexical
+   * and dense legs. Those legs run for the Recommended and Best fit orders; a
+   * list asked for by date, pay or deadline is not ordered by them.
+   */
+  rankedBy: string[];
+}
+
+/**
+ * `since` overrides the stored last visit. `markVisited=true` stamps
+ * `RAUserUiState.lastFeedVisitAt` after counting (the first page of
+ * `POST /feed/query` stamps it too). A polling badge omits `markVisited`, so
+ * polling never resets the count it shows. (Contract change from TASK_PLAN
+ * WP-32 "new-count stamps lastFeedVisitAt": recorded in the WP-32 handoff.)
+ * Results are cached per user for 2 minutes.
+ */
+export const NewCountQuerySchema = z.object({
+  since: z.iso.datetime().optional(),
+  markVisited: z.enum(['true', 'false']).optional(),
+});
+export interface NewCountResponse {
+  /**
+   * Real count of jobs first seen since the last visit: ≥ Good fit when
+   * personalised; every matching job when not (GoApply with 个性化推荐 off).
+   */
+  count: number;
+  since: string | null;
+  /** The count hit its ceiling (400 personalised, 5,000 otherwise): show "{count}+". */
+  capped?: boolean;
+}
+
+export interface SkillsCheckResponse {
+  /** Required skills absent from profile skills, with "asked in X of Y". */
+  skills: Array<{ skill: string; askedIn: number; outOf: number }>;
+}
+
+// ── Public visitor list: GET /api/v1/public/feed ─────────────────────────
+
+export const PublicFeedQuerySchema = z.object({
+  role: z.string().trim().max(80).optional(),
+  city: z.string().trim().max(80).optional(),
+  country: z.string().regex(/^[A-Z]{2}$/).optional(),
+});
+/** No fit, `publicDisplay` jobs only, 20 items. */
+export type PublicFeedItem = Omit<FeedItem, 'fit' | 'tracker' | 'cardMeta' | 'explanation'>;
+export interface PublicFeedResponse {
+  items: PublicFeedItem[];
+}
+
+// ── Documented JSON columns (ra-feed.prisma) ─────────────────────────────
+
+const FeedSessionRankEntrySchema = z
+  .object({
+    jobId: z.string(),
+    fit: z.number().nullable(),
+    kind: z.enum(['pre', 'ai']),
+    rank: z.number(),
+    /** Same-role collapse: the key of the card's (company, title) group, when it has one. */
+    g: z.string().optional(),
+    /** Same-role collapse: ids of the postings folded into this card (other places). */
+    also: z.array(z.string()).optional(),
+    /**
+     * Not a card: a row of the hybrid first window the fit-tier view hid, kept so a later window does not
+     * read and count it again. Such an entry is never in `jobIds`.
+     */
+    h: z.literal(true).optional(),
+  })
+  .strict();
+/**
+ * `RAFeedSession.ranks`: `[{ jobId, fit, kind: 'pre'|'ai', rank, g?, also?, h? }]`. The
+ * refill keyset id lives in its own column, `RAFeedSession.windowEndsId`
+ * (SCHEMA-3, SR-32-4). Sessions written before that column stored the
+ * envelope `{ entries, windowEndsId }` here (30-minute TTL); it is still read.
+ */
+export const FeedSessionRanksSchema = z.union([
+  z.array(FeedSessionRankEntrySchema),
+  z.object({ entries: z.array(FeedSessionRankEntrySchema), windowEndsId: z.string().nullable() }).strict(),
+]);
+/** `RAUserAffinity.{taxonomy,company,skill}Weights`: `{ [key]: -1..1 }` */
+export const AffinityWeightsSchema = z.record(z.string(), z.number().min(-1).max(1));
+/** `RAJobInteraction.detail` for kinds 'applied' | 'unapplied' | 'share' | 'copilot_open'. */
+export const JobInteractionDetailSchema = z.record(z.string(), z.unknown());
+
+/** Seam used by search (/search-profiles/count, /:id/limiting) and onboarding. */
+export interface FeedCountResult {
+  count: number | null;
+  capped: boolean;
+}
+export interface LimitingFilter {
+  field: string;
+  value: unknown;
+  removalGain: number;
+}
+export type { FilterSet };
+
+export const FEED_ERROR_CODES = {
+  refreshLimited: 'feed_refresh_limited', // 429 rate_limited { reason, retryAfterSec }
+  ratingAlreadyToday: 'feed_rating_already_today', // 409 conflict { reason }
+  sessionExpired: 'feed_session_expired', // 409 conflict { reason }: start again without a cursor
+  deadlineSortCnOnly: 'deadline_sort_cn_only', // 422 invalid_request { reason }
+  jobNotFound: 'job_not_found', // 404 not_found { reason }
+  noRole: 'nl_query_no_role', // 422 invalid_request { reason }: the text names no role
+} as const;
+
+// ── Ranking factors (public "How ranking works" page, /help/ranking, WP-40) ──
+
+/**
+ * The published texts of the Recommended order (factors and weights, the
+ * ordering rules besides them, the points a career goal adds) live in
+ * rankingText.ts; these are the same three constants, re-exported.
+ */
+export { GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS } from './rankingText.js';
+
+/**
+ * A result list shorter than this is "thin" (`FeedQueryResponse.thin`). It is
+ * the feed's existing thin-result threshold: the first window is widened from
+ * 14 to 45 days below the same number (`FEED_LIMITS.widenBelowRows`).
+ */
+export const FEED_THIN_BELOW = 60;
+
+/** Feed limits (ARCH §3.4, §3.10, §4.8). */
+export const FEED_LIMITS = {
+  pageSize: 20,
+  retrievalLimit: 400,
+  /** Rows each retrieval leg (recency, lexical, dense) contributes before fusion. */
+  legLimit: 200,
+  /** The constant k of reciprocal rank fusion: a row scores Σ 1 / (k + rank) over the legs. */
+  rrfK: 60,
+  firstWindowDays: 14,
+  widenWindowDays: 45,
+  widenBelowRows: FEED_THIN_BELOW,
+  maxAgeDays: 120,
+  sessionTtlMin: 30,
+  countCap: 5000,
+  companyMaxPerWindow: 2,
+  companyWindow: 20,
+  reportCloseThreshold: 3,
+  skillsCheckTop: 5,
+  skillsCheckList: 50,
+} as const;

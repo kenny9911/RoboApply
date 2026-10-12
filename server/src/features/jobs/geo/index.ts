@@ -1,0 +1,54 @@
+// server/src/features/jobs/geo/index.ts — public surface of the geo tables
+// (WP-16a). Used by the normalizers (jobs/normalize), and available to the
+// feed's location filter (WP-32) and the location typeahead (WP-20) to map a
+// city name in any language ("上海", "Shanghai") to one table id.
+
+export {
+  CITIES,
+  CITY_TABLE_AS_OF,
+  CITY_TABLE_SOURCE,
+  CITY_TABLE_VERSION,
+  citiesNamed,
+  cityById,
+  cityKey,
+  cityLabel,
+  distanceKm,
+  findCity,
+  scanCjkCities,
+  validateCityTable,
+} from './cities.js';
+export type { CityRecord, CityTable, CityTableSource } from './cities.js';
+export {
+  COUNTRIES,
+  SUBDIVISIONS,
+  countryByCode,
+  countryByName,
+  geoKey,
+  resolveCountry,
+  subdivision,
+  subdivisionCountries,
+} from './countries.js';
+export type { CountryRecord, SubdivisionRecord } from './countries.js';
+export { parseLocation, parseLocations, statedWorkModel, twDistrictOfText } from './parseLocation.js';
+export type { LocationHint, ParsedLocation, StatedWorkModel } from './parseLocation.js';
+// Taiwan's 22 counties and their districts by 3-digit postal code (MKT-3E): the open-data sweep's
+// split table and the county / district reading of strings such as 新竹縣竹北市.
+export {
+  TW_COUNTIES,
+  TW_DISTRICTS,
+  TW_DISTRICTS_AS_OF,
+  TW_DISTRICTS_SOURCE,
+  TW_DISTRICTS_VERSION,
+  districtByZip,
+  districtsOfCounty,
+  findTwDistrict,
+  twCounty,
+  validateTwDistricts,
+} from './twDistricts.js';
+export type { TwCounty, TwDistrict, TwDistrictData, TwDistrictMatch, TwDistrictSource } from './twDistricts.js';
+// Taiwan searches and the district filter's values (MKT-5F, JT-7): "is this search in Taiwan?", the
+// canonical `<county><district>` value, and the county names a client may match a typed place against.
+export { isTaiwanPlace, isTaiwanSearch, resolveTwDistrictValue, twCountiesOfPlace, twCountyCityNames, twCountyKeys, twDistrictNameIsShared, twPlaceKey } from './twSearch.js';
+export type { SearchPlace, SearchPlaces, TwDistrictRef } from './twSearch.js';
+// buildCities.ts (the GeoNames regeneration script) is deliberately not
+// re-exported: runtime code never needs it.

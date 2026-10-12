@@ -1,0 +1,613 @@
+// server/src/features/jobs/companies/service.ts — companies: ingest upsert, typeahead, profile, jobs, H-1B (WP-16b).
+//
+// D3 (ARCH §2.4, PRODUCT F-JOB-04):
+//   - a company field is shown only when `RACompany.facts` names its source;
+//     unknown fields are absent ("Not listed" in the UI), never guessed;
+//   - ingest fills an empty field from a sourced provider/bank statement and
+//     never overwrites a field another source already filled;
+//   - counts come from our own index (`Sourced`, source 'index') and count
+//     only live canonical public jobs of the brand's market;
+//   - an ANONYMOUS viewer (no session) sees and counts only jobs cleared for
+//     public display (`publicDisplay`, OPS-A4 / H12: licensed provider
+//     listings and bank jobs without syndication consent stay behind a
+//     session), like every other anonymous surface (public feed, SEO, /job/*);
+//   - the job list and the open-job count are one predicate (`liveJobWhere`),
+//     so they always agree; it holds a recruiter-bank row whose bank has no
+//     posting page (as the feed does) and a row that owes a credit line unless
+//     the caller prints the line, in which case each such item carries it;
+//   - H-1B numbers cite the US DOL LCA disclosure file they came from (the
+//     other sponsorship records, with every source and date, are
+//     sponsorship/service.ts);
+//   - industries use one vocabulary (industryMap.ts): a provider or bank
+//     string that is exactly one of the industry labels is stored as that id,
+//     anything else as the source wrote it. A company with no industry from a
+//     provider, the bank or a user takes the one a posting states in a
+//     verified quote (`setIndustryFromPosting`, provenance 'posting' with the
+//     posting's link); none is ever inferred (SM-10).
+// Market-scoped: a company of the other market answers 404 company_not_found.
+
+import { createHash } from 'node:crypto';
+import type prisma from '../../../lib/prisma.js';
+import { getCurrentBrandOrDefault, type Market } from '../../../platform/brand/index.js';
+import { httpError, type Sourced } from '../../../platform/http.js';
+import { bankListableWhere, creditLineHeldWhere, sourceKindOf, type FeedItem, type MarketCardMeta } from '../../feed/contract.js';
+import { DOL_LCA_URL } from '../data/index.js';
+import type { MarketHookContext, MarketHookJob } from '../marketHooks.js';
+import { hostOf, normalizeCompanyName, type CompanyUpsert } from '../normalize/index.js';
+import { industryIdFor, mapIndustries } from './industryMap.js';
+import {
+  COMPANY_ERROR_CODES,
+  type CompanyJobsResponse,
+  type CompanyProfile,
+  type CompanyTypeaheadItem,
+  type H1bHistoryResponse,
+  type SourcedFact,
+} from './contract.js';
+
+export type CompaniesDb = Pick<typeof prisma, 'rACompany' | 'rAJob' | 'rAH1bEmployerStat' | '$queryRaw'>;
+
+type FactEntry = { source: string; url?: string; fetchedAt: string };
+type Facts = Record<string, FactEntry>;
+
+// ── Slugs ─────────────────────────────────────────────────────────────────
+
+function shortHash(s: string, n = 6): string {
+  return createHash('sha1').update(s).digest('hex').slice(0, n);
+}
+
+/** URL slug: ASCII words of the display name; CJK-only names get 'c-<hash>'. Max 60 chars. */
+export function companySlug(displayName: string, nameNormalized: string): string {
+  const ascii = displayName
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+    .replace(/-+$/g, '');
+  return ascii.length >= 2 ? ascii : `c-${shortHash(nameNormalized, 8)}`;
+}
+
+// ── Ingest upsert ─────────────────────────────────────────────────────────
+
+const FACT_FIELDS = ['website', 'domain', 'industries', 'sizeBand', 'employeeCount', 'hqLocation', 'foundedYear', 'description'] as const;
+type FactField = (typeof FACT_FIELDS)[number];
+
+interface ExistingCompany {
+  id: string;
+  nameNormalized: string;
+  logoUrl: string | null;
+  isAgency: boolean | null;
+  bankCompanyRef: string | null;
+  website: string | null;
+  domain: string | null;
+  industries: string[];
+  sizeBand: string | null;
+  employeeCount: number | null;
+  hqLocation: string | null;
+  foundedYear: number | null;
+  description: string | null;
+  facts: unknown;
+}
+
+function isEmpty(v: unknown): boolean {
+  return v == null || (Array.isArray(v) && v.length === 0) || v === '';
+}
+
+function asFacts(v: unknown): Facts {
+  return v && typeof v === 'object' && !Array.isArray(v) ? { ...(v as Facts) } : {};
+}
+
+/**
+ * The update for an existing company: fills only empty fields that the new
+ * statement sources (per-field provenance copied into facts). Null = nothing to do.
+ */
+export function companyPatch(existing: ExistingCompany, next: CompanyUpsert): Record<string, unknown> | null {
+  const facts = asFacts(existing.facts);
+  const data: Record<string, unknown> = {};
+  for (const field of FACT_FIELDS) {
+    const value = next[field as FactField];
+    if (isEmpty(value) || !isEmpty(existing[field as FactField]) || !next.facts[field]) continue;
+    data[field] = value;
+    facts[field] = next.facts[field]!;
+  }
+  if (!existing.logoUrl && next.logoUrl) {
+    data.logoUrl = next.logoUrl;
+    if (next.facts.logoUrl) facts.logoUrl = next.facts.logoUrl;
+  }
+  if (existing.isAgency == null && next.isAgency != null) data.isAgency = next.isAgency;
+  if (!existing.bankCompanyRef && next.bankCompanyRef) data.bankCompanyRef = next.bankCompanyRef;
+  if (Object.keys(data).length === 0) return null;
+  data.facts = facts;
+  return data;
+}
+
+function createData(c: CompanyUpsert, slug: string) {
+  return {
+    market: c.market,
+    nameNormalized: c.nameNormalized,
+    displayName: c.displayName,
+    slug,
+    domain: c.domain,
+    logoUrl: c.logoUrl,
+    website: c.website,
+    industries: c.industries,
+    sizeBand: c.sizeBand,
+    employeeCount: c.employeeCount,
+    hqLocation: c.hqLocation,
+    foundedYear: c.foundedYear,
+    description: c.description,
+    isAgency: c.isAgency,
+    bankCompanyRef: c.bankCompanyRef,
+    facts: c.facts,
+  };
+}
+
+const EXISTING_SELECT = {
+  id: true,
+  nameNormalized: true,
+  logoUrl: true,
+  isAgency: true,
+  bankCompanyRef: true,
+  website: true,
+  domain: true,
+  industries: true,
+  sizeBand: true,
+  employeeCount: true,
+  hqLocation: true,
+  foundedYear: true,
+  description: true,
+  facts: true,
+} as const;
+
+/**
+ * Upserts the companies of one ingest batch (one market) on (market,
+ * nameNormalized). Returns nameNormalized → RACompany.id. Never throws for a
+ * slug clash: a clashing slug gets a short hash suffix.
+ */
+export async function upsertCompanies(db: Pick<CompaniesDb, 'rACompany'>, companies: CompanyUpsert[]): Promise<Map<string, string>> {
+  const ids = new Map<string, string>();
+  const byMarket = new Map<Market, Map<string, CompanyUpsert>>();
+  for (const c of companies) {
+    if (!c.nameNormalized) continue;
+    const m = byMarket.get(c.market) ?? new Map<string, CompanyUpsert>();
+    // One industry vocabulary: an exact label becomes its id, anything else stays as the source wrote it.
+    if (!m.has(c.nameNormalized)) m.set(c.nameNormalized, { ...c, industries: mapIndustries(c.industries) });
+    byMarket.set(c.market, m);
+  }
+  for (const [market, wanted] of byMarket) {
+    const names = [...wanted.keys()];
+    const find = async (subset: string[]) =>
+      (await db.rACompany.findMany({ where: { market, nameNormalized: { in: subset } }, select: EXISTING_SELECT })) as ExistingCompany[];
+
+    const existing = await find(names);
+    const have = new Map(existing.map((e) => [e.nameNormalized, e]));
+    let missing = names.filter((n) => !have.has(n));
+    for (const attempt of [0, 1]) {
+      if (missing.length === 0) break;
+      await db.rACompany.createMany({
+        data: missing.map((n) => {
+          const c = wanted.get(n)!;
+          const slug = companySlug(c.displayName, n);
+          return createData(c, attempt === 0 ? slug : `${slug.slice(0, 53)}-${shortHash(n)}`);
+        }),
+        skipDuplicates: true,
+      });
+      for (const row of await find(missing)) have.set(row.nameNormalized, { ...row, facts: row.facts });
+      missing = missing.filter((n) => !have.has(n));
+    }
+    for (const row of existing) {
+      const patch = companyPatch(row, wanted.get(row.nameNormalized)!);
+      if (patch) await db.rACompany.update({ where: { id: row.id }, data: patch });
+    }
+    for (const [name, row] of have) ids.set(`${market}\u0000${name}`, row.id);
+  }
+  return ids;
+}
+
+// ── Industry from a posting (SM-10) ───────────────────────────────────────
+
+/** Provenance of an industry a posting stated (`RACompany.facts.industries.source`). */
+export const POSTING_INDUSTRY_SOURCE = 'posting';
+/** A company holds at most this many posting-sourced industries. */
+export const MAX_POSTING_INDUSTRIES = 3;
+
+export interface PostingIndustry {
+  /** An industry id (industryMap.ts). The caller has verified the posting's quote. */
+  industry: string;
+  /** The posting's link, cited as the source. */
+  sourceUrl: string | null;
+  at: Date;
+}
+
+export type PostingIndustryOutcome = 'set' | 'appended' | 'unchanged' | 'not_found';
+
+/**
+ * Store the industry a posting states for its employer.
+ *   - the company has no industry: it becomes [industry], with provenance
+ *     'posting', the posting's link and the time;
+ *   - it has industries from a provider, the bank or a user: nothing changes;
+ *   - it has posting-sourced industries and this posting states another one:
+ *     it is appended, up to three values (the provenance of the first stays);
+ *   - it is a staffing agency (`isAgency`): nothing changes, since an agency's
+ *     postings describe its clients.
+ * A value outside the industry list is ignored. The first write only happens
+ * while the row still has no industry, so a provider's value that arrives at
+ * the same moment is never overwritten.
+ */
+export async function setIndustryFromPosting(db: Pick<CompaniesDb, 'rACompany'>, companyId: string, input: PostingIndustry): Promise<PostingIndustryOutcome> {
+  const industry = industryIdFor(input.industry);
+  if (!industry) return 'unchanged';
+  const row = (await db.rACompany.findUnique({ where: { id: companyId }, select: { id: true, industries: true, facts: true, isAgency: true } })) as {
+    id: string;
+    industries: string[];
+    facts: unknown;
+    isAgency?: boolean | null;
+  } | null;
+  if (!row) return 'not_found';
+  // A staffing agency posts for its clients: what such a posting says is the client's business.
+  if (row.isAgency === true) return 'unchanged';
+  const facts = asFacts(row.facts);
+  if (row.industries.length === 0) {
+    const url = input.sourceUrl && /^https?:\/\//i.test(input.sourceUrl) ? input.sourceUrl : null;
+    facts.industries = { source: POSTING_INDUSTRY_SOURCE, ...(url ? { url } : {}), fetchedAt: input.at.toISOString() };
+    const written = await db.rACompany.updateMany({ where: { id: companyId, industries: { isEmpty: true } }, data: { industries: [industry], facts } });
+    return written.count > 0 ? 'set' : 'unchanged';
+  }
+  if (facts.industries?.source !== POSTING_INDUSTRY_SOURCE) return 'unchanged';
+  if (row.industries.some((i) => i.toLowerCase() === industry.toLowerCase()) || row.industries.length >= MAX_POSTING_INDUSTRIES) return 'unchanged';
+  await db.rACompany.update({ where: { id: companyId }, data: { industries: [...row.industries, industry] } });
+  return 'appended';
+}
+
+/** Key into the map `upsertCompanies` returns. */
+export function companyKey(market: Market, nameNormalized: string): string {
+  return `${market}\u0000${nameNormalized}`;
+}
+
+// ── Reads ─────────────────────────────────────────────────────────────────
+
+/** Escape LIKE wildcards. */
+export function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+type EnvLike = Record<string, string | undefined>;
+
+/** Who is reading: a signed-in viewer, or anyone (anonymous visitors and crawlers). */
+export interface CompanyReadViewer {
+  /** True when there is no session: only `publicDisplay` jobs are listed or counted. */
+  publicOnly: boolean;
+  /**
+   * Extra Prisma `where` fragment ANDed into the job list and the open-job
+   * count. The router passes `cnPostingsWhere(viewerId)` on GoApply, so in
+   * recruitment-info mode `off` no third-party posting is listed or counted
+   * (R-14; WP-41 R41-1, applied at the Wave 3 gate).
+   */
+  restrict?: Record<string, unknown>;
+  /**
+   * True when the caller's surface prints the credit line a row owes: it reads
+   * `cardMeta.tw_sources.attribution` of each item of the list and shows the
+   * sentence with its link (strategy 1.3). Such rows are then listed, each
+   * with that field, and counted. Default false: they are held out of the
+   * list and of the count, because a row may be shown only where its credit
+   * line is printed.
+   */
+  printsCreditLine?: boolean;
+  /**
+   * The environment the two bank posting-page settings are read from (default
+   * `process.env`). A router built for a test passes its own.
+   */
+  env?: EnvLike;
+}
+
+/**
+ * Public, live, canonical, this market (TASK_PLAN §2.2 count rule); `publicOnly` adds publicDisplay (OPS-A4).
+ * One predicate for the list and for the open-job count, so the two always agree. Two holds, for every caller:
+ *
+ *   - A row that owes a credit line (the Taiwan open-data sources) is held unless the caller prints the line
+ *     (`viewer.printsCreditLine`; feed/sourceLine.ts `creditLineHeld`). The list is the Company tab's "other
+ *     jobs at this company", which shows a title and a place only.
+ *   - A recruiter-bank row whose bank has no candidate-facing posting page is held (`bankListableWhere`: the link
+ *     such a row stores is the bank site's "Page not found"), as in the feed, alerts and similar jobs. Both
+ *     markets (strategy M-7, C18).
+ */
+export function liveJobWhere(market: Market, companyId: string, viewer: CompanyReadViewer = { publicOnly: true }) {
+  const bank = bankListableWhere(viewer.env ?? process.env);
+  return {
+    companyId,
+    market,
+    visibility: 'public',
+    isCanonical: true,
+    archivedAt: null,
+    ...(viewer.publicOnly ? { publicDisplay: true } : {}),
+    AND: [...(viewer.printsCreditLine ? [] : [creditLineHeldWhere()]), ...(bank ? [bank] : []), ...(viewer.restrict ? [viewer.restrict] : [])],
+  };
+}
+
+/** Newest first; jobs without a posting date last (Postgres puts NULLs first on DESC by default). */
+export function companyJobsOrder() {
+  return [{ postedAt: { sort: 'desc' as const, nulls: 'last' as const } }, { id: 'desc' as const }];
+}
+
+export interface CompanyRow {
+  id: string;
+  market: string;
+  nameNormalized: string;
+  displayName: string;
+  slug: string;
+  domain: string | null;
+  logoUrl: string | null;
+  website: string | null;
+  industries: string[];
+  sizeBand: string | null;
+  hqLocation: string | null;
+  foundedYear: number | null;
+  description: string | null;
+  facts: unknown;
+}
+
+function fact<T>(value: T | null | undefined, entry: FactEntry | undefined): SourcedFact<T> | undefined {
+  if (value == null || value === '' || !entry?.source || !entry.fetchedAt) return undefined;
+  return { value, source: entry.source, asOf: entry.fetchedAt, ...(entry.url ? { url: entry.url } : {}) };
+}
+
+/** Pure: company row → CompanyProfile with only sourced facts. */
+export function toCompanyProfile(row: CompanyRow, openJobs: number, asOf: Date): CompanyProfile {
+  const f = asFacts(row.facts);
+  const facts: CompanyProfile['facts'] = {};
+  const put = <K extends keyof CompanyProfile['facts']>(key: K, value: CompanyProfile['facts'][K] | undefined) => {
+    if (value) facts[key] = value;
+  };
+  put('industry', fact(row.industries[0], f.industries));
+  put('size', fact(row.sizeBand, f.sizeBand));
+  put('headquarters', fact(row.hqLocation, f.hqLocation));
+  put('founded', fact(row.foundedYear, f.foundedYear));
+  put('description', fact(row.description, f.description));
+  put('website', fact(row.website, f.website));
+  const openJobsSourced: Sourced<number> = { value: openJobs, source: 'index', asOf: asOf.toISOString(), method: 'computed' };
+  return {
+    id: row.id,
+    name: row.displayName,
+    slug: row.slug,
+    logoUrl: row.logoUrl,
+    domain: f.domain ? row.domain : null,
+    facts,
+    openJobs: openJobsSourced,
+  };
+}
+
+interface JobListRow {
+  id: string;
+  title: string;
+  companyId: string | null;
+  companyName: string;
+  companyLogoUrl: string | null;
+  location: string | null;
+  workModel: string | null;
+  employmentType: string | null;
+  seniority: string | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryCurrency: string | null;
+  salaryPeriod: string | null;
+  salaryText: string | null;
+  salaryDisclosed: boolean;
+  postedAt: Date | null;
+  lastSeenAt: Date;
+  sourceBoard: string;
+  sourceName: string | null;
+  originalSourceName: string | null;
+  sourceUrl: string | null;
+  fromRecruiterBank: boolean;
+  employerVerified: boolean;
+  isAgency: boolean | null;
+}
+
+const PAY_PERIODS = new Set(['year', 'month', 'day', 'hour']);
+
+/** The set id of the credit line in `cardMeta` (jobs/sources/twHooks.ts). */
+const CREDIT_LINE_SET = 'tw_sources';
+
+/**
+ * The credit line a row owes, as the feed card carries it (`cardMeta.tw_sources`), or undefined. Only that
+ * set is taken from the hook's answer: the other sets read columns this list does not select (market tags,
+ * the posting text), so their lines would be partial here.
+ */
+export function creditLineMeta(meta: MarketCardMeta | null | undefined): MarketCardMeta | undefined {
+  const line = meta?.[CREDIT_LINE_SET];
+  return line && typeof line === 'object' && Object.keys(line).length ? { [CREDIT_LINE_SET]: line } : undefined;
+}
+
+/**
+ * Pure: a live job row → the feed card shape (no fit, no badges derived here). `cardMeta` is the row's
+ * credit line (`creditLineMeta`) for a caller that prints it; left off otherwise.
+ */
+export function toCompanyJobItem(r: JobListRow, cardMeta?: MarketCardMeta): FeedItem {
+  const hasPay = r.salaryDisclosed && (r.salaryMin != null || r.salaryMax != null) && !!r.salaryCurrency && PAY_PERIODS.has(r.salaryPeriod ?? '');
+  // The feed's own rule (feed/sourceLine.ts): an employer board is claimed only for a known board source. Before,
+  // every row that was not a bank's or one of three aggregators' was called an employer board (D3).
+  const kind: FeedItem['source']['kind'] = sourceKindOf({ sourceBoard: r.sourceBoard, fromRecruiterBank: r.fromRecruiterBank });
+  return {
+    jobId: r.id,
+    title: r.title,
+    company: { id: r.companyId, name: r.companyName, logoUrl: r.companyLogoUrl },
+    location: r.location,
+    workModel: r.workModel === 'remote' || r.workModel === 'hybrid' || r.workModel === 'onsite' ? r.workModel : null,
+    employmentType: r.employmentType,
+    seniority: r.seniority,
+    pay: hasPay
+      ? { min: r.salaryMin, max: r.salaryMax, currency: r.salaryCurrency!, period: r.salaryPeriod as 'year' | 'month' | 'day' | 'hour', text: r.salaryText }
+      : null,
+    postedAt: r.postedAt ? r.postedAt.toISOString() : null,
+    lastSeenAt: r.lastSeenAt.toISOString(),
+    source: { name: r.sourceName ?? r.originalSourceName ?? hostOf(r.sourceUrl) ?? '', kind },
+    fromRecruiterBank: r.fromRecruiterBank,
+    employerVerified: r.employerVerified,
+    isAgency: r.isAgency === true,
+    badges: [],
+    fit: null,
+    tracker: null,
+    ...(cardMeta ? { cardMeta } : {}),
+  };
+}
+
+const COMPANY_SELECT = {
+  id: true,
+  market: true,
+  nameNormalized: true,
+  displayName: true,
+  slug: true,
+  domain: true,
+  logoUrl: true,
+  website: true,
+  industries: true,
+  sizeBand: true,
+  hqLocation: true,
+  foundedYear: true,
+  description: true,
+  facts: true,
+} as const;
+
+const JOB_LIST_SELECT = {
+  id: true,
+  title: true,
+  companyId: true,
+  companyName: true,
+  companyLogoUrl: true,
+  location: true,
+  workModel: true,
+  employmentType: true,
+  seniority: true,
+  salaryMin: true,
+  salaryMax: true,
+  salaryCurrency: true,
+  salaryPeriod: true,
+  salaryText: true,
+  salaryDisclosed: true,
+  postedAt: true,
+  lastSeenAt: true,
+  sourceBoard: true,
+  sourceName: true,
+  originalSourceName: true,
+  sourceUrl: true,
+  fromRecruiterBank: true,
+  employerVerified: true,
+  isAgency: true,
+} as const;
+
+export const COMPANY_JOBS_PAGE = 20;
+
+/** US DOL OFLC performance data page (the LCA disclosure files' home); defined with the other sponsorship sources in jobs/data. */
+export { DOL_LCA_URL };
+export const H1B_DISCLAIMER =
+  'Counts of certified Labor Condition Applications from US Department of Labor public disclosure files. A certified application is not a visa approval or a hire.';
+
+export interface CompanyReadService {
+  typeahead(market: Market, q: string, limit?: number): Promise<CompanyTypeaheadItem[]>;
+  /** `viewer` defaults to anonymous (publicDisplay jobs only). */
+  profile(market: Market, idOrSlug: string, viewer?: CompanyReadViewer): Promise<CompanyProfile>;
+  jobs(market: Market, id: string, cursor?: string, viewer?: CompanyReadViewer): Promise<CompanyJobsResponse>;
+  h1b(market: Market, id: string): Promise<H1bHistoryResponse>;
+}
+
+export interface CompanyReadDeps {
+  /**
+   * `marketHooks.cardMeta`, for the credit line of a listed row (asked only for a viewer whose surface prints
+   * it). Default: the registered hooks, loaded on the first such list.
+   */
+  cardMeta?: (job: MarketHookJob, ctx: MarketHookContext) => MarketCardMeta | Promise<MarketCardMeta>;
+}
+
+/** `marketHooks.cardMeta`, loaded on first use: the hook modules bring the source adapters with them. */
+async function defaultCardMeta(job: MarketHookJob, ctx: MarketHookContext): Promise<MarketCardMeta> {
+  const { cardMeta } = await import('../marketHooks.js');
+  return cardMeta(job, ctx);
+}
+
+/** The company of this market by id or slug; 404 `company_not_found` for none (another market's company included). */
+export async function findCompanyRow(db: Pick<CompaniesDb, 'rACompany'>, market: Market, idOrSlug: string): Promise<CompanyRow> {
+  const row = (await db.rACompany.findFirst({
+    where: { market, OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+    select: COMPANY_SELECT,
+  })) as CompanyRow | null;
+  if (!row) throw httpError('not_found', 'Company not found.', { code: COMPANY_ERROR_CODES.notFound });
+  return row;
+}
+
+export function createCompanyReadService(db: CompaniesDb, now: () => Date = () => new Date(), deps: CompanyReadDeps = {}): CompanyReadService {
+  const findCompany = (market: Market, idOrSlug: string) => findCompanyRow(db, market, idOrSlug);
+  const cardMeta = deps.cardMeta ?? defaultCardMeta;
+
+  /** The credit line of each row that owes one, by job id (the only market lines this list carries). */
+  async function creditLines(market: Market, rows: JobListRow[]): Promise<Map<string, MarketCardMeta>> {
+    const out = new Map<string, MarketCardMeta>();
+    const ctx: MarketHookContext = { brand: getCurrentBrandOrDefault().id, market, stage: 'card' };
+    for (const row of rows) {
+      const line = creditLineMeta(await cardMeta({ ...row, market } as MarketHookJob, ctx));
+      if (line) out.set(row.id, line);
+    }
+    return out;
+  }
+
+  return {
+    async typeahead(market, q, limit = 8) {
+      const qn = normalizeCompanyName(q) || q.trim().toLowerCase();
+      if (qn.length < 2) return [];
+      const prefix = `${escapeLike(qn)}%`;
+      const take = Math.min(Math.max(limit, 1), 20);
+      const rows = await db.$queryRaw<Array<{ id: string; name: string; slug: string; logoUrl: string | null; domain: string | null }>>`
+        SELECT c."id", c."displayName" AS "name", c."slug", c."logoUrl", c."domain"
+        FROM "RACompany" c
+        WHERE c."market" = ${market}
+          AND (c."nameNormalized" LIKE ${prefix} ESCAPE '\\' OR c."nameNormalized" % ${qn})
+        ORDER BY (c."nameNormalized" LIKE ${prefix} ESCAPE '\\') DESC, similarity(c."nameNormalized", ${qn}) DESC, c."displayName" ASC
+        LIMIT ${take}`;
+      return rows.map((r) => ({ id: r.id, name: r.name, slug: r.slug, logoUrl: r.logoUrl, domain: r.domain }));
+    },
+
+    async profile(market, idOrSlug, viewer = { publicOnly: true }) {
+      const row = await findCompany(market, idOrSlug);
+      const openJobs = await db.rAJob.count({ where: liveJobWhere(market, row.id, viewer) });
+      return toCompanyProfile(row, openJobs, now());
+    },
+
+    async jobs(market, id, cursor, viewer = { publicOnly: true }) {
+      const row = await findCompany(market, id);
+      const offset = cursor && /^\d{1,6}$/.test(cursor) ? Number(cursor) : 0;
+      const rows = (await db.rAJob.findMany({
+        where: liveJobWhere(market, row.id, viewer),
+        orderBy: companyJobsOrder(),
+        skip: offset,
+        take: COMPANY_JOBS_PAGE + 1,
+        select: JOB_LIST_SELECT,
+      })) as JobListRow[];
+      const page = rows.slice(0, COMPANY_JOBS_PAGE);
+      // Rows that owe a credit line are in the page only for a viewer whose surface prints it: carry the line.
+      const lines = viewer.printsCreditLine ? await creditLines(market, page) : new Map<string, MarketCardMeta>();
+      return { items: page.map((r) => toCompanyJobItem(r, lines.get(r.id))), cursor: rows.length > COMPANY_JOBS_PAGE ? String(offset + COMPANY_JOBS_PAGE) : null };
+    },
+
+    async h1b(market, id) {
+      const row = await findCompany(market, id);
+      if (market !== 'intl') return { years: [], disclaimer: H1B_DISCLAIMER };
+      const stats = await db.rAH1bEmployerStat.findMany({
+        where: { employerNameNormalized: row.nameNormalized },
+        orderBy: { fiscalYear: 'desc' },
+        take: 10,
+      });
+      return {
+        years: stats.map((s) => ({
+          fiscalYear: s.fiscalYear,
+          certifiedCount: s.certifiedCount,
+          medianWage:
+            s.medianWageAnnualUsd == null
+              ? null
+              : { value: s.medianWageAnnualUsd, source: 'dol_lca' as const, asOf: s.importedAt.toISOString(), url: DOL_LCA_URL, sourceFile: s.sourceFile },
+        })),
+        disclaimer: H1B_DISCLAIMER,
+      };
+    },
+  };
+}

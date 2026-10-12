@@ -1,0 +1,329 @@
+// server/src/features/resume/store.ts
+//
+// The narrow, typed Prisma adapter for the resume check (WP-22). The service
+// talks to this interface only, so tests run against an in-memory twin and
+// never touch the database. Every read is scoped to the user.
+
+import crypto from 'node:crypto';
+import type { Prisma } from '../../generated/prisma/client.js';
+
+export interface VariantRow {
+  id: string;
+  userId: string;
+  resumeMarkdown: string;
+  resumeContentHash: string;
+  /** `RAResumeVariant.layout` (template etc.), when set. */
+  layout: unknown;
+}
+
+export interface GradeRow {
+  id: string;
+  userId: string;
+  variantId: string;
+  contentHash: string;
+  targetTitle: string | null;
+  status: string;
+  grade: string | null;
+  score: number | null;
+  counts: unknown;
+  issues: unknown;
+  model: string | null;
+  creditLedgerId: string | null;
+  createdAt: Date;
+  completedAt: Date | null;
+  /** When the owner first opened the finished check (`RAResumeGrade.viewedAt`); null until then. */
+  viewedAt?: Date | null;
+}
+
+export interface NewGrade {
+  userId: string;
+  variantId: string;
+  contentHash: string;
+  targetTitle: string | null;
+  creditLedgerId: string | null;
+}
+
+export interface GradeUpdate {
+  status?: string;
+  grade?: string | null;
+  score?: number | null;
+  counts?: unknown;
+  issues?: unknown;
+  model?: string | null;
+  completedAt?: Date | null;
+}
+
+export interface JobRow {
+  id: string;
+  title: string;
+  descriptionPlain: string;
+  qualifications: string | null;
+  responsibilities: string | null;
+  minYears: number | null;
+  educationLevel: string | null;
+  skills: string[];
+}
+
+export interface FitRow {
+  score: number;
+  tier: string | null;
+  generatedAt: Date;
+  resumeContentHashAtScore: string;
+}
+
+export interface ResumeCheckStore {
+  findVariant(userId: string, variantId: string): Promise<VariantRow | null>;
+  createGrade(input: NewGrade): Promise<GradeRow>;
+  updateGrade(gradeId: string, data: GradeUpdate): Promise<GradeRow>;
+  /**
+   * The same update, only while the row is still `running` (completion and
+   * failure writes); null when a cancel got there first.
+   */
+  completeRunningGrade(gradeId: string, data: GradeUpdate): Promise<GradeRow | null>;
+  /** Only when the status is still `running` (cancel); null otherwise. */
+  cancelRunningGrade(userId: string, gradeId: string): Promise<GradeRow | null>;
+  findGrade(userId: string, gradeId: string): Promise<GradeRow | null>;
+  /** Newest first. */
+  listGrades(userId: string, variantId: string, limit: number): Promise<GradeRow[]>;
+  /**
+   * Stamp `viewedAt` on a finished check the first time its owner opens it.
+   * True when this call set it; false when it was already set, the check is
+   * not finished, or it is not the user's. Optional: a store with no owner
+   * (the signed-out free tool) has nothing to stamp.
+   */
+  markGradeViewed?(userId: string, gradeId: string, at: Date): Promise<boolean>;
+  /** A job the user may see: public, or one the user added. */
+  findJob(userId: string, jobId: string): Promise<JobRow | null>;
+  findKeywordExtraction(jobId: string): Promise<{ keywords: unknown } | null>;
+  findFitRow(userId: string, jobId: string, variantId: string): Promise<FitRow | null>;
+  /**
+   * Writes new markdown the way RAResumeService.patch does: new
+   * `resumeContentHash` (which marks fit scores stale) and `lastEditedAt`.
+   * `aiAssisted` stamps `RAResumeVariant.aiAssistedAt` once (text a model
+   * wrote went into the resume), so exports carry the AI marks.
+   */
+  saveMarkdown(userId: string, variantId: string, markdown: string, opts?: { aiAssisted?: boolean }): Promise<{ resumeContentHash: string }>;
+  /**
+   * At-most-once grant per (user, reason), across server instances: runs `fn`
+   * while holding a per-(user, reason) lock (Postgres: a transaction-scoped
+   * advisory lock), passing whether a grant with that reason already exists.
+   * `fn` returns true when it created the grant.
+   */
+  withGrantClaim<T>(userId: string, reason: string, fn: (alreadyGranted: boolean) => Promise<{ created: boolean; value: T }>): Promise<T>;
+}
+
+/** The advisory-lock key of a (user, grant reason) claim. */
+export function grantClaimKey(userId: string, reason: string): string {
+  return `ra_credit_grant:${userId}:${reason}`;
+}
+
+const json = (v: unknown) => v as Prisma.InputJsonValue;
+
+/** Same format as RAResumeService's `sha256()` (`sha256:` + 32 hex chars). */
+export function resumeContentHashOf(markdown: string): string {
+  return 'sha256:' + crypto.createHash('sha256').update(markdown).digest('hex').slice(0, 32);
+}
+
+function gradeData(data: GradeUpdate) {
+  return {
+    ...(data.status !== undefined ? { status: data.status } : {}),
+    ...(data.grade !== undefined ? { grade: data.grade } : {}),
+    ...(data.score !== undefined ? { score: data.score } : {}),
+    ...(data.counts !== undefined ? { counts: json(data.counts) } : {}),
+    ...(data.issues !== undefined ? { issues: json(data.issues) } : {}),
+    ...(data.model !== undefined ? { model: data.model } : {}),
+    ...(data.completedAt !== undefined ? { completedAt: data.completedAt } : {}),
+  };
+}
+
+/** The fields of a `Fit` (match/fit.ts) the keyword report reads. */
+export interface ReportFit {
+  score: number | null;
+  tier: string | null;
+  kind: 'ai' | 'estimate';
+  scoredAt: string;
+  basis: { resumeVariantId: string | null; resumeContentHash: string | null };
+}
+
+export interface ResumeCheckStoreOptions {
+  /**
+   * THE fit of a job (match/fit.ts `getFit`: the person's main resume, no
+   * model call). Default: the module's own function, loaded on first use.
+   */
+  fit?: (userId: string, jobId: string) => Promise<ReportFit>;
+  /**
+   * The id of the person's main resume (the one THE fit is read for), or null
+   * when they have none. Default: `primaryVariantId` (primaryVariant.ts: the
+   * one marked primary, else the most recently edited), the same rule the
+   * match repository's `getResume` applies.
+   */
+  mainResumeId?: (userId: string) => Promise<string | null>;
+}
+
+async function defaultFit(userId: string, jobId: string): Promise<ReportFit> {
+  return (await import('../match/index.js')).getFit(userId, jobId);
+}
+
+async function defaultMainResumeId(userId: string): Promise<string | null> {
+  return (await import('./primaryVariant.js')).primaryVariantId(userId);
+}
+
+/**
+ * The fit score the keyword report may show for a resume version and a job,
+ * or null. Read through the fit contract, never from the score table:
+ *   - It is THE fit of the job, so it is shown only on the report of the
+ *     person's MAIN resume. A number for another version is a different,
+ *     separately named measure ("With this version") that only tailoring
+ *     shows (strategy 2.2); this report shows none for such a version.
+ *   - Only a real AI fit (D3: never a quick estimate here), computed as every
+ *     other surface computes it: today's weights and tier rule, no row of the
+ *     old scorer or of a replaced resume text, and on GoApply nothing AI-made
+ *     without the "Use AI" consent.
+ * Any failure answers null: the report's rows do not depend on the fit.
+ */
+export async function fitRowFromContract(variantId: string, read: () => Promise<ReportFit>): Promise<FitRow | null> {
+  // The caller (`fitRowForVersion`) has already ruled out a version that is not the main resume without
+  // reading a fit; the check on `basis.resumeVariantId` below stays as the authority on which resume was read.
+  try {
+    const fit = await read();
+    if (fit.basis.resumeVariantId !== variantId) return null;
+    if (fit.kind !== 'ai' || fit.score === null || !fit.basis.resumeContentHash) return null;
+    return { score: Math.round(fit.score), tier: fit.tier, generatedAt: new Date(fit.scoredAt), resumeContentHashAtScore: fit.basis.resumeContentHash };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `fitRowFromContract` for one resume version, without paying for a fit that
+ * would be thrown away: THE fit is the main resume's, so for any other
+ * version (the report of a tailored resume, which the tailoring result page
+ * opens on every view) the answer is null after one id lookup, and the fit
+ * (the job, the person's inputs, the resume, the stored score) is never read.
+ */
+export async function fitRowForVersion(
+  userId: string,
+  jobId: string,
+  variantId: string,
+  reads: { mainResumeId: (userId: string) => Promise<string | null>; fit: (userId: string, jobId: string) => Promise<ReportFit> },
+): Promise<FitRow | null> {
+  let main: string | null;
+  try {
+    main = await reads.mainResumeId(userId);
+  } catch {
+    return null;
+  }
+  if (main !== variantId) return null;
+  return fitRowFromContract(variantId, () => reads.fit(userId, jobId));
+}
+
+export function createPrismaResumeCheckStore(options: ResumeCheckStoreOptions = {}): ResumeCheckStore {
+  const db = async () => (await import('../../lib/prisma.js')).default;
+  const readFit = options.fit ?? defaultFit;
+  const mainResumeId = options.mainResumeId ?? defaultMainResumeId;
+  return {
+    async findVariant(userId, variantId) {
+      const p = await db();
+      return p.rAResumeVariant.findFirst({
+        where: { id: variantId, userId, deletedAt: null },
+        select: { id: true, userId: true, resumeMarkdown: true, resumeContentHash: true, layout: true },
+      });
+    },
+    async createGrade(input) {
+      const p = await db();
+      return p.rAResumeGrade.create({
+        data: {
+          userId: input.userId,
+          variantId: input.variantId,
+          contentHash: input.contentHash,
+          targetTitle: input.targetTitle,
+          status: 'running',
+          creditLedgerId: input.creditLedgerId,
+        },
+      });
+    },
+    async updateGrade(gradeId, data) {
+      const p = await db();
+      return p.rAResumeGrade.update({ where: { id: gradeId }, data: gradeData(data) });
+    },
+    async completeRunningGrade(gradeId, data) {
+      const p = await db();
+      const res = await p.rAResumeGrade.updateMany({ where: { id: gradeId, status: 'running' }, data: gradeData(data) });
+      if (res.count === 0) return null;
+      return p.rAResumeGrade.findUnique({ where: { id: gradeId } });
+    },
+    async cancelRunningGrade(userId, gradeId) {
+      const p = await db();
+      const res = await p.rAResumeGrade.updateMany({
+        where: { id: gradeId, userId, status: 'running' },
+        data: { status: 'cancelled', completedAt: new Date() },
+      });
+      if (res.count === 0) return null;
+      return p.rAResumeGrade.findFirst({ where: { id: gradeId, userId } });
+    },
+    async findGrade(userId, gradeId) {
+      const p = await db();
+      return p.rAResumeGrade.findFirst({ where: { id: gradeId, userId } });
+    },
+    async listGrades(userId, variantId, limit) {
+      const p = await db();
+      return p.rAResumeGrade.findMany({ where: { userId, variantId }, orderBy: { createdAt: 'desc' }, take: limit });
+    },
+    async markGradeViewed(userId, gradeId, at) {
+      const p = await db();
+      const res = await p.rAResumeGrade.updateMany({ where: { id: gradeId, userId, status: 'done', viewedAt: null }, data: { viewedAt: at } });
+      return res.count > 0;
+    },
+    async findJob(userId, jobId) {
+      const p = await db();
+      return p.rAJob.findFirst({
+        where: { id: jobId, OR: [{ visibility: 'public' }, { ownerUserId: userId }] },
+        select: {
+          id: true,
+          title: true,
+          descriptionPlain: true,
+          qualifications: true,
+          responsibilities: true,
+          minYears: true,
+          educationLevel: true,
+          skills: true,
+        },
+      });
+    },
+    async findKeywordExtraction(jobId) {
+      const p = await db();
+      return p.rAKeywordExtraction.findUnique({ where: { jobId }, select: { keywords: true } });
+    },
+    findFitRow: (userId, jobId, variantId) => fitRowForVersion(userId, jobId, variantId, { mainResumeId, fit: readFit }),
+    async saveMarkdown(userId, variantId, markdown, opts) {
+      const p = await db();
+      const resumeContentHash = resumeContentHashOf(markdown);
+      const now = new Date();
+      const res = await p.rAResumeVariant.updateMany({
+        where: { id: variantId, userId, deletedAt: null },
+        data: { resumeMarkdown: markdown, resumeContentHash, lastEditedAt: now },
+      });
+      if (res.count === 0) throw new Error('resume variant not found');
+      if (opts?.aiAssisted) {
+        // Stamped once: the first time AI-written text lands in this resume.
+        await p.rAResumeVariant.updateMany({ where: { id: variantId, userId, aiAssistedAt: null }, data: { aiAssistedAt: now } });
+      }
+      return { resumeContentHash };
+    },
+    async withGrantClaim(userId, reason, fn) {
+      const p = await db();
+      // The lock is held until this transaction ends, so a second instance
+      // waits here and then sees the grant the first one wrote (the grant
+      // itself commits on its own connection inside `fn`, before the unlock).
+      return p.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${grantClaimKey(userId, reason)}))`;
+          const row = await tx.rACreditGrant.findFirst({ where: { userId, reason }, select: { id: true } });
+          const { value } = await fn(row !== null);
+          return value;
+        },
+        { maxWait: 10_000, timeout: 20_000 },
+      );
+    },
+  };
+}

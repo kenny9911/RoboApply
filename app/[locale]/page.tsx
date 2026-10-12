@@ -1,49 +1,72 @@
-// Localized landing pages — `/zh`, `/zh-TW`, `/ja`, `/ko`, `/es`, `/fr`,
-// `/pt`, `/de`. Stable, indexable URLs for the hreflang cluster; the proxy
-// forwards `x-pathname` so the root layout resolves the SAME locale for
-// <html lang> + the message bundle (lib/serverLocale.ts). Unknown segments 404.
-// Opening one also stores its language in the robo_locale cookie
-// (RememberLocale), so the pages that follow stay in that language.
+// Localized home pages — `/{locale}` for every locale the request's brand
+// serves (RoboApply: the 8 non-English locales plus `/en`; GoApply: `/en`).
+// Stable, indexable URLs for the hreflang cluster; the proxy forwards
+// `x-pathname` so the root layout resolves the SAME locale for <html lang>
+// and the message bundle (lib/serverLocale.ts). A segment that is not a
+// locale of this brand 404s (ARCHITECTURE.md §1.6). Opening one also stores
+// its language in the robo_locale cookie (RememberLocale).
 //
-// `/en` renders English the same way, whatever the visitor's cookie or
+// `/en` on RoboApply renders English whatever the visitor's cookie or
 // Accept-Language, so a link can force English (RoboHire's job-seeker link
-// does). `/` is content-negotiated and cannot. Its canonical is `/` (the
-// x-default + English canonical), so search engines still index one EN
-// document, and `/en` stays out of the sitemap and the hreflang cluster.
+// does). Its canonical is `/` (lib/seo.ts homePath), so search engines index
+// one English document. GoApply's `/en` is reachable but not indexed
+// (GoApply's SEO locale is zh only).
+//
+// The localized homes of both brands carry the same live job ticker as `/`
+// (app/page.tsx): its own Suspense boundary, so the page streams without it
+// and a slow or failed read shows no ticker (never invented counts).
 
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-import { LandingContent } from '../../components/landing/LandingContent';
-import { LandingJsonLd } from '../../components/landing/LandingJsonLd';
+import { GoApplyHome, JsonLd, RoboApplyHome } from '../../components/features/marketing';
+import { JobTicker } from '../../components/features/seo/server';
+import { HOME_FAQ_KEYS, cnHomeFaqKeys } from '../../components/features/marketing/catalog';
 import { RememberLocale } from '../../components/landing/RememberLocale';
-import { isLocale } from '../../lib/localeConfig';
-import { landingMetadata } from '../../lib/seo';
-import { resolveVisitorMarket } from '../../lib/serverMarket';
+import { getBrand } from '../../lib/brand/registry.generated';
+import { isLocale, isLocaleIn } from '../../lib/localeConfig';
+import { getServerBrandId } from '../../lib/server/brand';
+import { faqFromMessages, homeMetadata, homePath, marketingJsonLd, messageAt } from '../../lib/seo';
 
 interface LocaleParams {
   params: Promise<{ locale: string }>;
 }
 
-export async function generateMetadata({
-  params,
-}: LocaleParams): Promise<Metadata> {
+export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
-  return landingMetadata(locale);
+  const brand = getBrand(await getServerBrandId());
+  if (!isLocaleIn(locale, brand.locales)) return {};
+  return homeMetadata(brand.id, locale);
 }
 
 export default async function LocalizedLandingPage({ params }: LocaleParams) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  // Currency follows the visitor's country, not the page's language: /zh read
-  // from Taipei quotes US dollars, /en read from Shanghai quotes RMB.
-  const market = await resolveVisitorMarket(locale);
+  const brand = getBrand(await getServerBrandId());
+  if (!isLocaleIn(locale, brand.locales)) notFound();
+  const cn = brand.market === 'cn';
+  const ns = cn ? 'landing.cnHome' : 'landing.home';
+  const json = marketingJsonLd({
+    brandId: brand.id,
+    locale,
+    path: homePath(brand, locale),
+    name: messageAt(locale, brand.id, `${ns}.meta.title`, brand.name),
+    description: messageAt(locale, brand.id, `${ns}.meta.description`),
+    // GoApply: only the questions that hold whatever the operator switched off (see cnHomeFaqKeys).
+    faq: faqFromMessages(locale, brand.id, `${ns}.faq`, cn ? cnHomeFaqKeys(false) : HOME_FAQ_KEYS),
+  });
+  const ticker = (
+    <Suspense fallback={null}>
+      <JobTicker />
+    </Suspense>
+  );
   return (
     <>
       <RememberLocale locale={locale} />
-      <LandingJsonLd locale={locale} market={market} />
-      <LandingContent market={market} />
+      <JsonLd json={json} />
+      {cn ? <GoApplyHome ticker={ticker} /> : <RoboApplyHome ticker={ticker} />}
     </>
   );
 }

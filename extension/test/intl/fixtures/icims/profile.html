@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Candidate Profile | Example Co Careers</title>
+  <meta property="og:site_name" content="Example Co Careers">
+</head>
+<body class="iCIMS_Body">
+  <div class="iCIMS_MainWrapper">
+    <div class="iCIMS_Header"><h1>Warehouse Supervisor</h1></div>
+    <form id="iCIMS_ApplyForm" name="iCIMS_ApplyForm" method="post" action="/jobs/1234/warehouse-supervisor/candidate?in_iframe=1">
+      <h2>Contact Information</h2>
+      <div class="iCIMS_FieldRow"><label for="PersonProfileFields.FirstName">First Name <span class="iCIMS_Required">*</span></label><input type="text" id="PersonProfileFields.FirstName" name="PersonProfileFields.FirstName" required></div>
+      <div class="iCIMS_FieldRow"><label for="PersonProfileFields.LastName">Last Name <span class="iCIMS_Required">*</span></label><input type="text" id="PersonProfileFields.LastName" name="PersonProfileFields.LastName" required></div>
+      <div class="iCIMS_FieldRow"><label for="PersonProfileFields.Email">Email <span class="iCIMS_Required">*</span></label><input type="email" id="PersonProfileFields.Email" name="PersonProfileFields.Email" required></div>
+      <div class="iCIMS_FieldRow"><label for="PersonProfileFields.PhoneNumber">Phone</label><input type="tel" id="PersonProfileFields.PhoneNumber" name="PersonProfileFields.PhoneNumber"></div>
+      <div class="iCIMS_FieldRow"><label for="PersonProfileFields.AddressStreet1">Address</label><input type="text" id="PersonProfileFields.AddressStreet1" name="PersonProfileFields.AddressStreet1"></div>
+      <div class="iCIMS_FieldRow"><label for="PersonProfileFields.AddressCity">City</label><input type="text" id="PersonProfileFields.AddressCity" name="PersonProfileFields.AddressCity"></div>
+      <div class="iCIMS_FieldRow">
+        <label for="PersonProfileFields.AddressState">State/Province</label>
+        <select id="PersonProfileFields.AddressState" name="PersonProfileFields.AddressState">
+          <option value="">— Make a Selection —</option>
+          <option value="TX">Texas</option>
+          <option value="WA">Washington</option>
+        </select>
+      </div>
+      <div class="iCIMS_FieldRow"><label for="PersonProfileFields.AddressZip">Zip/Postal Code</label><input type="text" id="PersonProfileFields.AddressZip" name="PersonProfileFields.AddressZip"></div>
+      <div class="iCIMS_FieldRow">
+        <label for="PersonProfileFields.AddressCountry">Country</label>
+        <select id="PersonProfileFields.AddressCountry" name="PersonProfileFields.AddressCountry">
+          <option value="">— Make a Selection —</option>
+          <option value="US">United States</option>
+          <option value="CA">Canada</option>
+        </select>
+      </div>
+      <h2>Resume</h2>
+      <div class="iCIMS_FieldRow"><span class="iCIMS_InfoField">Upload your resume</span><input type="file" id="resume_file" name="resume_file"></div>
+      <div class="iCIMS_ButtonRow">
+        <input type="submit" class="iCIMS_PrimaryButton" value="Submit Profile">
+      </div>
+    </form>
+  </div>
+</body>
+</html>

@@ -1,4 +1,6 @@
-// components/v3/account — barrel for the /account page components.
+// components/v3/account — the pre-clone account pieces /settings still renders
+// (Panel, SecurityCard, the invoice list, the delete-account modal). The plan
+// grid and the legacy billing cards were deleted by INT-12.
 
 export {
   ACCOUNT_SECTIONS,
@@ -10,17 +12,7 @@ export {
   type AccountSectionId,
 } from './sections';
 
-export {
-  TierBadge,
-  CreditsCard,
-  CurrentPlanCard,
-  CurrencyNote,
-  BillingHistoryLink,
-  tierLabel,
-} from './billing';
-
-export { PlanCatalog } from './planCatalog';
-export type { PlanCatalogMode, PlanCatalogProps } from './planCatalog';
+export { TierBadge, tierLabel } from './billing';
 
 export { BillingHistoryView } from './billingHistory';
 

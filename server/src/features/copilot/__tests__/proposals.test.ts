@@ -1,0 +1,383 @@
+// @vitest-environment node
+// WP-50 proposals: apply / dismiss, baseVersion conflicts, 24 h expiry,
+// one-shot claims, credit actions charged only on apply, memory rules.
+
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../../services/LoggerService.js', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+import { COPILOT_MEMORY_MAX, PROPOSAL_TTL_MS } from '../contract.js';
+import { COUNT_AFTER_WAIT_MS, PROPOSAL_APPLYING, UNSAVED_TURN_GRACE_MS } from '../proposals.js';
+import { NOW, USER, makeService, newThread, profile, runTurn, type Harness } from './testkit.js';
+
+async function proposalFrom(h: Harness, tool: string, args: unknown, contextJobId?: string): Promise<{ id: string; messageId: string; threadId: string }> {
+  const t = await newThread(h, contextJobId);
+  h.llm.streamChatWithTools.mockClear();
+  const events = await runTurn(h, t, 'please', { contextJobId });
+  const card = events.find((e) => e.event === 'card')!.data as { data: { proposalId: string } };
+  const done = events.at(-1)!.data as { messageId: string };
+  return { id: card.data.proposalId, messageId: done.messageId, threadId: t };
+}
+
+function withTool(name: string, args: unknown, over: Parameters<typeof makeService>[0] = {}) {
+  return makeService({ rounds: [{ toolCalls: [{ name, args }] }, { chunks: ['Review the card.'] }], ...over });
+}
+
+async function storedCardStatus(h: Harness, messageId: string) {
+  const msg = await h.store.getMessage(messageId);
+  return (msg!.cards as Array<{ type: string; data: { status?: string } }>).map((c) => [c.type, c.data.status]);
+}
+
+describe('filter_change', () => {
+  it('applies the patch at baseVersion and marks the card applied', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    const res = await h.service.proposals.apply(USER, p.id);
+    expect(h.areas.patchFilters).toHaveBeenCalledWith(USER, 'sp_1', 3, { workModels: ['onsite'] });
+    expect(res).toMatchObject({ applied: true, result: { searchProfileId: 'sp_1', version: 4, countAfter: { count: { value: 40, source: 'index' }, capped: false } } });
+    expect(await storedCardStatus(h, p.messageId)).toEqual([['filter_diff', 'applied']]);
+    // a second click does nothing
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'proposal_closed' } });
+    expect(h.areas.patchFilters).toHaveBeenCalledTimes(1);
+    // listed messages show the live status
+    const list = await h.service.listMessages(USER, p.threadId, {});
+    expect(list.items.at(-1)!.cards[0]!.data).toMatchObject({ status: 'applied' });
+    expect(list.items.at(-1)!.aiGenerated).toBe(true);
+  });
+
+  it('a second click on an applied proposal is told it was applied (so that card can show it)', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    await h.service.proposals.apply(USER, p.id);
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ details: { reason: 'proposal_closed', status: 'applied' } });
+  });
+
+  it('answers "applied" even when the job count is slow or the card update fails', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      // The count after the change never answers (the diff's own counts, before the change, do).
+      h.areas.countForFilters.mockImplementation(() => (h.areas.patchFilters.mock.calls.length ? new Promise(() => undefined) : Promise.resolve({ count: 40, capped: false })) as never);
+      vi.spyOn(h.store, 'updateCards').mockRejectedValue(new Error('Unable to start a transaction in the given time.'));
+      const pending = h.service.proposals.apply(USER, p.id);
+      await vi.advanceTimersByTimeAsync(COUNT_AFTER_WAIT_MS + 10);
+      expect(await pending).toMatchObject({ applied: true, result: { version: 4, countAfter: null } });
+      // The stored card could not be updated; the thread still shows the proposal's own status.
+      const list = await h.service.listMessages(USER, p.threadId, {});
+      expect(list.items.at(-1)!.cards[0]!.data).toMatchObject({ status: 'applied' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a suggestion whose reply is not in the thread long after it was made is closed, not applied', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    const row = h.db.$rows('rACopilotProposal').find((r) => r.id === p.id)!;
+    // The reply was never stored (another instance's save failed) and the grace time has passed.
+    row.createdAt = new Date(NOW.getTime() - UNSAVED_TURN_GRACE_MS - 1_000);
+    const messages = h.db.$rows('rACopilotMessage');
+    messages.splice(0, messages.length);
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'proposal_expired', cause: 'turn_not_saved' } });
+    expect(h.areas.patchFilters).not.toHaveBeenCalled();
+    expect((await h.store.getProposal(p.id))!.status).toBe('expired');
+  });
+
+  it('a suggestion applied while its reply is still being written is not mistaken for an unsaved one', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    const row = h.db.$rows('rACopilotProposal').find((r) => r.id === p.id)!;
+    row.createdAt = new Date(NOW.getTime() - 30_000);
+    const messages = h.db.$rows('rACopilotMessage');
+    messages.splice(0, messages.length);
+    expect(await h.service.proposals.apply(USER, p.id)).toMatchObject({ applied: true });
+  });
+
+  it('baseVersion mismatch → 409 version_conflict with a fresh diff card (a new pending proposal)', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    h.areas.searchProfile.mockResolvedValue(profile({ version: 7, filters: { titles: ['BI Analyst'] } }));
+    const err = await h.service.proposals.apply(USER, p.id).catch((e) => e);
+    expect(err).toMatchObject({ code: 'version_conflict', status: 409, details: { currentVersion: 7 } });
+    const fresh = (err.details as { card: { type: string; data: { proposalId: string; baseVersion: number; status: string } } }).card;
+    expect(fresh).toMatchObject({ type: 'filter_diff', data: { baseVersion: 7, status: 'pending' } });
+    expect(fresh.data.proposalId).not.toBe(p.id);
+    expect(h.areas.patchFilters).not.toHaveBeenCalled();
+    expect((await h.store.getProposal(p.id))!.status).toBe('conflict');
+    // the fresh one applies at the new version
+    await h.service.proposals.apply(USER, fresh.data.proposalId);
+    expect(h.areas.patchFilters).toHaveBeenCalledWith(USER, 'sp_1', 7, { workModels: ['onsite'] });
+  });
+
+  it('a race lost inside patchFilters is also a conflict', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'add', path: 'excludedCompanies', value: 'Acme' }], reason: 'x' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    h.areas.patchFilters.mockRejectedValueOnce(Object.assign(new Error('changed'), { code: 'version_conflict', currentVersion: 4 }));
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'version_conflict' });
+    expect((await h.store.getProposal(p.id))!.status).toBe('conflict');
+  });
+
+  it('expires after 24 h', async () => {
+    let now = NOW;
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'x' }, { now: () => now });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    now = new Date(NOW.getTime() + PROPOSAL_TTL_MS + 1);
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'proposal_expired' } });
+    expect(h.areas.patchFilters).not.toHaveBeenCalled();
+    expect(await storedCardStatus(h, p.messageId)).toEqual([['filter_diff', 'expired']]);
+  });
+
+  it("another user's proposal is a 404", async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'x' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    await expect(h.service.proposals.apply('intruder', p.id)).rejects.toMatchObject({ code: 'not_found' });
+    await expect(h.service.proposals.dismiss('intruder', p.id)).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('credit actions: charged only on apply', () => {
+  it('tailor runs the resume seam with the proposal key and appends a tailor_ready card', async () => {
+    const h = withTool('tailor_resume', { jobId: 'job_1' });
+    const p = await proposalFrom(h, 'tailor_resume', {}, 'job_1');
+    expect(h.areas.createTailorSession).not.toHaveBeenCalled();
+    const res = await h.service.proposals.apply(USER, p.id, { locale: 'en' });
+    expect(h.areas.createTailorSession).toHaveBeenCalledWith(USER, { baseVariantId: 'res_1', jobId: 'job_1', idempotencyKey: `copilot:${p.id}`, locale: 'en' });
+    expect(res.result).toMatchObject({ card: { type: 'tailor_ready', data: { sessionId: 'ts_1', href: '/resume/res_1?tailor=job_1&tailorSession=ts_1' } } });
+    expect(await storedCardStatus(h, p.messageId)).toEqual([
+      ['credit_action', 'applied'],
+      ['tailor_ready', undefined],
+    ]);
+  });
+
+  it('a second click while the paid action is still running is told "applying", never "applied" (review: "Done." shown for work that then failed)', async () => {
+    const h = withTool('tailor_resume', { jobId: 'job_1' });
+    const p = await proposalFrom(h, 'tailor_resume', {}, 'job_1');
+    let fail!: (err: unknown) => void;
+    h.areas.createTailorSession.mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)) as never);
+    const first = h.service.proposals.apply(USER, p.id);
+    await vi.waitFor(() => expect(h.areas.createTailorSession).toHaveBeenCalledTimes(1));
+    // The proposal is claimed (its row says applied) but nothing has been made yet.
+    expect((await h.store.getProposal(p.id))!.status).toBe('applied');
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'proposal_closed', status: PROPOSAL_APPLYING } });
+    // Read again meanwhile (a reload, a second view): the card is not shown as done.
+    expect((await h.service.listMessages(USER, p.threadId, {})).items.at(-1)!.cards[0]!.data).toMatchObject({ status: 'pending' });
+    // The first click fails: nothing ran, the proposal can be used again.
+    fail(Object.assign(new Error('none left'), { code: 'credits_exhausted', status: 402 }));
+    await expect(first).rejects.toMatchObject({ code: 'credits_exhausted' });
+    expect((await h.store.getProposal(p.id))!.status).toBe('pending');
+    expect(h.areas.createTailorSession).toHaveBeenCalledTimes(1);
+    // Applied for real: only now is a second click told so.
+    await h.service.proposals.apply(USER, p.id);
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ details: { reason: 'proposal_closed', status: 'applied' } });
+    expect((await h.service.listMessages(USER, p.threadId, {})).items.at(-1)!.cards[0]!.data).toMatchObject({ status: 'applied' });
+  });
+
+  it('the click is answered when the stored card is slow to update; the update still lands (review: 30 to 90 s on a busy database)', async () => {
+    const h = withTool('tailor_resume', { jobId: 'job_1' });
+    const p = await proposalFrom(h, 'tailor_resume', {}, 'job_1');
+    const update = h.store.updateCards.bind(h.store);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    vi.spyOn(h.store, 'updateCards').mockImplementation(async (id, fn) => {
+      await held;
+      return update(id, fn);
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const pending = h.service.proposals.apply(USER, p.id, { locale: 'en' });
+      await vi.advanceTimersByTimeAsync(COUNT_AFTER_WAIT_MS + 10);
+      expect(await pending).toMatchObject({ applied: true, result: { card: { type: 'tailor_ready' } } });
+      expect(await storedCardStatus(h, p.messageId)).toEqual([['credit_action', 'pending']]);
+    } finally {
+      vi.useRealTimers();
+    }
+    release();
+    await vi.waitFor(async () =>
+      expect(await storedCardStatus(h, p.messageId)).toEqual([
+        ['credit_action', 'applied'],
+        ['tailor_ready', undefined],
+      ]),
+    );
+  });
+
+  it('a card update that is run twice appends the result card once (review: a retried update doubled it)', async () => {
+    const h = withTool('tailor_resume', { jobId: 'job_1' });
+    const p = await proposalFrom(h, 'tailor_resume', {}, 'job_1');
+    const update = h.store.updateCards.bind(h.store);
+    // The first try was stored, its answer was lost, and the store tried again.
+    vi.spyOn(h.store, 'updateCards').mockImplementation(async (id, fn) => {
+      await update(id, fn);
+      await update(id, fn);
+    });
+    await h.service.proposals.apply(USER, p.id, { locale: 'en' });
+    expect(await storedCardStatus(h, p.messageId)).toEqual([
+      ['credit_action', 'applied'],
+      ['tailor_ready', undefined],
+    ]);
+  });
+
+  it('a failed action (credits exhausted) leaves the proposal pending and charges nothing here', async () => {
+    const h = withTool('write_cover_letter', { jobId: 'job_1' });
+    const p = await proposalFrom(h, 'write_cover_letter', {}, 'job_1');
+    h.areas.createCoverLetter.mockRejectedValueOnce(Object.assign(new Error('none left'), { code: 'credits_exhausted', status: 402 }));
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'credits_exhausted' });
+    expect((await h.store.getProposal(p.id))!.status).toBe('pending');
+    const res = await h.service.proposals.apply(USER, p.id);
+    expect(res.result).toMatchObject({ card: { type: 'cover_letter', data: { letterId: 'cl_1', href: '/resume/letters/cl_1' } } });
+    expect(h.areas.createCoverLetter).toHaveBeenLastCalledWith(USER, { jobId: 'job_1', resumeVariantId: 'res_1', tone: undefined, length: undefined }, `copilot:${p.id}`);
+  });
+
+  it('job import reads the link, then saves the confirmed draft as source "assistant"', async () => {
+    const h = withTool('add_external_job', { url: 'https://beta.example/jobs/9' });
+    const p = await proposalFrom(h, 'add_external_job', {});
+    const res = await h.service.proposals.apply(USER, p.id);
+    expect(h.areas.importJob).toHaveBeenCalledWith(USER, { url: 'https://beta.example/jobs/9' }, `copilot:${p.id}:read`);
+    expect(h.areas.saveImportedJob).toHaveBeenCalledWith(USER, expect.objectContaining({ title: 'Analyst', company: 'Beta', applyUrl: 'https://beta.example/j' }), { importId: 'draft_1', idempotencyKey: `copilot:${p.id}` });
+    expect(res.result).toMatchObject({ card: { type: 'job_imported', data: { status: 'done', jobId: 'job_new', href: '/jobs/job_new' } } });
+  });
+
+  it('rewrite returns suggestions only; the resume is not changed', async () => {
+    const h = makeService({ rounds: [{ toolCalls: [{ name: 'rewrite_resume_section', args: { issueId: 'iss_1' } }] }, { chunks: ['Review the card.'] }] });
+    const t = await newThread(h);
+    const events = await runTurn(h, t, 'rewrite', { resumeId: 'res_1' });
+    const id = (events.find((e) => e.event === 'card')!.data as { data: { proposalId: string } }).data.proposalId;
+    const res = await h.service.proposals.apply(USER, id);
+    expect(h.areas.fixResumeIssue).toHaveBeenCalledWith(USER, 'res_1', 'iss_1', expect.objectContaining({ variant: 'ai', idempotencyKey: `copilot:${id}` }));
+    expect(res.result).toMatchObject({ card: { type: 'rewrite_ready', data: { suggestions: [{ text: 'Built weekly reports', aiWritten: true }] } } });
+  });
+});
+
+describe('outreach draft (credit bucket `outreach`, written by NET)', () => {
+  it('nothing is written until the user applies; then NET runs with the proposal key and the People link is stored', async () => {
+    const h = withTool('draft_outreach', { jobId: 'job_1', channel: 'email' }, { hiringContacts: 'on' });
+    const p = await proposalFrom(h, 'draft_outreach', {}, 'job_1');
+    expect(h.areas.createOutreachDraft).not.toHaveBeenCalled();
+    const res = await h.service.proposals.apply(USER, p.id, { locale: 'en' });
+    expect(h.areas.createOutreachDraft).toHaveBeenCalledTimes(1);
+    expect(h.areas.createOutreachDraft).toHaveBeenCalledWith(USER, { jobId: 'job_1', channel: 'email', locale: 'en' }, `copilot:${p.id}`);
+    expect(res.result).toMatchObject({
+      card: { type: 'action', data: { kind: 'open_link', href: '/jobs/job_1?tab=people', label: 'people' } },
+      draft: { id: 'dr_1', channel: 'email', subject: 'Data Analyst at Acme', jobId: 'job_1', aiWritten: true },
+    });
+    // The stored message keeps the proposal's status and a link to where the draft lives; never the draft text.
+    expect(await storedCardStatus(h, p.messageId)).toEqual([
+      ['credit_action', 'applied'],
+      ['action', undefined],
+    ]);
+    const stored = JSON.stringify((await h.store.getMessage(p.messageId))!.cards);
+    expect(stored).not.toContain('would like to learn more');
+  });
+
+  it('out of credits or AI off: the error passes through and the proposal stays pending for a retry', async () => {
+    const h = withTool('draft_outreach', { jobId: 'job_1' }, { hiringContacts: 'on' });
+    const p = await proposalFrom(h, 'draft_outreach', {}, 'job_1');
+    h.areas.createOutreachDraft.mockRejectedValueOnce(Object.assign(new Error('none left'), { code: 'credits_exhausted', status: 402 }));
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'credits_exhausted' });
+    expect((await h.store.getProposal(p.id))!.status).toBe('pending');
+    h.areas.createOutreachDraft.mockRejectedValueOnce(Object.assign(new Error('AI is off'), { code: 'ai_unavailable', status: 503 }));
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'ai_unavailable' });
+    expect(await storedCardStatus(h, p.messageId)).toEqual([['credit_action', 'pending']]);
+    // The retry reuses the same key, so NET's credit call cannot charge twice.
+    await h.service.proposals.apply(USER, p.id);
+    expect(h.areas.createOutreachDraft.mock.calls.map((c) => c[2])).toEqual([`copilot:${p.id}`, `copilot:${p.id}`, `copilot:${p.id}`]);
+  });
+
+  it('with hiring contacts off there is no draft tool: the model cannot propose one', async () => {
+    const h = withTool('draft_outreach', { jobId: 'job_1' }, { hiringContacts: 'off' });
+    const t = await newThread(h, 'job_1');
+    const events = await runTurn(h, t, 'please', { contextJobId: 'job_1' });
+    expect(events.some((e) => e.event === 'card')).toBe(false);
+    expect(h.areas.createOutreachDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe('memory_add', () => {
+  it('RoboApply: confirming stores the fact', async () => {
+    const h = withTool('remember', { fact: 'Prefers remote work' });
+    const p = await proposalFrom(h, 'remember', {});
+    expect(await h.db.rACopilotMemory.count({})).toBe(0);
+    const res = await h.service.proposals.apply(USER, p.id);
+    expect(res.result).toMatchObject({ memory: { fact: 'Prefers remote work' } });
+    expect((await h.service.listMemory(USER)).items.map((m) => m.fact)).toEqual(['Prefers remote work']);
+  });
+
+  it('GoApply: 403 without the copilot_memory consent; the proposal stays pending', async () => {
+    const h = withTool('remember', { fact: '想去上海' }, { brand: 'goapply' });
+    const p = await proposalFrom(h, 'remember', {});
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'forbidden', details: { reason: 'copilot_memory_consent_required' } });
+    expect((await h.store.getProposal(p.id))!.status).toBe('pending');
+    h.consents.add('copilot_memory');
+    await h.service.proposals.apply(USER, p.id);
+    expect(await h.db.rACopilotMemory.count({})).toBe(1);
+  });
+
+  it(`keeps at most ${COPILOT_MEMORY_MAX} facts`, async () => {
+    const h = withTool('remember', { fact: 'One more fact' });
+    for (let i = 0; i < COPILOT_MEMORY_MAX; i += 1) await h.store.createMemory({ userId: USER, fact: `f${i}`, source: 'user_confirmed' });
+    const p = await proposalFrom(h, 'remember', {});
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'memory_full' } });
+  });
+
+  it('the cap holds when two applies race past the fast check (count and create are one locked step)', async () => {
+    const h = withTool('remember', { fact: 'One more fact' });
+    for (let i = 0; i < COPILOT_MEMORY_MAX; i += 1) await h.store.createMemory({ userId: USER, fact: `f${i}`, source: 'user_confirmed' });
+    const p = await proposalFrom(h, 'remember', {});
+    // the other apply stored the 50th fact after this one's fast check read 49
+    vi.spyOn(h.store, 'countMemory').mockResolvedValueOnce(COPILOT_MEMORY_MAX - 1);
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'memory_full' } });
+    expect(await h.db.rACopilotMemory.count({ where: { userId: USER, deletedAt: null } })).toBe(COPILOT_MEMORY_MAX);
+    expect((await h.store.getProposal(p.id))!.status).toBe('pending');
+    expect(h.db.$sql.calls.some((c) => c.text.includes('pg_advisory_xact_lock'))).toBe(true);
+  });
+
+  it('deleting a fact clears its text', async () => {
+    const h = makeService();
+    const m = await h.store.createMemory({ userId: USER, fact: 'secret-ish', source: 'user_confirmed' });
+    await h.service.deleteMemory(USER, m.id);
+    expect((await h.service.listMemory(USER)).items).toEqual([]);
+    expect((await h.db.rACopilotMemory.findUnique({ where: { id: m.id } }))!.fact).toBe('');
+    await expect(h.service.deleteMemory(USER, m.id)).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('message cards', () => {
+  it('two proposals on one message keep both statuses and the result card (row-locked read-modify-write)', async () => {
+    const h = makeService({
+      rounds: [
+        { toolCalls: [{ name: 'remember', args: { fact: 'Likes data work' } }, { name: 'remember', args: { fact: 'Prefers remote' } }] },
+        { chunks: ['Review the cards.'] },
+      ],
+    });
+    const t = await newThread(h);
+    const events = await runTurn(h, t, 'please');
+    const ids = events.filter((e) => e.event === 'card').map((e) => (e.data as { data: { proposalId: string } }).data.proposalId);
+    const messageId = (events.at(-1)!.data as { messageId: string }).messageId;
+    expect(ids).toHaveLength(2);
+    await Promise.all([h.service.proposals.apply(USER, ids[0]!), h.service.proposals.dismiss(USER, ids[1]!)]);
+    expect(await storedCardStatus(h, messageId)).toEqual([
+      ['memory_add', 'applied'],
+      ['memory_add', 'dismissed'],
+    ]);
+    const locks = h.db.$sql.calls.filter((c) => /FROM "RACopilotMessage" WHERE id = \$1 FOR UPDATE/.test(c.text));
+    expect(locks.length).toBeGreaterThanOrEqual(2);
+    expect(locks.every((c) => c.values[0] === messageId)).toBe(true);
+  });
+});
+
+describe('dismiss', () => {
+  it('dismisses a pending proposal once; dismissing again is a no-op; an applied one cannot be dismissed', async () => {
+    const h = withTool('remember', { fact: 'Likes data work' });
+    const p = await proposalFrom(h, 'remember', {});
+    await h.service.proposals.dismiss(USER, p.id);
+    await h.service.proposals.dismiss(USER, p.id);
+    expect((await h.store.getProposal(p.id))!.status).toBe('dismissed');
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'conflict' });
+    const h2 = withTool('remember', { fact: 'Likes data work' });
+    const p2 = await proposalFrom(h2, 'remember', {});
+    await h2.service.proposals.apply(USER, p2.id);
+    await expect(h2.service.proposals.dismiss(USER, p2.id)).rejects.toMatchObject({ code: 'conflict' });
+  });
+});

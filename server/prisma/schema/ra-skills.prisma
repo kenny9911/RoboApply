@@ -1,0 +1,36 @@
+// ra-skills.prisma: SKILLS area model (MKT-0; MARKET_STRATEGY 2.3; SM-6).
+//
+// The canonical skill vocabulary that RAJob.skillIds and the skillId inside
+// RAJob.skillsDetail items point to. No relation fields: ids are plain strings on
+// the job row, so no other model is edited. The optional label vector needs the
+// `vector` extension (server/prisma/sql/001_vector.sql, run before the push) and is
+// written with raw SQL; every other column has ordinary client CRUD.
+
+/// One canonical skill with its labels, aliases and broader skill.
+model RASkill {
+  /// Stable slug, e.g. 'postgresql', 'relational_databases', 'cpa'.
+  id             String                        @id
+  /// 'hard' | 'soft' | 'certification'
+  kind           String                        @default("hard")
+  labelEn        String
+  labelZh        String?
+  labelZhHant    String?
+  /// Comparison keys (features/match/terms.ts termKey form) of every label and alias in any script.
+  aliases        String[]                      @default([])
+  /// Broader skill this one is evidence for (postgresql -> relational_databases).
+  parentId       String?
+  esco           String?
+  onet           String?
+  /// 'reviewed' | 'unreviewed' (unreviewed skills are shown, never scored).
+  status         String                        @default("unreviewed")
+  mentionCount   Int                           @default(0)
+  /// Label vector, written with raw SQL; embeddingModel says which model produced it.
+  embedding      Unsupported("halfvec(1024)")?
+  embeddingModel String?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  @@index([aliases], type: Gin)
+  @@index([parentId])
+  @@index([status, mentionCount(sort: Desc)])
+}

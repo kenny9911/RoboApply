@@ -1,4 +1,10 @@
+/// <reference path="../features/coverletter/pdfkit.d.ts" />
+
 import { logger } from './LoggerService.js';
+import type { BrandId } from '../platform/brand/registry.js';
+import { DEFAULT_GOHIRE_API_BASE, goHireParseActive } from '../platform/residency/egressPolicy.js';
+import { applyResumeUploadPolicy, isImageUpload } from '../platform/residency/uploadPolicy.js';
+import { resolveOwnerWriteBrand, resolveWriteBrand } from '../platform/residency/writeBrand.js';
 import type {
   ParsedResume,
   WorkExperience,
@@ -14,32 +20,44 @@ import type {
 /**
  * GoHire `POST /api/v1/parse-resume` — the resume extract+parse path.
  *
- * WHY THIS EXISTS. Local extraction ran pdftotext → (on failure) rasterize →
- * vision-LLM OCR → ResumeParseAgent. For image-only scans that path FABRICATES
- * the document: three passes over one 2.8MB scanned Chinese résumé produced
- * three different candidates (陈丽萍 / 庄丽萍 / 邱丽萍 — the real name is 占丽萍),
- * three different phone numbers and three different universities, every one of
- * them persisted with parseStatus='parsed'. A wrong phone number on a
- * job-seeker's résumé is worse than a visible failure. GoHire's endpoint is
- * purpose-built for this (its docs state text, scanned and image-only PDFs are
- * all supported) and returns the correct 占丽萍 / 15907036381 / 九江学院.
+ * WHY THIS EXISTS. Local extraction runs pdftotext → (on failure) rasterize →
+ * vision-LLM OCR → ResumeParseAgent. For image-only scans that path is not
+ * reliable: the vision model can return text that is not on the page, and the
+ * result is still stored as a successful parse. Wrong contact details on a
+ * resume are worse than a visible failure. GoHire's endpoint is built for
+ * this (its docs state text, scanned and image-only PDFs are all supported).
  *
  * It replaces BOTH pipeline steps at once: the response carries `rawText` (the
  * full transcription) AND the structured fields, so a hit skips local
  * extraction and ResumeParseAgent entirely.
  *
  * NOT a hard dependency. Every failure path returns null and the caller falls
- * back to the local pipeline — an unconfigured key, a non-PDF, an oversized
- * file, a timeout, a non-200, or a response too thin to be a real parse.
+ * back to the local pipeline: an unconfigured key, a non-PDF, an oversized
+ * file, a timeout, a non-200, or a response too thin to be a real parse. A
+ * caller that passes `allowImages` (GoApply) gets a JPEG/PNG wrapped into a
+ * one-page PDF and sent here first; on null it reads the image with the local
+ * pipeline, as RoboApply does.
+ *
+ * ROUTING (TASK_PLAN.md R-16, CN_TW_LAUNCH_PLAN.md L-10; D5). The API host
+ * resolves to a mainland-China server. It is the preferred parser for the
+ * brands in `GOHIRE_PARSE_BRANDS` (default `goapply`), a routing preference
+ * and never a requirement: without `GOHIRE_API_KEY` GoApply uploads are read
+ * locally on the shared models. RoboApply uploads never reach it unless the
+ * owner adds `roboapply` there after the privacy notice discloses the
+ * transfer. Every call also passes the brand's egress policy
+ * (`platform/residency/egressPolicy.ts`). The result goes through the brand's
+ * storage rule before it is returned (`platform/residency/uploadPolicy.ts`):
+ * unchanged by default, redacted for GoApply under `CN_STORAGE_MODE=redact`
+ * or `discard`.
  */
 
-const DEFAULT_API_BASE = 'https://api.gohire.top';
+const DEFAULT_API_BASE = DEFAULT_GOHIRE_API_BASE;
 /** Documented ceiling for the endpoint. Larger files skip straight to local. */
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 /**
- * Measured 45.4s on a 1-page 2.8MB image-only scan, so the ceiling has to be
- * generous — but it must stay BELOW the caller's own budget so a hung upstream
- * degrades to the local pipeline instead of hanging the user's upload.
+ * A one-page image-only scan can take most of a minute, so the ceiling has to
+ * be generous — but it must stay BELOW the caller's own budget so a hung
+ * upstream degrades to the local pipeline instead of hanging the user's upload.
  */
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -293,6 +311,39 @@ function isUsableParse(rawText: string, parsed: ParsedResume): boolean {
   );
 }
 
+/** JPEG or PNG by magic bytes (the two formats a PDF page can carry as they are). */
+export function embeddableImageType(buffer: Buffer): 'jpeg' | 'png' | null {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpeg';
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  return null;
+}
+
+/**
+ * Wrap one JPEG/PNG into a single-page PDF the size of the image, so an image
+ * upload can use the parse endpoint (which takes PDFs, image-only ones
+ * included). In memory only; null for any other format or an unreadable image.
+ */
+export async function imageAsPdf(buffer: Buffer): Promise<Buffer | null> {
+  if (!embeddableImageType(buffer)) return null;
+  try {
+    const { default: PDFDocument } = await import('pdfkit');
+    const doc = new PDFDocument({ autoFirstPage: false, margin: 0 });
+    const done = new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+    });
+    const image = doc.openImage(buffer);
+    doc.addPage({ size: [image.width, image.height], margin: 0 });
+    doc.image(image, 0, 0, { width: image.width, height: image.height });
+    doc.end();
+    return await done;
+  } catch {
+    return null;
+  }
+}
+
 export class GoHireResumeParseService {
   private resolveApiKey(): string {
     return (process.env.GOHIRE_API_KEY || '').trim();
@@ -307,10 +358,18 @@ export class GoHireResumeParseService {
     return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
   }
 
-  isConfigured(): boolean {
-    // Opt-out so a bad upstream can be switched off without a redeploy.
-    if ((process.env.GOHIRE_PARSE_ENABLED || '').trim().toLowerCase() === 'false') return false;
-    return Boolean(this.resolveApiKey());
+  /**
+   * Whether uploads for the brand (default: the current brand) may go to the
+   * GoHire parse API: enabled (`GOHIRE_PARSE_ENABLED=false` is the opt-out
+   * switch), keyed, the brand is in `GOHIRE_PARSE_BRANDS` and the API host
+   * passes the brand's egress policy (`goHireParseActive`). False when the
+   * brand cannot be known: no guessing RoboApply for a mainland transfer.
+   * Synchronous, so it asks the explicit brand, the unit of work and the
+   * deployment only; `parseResumeFile` also asks the owning user's brand.
+   */
+  isConfigured(brand?: BrandId): boolean {
+    const brandId = resolveWriteBrand(brand);
+    return brandId ? goHireParseActive(brandId) : false;
   }
 
   /**
@@ -323,15 +382,38 @@ export class GoHireResumeParseService {
     mimeType: string;
     requestId?: string;
     signal?: AbortSignal;
+    /** Brand that owns the upload (default: the current unit of work's brand, else the owner's). */
+    brand?: BrandId;
+    /**
+     * The user who owns the file. With no `brand` and no unit of work (a
+     * worker), the user's stored brand decides whether the file may go here.
+     */
+    userId?: string;
+    /**
+     * Accept a JPEG/PNG image: it is wrapped into a one-page PDF in memory and
+     * parsed like a scan. Off by default (images then return null).
+     */
+    allowImages?: boolean;
   }): Promise<GoHireParseResult | null> {
-    const { buffer, fileName, mimeType, requestId, signal } = params;
+    const { mimeType, requestId, signal } = params;
+    let { buffer, fileName } = params;
+    const brandId = await resolveOwnerWriteBrand(params.brand, params.userId);
 
-    if (!this.isConfigured()) return null;
+    if (!brandId || !this.isConfigured(brandId)) return null;
 
-    // The endpoint takes PDFs only. Everything else (docx, images, txt) stays
-    // on the local pipeline, which already handles those formats natively.
+    // The endpoint takes PDFs only. Word and text files stay on the local
+    // pipeline; an image goes through only when the caller allows it.
     const isPdf = mimeType === 'application/pdf' || /\.pdf$/i.test(fileName);
-    if (!isPdf) return null;
+    if (!isPdf) {
+      if (!params.allowImages || !isImageUpload(mimeType, fileName)) return null;
+      const wrapped = await imageAsPdf(buffer);
+      if (!wrapped) {
+        logger.info('GOHIRE_PARSE', 'Skipping GoHire parse: the image is not a JPEG or PNG', { mimeType }, requestId);
+        return null;
+      }
+      buffer = wrapped;
+      fileName = `${fileName.replace(/\.[^.]+$/, '') || 'resume'}.pdf`;
+    }
 
     if (buffer.byteLength > MAX_FILE_BYTES) {
       logger.info(
@@ -409,16 +491,21 @@ export class GoHireResumeParseService {
         return null;
       }
 
+      // Brand storage rule: unchanged by default; GoApply under CN_STORAGE_MODE=redact|discard has IDs and health details removed.
+      const applied = applyResumeUploadPolicy(brandId, { rawText, parsed });
+      const result: GoHireParseResult = { rawText: applied.rawText, parsed: applied.parsed ?? parsed };
+
       logger.info('GOHIRE_PARSE', 'GoHire parse succeeded', {
         rawChars: rawText.length,
         hasName: Boolean(parsed.name),
         hasPhone: Boolean(parsed.phone),
         experienceCount: parsed.experience.length,
         educationCount: parsed.education.length,
+        redacted: applied.redactions ? Object.values(applied.redactions).reduce((a, b) => a + b, 0) : 0,
         elapsedMs: Date.now() - startedAt,
       }, requestId);
 
-      return { rawText, parsed };
+      return result;
     } catch (err) {
       // Includes upstream timeout AND caller abort. Both degrade to local.
       logger.warn(

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
+import { hostOf, isLinkedInBranded, isLinkedInHost } from '../features/jobs/normalize/index.js';
 import type { ExternalJobNormalized } from '../roboapply/v2/lib/raExternalJobTypes.js';
 import type { EmploymentType, SearchInput, SearchJob } from './types.js';
 import { countryCode, EMPLOYMENT_TYPES } from './validation.js';
@@ -47,12 +48,29 @@ function amount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+/** A link on a LinkedIn host (the display rule of the ingest normalizer, applied to this API's own rows). */
+function onLinkedIn(url: string | null): boolean {
+  return !!url && isLinkedInHost(hostOf(url));
+}
+
+/**
+ * One provider row as this API returns it. LinkedIn is never a source here
+ * (MARKET_STRATEGY M-3, M-4, §1.5: no LinkedIn name, logo or URL on any
+ * source field): a row whose only apply link is on LinkedIn has no usable
+ * apply link and is dropped, as ingest drops it; a LinkedIn page kept as the
+ * row's provenance is replaced by the apply link; a publisher named LinkedIn
+ * is not named.
+ */
 export function normalizeJob(raw: ProviderJob, fetchedAt: string): SearchJob | null {
   if (!raw || typeof raw !== 'object') return null;
   const applyUrl = safeJobUrl(raw.applyUrl);
   const title = clean(raw.title);
   const company = clean(raw.company);
-  if (!applyUrl || !title || !company) return null;
+  if (!applyUrl || onLinkedIn(applyUrl) || !title || !company) return null;
+  const statedSource = safeJobUrl(raw.sourceUrl);
+  const sourceUrl = statedSource && !onLinkedIn(statedSource) ? statedSource : applyUrl;
+  const statedPublisher = clean(raw.sourcePublisher) || null;
+  const publisher = isLinkedInBranded(statedPublisher) ? null : statedPublisher;
   const id = `job_${createHash('sha256').update(canonicalApplyUrl(applyUrl)).digest('hex').slice(0, 24)}`;
   const min = amount(raw.salaryMin);
   const max = amount(raw.salaryMax);
@@ -68,10 +86,10 @@ export function normalizeJob(raw: ProviderJob, fetchedAt: string): SearchJob | n
     // Returned as inert text. Browser consumers must not render source HTML.
     description: clean(raw.description, 20_000).replace(/<[^>]*>/g, ' ').replace(/[ \t]+/g, ' '),
     applyUrl,
-    sourceUrl: safeJobUrl(raw.sourceUrl) ?? applyUrl,
+    sourceUrl,
     applyIsDirect: raw.applyIsDirect === true,
     provider: raw.sourceBoard,
-    sources: [{ provider: raw.sourceBoard, id: clean(raw.externalId, 300), applyUrl, publisher: clean(raw.sourcePublisher) || null, sourceUrl: safeJobUrl(raw.sourceUrl) ?? applyUrl }],
+    sources: [{ provider: raw.sourceBoard, id: clean(raw.externalId, 300), applyUrl, publisher, sourceUrl }],
     postedAt: raw.postedAtEstimated ? null : iso(raw.postedAt),
     fetchedAt: iso(raw.fetchedAt) ?? fetchedAt,
     remote: raw.workType === 'remote' ? true : null,

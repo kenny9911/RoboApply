@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Operations Lead - Sample Labs</title>
+  <meta property="og:title" content="Operations Lead - Sample Labs">
+</head>
+<body>
+  <main>
+    <h1 data-ui="job-title">Operations Lead</h1>
+    <span data-ui="job-location">Toronto, Ontario, Canada</span>
+    <div data-ui="job-description"><p>Run day-to-day operations for our lab network.</p></div>
+    <form data-ui="application-form">
+      <div data-ui="field"><label for="firstname">First name *</label><input id="firstname" name="firstname" type="text" required></div>
+      <div data-ui="field"><label for="lastname">Last name *</label><input id="lastname" name="lastname" type="text" required></div>
+      <div data-ui="field"><label for="email">Email *</label><input id="email" name="email" type="email" required></div>
+      <div data-ui="resume"><label>Resume</label><input type="file" name="resume"></div>
+      <fieldset data-ui="QA_101">
+        <legend>Are you legally entitled to work in Canada? *</legend>
+        <label><input type="radio" name="QA_101" value="true"> Yes</label>
+        <label><input type="radio" name="QA_101" value="false"> No</label>
+      </fieldset>
+      <div data-ui="field">
+        <label for="QA_102">Notice period</label>
+        <select id="QA_102" name="QA_102"><option value="">Select...</option><option>Immediately</option><option>2 weeks</option><option>1 month</option></select>
+      </div>
+      <div data-ui="field"><label for="QA_103">What would you improve in your last team's operations?</label><textarea id="QA_103" name="QA_103"></textarea></div>
+      <div role="radiogroup" aria-labelledby="qa104-label">
+        <span id="qa104-label">Preferred work arrangement</span>
+        <label><input type="radio" name="QA_104" value="onsite"> On-site</label>
+        <label><input type="radio" name="QA_104" value="hybrid"> Hybrid</label>
+      </div>
+      <div data-ui="field"><input type="checkbox" id="gdpr" name="gdpr"><label for="gdpr">Keep my data for future roles</label></div>
+      <button type="submit">Submit application</button>
+    </form>
+  </main>
+</body>
+</html>

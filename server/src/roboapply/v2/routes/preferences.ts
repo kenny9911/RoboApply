@@ -13,13 +13,22 @@
 //
 // Both handlers scope to the authed user via `requireAuth`; first-time users
 // get the service's default blob. Options are static.
+//
+// WP-20: the job-targeting keys of the blob (`roleTitles`, `workModes`,
+// `cities`, `salaryMinK`, …) are projected from / written through to the
+// user's active search profile (features/search, the one preference store);
+// see RAPreferencesService. A search-profile error on PATCH answers with its
+// platform code (e.g. 409 version_conflict after the service's one retry,
+// 422 invalid_request) instead of a bare 500.
 
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../lib/raAuth.js';
 import { normalizeRaLocale } from '../lib/raLocale.js';
+import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
 import { logger } from '../../../services/LoggerService.js';
 import prisma from '../../../lib/prisma.js';
 import { raPreferencesService } from '../services/RAPreferencesService.js';
+import { searchErrorToHttpError } from '../../../features/search/index.js';
 
 const router = Router();
 
@@ -52,6 +61,10 @@ router.patch('/', requireAuth, async (req: Request, res: Response) => {
     const result = await raPreferencesService.update(userId, body);
     return res.json(result);
   } catch (err) {
+    const mapped = searchErrorToHttpError(err);
+    if (mapped) {
+      return res.status(mapped.status).json({ error: mapped.code, code: mapped.code, details: mapped.details });
+    }
     logger.error('RA_V2_PREFERENCES', 'PATCH /preferences failed', {
       userId: req.user?.id,
       error: err instanceof Error ? err.message : String(err),
@@ -76,7 +89,9 @@ router.put('/locale', requireAuth, async (req: Request, res: Response) => {
     const locale = normalizeRaLocale(
       typeof raw.locale === 'string' ? raw.locale : undefined,
     );
-    if (!locale) {
+    // Only a locale the request's brand serves (nine on RoboApply, zh/en on
+    // GoApply; WP-12 R7) — the switchers never offer another one.
+    if (!locale || !(getCurrentBrandOrDefault().locales as readonly string[]).includes(locale)) {
       return res.status(422).json({ error: 'invalid_locale' });
     }
     await prisma.seekerProfile.updateMany({

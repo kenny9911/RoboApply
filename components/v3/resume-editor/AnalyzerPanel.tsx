@@ -16,9 +16,16 @@ import { useState } from 'react';
 
 import { IconArrow, IconCheck, IconX } from '../primitives';
 import type { AnalyzerIssue, AnalyzerReport, AnalyzerSeverity } from '../../../lib/resumeAnalyzer';
+import { EditorCheckSummary } from '../../features/resume';
 
 interface Props {
   report: AnalyzerReport;
+  /**
+   * When set, the popover leads with the server resume check (grade + link to
+   * /resume/[id]/check, WP-22); the local heuristic below stays as the quick,
+   * offline view while editing.
+   */
+  resumeId?: string;
   /** Scroll/focus the section the issue points at. */
   onJump: (anchor?: string) => void;
   onClose: () => void;
@@ -26,7 +33,7 @@ interface Props {
 
 const SEVERITY_ORDER: AnalyzerSeverity[] = ['critical', 'recommended', 'optional'];
 
-export function AnalyzerPanel({ report, onJump, onClose }: Props) {
+export function AnalyzerPanel({ report, resumeId, onJump, onClose }: Props) {
   const t = useTranslations('resume');
   const [severity, setSeverity] = useState<AnalyzerSeverity | null>(null);
 
@@ -63,6 +70,8 @@ export function AnalyzerPanel({ report, onJump, onClose }: Props) {
           <IconX size={11} />
         </button>
       </div>
+
+      {resumeId ? <EditorCheckSummary resumeId={resumeId} /> : null}
 
       <div className="discovery-analyzer-overview">
         <span className="rb-analyzer-score">{t('analyzer.scoreUnit', { score: report.score })}</span>

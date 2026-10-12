@@ -7,17 +7,53 @@
 //
 //   1. Delete R2 interview artifacts — interviews/<sessionId>/recording.mp4
 //      (the user's voice), transcript.json/.txt, report.json — for every
-//      InterviewSession the user owns.
+//      InterviewSession the user owns, each inside the SESSION's brand
+//      (`sessionArtifactBrand`): a GoApply session's objects are deleted in
+//      the store that brand's media uses.
 //   2. Delete stored resume originals (RAResumeVariant.originalFileKey,
-//      candidate keyspace of ResumeOriginalFileStorageService).
-//   3. Hard-delete the User row — Prisma onDelete: Cascade takes the DB side
+//      candidate keyspace of ResumeOriginalFileStorageService). The key names
+//      its store: a GoApply original is under `goapply/` on the shared store,
+//      or under `cn/` in GoApply's own bucket (CN_S3_*), and is deleted there
+//      whatever the storage configuration is on the day of the purge.
+//   3. Delete the exact application files sent with applications
+//      (RAApplicationArtifact.storageKey; WP-10) through the registered
+//      artifact-storage deleter.
+//   4. End a subscription that still runs at the payment provider. Closing an
+//      account only soft-closes the profile, so a subscriber who never
+//      cancelled is still charged, and the plan row deleted in step 7 is the
+//      only pointer to that subscription: once it is gone nothing can stop
+//      the charges and no later event of that customer matches a row. The
+//      subscription is cancelled at once (Stripe `subscriptions.cancel`
+//      through the one client factory, idempotency key `purge:<subscription>`;
+//      nothing is refunded here). RoboApply accounts only: Stripe never
+//      serves GoApply (rule A11). If it cannot be ended, the account is NOT
+//      deleted on this run, exactly like a stored file that cannot be removed.
+//   5. Copy a minimal proof of the checkout acknowledgements into
+//      RABillingConsentArchive (platform/billing/consentArchive.ts; ST-9,
+//      California AB 2863: kept until the later of 3 years after consent and
+//      1 year after the subscription ends, which for a subscription ended in
+//      step 4 is now). The records themselves cascade away with the User row
+//      in step 7, which can be years short of that. No IP address, no user
+//      agent, no email in clear. If the copy fails, the account is NOT deleted
+//      on this run.
+//   6. Delete the user's rows that have no FK to User (WP-10, FND-1b
+//      NO_CASCADE list): RAOnboardingSession, RAWorkItem and RABillingRefund
+//      by userId, and the first-party events of the user's linked anonIds via
+//      growth.deleteEventsForUser() (rows with the userId cascade anyway).
+//   7. Hard-delete the User row — Prisma onDelete: Cascade takes the DB side
 //      (SeekerProfile + children, InterviewSession, RAResumeVariant, Resume,
-//      sessions, ...).
+//      sessions, every RA* user-owned table, ...).
+//
+// Brand-aware (WP-10): each user is purged inside `runWithBrand(user.brand)`
+// so per-brand storage and logging resolve to the user's brand, and GoApply
+// accounts use a retention window of at most 15 days (PIPL: deletion within 15
+// working days); RoboApply keeps ACCOUNT_PURGE_RETENTION_DAYS (default 30).
 //
 // ORDER MATTERS: storage objects are deleted BEFORE the DB rows because the
 // rows hold the only pointers to the object keys. If any storage delete cannot
 // be confirmed the user is left in place (counted as `blocked`) and retried on
-// the next run — we never orphan objects by dropping their pointer first.
+// the next run — we never orphan objects by dropping their pointer first. The
+// same holds for a running subscription (step 4).
 //
 // Selection is guarded twice: the DB query filters deletedAt <= cutoff, and
 // the pure helpers in accountPurgeHelpers.ts (unit-tested) re-check the cutoff
@@ -32,12 +68,45 @@ import prisma from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
 import { interviewR2Storage } from '../../interview-engine/storage/r2Storage.js';
 import { resumeOriginalFileStorageService } from '../../services/ResumeOriginalFileStorageService.js';
+import { inBrand } from '../../interview-engine/providers/brandScope.js';
+import { VOICE_SEAM_KEY, readVoiceSeam } from '../../interview-engine/providers/sessionSeam.js';
+import { runWithBrand } from '../../lib/requestContext.js';
+import { parseBrandId, type BrandId } from '../../platform/brand/registry.js';
+import { growthService } from '../../features/growth/index.js';
+import { purgeAuthTokens } from '../../features/auth/tokens.js';
+import { archiveBillingConsents } from '../../platform/billing/consentArchive.js';
+import { getStripe } from '../../platform/billing/stripeClient.js';
 import {
+  isPurgeSafeRoleSet,
   partitionPurgeCandidates,
   purgeCutoff,
   resolveRetentionDays,
+  retentionDaysFor,
   type PurgeCandidate,
 } from './accountPurgeHelpers.js';
+
+/**
+ * Deletes one stored application artifact (RAApplicationArtifact.storageKey).
+ * Returns true only when the object is confirmed gone (or never existed).
+ * The default deletes the key in the store it names (shared store or
+ * GoApply's own bucket; local disk where the shared store is local disk); the
+ * artifact writer (WP-38 / WP-55a) may register its own deleter with
+ * `setArtifactStorageDeleter`.
+ */
+export type ArtifactStorageDeleter = (key: string) => Promise<boolean>;
+
+const defaultArtifactDeleter: ArtifactStorageDeleter = (key) =>
+  resumeOriginalFileStorageService.deleteFile({ provider: resumeOriginalFileStorageService.providerOfKey(key), key, fileName: null, mimeType: null });
+
+let artifactDeleter: ArtifactStorageDeleter = defaultArtifactDeleter;
+
+export function setArtifactStorageDeleter(deleter: ArtifactStorageDeleter | null): void {
+  artifactDeleter = deleter ?? defaultArtifactDeleter;
+}
+
+export function getArtifactStorageDeleter(): ArtifactStorageDeleter {
+  return artifactDeleter;
+}
 
 /** Accounts processed per run — keeps the cron invocation well under the
  *  function timeout even on a backlog; the nightly cadence drains the rest. */
@@ -59,6 +128,16 @@ export interface AccountPurgeSummary {
   interviewSessionsCleaned: number;
   /** Resume original files removed from storage. */
   resumeOriginalsDeleted: number;
+  /** Checkout acknowledgements copied into RABillingConsentArchive before their accounts were deleted. */
+  billingConsentsArchived: number;
+  /** Subscriptions that still ran at the payment provider and were ended before their accounts were deleted. */
+  subscriptionsEnded: number;
+  /**
+   * Used or expired sign-in tokens deleted (reset/verify links, OAuth state,
+   * pending OAuth sign-ups, expired known-device marks); null when that step
+   * failed (logged; retried next run).
+   */
+  authTokensPurged: number | null;
 }
 
 interface UserPurgeOutcome {
@@ -66,26 +145,113 @@ interface UserPurgeOutcome {
   reason?: string;
   interviewSessionsCleaned: number;
   resumeOriginalsDeleted: number;
+  /** Archive rows written by this run (0 when blocked, or when an earlier run wrote them). */
+  billingConsentsArchived: number;
+  /** This run ended a subscription that still ran at the payment provider. */
+  subscriptionEnded: boolean;
+}
+
+/** Plan row statuses after which the payment provider charges nothing more (RoboApplyBillingService `STRIPE_STATUS_MAP`). */
+const ENDED_SUBSCRIPTION_STATUSES = new Set(['canceled']);
+/** Stripe's own statuses of a subscription that is over. */
+const ENDED_AT_STRIPE = new Set(['canceled', 'incomplete_expired']);
+
+/** Stripe does not know the object (a subscription of another Stripe account or mode): nothing there can charge. */
+function isStripeMissing(err: unknown): boolean {
+  const e = err as { code?: unknown; statusCode?: unknown } | null;
+  return e?.code === 'resource_missing' || e?.statusCode === 404;
+}
+
+type SubscriptionEnd = { blocked: true; reason: string } | { blocked: false; endedNow: boolean };
+
+/**
+ * End the account's subscription at the payment provider when it may still
+ * run there (step 4). `endedNow` is true when THIS call ended it; false when
+ * there was nothing to end (no Stripe subscription, a GoApply account or plan
+ * row, a row that already says it ended, a subscription Stripe reports as
+ * over or does not know). Blocked when Stripe cannot be asked or does not
+ * confirm: the caller keeps the account for the next run.
+ *
+ * Safe to repeat: the idempotency key is the subscription's, and a
+ * subscription that is already cancelled counts as ended.
+ */
+async function endRunningSubscription(userId: string, userBrand: BrandId): Promise<SubscriptionEnd> {
+  const nothing: SubscriptionEnd = { blocked: false, endedNow: false };
+  // Rule A11: Stripe serves RoboApply accounts only, and never a plan row of another brand.
+  if (userBrand !== 'roboapply') return nothing;
+  const profile = await prisma.seekerProfile.findUnique({ where: { userId }, select: { id: true } });
+  if (!profile) return nothing;
+  const row = await prisma.seekerSubscription.findUnique({
+    where: { seekerProfileId: profile.id },
+    select: { brand: true, status: true, stripeSubscriptionId: true },
+  });
+  const subscriptionId = row?.stripeSubscriptionId ?? null;
+  if (!row || !subscriptionId || ENDED_SUBSCRIPTION_STATUSES.has(row.status)) return nothing;
+  if ((parseBrandId(row.brand) ?? 'roboapply') !== 'roboapply') return nothing;
+
+  const stripe = getStripe();
+  if (!stripe) return { blocked: true, reason: 'stripe_not_configured' };
+  try {
+    await stripe.subscriptions.cancel(subscriptionId, {}, { idempotencyKey: `purge:${subscriptionId}` });
+    return { blocked: false, endedNow: true };
+  } catch (err) {
+    if (isStripeMissing(err)) return nothing;
+    // Stripe refuses to cancel what is already cancelled: the subscription's own status decides.
+    try {
+      if (ENDED_AT_STRIPE.has((await stripe.subscriptions.retrieve(subscriptionId)).status)) return nothing;
+    } catch (readErr) {
+      if (isStripeMissing(readErr)) return nothing;
+    }
+    logger.error('RA_ACCOUNT_PURGE', 'a running subscription could not be ended at the payment provider', {
+      userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { blocked: true, reason: 'subscription_not_ended' };
+  }
+}
+
+/**
+ * The brand whose storage holds a session's artifacts (WP-63a R9):
+ *   1. `InterviewSession.brand` when the row carries it (SCHEMA-4);
+ *   2. else the voice seam stored at create in `liveMetrics` (GoApply and
+ *      non-default sessions write one; default RoboApply rows write nothing);
+ *   3. else the account's brand.
+ * A recording is written by the session's media plane, so it sits in that
+ * brand's bucket even when the purge runs under another brand.
+ */
+export function sessionArtifactBrand(session: { brand?: string | null; liveMetrics?: unknown }, userBrand: BrandId): BrandId {
+  const own = parseBrandId(session.brand);
+  if (own) return own;
+  const metrics = session.liveMetrics;
+  if (metrics && typeof metrics === 'object' && !Array.isArray(metrics) && VOICE_SEAM_KEY in metrics) {
+    return readVoiceSeam(metrics).brand;
+  }
+  return userBrand;
 }
 
 /**
  * Purge one user's stored artifacts, then the user row. Returns blocked=true
  * (row kept, retried next run) when any storage delete cannot be confirmed.
+ * `now` dates the checkout acknowledgements that are archived on the way.
  */
-async function purgeUser(userId: string): Promise<UserPurgeOutcome> {
-  // ── 1. Interview artifacts (R2) ──
+async function purgeUser(userId: string, userBrand: BrandId, now: Date = new Date()): Promise<UserPurgeOutcome> {
+  // ── 1. Interview artifacts (R2 / S3), each in its session's brand ──
   const sessions = await prisma.interviewSession.findMany({
     where: { userId },
-    select: { id: true, recordingKey: true, transcriptKey: true },
+    select: { id: true, recordingKey: true, transcriptKey: true, brand: true, liveMetrics: true },
   });
-  if (sessions.length > 0 && !interviewR2Storage.isConfigured()) {
-    // Can't clean what we can't reach. Deleting the rows now would orphan any
-    // objects that do exist, so hold the user until R2 creds are present.
-    return { blocked: true, reason: 'r2_not_configured', interviewSessionsCleaned: 0, resumeOriginalsDeleted: 0 };
+  const byBrand = sessions.map((s) => ({ session: s, brand: sessionArtifactBrand(s, userBrand) }));
+  for (const brand of new Set(byBrand.map((x) => x.brand))) {
+    if (!inBrand(brand, () => interviewR2Storage.isConfigured())) {
+      // Can't clean what we can't reach. Deleting the rows now would orphan any
+      // objects that do exist, so hold the user until that brand's storage
+      // credentials are present.
+      return { blocked: true, reason: `r2_not_configured${brand === userBrand ? '' : ` (${brand})`}`, interviewSessionsCleaned: 0, resumeOriginalsDeleted: 0, billingConsentsArchived: 0, subscriptionEnded: false };
+    }
   }
   let artifactFailures = 0;
-  for (const s of sessions) {
-    const { failed } = await interviewR2Storage.deleteSessionArtifacts(s.id, [s.recordingKey, s.transcriptKey]);
+  for (const { session: s, brand } of byBrand) {
+    const { failed } = await inBrand(brand, () => interviewR2Storage.deleteSessionArtifacts(s.id, [s.recordingKey, s.transcriptKey]));
     artifactFailures += failed;
   }
 
@@ -114,20 +280,143 @@ async function purgeUser(userId: string): Promise<UserPurgeOutcome> {
     else resumeOriginalFailures += 1;
   }
 
-  if (artifactFailures > 0 || resumeOriginalFailures > 0) {
+  // ── 3. Application artifacts (the exact files sent with applications). ──
+  const artifacts = await prisma.rAApplicationArtifact.findMany({
+    where: { userId, storageKey: { not: null } },
+    select: { id: true, storageKey: true },
+  });
+  let applicationFileFailures = 0;
+  for (const a of artifacts) {
+    let ok = false;
+    try {
+      ok = await artifactDeleter(a.storageKey as string);
+    } catch {
+      ok = false;
+    }
+    if (!ok) applicationFileFailures += 1;
+  }
+
+  if (artifactFailures > 0 || resumeOriginalFailures > 0 || applicationFileFailures > 0) {
     return {
       blocked: true,
-      reason: `storage_cleanup_incomplete (artifacts=${artifactFailures}, originals=${resumeOriginalFailures})`,
+      reason: `storage_cleanup_incomplete (artifacts=${artifactFailures}, originals=${resumeOriginalFailures}, applicationFiles=${applicationFileFailures})`,
       interviewSessionsCleaned: 0,
       resumeOriginalsDeleted,
+      billingConsentsArchived: 0,
+      subscriptionEnded: false,
     };
   }
 
-  // ── 3. Hard-delete the User row; cascades take every dependent table.
+  // ── 4. A subscription that still runs at the payment provider is ended
+  //      before its only pointer (the plan row) is deleted. ──
+  const subscription = await endRunningSubscription(userId, userBrand);
+  if (subscription.blocked) {
+    return { blocked: true, reason: subscription.reason, interviewSessionsCleaned: 0, resumeOriginalsDeleted, billingConsentsArchived: 0, subscriptionEnded: false };
+  }
+
+  // ── 5. Checkout acknowledgements must outlive the account (ST-9): copy
+  //      their minimal proof BEFORE anything is deleted. A throw here leaves
+  //      the user in place for the next run, and a run that repeats this
+  //      step writes each acknowledgement once (unique key). A subscription
+  //      ended in step 4 ended now: its year is counted from here. ──
+  const consents = await archiveBillingConsents(prisma, userId, now, { subscriptionEndedAt: subscription.endedNow ? now : null });
+
+  // ── 6. Rows without an FK to User (FND-1b NO_CASCADE list) and the
+  //      first-party events of the user's linked anonIds. ──
+  await deleteRowsWithoutUserFk(userId);
+
+  // ── 7. Hard-delete the User row; cascades take every dependent table.
   //      deleteMany so a concurrent/duplicate run is an idempotent no-op. ──
   await prisma.user.deleteMany({ where: { id: userId } });
 
-  return { blocked: false, interviewSessionsCleaned: sessions.length, resumeOriginalsDeleted };
+  return {
+    blocked: false,
+    interviewSessionsCleaned: sessions.length,
+    resumeOriginalsDeleted,
+    billingConsentsArchived: consents.archived,
+    subscriptionEnded: subscription.endedNow,
+  };
+}
+
+/**
+ * The user-owned rows that a User delete does NOT cascade to (FND-1b
+ * schemaInvariants NO_CASCADE, `no_fk` entries that are user data). Run before
+ * the User row goes, by the account purge and nowhere else.
+ */
+export async function deleteRowsWithoutUserFk(userId: string): Promise<{ onboardingSessions: number; workItems: number; billingRefunds: number; anonEvents: number | null }> {
+  // RABillingRefund (market wave schema, MKT-0 O-3): a refund record names the
+  // user, the charge and the order and has no FK, so nothing else removes it.
+  // Payment rows go with the account (AlipayOrder cascades from User); the
+  // record of truth stays with Stripe and the merchant console.
+  // RABillingConsentArchive is deliberately NOT here: it is the proof of a
+  // checkout acknowledgement that must outlive the account (written by
+  // `purgeUser` right before this runs), and compliance-daily deletes it at
+  // its `retainUntil`.
+  const [onboardingSessions, workItems, billingRefunds] = await prisma.$transaction([
+    prisma.rAOnboardingSession.deleteMany({ where: { userId } }),
+    prisma.rAWorkItem.deleteMany({ where: { userId } }),
+    prisma.rABillingRefund.deleteMany({ where: { userId } }),
+  ]);
+  let anonEvents: number | null = null;
+  try {
+    anonEvents = (await growthService.deleteEventsForUser(userId)).deleted;
+  } catch (err) {
+    // WP-23 fills the seam; until then only the events stamped with the
+    // userId go (by cascade). Logged so the gap is visible.
+    logger.warn('RA_ACCOUNT_PURGE', 'linked anonymous events not deleted (growth seam unavailable)', {
+      userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return { onboardingSessions: onboardingSessions.count, workItems: workItems.count, billingRefunds: billingRefunds.count, anonEvents };
+}
+
+/**
+ * Hard-delete ONE already-closed account now: stored files first, then the
+ * User row and its cascades — the same steps as the sweep, without waiting
+ * for the retention window. For statutory deadlines shorter than that window
+ * (WP-13: withdrawing GoApply's cross-border consent must purge within
+ * the PIPL 15-working-day due date). Refuses, and changes nothing, when the
+ * account is not closed (`SeekerProfile.deletedAt` unset) or holds a
+ * non-seeker role. An account that no longer exists counts as purged.
+ */
+export async function purgeAccountNow(userId: string): Promise<{ blocked: boolean; reason?: string }> {
+  const profile = await prisma.seekerProfile.findFirst({
+    where: { userId },
+    select: { userId: true, deletedAt: true, user: { select: { role: true, roles: true, brand: true } } },
+  });
+  if (!profile) {
+    const user = await prisma.user.findFirst({ where: { id: userId }, select: { id: true } });
+    return user ? { blocked: true, reason: 'not_a_seeker_account' } : { blocked: false };
+  }
+  if (!profile.deletedAt) return { blocked: true, reason: 'account_not_closed' };
+  const candidate: PurgeCandidate = {
+    userId: profile.userId,
+    deletedAt: profile.deletedAt,
+    role: profile.user.role,
+    roles: profile.user.roles,
+    brand: profile.user.brand,
+  };
+  // No retention window here (the caller's deadline is shorter); the role guard still applies.
+  if (!isPurgeSafeRoleSet(candidate.role, candidate.roles)) {
+    logger.warn('RA_ACCOUNT_PURGE', 'immediate purge refused: non-seeker roles need manual review', { userId, role: candidate.role, roles: candidate.roles });
+    return { blocked: true, reason: 'unsafe_role' };
+  }
+  const brand = parseBrandId(candidate.brand) ?? 'roboapply';
+  const outcome = await runWithBrand(brand, () => purgeUser(userId, brand));
+  if (outcome.blocked) {
+    logger.warn('RA_ACCOUNT_PURGE', 'immediate purge blocked — user kept for retry', { userId, reason: outcome.reason });
+    return { blocked: true, reason: outcome.reason };
+  }
+  logger.warn('RA_ACCOUNT_PURGE', 'account hard-purged now (statutory request)', {
+    userId,
+    softDeletedAt: candidate.deletedAt?.toISOString(),
+    interviewSessionsCleaned: outcome.interviewSessionsCleaned,
+    resumeOriginalsDeleted: outcome.resumeOriginalsDeleted,
+    billingConsentsArchived: outcome.billingConsentsArchived,
+    subscriptionEnded: outcome.subscriptionEnded,
+  });
+  return { blocked: false };
 }
 
 /** Run one purge sweep. `now` / `retentionDays` / `limit` are test seams. */
@@ -137,7 +426,12 @@ export async function runAccountPurgeSweep(
   const now = opts.now ?? new Date();
   const retentionDays = opts.retentionDays ?? resolveRetentionDays(process.env.ACCOUNT_PURGE_RETENTION_DAYS);
   const limit = opts.limit ?? DEFAULT_BATCH_LIMIT;
-  const cutoff = purgeCutoff(now, retentionDays);
+  // Per-brand window: an explicit `retentionDays` (tests) applies to every
+  // brand; otherwise GoApply is capped at the PIPL window.
+  const daysFor = (c: PurgeCandidate) =>
+    opts.retentionDays !== undefined ? opts.retentionDays : retentionDaysFor(c.brand ?? null);
+  // Query with the shortest window; partition applies each user's own.
+  const cutoff = purgeCutoff(now, Math.min(retentionDays, retentionDaysFor('goapply')));
 
   const profiles = await prisma.seekerProfile.findMany({
     where: { deletedAt: { lte: cutoff } },
@@ -146,7 +440,7 @@ export async function runAccountPurgeSweep(
     select: {
       userId: true,
       deletedAt: true,
-      user: { select: { role: true, roles: true } },
+      user: { select: { role: true, roles: true, brand: true } },
     },
   });
 
@@ -155,8 +449,9 @@ export async function runAccountPurgeSweep(
     deletedAt: p.deletedAt,
     role: p.user.role,
     roles: p.user.roles,
+    brand: p.user.brand,
   }));
-  const { due, unsafeRole } = partitionPurgeCandidates(candidates, now, retentionDays);
+  const { due, unsafeRole } = partitionPurgeCandidates(candidates, now, daysFor);
 
   for (const c of unsafeRole) {
     logger.warn('RA_ACCOUNT_PURGE', 'soft-deleted profile has non-seeker roles — skipping hard delete, needs manual review', {
@@ -176,12 +471,18 @@ export async function runAccountPurgeSweep(
     failed: 0,
     interviewSessionsCleaned: 0,
     resumeOriginalsDeleted: 0,
+    billingConsentsArchived: 0,
+    subscriptionsEnded: 0,
+    authTokensPurged: null,
   };
 
   for (const c of due) {
     try {
-      const outcome = await purgeUser(c.userId);
+      const brand = parseBrandId(c.brand) ?? 'roboapply';
+      const outcome = await runWithBrand(brand, () => purgeUser(c.userId, brand, now));
       summary.resumeOriginalsDeleted += outcome.resumeOriginalsDeleted;
+      summary.billingConsentsArchived += outcome.billingConsentsArchived;
+      if (outcome.subscriptionEnded) summary.subscriptionsEnded += 1;
       if (outcome.blocked) {
         summary.blocked += 1;
         logger.warn('RA_ACCOUNT_PURGE', 'purge blocked — user kept for retry', {
@@ -196,6 +497,8 @@ export async function runAccountPurgeSweep(
           softDeletedAt: c.deletedAt?.toISOString(),
           interviewSessionsCleaned: outcome.interviewSessionsCleaned,
           resumeOriginalsDeleted: outcome.resumeOriginalsDeleted,
+          billingConsentsArchived: outcome.billingConsentsArchived,
+          subscriptionEnded: outcome.subscriptionEnded,
         });
       }
     } catch (err) {
@@ -205,6 +508,17 @@ export async function runAccountPurgeSweep(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  // Token retention (F-TRUST-06 "auth tokens 24 h"): every used or expired
+  // RAAuthToken row goes, including rows with no user (OAuth state, pending
+  // sign-ups) that the per-user purge above never reaches.
+  try {
+    summary.authTokensPurged = await purgeAuthTokens(prisma, now);
+  } catch (err) {
+    logger.error('RA_ACCOUNT_PURGE', 'auth token sweep failed — will retry next run', {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   logger.info('RA_ACCOUNT_PURGE', 'sweep complete', { ...summary });

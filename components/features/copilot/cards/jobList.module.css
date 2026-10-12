@@ -1,0 +1,30 @@
+/* Job list card (MKT-4H): the licence credit line of an open-data row.
+   Everything else on the card uses the shared copilot classes. Clarity tokens
+   only; light and dark come from the token values. */
+
+.credit {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.creditLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.creditLink:hover {
+  color: var(--action);
+}
+
+.creditLink:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r-xs);
+}

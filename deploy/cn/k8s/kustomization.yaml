@@ -1,0 +1,20 @@
+# Base for the GoApply mainland stack (WP-76). Do not apply this directory
+# directly: the image names below are placeholders. Render a deploy overlay
+# with the ACR image names and the SLB certificate, then apply it:
+#
+#   node deploy/cn/render-overlay.mjs --registry <acr host> --namespace <acr ns> \
+#        --tag <git sha> --slb-cert-id <cert id> --out deploy/cn/overlays/prod
+#   kubectl apply -k deploy/cn/overlays/prod --dry-run=server   # then without --dry-run
+#
+# `kubectl kustomize deploy/cn/k8s` renders this base offline.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goapply
+resources:
+  - namespace.yaml
+  - api.yaml
+  - web.yaml
+  - worker.yaml
+  - gateway.yaml
+  - networkpolicy.yaml
+  - cronjobs.yaml

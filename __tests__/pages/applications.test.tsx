@@ -21,10 +21,11 @@
 //     it is one string, and it is the question the destination answers.
 //   • Column label "Interview" → "Interviewing" (ruling C1 fixes the ladder at
 //     Saved · Applied · First call · Interviewing · Final round · Offer ·
-//     Rejected). Only four rungs render today because RATrackerStatus has no
-//     first_call/final_round member yet — see components/v3/pipeline/columns.ts
-//     for the data change (C32) that unlocks the rest. Asserting the four that
-//     DO render, plus the absence of the retired label, is the honest test.
+//     Rejected). All seven rungs render on RoboApply: `first_call` and
+//     `final_round` are tracker statuses since WP-38 (INTL_COLUMNS in
+//     components/v3/pipeline/columns.ts; GoApply renders its own ladder,
+//     CN_COLUMNS). The test asserts the whole ladder, in order, plus the
+//     absence of the retired label.
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
@@ -62,10 +63,14 @@ describe('/applications', () => {
       }),
     ).toBeInTheDocument();
 
-    // Stage headings remain navigable independently of the summary metrics.
-    for (const name of ['Saved', 'Applied', 'Interviewing', 'Offer']) {
+    // Stage headings remain navigable independently of the summary metrics:
+    // the whole C1 ladder, in order.
+    const ladder = ['Saved', 'Applied', 'First call', 'Interviewing', 'Final round', 'Offer', 'Rejected'];
+    for (const name of ladder) {
       expect(await screen.findByRole('heading', { name, level: 2 })).toBeInTheDocument();
     }
+    const rendered = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim() ?? '');
+    expect(rendered.filter((name) => ladder.includes(name))).toEqual(ladder);
     // The pre-ruling label is gone, not merely unused: "Interview" as a stage
     // name reads as an event, and C1 wants the state.
     expect(screen.queryByText(/^Interview$/)).toBeNull();

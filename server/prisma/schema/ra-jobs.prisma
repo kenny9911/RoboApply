@@ -1,0 +1,492 @@
+// ra-jobs.prisma: INGEST area models (ARCHITECTURE.md §2.1).
+// Moved verbatim from the former single-file schema.prisma; no DDL change.
+
+//
+// ─────────────────────────────────────────────────────────────────────────────
+//  RoboApply V2 (candidate-facing companion product)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// All tables prefixed `RA` to distinguish from V1's `RoboApply*`. The slice
+// is strictly additive — no FK changes to any existing table. Lives behind
+// the decoupled boundary in backend/src/roboapply/v2/* enforced by
+// scripts/check-roboapply-v2-boundary.mjs.
+//
+// Spec: docs/roboapply/v2/04-backend-spec.md §2 (every column / index here
+// must match the spec exactly).
+//
+// Note on indexes: the spec calls for a `pg_trgm` GIN index on
+// `RAJob.titleNormalized` + `RAJob.companyNameNormalized` for fast
+// substring search. Prisma 7 does not natively manage GIN-trgm indexes
+// via `@@index`, and the seed-data scale (~200 rows) makes a sequential
+// scan acceptable for launch. The btree indexes below cover the rest of
+// the spec's index requirements. When V2.5 lands live-ingest at 10k+
+// rows, add `previewFeatures = ["postgresqlExtensions"]` + an
+// `extensions = [pg_trgm]` block to the datasource and a manual
+// `CREATE INDEX ... USING gin (...) gin_trgm_ops` migration.
+//
+// FND-1b (Jobright clone) update: superseded. Prisma 7.10 accepts
+// `@@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)` without the
+// postgresqlExtensions preview feature, so the trigram index on
+// RAJob.searchText is declared below (db push would drop an undeclared index).
+// pg_trgm itself is installed once by server/prisma/sql/000_extensions.sql.
+//
+
+/// The seeded V2 job index. One row per (sourceBoard, externalId).
+/// Spec: 04-backend-spec.md §2.2.
+model RAJob {
+  id          String @id @default(cuid())
+  externalId  String
+  /// 'greenhouse' | 'lever' | 'seed' | 'manual' | 'jsearch' | 'robohire' | 'gohire'
+  /// robohire/gohire rows are materialized by the cross-bank search agent team
+  /// (RACrossBankSearchService) from the recruiter Job banks. externalId = the
+  /// recruiter Job.id; @@unique([externalId, sourceBoard]) keeps the two banks'
+  /// Job.id spaces collision-free. No DDL — sourceBoard is a plain String.
+  sourceBoard String
+  applyUrl    String
+
+  title                 String
+  /// lowercased, trimmed — forward-compatible with pg_trgm GIN index (V2.5)
+  titleNormalized       String
+  companyName           String
+  companyNameNormalized String
+  companyLogoUrl        String?
+
+  location        String?
+  locationCity    String?
+  locationCountry String?
+  /// 'remote' | 'hybrid' | 'onsite'
+  workType        String  @default("onsite")
+  /// 'full_time' | 'contract' | 'part_time' | 'internship' | null
+  employmentType  String?
+
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String? @default("USD")
+  /// 'year' | 'month' | 'week' | 'day' | 'hour'
+  salaryPeriod   String? @default("year")
+
+  description      String  @db.Text
+  descriptionPlain String  @db.Text
+  qualifications   String? @db.Text
+  responsibilities String? @db.Text
+  benefits         String? @db.Text
+
+  postedAt   DateTime?
+  /// Seed-only metadata: `{ companyTier: 'faang' | 'series_b' | …, role: 'pm' | 'swe' | … }`
+  seedTags   Json?
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trackerEntries    RATrackerEntry[]
+  resumeVariants    RAResumeVariant[]    @relation("RAResumeVariantTargetJob")
+  keywordExtraction RAKeywordExtraction?
+  matchScores       RAJobMatchScore[]
+
+  // ── Jobright clone (FND-1b; ARCH §2.4, TASK_PLAN.md R-17). Every column above
+  //    is kept verbatim so existing readers keep working. `workType` is
+  //    deprecated: its 'onsite' default lies; read `workModel` instead. ──
+
+  /// 'intl' | 'cn' — which brand's feed may show the job.
+  market      String     @default("intl")
+  /// 'public' | 'private' (a user's own import, visible only to its owner).
+  /// D3: every aggregate and public count filters visibility='public' AND
+  /// isCanonical AND archivedAt IS NULL AND market = brand.market.
+  visibility  String     @default("public")
+  ownerUserId String?
+  owner       User?      @relation("RAJobOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  companyId   String?
+  company     RACompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  // taxonomy and level
+  /// Taxonomy ids from taxonomy.v1.json, snake_case, ordered [L1, L2, L3]
+  /// (WP-16a; e.g. ['software_engineering', 'swe_backend', 'backend_engineer']).
+  taxonomyIds       String[] @default([])
+  primaryTaxonomyId String?
+  /// 'intern_newgrad' | 'entry' | 'mid' | 'senior' | 'lead_staff' | 'director_exec'
+  seniority         String?
+  /// 'ic' | 'manager'
+  roleType          String?
+  minYears          Int?
+  maxYears          Int?
+  /// 'none' | 'associate' | 'bachelor' | 'master' | 'phd'
+  educationLevel    String?
+  /// Normalized lowercase, max 25.
+  skills            String[] @default([])
+  /// `[{ skill, kind: 'hard'|'soft', required: boolean }]`
+  skillsDetail      Json?
+
+  // location and work model
+  /// 'remote' | 'hybrid' | 'onsite'; null = not stated in the posting.
+  workModel      String?
+  /// ISO country, 'global', or null.
+  remoteScope    String?
+  locationRegion String?
+  /// `[{ city, region, country, lat, lng }]`
+  locations      Json?
+  geoLat         Float?
+  geoLng         Float?
+
+  // pay (salaryMin/Max/Currency/Period above stay as stated in the posting)
+  /// 'provider' | 'posting_text' — never 'estimate' on this row (D3).
+  salarySource    String?
+  /// Annualized in salaryCurrency (hour×2080, month×12, or month×salaryMonths).
+  salaryAnnualMin Int?
+  salaryAnnualMax Int?
+  /// CN "N薪".
+  salaryMonths    Int?
+  /// TW-03: 面議 (or 面議 with a NT$40k floor) is NOT disclosed pay.
+  salaryDisclosed Boolean @default(false)
+  /// The pay text exactly as the posting states it (e.g. 面議, 待遇面議). Never estimated.
+  salaryText      String?
+
+  // work authorization signals: extracted with evidence, never inferred from
+  // absence (ruling C18)
+  /// 'offered' | 'not_offered' | null
+  sponsorship         String?
+  /// ≤240-char quote from the posting.
+  sponsorshipEvidence String?
+  citizenshipRequired Boolean?
+  clearanceRequired   Boolean?
+  /// CN only: 'soe' | 'bianzhi' | 'hukou' | 'foreign', each from a cited source
+  /// (evidence in marketTags).
+  employerTags        String[] @default([])
+
+  // provenance and lifecycle
+  sourceUrl            String?
+  /// Display name of where we got the posting (e.g. 'GoHire', 'Greenhouse').
+  sourceName           String?
+  /// For reposted jobs: the original publisher (reposted-source duty, CN plan §4.1).
+  originalSourceName   String?
+  /// Host of the original publisher's page (from sourceUrl, then applyUrl),
+  /// skipping job-board hosts; never a LinkedIn host (SCHEMA-2, WP-16a).
+  originalHost         String?
+  /// 'greenhouse' | 'lever' | 'workday' | 'ashby' | 'smartrecruiters' | 'icims' |
+  /// 'workable' | 'taleo' | 'successfactors' | 'moka' | 'beisen' | 'feishu' | 'dayee' | 'other'
+  atsType              String?
+  isAgency             Boolean?
+  /// Came from our RoboHire/GoHire recruiter banks. D3: this is NOT a claim that
+  /// the job is absent from other boards ("not on other job boards" is banned
+  /// copy), and it gives no ranking boost; it backs the free "Recruiter-posted" filter only.
+  fromRecruiterBank    Boolean   @default(false)
+  /// The bank's verified-employer field. D3: "Direct from employer" / 企业直招
+  /// may be shown only when this is true AND isAgency is not true.
+  employerVerified     Boolean   @default(false)
+  /// D3: a real count from a named source only. Never written from 'linkedin' or
+  /// 'jsearch' (scraped LinkedIn counts; F-FEED-08 is SKIP); reserved until a
+  /// source we may cite exists. Shown only with applicantCountSource + applicantCountAt.
+  applicantCount       Int?
+  applicantCountSource String?
+  applicantCountAt     DateTime?
+  postedAtEstimated    Boolean   @default(false)
+  firstSeenAt          DateTime  @default(now())
+  lastSeenAt           DateTime  @default(now())
+  expiresAt            DateTime?
+  closedAt             DateTime?
+  /// 'expired' | 'source_removed' | 'bank_closed' | 'reported' | 'duplicate' |
+  /// 'removed_by_user' (a user archived their own import; SCHEMA-3, SR-35-1)
+  closeReason          String?
+  /// Missed-refresh tracking (SCHEMA-2, SR-16b-1): the RAIngestQuery that last
+  /// returned this job and that query's runCount at the time. Archived as
+  /// 'source_removed' once the query has run twice more without it.
+  lastSeenQueryId      String?
+  lastSeenRun          Int?
+  /// GoApply anti-fraud evidence: `[{ rule, evidence, at }]`; flagged jobs are
+  /// excluded from ranking until reviewed (WP-41).
+  fraudFlags           Json?
+  /// `[{ tag, evidenceQuote, evidenceUrl }]` — every market tag cites its source.
+  marketTags           Json?
+
+  // dedupe
+  dedupeKey      String?
+  canonicalJobId String?
+  isCanonical    Boolean @default(true)
+  /// Lower wins: activejobs 10, bank 15, linkedin 20, jsearch 30, user_import 90.
+  sourcePriority Int     @default(50)
+
+  // search + enrichment
+  /// Normalized title + company + top skills; trigram-indexed (needs pg_trgm,
+  /// server/prisma/sql/000_extensions.sql).
+  searchText    String    @default("")
+  /// ≤2 sentences; enrichment output (AI; labelled as AI in the UI).
+  summary       String?   @db.Text
+  enrichedAt    DateTime?
+  enrichVersion Int?
+  /// What produced the enrichment at `enrichVersion`: a model id, or one of two
+  /// rules-only markers (no model ran, nothing here is AI output):
+  /// 'rules' = rules-only because no model was available or the budget was off
+  /// (maintenance retries these), 'rules_checked' = rules-only and settled for
+  /// this version (covered by rules, AI consent off, or the model call failed;
+  /// maintenance never selects it). Readers treat both markers alike (INT-05).
+  enrichModel   String?
+  /// Public job page slug (SEO).
+  slug          String?
+  /// The provider licence allows public redisplay (ARCH §9.4). Default off.
+  publicDisplay Boolean   @default(false)
+
+  // ── Market wave (MKT-0; MARKET_STRATEGY 2.3 and 7 item 11). Additive. ──
+  /// K2 exact dedupe key '{ats}:{tenant}:{postingId}' parsed from the apply or source URL. JI-5.
+  atsPostingKey     String?
+  /// Openings (招聘人数) as stated by the source: a recruiter bank or an employer board. Null when not stated; never inferred (D3). SCHEMA-8, PAR-7.
+  headcount         Int?
+  /// Who states RAJob.sponsorship: 'posting_quote' | 'provider:<provider id>' (a provider's reading, labelled as such). JI-7, JI-11.
+  sponsorshipSource String?
+  /// Taiwan 鄉鎮市區 as posted, e.g. '竹北市'. JT-7.
+  locationDistrict  String?
+  /// 'day' | 'evening' | 'night' | 'rotating' | 'part_time' from the source's own field; null = not stated. JT-7.
+  workShift         String?
+  /// Score 0..1 of the deterministic title-to-role match (taxonomy/match.ts) that produced primaryTaxonomyId; null = never matched. SM-2.
+  titleMatchScore   Float?   @db.Real
+  /// Canonical RASkill ids of the posting's skills, required first. SM-6.
+  skillIds          String[] @default([])
+  /// Lexical document (title, role labels en/zh/zhHant, canonical skill labels and aliases, summary, requirements head). CJK segmented in the application; Traditional folded to Simplified in this token copy only. Never displayed. SM-7.
+  searchDoc         String?  @db.Text
+  // Raw SQL on RAJob (MKT-2H, MKT-3C, MKT-4F): list the columns you need. Never `SELECT *`, `SELECT j.*` or
+  // `RETURNING *`, and never return searchTsv bare: @prisma/adapter-pg has no mapping for the built-in type
+  // tsvector and throws UnsupportedNativeDataType on the result. Use it in WHERE / ORDER BY (`@@`,
+  // `ts_rank_cd(...)`), or return `"searchTsv"::text`. The client itself never selects this column.
+  /// to_tsvector('simple', searchDoc), written by the application in the same statement as searchDoc. NOT a generated column (prisma db push cannot express one). SM-7.
+  searchTsv         Unsupported("tsvector")?
+  /// sha1 of the content a fit depends on: title + requirements text + skills. SM-5, SM-7.
+  contentHash       String?
+  /// Language of the posting text: 'en' | 'zh-Hans' | 'zh-Hant' | 'ja' | 'ko' | other BCP-47 primary tag. SM-7, SM-11.
+  lang              String?
+  /// { v: 1, contentHash, model, extractedAt, items: [{ id, kind: 'skill'|'experience'|'education'|'domain'|'scope', text (verbatim from the posting), importance: 'must'|'preferred' }] }. SM-8.
+  requirements      Json?
+  /// Dense vector side row (ra-retrieval.prisma); read and written with raw SQL only. SM-7.
+  embedding         RAJobEmbedding?
+
+  userStates     RAJobUserState[]
+  /// GoApply admin fraud reviews of this job (SCHEMA-3, SR-41-2).
+  cnFraudReviews RACnFraudReview[]
+  /// Admin "Reports to review" decisions (SCHEMA-5, SR-74-2).
+  reviews        RAJobReview[]
+
+  @@unique([externalId, sourceBoard])
+  @@index([workType, archivedAt])
+  @@index([locationCity, archivedAt])
+  @@index([postedAt(sort: Desc), archivedAt])
+  @@index([salaryMin(sort: Desc), archivedAt])
+  @@index([archivedAt])
+  @@index([market, isCanonical, archivedAt, postedAt(sort: Desc)])
+  @@index([market, locationCountry, workModel, archivedAt])
+  @@index([taxonomyIds], type: Gin)
+  @@index([skills], type: Gin)
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([dedupeKey])
+  @@index([companyId, archivedAt])
+  @@index([expiresAt])
+  @@index([enrichedAt])
+  @@index([ownerUserId])
+  @@index([salaryCurrency, salaryAnnualMax])
+  @@index([lastSeenQueryId])
+  // SCHEMA-3 (WP-32): SR-32-1 feed new-count (firstSeenAt > last visit),
+  // SR-32-2 GoApply employer-tag / 户口 filters, SR-32-3 radius bounding box.
+  @@index([market, isCanonical, archivedAt, firstSeenAt(sort: Desc)])
+  @@index([employerTags], type: Gin)
+  @@index([geoLat, geoLng])
+  // SCHEMA-3 (WP-42, optional): ATS board reads `sourceBoard = ? AND externalId
+  // LIKE '<board>:%'`; text_pattern_ops lets the prefix use a btree.
+  @@index([sourceBoard, externalId(ops: raw("text_pattern_ops"))])
+  // Market wave (MKT-0): K2 posting identity (JI-5), Taiwan district filter (JT-7),
+  // canonical skills (SM-6) and the lexical retrieval leg (SM-7). The text-search
+  // index is declared here because prisma db push drops an index the schema does
+  // not declare.
+  @@index([market, atsPostingKey])
+  @@index([market, locationCountry, locationDistrict])
+  @@index([skillIds], type: Gin)
+  @@index([searchTsv], type: Gin)
+}
+
+// ── Jobright clone: INGEST models (FND-1b; ARCH §2.4) ──────────────────────
+
+/// Company records per market. Every displayed field needs a provenance entry
+/// in `facts` (D3).
+model RACompany {
+  id             String   @id @default(cuid())
+  /// 'intl' | 'cn'
+  market         String
+  nameNormalized String
+  displayName    String
+  slug           String
+  domain         String?
+  logoUrl        String?
+  website        String?
+  linkedinUrl    String?
+  industries     String[] @default([])
+  /// '1-10' | '11-50' | '51-200' | '201-500' | '501-1000' | '1001-5000' | '5001+'
+  sizeBand       String?
+  employeeCount  Int?
+  hqLocation     String?
+  foundedYear    Int?
+  description    String?  @db.Text
+  isAgency       Boolean?
+  /// Recruiter-bank Company.id ('robohire:<id>' | 'gohire:<id>').
+  bankCompanyRef String?
+  /// Provenance per field: `{ [field]: { source: 'provider:linkedin'|'bank'|'website'|'user', url?, fetchedAt } }`.
+  /// D3: no company field is shown without an entry here; unknown renders "Not listed".
+  facts          Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  jobs           RAJob[]
+
+  @@unique([market, nameNormalized])
+  @@unique([market, slug])
+  @@index([domain])
+  /// Company typeahead (SCHEMA-2, SR-16b-2); needs pg_trgm (server/prisma/sql/000_extensions.sql).
+  @@index([nameNormalized(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+/// Demand-driven ingestion plan (ARCH §4.3). One row per provider × normalized query.
+model RAIngestQuery {
+  id               String    @id @default(cuid())
+  market           String
+  /// JobProvider key.
+  provider         String
+  paramsHash       String
+  /// `{ q, taxonomyId?, country, city?, remote?, datePosted, cursor? }`
+  params           Json
+  /// 'demand' | 'seo_seed' | 'manual' | 'bank_sync'
+  origin           String
+  /// Number of active users whose default search profile maps here.
+  demandScore      Int       @default(0)
+  priority         Int       @default(100)
+  enabled          Boolean   @default(true)
+  nextRunAt        DateTime  @default(now())
+  lastRunAt        DateTime?
+  lastNewCount     Int?
+  lastSeenCount    Int?
+  consecutiveEmpty Int       @default(0)
+  /// Counted runs (succeeded with ≥1 posting) for the missed-refresh rule
+  /// (SCHEMA-2, SR-16b-1; see RAJob.lastSeenRun).
+  runCount         Int       @default(0)
+  lastError        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([provider, paramsHash])
+  @@index([enabled, nextRunAt, priority])
+}
+
+/// Per-provider daily call and yield counters (quota and cost guard).
+model RAProviderUsage {
+  provider     String
+  /// 'YYYY-MM-DD' UTC
+  dayKey       String
+  calls        Int    @default(0)
+  jobsReturned Int    @default(0)
+  jobsNew      Int    @default(0)
+  errors       Int    @default(0)
+
+  @@id([provider, dayKey])
+}
+
+/// US DOL LCA public disclosure data, aggregated per employer and fiscal year
+/// (F-SAL-03 honest source; every number shown cites `sourceFile`).
+model RAH1bEmployerStat {
+  id                     String   @id @default(cuid())
+  employerNameNormalized String
+  fiscalYear             Int
+  certifiedCount         Int
+  withdrawnCount         Int      @default(0)
+  medianWageAnnualUsd    Int?
+  /// `[{ title, count, medianWageAnnualUsd }]`
+  topTitles              Json
+  /// e.g. 'LCA_Disclosure_Data_FY2026_Q3.xlsx'
+  sourceFile             String
+  importedAt             DateTime @default(now())
+
+  @@unique([employerNameNormalized, fiscalYear])
+}
+
+/// Ops-curated public ATS job boards (Greenhouse, Lever, Ashby, SmartRecruiters)
+/// read through their public posting APIs (WP-42; TASK_PLAN.md R-17).
+model RACareerSiteSource {
+  id           String    @id @default(cuid())
+  /// 'intl' | 'cn' — the brand market whose feed these jobs enter.
+  market       String    @default("intl")
+  /// 'greenhouse' | 'lever' | 'ashby' | 'smartrecruiters'
+  ats          String
+  boardToken   String
+  companyName  String
+  companyId    String?
+  /// ISO country the board mainly hires in (e.g. 'TW').
+  countryCode  String?
+  enabled      Boolean   @default(true)
+  lastSyncedAt DateTime?
+  lastJobCount Int?
+  lastError    String?
+  // ── Market wave (MKT-0). Additive: origin, coverage and sync state of a board. ──
+  /// 'admin' | 'seed' | 'import' | 'discovered'. JI-3.
+  origin         String    @default("admin")
+  /// For origin 'discovered': '<sourceBoard>:<externalId>' of the row that named the board, or 'user_import'. JI-3.
+  discoveredFrom String?
+  /// ISO alpha-2 codes the board is read for; empty = every country the brands serve. JI-3, JC-4, JT-5.
+  countries      String[]  @default([])
+  /// Consecutive hard sync failures; 3 disables the source. JI-4.
+  failCount      Int       @default(0)
+  /// When a sync last added or closed a posting (adaptive interval). JI-4.
+  lastChangeAt   DateTime?
+  /// When the board is next due; null = now; also the sync lease. JI-4.
+  nextSyncAt     DateTime?
+  /// Set when three failures disabled the source; its rows are archived 48 h later. JI-4.
+  disabledAt     DateTime?
+  createdBy    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([ats, boardToken])
+  @@index([market, enabled, lastSyncedAt])
+  /// Due boards for the sync worker (MKT-0; JI-4).
+  @@index([enabled, nextSyncAt])
+}
+
+/// Admin decision on a reported or scam-flagged job ("Reports to review",
+/// F-TRUST-04; WP-74; SCHEMA-5, SR-74-2). A dedicated table so decisions are
+/// not swept by job_interactions retention or included in the admin's data
+/// export, and so the feed's three-report close rule and re-enrichment can
+/// respect a restore. Until WP-93 switches features/admin/reports.ts, decisions
+/// are RAJobInteraction rows of kind 'admin_review'.
+model RAJobReview {
+  id           String   @id @default(cuid())
+  jobId        String
+  job          RAJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// 'close' | 'restore' (features/admin/contract.ts ResolveDecision).
+  decision     String
+  note         String?
+  /// Admin user id (no FK; admin accounts outlive decisions).
+  by           String
+  at           DateTime @default(now())
+  /// International scam rule ids the admin cleared on restore; re-enrichment
+  /// must not bring them back.
+  clearedRules String[] @default([])
+
+  @@index([jobId, at(sort: Desc)])
+}
+
+/// Public sponsor registers beside the DOL LCA table RAH1bEmployerStat: USCIS H-1B Employer Data Hub and the UK Register
+/// of Licensed Sponsors. Company facts with source and date; never a job-level label. JI-11.
+model RASponsorRegisterEntry {
+  id                     String   @id @default(cuid())
+  /// 'uscis_h1b_hub' | 'uk_sponsor_register'
+  source                 String
+  /// ISO alpha-2
+  country                String
+  employerNameNormalized String
+  employerName           String
+  /// 'FY2025' for USCIS, '' for the UK register
+  period                 String   @default("")
+  approvals              Int?
+  denials                Int?
+  town                   String?
+  rating                 String?
+  routes                 String[] @default([])
+  sourceFile             String
+  sourceUrl              String
+  asOf                   DateTime
+  importedAt             DateTime @default(now())
+
+  @@unique([source, employerNameNormalized, period])
+  @@index([country, employerNameNormalized])
+}

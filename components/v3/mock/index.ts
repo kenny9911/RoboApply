@@ -13,6 +13,7 @@ export {
   PracticeSetupSkeleton,
   PracticeSetupError,
   JD_MIN_CHARS,
+  practiceDurationOptions,
   type RoleSourceMode,
 } from './PracticeSetupFlow';
 export { MarketRequirementsPanel } from './MarketRequirementsPanel';

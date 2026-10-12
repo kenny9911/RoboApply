@@ -1,0 +1,24 @@
+# Build context for deploy/cn/Dockerfile.api (BuildKit reads <Dockerfile>.dockerignore
+# next to the Dockerfile). Allow list: the API image needs the server, the Prisma
+# config, the lockfile, the legal documents and the two deploy scripts. Nothing else
+# (and no .env file) enters the context.
+
+*
+!package.json
+!package-lock.json
+!prisma.config.ts
+!server/
+!content/legal/
+!deploy/cn/cron-call.mjs
+!deploy/cn/preflight.mjs
+
+# Re-excluded inside the allowed folders.
+server/dist
+server/src/generated
+**/node_modules
+**/*.test.ts
+**/__tests__
+**/.env
+**/.env.*
+**/*.pem
+**/*.key

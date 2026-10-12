@@ -11,7 +11,7 @@ const K2_MODELS = [
   'kimi-k2-thinking-turbo',
 ];
 
-function isK2Model(model: string): boolean {
+export function isK2Model(model: string): boolean {
   return K2_MODELS.some((m) => model.toLowerCase() === m.toLowerCase());
 }
 

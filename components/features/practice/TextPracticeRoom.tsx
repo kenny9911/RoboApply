@@ -1,0 +1,313 @@
+'use client';
+
+// TextPracticeRoom — the written practice interview (TASK_PLAN.md WP-43;
+// CN_TW_LAUNCH_PLAN.md: "absent voice credentials → text practice").
+//
+// Used when live voice practice is not available for the brand (GoApply with
+// `ai.interviewVoice` off). It runs the written interview through the
+// first-party practice routes (`textPracticeApi`: start → next-turn per answer
+// → score), one question at a time. The server checks the brand gate, loads
+// the job (`jobId`) itself and meters the practice; a refused start (402, the
+// gate, an unknown job) goes back to the setup page through `onStartRefused`.
+// An answered, scored practice ticks the getting-started checklist and the
+// job's "Practiced" step on the server; this refreshes the checklist and the
+// credit balance. The interviewer's text and the result are AI output, so each
+// block carries AiGeneratedBadge (it renders only on GoApply). The score line
+// says what it is: a score of this practice, not a prediction.
+//
+// The interviewer's lines, the questions and the hints are markdown (the
+// server contract: RAMockTurn.text). They render through the sanitized
+// Markdown primitive in block mode, so a numbered list keeps its numbers and a
+// code block keeps its lines. What the user typed is shown as typed, line
+// breaks included. A practice with no answer shows "—" for the score, never a
+// 0 out of 100.
+//
+// GoApply AI-interview format (WP-66): when the start returns the format's
+// plan, each question shows its thinking and answer time (CnQuestionTiming,
+// from the plan's numbers), and a score that carries the `cn` report block is
+// followed by the practice report (CnReportView): three areas, the STAR check
+// on story answers and filler-word counts. RoboApply gets neither. The report
+// is told the answers were typed, so it never mentions speech-to-text.
+
+import { useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import { QueryClientContext } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
+
+import { Btn } from '../../v3/primitives/Btn';
+import { Markdown } from '../../v3/primitives/Markdown';
+import { AiGeneratedBadge } from '../market';
+import { CnQuestionTiming, CnReportView, asCnPracticeReport, cnTimingFor } from '../practice-cn';
+import {
+  textPracticeApi,
+  type TextPracticeCnFormat,
+  type TextPracticeQuestion,
+  type TextPracticeScoreResult,
+  type TextPracticeTurn,
+} from '../../../lib/api/interviewEngine';
+import { refreshChecklist } from '../../../hooks/growth';
+import { accountKeys } from '../../../hooks/useAccount';
+import styles from './practice.module.css';
+
+export interface TextPracticeRoomProps {
+  role: string;
+  interviewerId: string;
+  typeId: string;
+  language?: string;
+  durationMinutes?: number;
+  /** The job this practice is for (the server loads it and seeds the interview). */
+  jobId?: string | null;
+  /**
+   * A start the server refused for a reason the setup page shows (out of
+   * credits, the GoApply gate, an unknown job). Return true when handled: the
+   * room then leaves without its own retry.
+   */
+  onStartRefused?: (err: unknown) => boolean;
+  /** Leave the room (back to the setup). */
+  onExit: () => void;
+}
+
+type Phase = 'starting' | 'answering' | 'scoring' | 'done' | 'error';
+
+/**
+ * AI-written text (an interviewer line, a question, a hint): block markdown.
+ * The wrapper is a <div> because lists and code blocks cannot sit inside a <p>.
+ */
+function AiText({ text, className }: { text: string; className?: string }) {
+  return (
+    <div className={`${styles.aiText} ${className ?? ''}`}>
+      <Markdown block>{text}</Markdown>
+    </div>
+  );
+}
+
+export function TextPracticeRoom({
+  role,
+  interviewerId,
+  typeId,
+  language,
+  durationMinutes,
+  jobId,
+  onStartRefused,
+  onExit,
+}: TextPracticeRoomProps) {
+  const t = useTranslations('practice.text');
+  const queryClient = useContext(QueryClientContext);
+  const answerId = useId();
+  const [phase, setPhase] = useState<Phase>('starting');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<TextPracticeQuestion[]>([]);
+  const [cnFormat, setCnFormat] = useState<TextPracticeCnFormat | null>(null);
+  const [index, setIndex] = useState(0);
+  const [turns, setTurns] = useState<TextPracticeTurn[]>([]);
+  const [answer, setAnswer] = useState('');
+  const [sending, setSending] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [score, setScore] = useState<TextPracticeScoreResult | null>(null);
+  const [failedStep, setFailedStep] = useState<'start' | 'turn' | 'score' | null>(null);
+  const startedRef = useRef(false);
+
+  const start = useCallback(async () => {
+    setPhase('starting');
+    setFailedStep(null);
+    try {
+      const res = await textPracticeApi.start({
+        role,
+        interviewerId,
+        typeId,
+        language,
+        durationMinutes,
+        jobId: jobId ?? null,
+      });
+      setSessionId(res.sessionId);
+      setQuestions(res.questions ?? []);
+      setCnFormat(res.cnFormat ?? null);
+      setIndex(0);
+      setTurns([]);
+      setFinished((res.questions ?? []).length === 0);
+      setPhase('answering');
+    } catch (err) {
+      if (onStartRefused?.(err)) return;
+      setFailedStep('start');
+      setPhase('error');
+    }
+  }, [role, interviewerId, typeId, language, durationMinutes, jobId, onStartRefused]);
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    void start();
+  }, [start]);
+
+  async function send(text: string) {
+    if (!sessionId || sending) return;
+    setSending(true);
+    try {
+      const res = await textPracticeApi.nextTurn({ sessionId, answer: text, questionIndex: index });
+      setTurns((prev) => [
+        ...prev,
+        ...(text.trim() ? [{ who: 'you' as const, text: text.trim() }] : []),
+        ...(res.turns ?? []),
+      ]);
+      setAnswer('');
+      if (res.nextIndex === null || res.nextIndex >= questions.length) setFinished(true);
+      else setIndex(res.nextIndex);
+    } catch {
+      setFailedStep('turn');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function finish() {
+    if (!sessionId) return;
+    setPhase('scoring');
+    setFailedStep(null);
+    try {
+      const result = await textPracticeApi.score(sessionId);
+      setScore(result);
+      setPhase('done');
+      if (queryClient) {
+        // The practice was metered; an answered one also ticked the checklist.
+        void queryClient.invalidateQueries({ queryKey: accountKeys.credits() });
+        if (result.practiceCounted) void refreshChecklist(queryClient).catch(() => undefined);
+      }
+    } catch {
+      setFailedStep('score');
+      setPhase('answering');
+    }
+  }
+
+  const current = questions[index] ?? null;
+  // GoApply AI-interview format: this question's timing, only when the plan matches the questions.
+  const timing = cnTimingFor(cnFormat, index, questions.length);
+  const cnReport = score ? asCnPracticeReport(score.cn) : null;
+  const hasInterviewerTurn = turns.some((turn) => turn.who === 'them');
+  // The server says whether any question was answered (`practiceCounted`).
+  const answered = score?.practiceCounted !== false;
+
+  return (
+    <section className={styles.room} aria-labelledby="text-practice-title">
+      <header className={styles.roomHead}>
+        <h1 id="text-practice-title">{t('title')}</h1>
+        <p>{t('intro')}</p>
+      </header>
+
+      {phase === 'starting' ? (
+        <p className={styles.muted} role="status" aria-live="polite">{t('starting')}</p>
+      ) : null}
+
+      {phase === 'error' ? (
+        <div className={styles.card} role="alert">
+          <p>{t('error')}</p>
+          <div className={styles.actions}>
+            <Btn variant="primary" onClick={() => void start()}>{t('retry')}</Btn>
+            <Btn onClick={onExit}>{t('exit')}</Btn>
+          </div>
+        </div>
+      ) : null}
+
+      {phase === 'answering' || phase === 'scoring' ? (
+        <>
+          {/* The interviewer's replies are AI output: one label for the thread (GoApply). */}
+          {hasInterviewerTurn ? <AiGeneratedBadge /> : null}
+          {turns.length > 0 ? (
+            <ul className={styles.turns} aria-live="polite">
+              {turns.map((turn, i) => (
+                <li key={i} className={`${styles.turn} ${turn.who === 'you' ? styles.turnYou : ''}`}>
+                  <span className={styles.turnWho} data-turn-who>{turn.who === 'you' ? t('you') : t('interviewer')}</span>
+                  {turn.who === 'you'
+                    ? <p className={`${styles.turnText} ${styles.turnTyped}`}>{turn.text}</p>
+                    : <AiText text={turn.text} className={styles.turnText} />}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {!finished && current ? (
+            <div className={styles.card} data-question-card>
+              <p className={styles.cardLabel}>{t('question', { n: index + 1, total: questions.length })}</p>
+              <AiText text={current.q} className={styles.question} />
+              <AiGeneratedBadge />
+              {timing ? <CnQuestionTiming prepSeconds={timing.prepSeconds} answerSeconds={timing.answerSeconds} /> : null}
+              {current.hint ? (
+                <div className={`${styles.muted} ${styles.hint}`}>
+                  <span>{t('hint')}: </span>
+                  <AiText text={current.hint} />
+                </div>
+              ) : null}
+              <label className={styles.cardLabel} htmlFor={answerId}>{t('answerLabel')}</label>
+              <textarea
+                id={answerId}
+                className={styles.textarea}
+                value={answer}
+                onChange={(event) => setAnswer(event.target.value)}
+                disabled={sending}
+              />
+              <div className={styles.actions}>
+                <Btn variant="primary" onClick={() => void send(answer)} disabled={sending || !answer.trim()}>
+                  {sending ? t('sending') : t('send')}
+                </Btn>
+                <Btn onClick={() => void send('')} disabled={sending}>{t('skip')}</Btn>
+              </div>
+            </div>
+          ) : null}
+
+          {failedStep === 'turn' || failedStep === 'score' ? (
+            <p className={styles.error} role="alert">{t('error')}</p>
+          ) : null}
+
+          {finished || !current ? (
+            <div className={styles.actions}>
+              <Btn variant="primary" onClick={() => void finish()} disabled={phase === 'scoring'}>
+                {phase === 'scoring' ? t('scoring') : t('finish')}
+              </Btn>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {phase === 'done' && score ? (
+        <div className={styles.card} aria-labelledby="text-practice-result">
+          <h2 id="text-practice-result" className={styles.question}>{t('resultTitle')}</h2>
+          <AiGeneratedBadge />
+          <p className={styles.score} data-testid="text-practice-score">
+            <span className={styles.cardLabel}>{t('overall')}</span>{' '}
+            {answered ? (
+              <>
+                <strong>{Math.max(0, Math.min(100, Math.round(score.overall)))}</strong>
+                <span>/100</span>
+              </>
+            ) : (
+              // Nothing was answered: there is no score to show.
+              <strong>—</strong>
+            )}
+          </p>
+          {score.strengths.length > 0 ? (
+            <>
+              <h3 className={styles.cardLabel}>{t('strengths')}</h3>
+              <ul className={styles.list}>{score.strengths.map((item, i) => <li key={i}>{item}</li>)}</ul>
+            </>
+          ) : null}
+          {score.gaps.length > 0 ? (
+            <>
+              <h3 className={styles.cardLabel}>{t('gaps')}</h3>
+              <ul className={styles.list}>{score.gaps.map((item, i) => <li key={i}>{item}</li>)}</ul>
+            </>
+          ) : null}
+          <p className={styles.reportNote}>{t('scoreNote')}</p>
+          <div className={styles.actions}>
+            <Btn variant="primary" onClick={() => { startedRef.current = true; void start(); setScore(null); }}>
+              {t('again')}
+            </Btn>
+            <Btn onClick={onExit}>{t('exit')}</Btn>
+          </div>
+        </div>
+      ) : null}
+
+      {/* GoApply: the practice report for this written practice (its blocks carry their own AI labels). */}
+      {phase === 'done' && cnReport ? <CnReportView report={cnReport} typed /> : null}
+    </section>
+  );
+}
+
+export default TextPracticeRoom;

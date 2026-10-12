@@ -1,0 +1,268 @@
+/* components/features/practice-cn — the GoApply AI-interview practice report
+ * blocks (WP-66). Clarity tokens only; one column at 375px, three area cards
+ * side by side from 640px. Works in both themes and both brands. */
+
+.report {
+  display: grid;
+  gap: var(--sp-5);
+  margin-top: var(--sp-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: var(--sp-4);
+}
+
+.head {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.title {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  line-height: var(--lh-subtitle);
+}
+
+.format,
+.text,
+.empty {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.block {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.blockHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.blockTitle {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: var(--lh-body);
+}
+
+.summary {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: var(--lh-body);
+}
+
+.rate {
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.source {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+/* ─── Areas ──────────────────────────────────────────────────────────────── */
+
+.areas {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 640px) {
+  .areas {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.area {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-2);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.areaLabel {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  line-height: var(--lh-meta);
+}
+
+.areaValue {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: var(--lh-title);
+  font-variant-numeric: tabular-nums;
+}
+
+.areaHint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.meter {
+  height: var(--sp-2);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--rule-soft);
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--action);
+}
+
+/* ─── STAR ───────────────────────────────────────────────────────────────── */
+
+.answers {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.answer {
+  display: grid;
+  gap: var(--sp-2);
+  border-top: 1px solid var(--rule-soft);
+  padding-top: var(--sp-3);
+}
+
+.answerLabel {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  line-height: var(--lh-meta);
+}
+
+.question {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  overflow-wrap: anywhere;
+}
+
+.parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.partFound,
+.partMissing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  border-radius: var(--r-pill);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.partFound {
+  background: var(--ok-subtle);
+  color: var(--text);
+}
+
+.partMissing {
+  border: 1px dashed var(--warn);
+  background: var(--warn-subtle);
+  color: var(--text);
+}
+
+/* ─── Fillers ────────────────────────────────────────────────────────────── */
+
+.fillerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+/* ─── How these checks work ──────────────────────────────────────────────── */
+
+.how {
+  display: grid;
+  gap: var(--sp-2);
+  border-top: 1px solid var(--rule-soft);
+  padding-top: var(--sp-2);
+}
+
+.how > .text + .text {
+  margin-top: var(--sp-2);
+}
+
+.howSummary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--action);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.howSummary:focus-visible {
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-focus);
+  outline: none;
+}

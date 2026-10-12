@@ -19,8 +19,8 @@
 //      read it; `inferred` means we guessed it. The client renders the two
 //      differently, and that is not decoration: a guessed city presented as a
 //      fact is exactly how someone in Bangalore searching for remote EU/US
-//      work ends up with an empty feed, because `location` is a substring
-//      filter in RAJobIndexService and a wrong one deletes rows rather than
+//      work ends up with an empty feed, because a location is a hard filter
+//      on the feed (features/feed) and a wrong one deletes rows rather than
 //      biasing them.
 //
 //   3. The city is therefore PROPOSED, never applied. It ships in

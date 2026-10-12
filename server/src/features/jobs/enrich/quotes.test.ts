@@ -1,0 +1,258 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import {
+  hasNegation,
+  mentionsWorkAuthorization,
+  INDUSTRY_TOPIC_CUES,
+  quoteSpeaksOfClient,
+  quoteSupportsEmployerTag,
+  quoteWithoutCompanyName,
+  reconcileIndustry,
+  reconcileRequirement,
+  reconcileSponsorship,
+  verifyEmployerTagQuote,
+  verifyQuote,
+} from './quotes.js';
+import { ENRICH_INDUSTRY_IDS, MAX_QUOTE_CHARS } from './schema.js';
+
+const POSTING = [
+  'We build payment tools for small shops.',
+  'We are unable to sponsor work visas for this role.',
+  'Visa sponsorship available for exceptional candidates.',
+  'We hold a UK sponsor licence and can sponsor Skilled Worker visas.',
+  'This role is LMIA-supported for international hires.',
+  'We do not offer visa sponsorship at this time.',
+  'Active Secret clearance required.',
+  '本公司不提供工作签证。',
+  '本公司可協助外國人申請工作許可。',
+].join('\n');
+
+describe('verifyQuote (substring guard)', () => {
+  it('accepts an exact substring and returns it', () => {
+    expect(verifyQuote('We are unable to sponsor work visas for this role.', POSTING)).toBe('We are unable to sponsor work visas for this role.');
+  });
+
+  it('tolerates whitespace, case, curly quotes and wrapping quote marks', () => {
+    expect(verifyQuote('“we  are UNABLE to sponsor work visas”', POSTING)).toBe('we are UNABLE to sponsor work visas');
+    expect(verifyQuote('We are unable to sponsor work visas…', POSTING)).toBe('We are unable to sponsor work visas');
+  });
+
+  it('drops a paraphrase that is not in the posting', () => {
+    expect(verifyQuote('The company cannot sponsor visas.', POSTING)).toBeNull();
+    expect(verifyQuote('', POSTING)).toBeNull();
+    expect(verifyQuote(null, POSTING)).toBeNull();
+  });
+
+  it('drops quotes too short to mean anything', () => {
+    expect(verifyQuote('visa', POSTING)).toBeNull();
+    expect(verifyQuote('签证', POSTING)).toBe('签证');
+  });
+
+  it('caps long quotes', () => {
+    const long = 'a'.repeat(300);
+    expect(verifyQuote(long, `x ${long} y`)).toHaveLength(MAX_QUOTE_CHARS);
+  });
+});
+
+describe('negation and work-authorization vocabulary', () => {
+  it('finds negation keywords in en, zh and zh-TW', () => {
+    expect(hasNegation('We are unable to sponsor')).toBe(true);
+    expect(hasNegation("We can't sponsor visas")).toBe(true);
+    expect(hasNegation('Sponsorship is not available')).toBe(true);
+    expect(hasNegation('本公司不提供工作签证')).toBe(true);
+    expect(hasNegation('無法協助申請工作許可')).toBe(true);
+    expect(hasNegation('Visa sponsorship available')).toBe(false);
+    expect(hasNegation('Notably, we sponsor visas')).toBe(false);
+  });
+
+  it('knows country-specific sponsorship terms (TW-09)', () => {
+    expect(mentionsWorkAuthorization('H-1B transfers welcome')).toBe(true);
+    expect(mentionsWorkAuthorization('We hold a UK sponsor licence')).toBe(true);
+    expect(mentionsWorkAuthorization('LMIA-supported role')).toBe(true);
+    expect(mentionsWorkAuthorization('Employment Gold Card holders welcome')).toBe(true);
+    expect(mentionsWorkAuthorization('可協助申請工作許可')).toBe(true);
+    expect(mentionsWorkAuthorization('就業金卡持有者優先')).toBe(true);
+    expect(mentionsWorkAuthorization('Great snacks and a gym')).toBe(false);
+  });
+});
+
+describe('reconcileSponsorship (H36)', () => {
+  it('"unable to sponsor" labelled offered is corrected, never shown as offered', () => {
+    const r = reconcileSponsorship('offered', 'We are unable to sponsor work visas for this role.', POSTING);
+    expect(r.status).toBe('not_stated');
+    expect(r.quote).toBeNull();
+    expect(r.corrected).toBe('negation_in_offered_quote');
+  });
+
+  it('"unable to sponsor" labelled not_offered is kept with its quote', () => {
+    expect(reconcileSponsorship('not_offered', 'We are unable to sponsor work visas for this role.', POSTING)).toEqual({
+      status: 'not_offered',
+      quote: 'We are unable to sponsor work visas for this role.',
+      corrected: null,
+    });
+  });
+
+  it('"sponsorship available" never becomes not_offered', () => {
+    const r = reconcileSponsorship('not_offered', 'Visa sponsorship available for exceptional candidates.', POSTING);
+    expect(r).toMatchObject({ status: 'not_stated', quote: null, corrected: 'no_negation_keyword' });
+    expect(reconcileSponsorship('offered', 'Visa sponsorship available for exceptional candidates.', POSTING).status).toBe('offered');
+  });
+
+  it('drops a label whose quote is not in the posting', () => {
+    expect(reconcileSponsorship('not_offered', 'We never sponsor anyone.', POSTING)).toMatchObject({ status: 'not_stated', corrected: 'quote_not_in_posting' });
+    expect(reconcileSponsorship('offered', null, POSTING)).toMatchObject({ status: 'not_stated', corrected: 'quote_not_in_posting' });
+  });
+
+  it('drops a quote that does not talk about work authorization', () => {
+    expect(reconcileSponsorship('offered', 'We build payment tools for small shops.', POSTING)).toMatchObject({
+      status: 'not_stated',
+      corrected: 'no_work_auth_term',
+    });
+  });
+
+  it('handles UK, Canada, Taiwan and mainland wording', () => {
+    expect(reconcileSponsorship('offered', 'We hold a UK sponsor licence and can sponsor Skilled Worker visas.', POSTING).status).toBe('offered');
+    expect(reconcileSponsorship('offered', 'This role is LMIA-supported for international hires.', POSTING).status).toBe('offered');
+    expect(reconcileSponsorship('offered', '本公司可協助外國人申請工作許可。', POSTING).status).toBe('offered');
+    expect(reconcileSponsorship('not_offered', '本公司不提供工作签证。', POSTING).status).toBe('not_offered');
+    expect(reconcileSponsorship('not_offered', 'We do not offer visa sponsorship at this time.', POSTING).status).toBe('not_offered');
+  });
+
+  it('passes not_stated through', () => {
+    expect(reconcileSponsorship('not_stated', 'anything', POSTING)).toEqual({ status: 'not_stated', quote: null, corrected: null });
+  });
+});
+
+describe('reconcileRequirement', () => {
+  const REQ = [
+    'Active Secret clearance required.',
+    'Must be authorized to work in the United States.',
+    'US citizenship is required for this position.',
+    'US citizenship is not required.',
+    'No security clearance is required for this role.',
+    'Applicants must hold a TS/SCI clearance with polygraph.',
+    '本岗位需通过政审。',
+    '不限国籍。',
+  ].join('\n');
+
+  it('keeps a requirement only with a verified quote', () => {
+    expect(reconcileRequirement('clearance', { value: true, quote: 'Active Secret clearance required.' }, REQ)).toEqual({
+      value: true,
+      quote: 'Active Secret clearance required.',
+    });
+    expect(reconcileRequirement('clearance', { value: true, quote: 'Top Secret clearance needed.' }, REQ)).toEqual({ value: null, dropped: 'quote_not_in_posting' });
+    expect(reconcileRequirement('clearance', { value: true, quote: null }, REQ)).toEqual({ value: null, dropped: 'quote_not_in_posting' });
+    expect(reconcileRequirement('clearance', { value: null, quote: 'Active Secret clearance required.' }, REQ)).toBeNull();
+    expect(reconcileRequirement('clearance', null, REQ)).toBeNull();
+  });
+
+  it('needs a topic cue: work authorization is not citizenship (review probe)', () => {
+    expect(reconcileRequirement('citizenship', { value: true, quote: 'Must be authorized to work in the United States.' }, REQ)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileRequirement('clearance', { value: true, quote: 'US citizenship is required for this position.' }, REQ)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileRequirement('clearance', { value: true, quote: 'Applicants must hold a TS/SCI clearance with polygraph.' }, REQ)).toMatchObject({ value: true });
+    expect(reconcileRequirement('clearance', { value: true, quote: '本岗位需通过政审。' }, REQ)).toMatchObject({ value: true });
+  });
+
+  it('needs the quote to agree with the value (review probe)', () => {
+    // false with a quote that says it IS required → dropped.
+    expect(reconcileRequirement('citizenship', { value: false, quote: 'US citizenship is required for this position.' }, REQ)).toEqual({ value: null, dropped: 'no_negation_keyword' });
+    // true with a quote that says it is NOT required → dropped.
+    expect(reconcileRequirement('citizenship', { value: true, quote: 'US citizenship is not required.' }, REQ)).toEqual({ value: null, dropped: 'negated_required_quote' });
+    expect(reconcileRequirement('clearance', { value: true, quote: 'No security clearance is required for this role.' }, REQ)).toEqual({ value: null, dropped: 'negated_required_quote' });
+    expect(reconcileRequirement('citizenship', { value: true, quote: '不限国籍。' }, REQ)).toEqual({ value: null, dropped: 'negated_required_quote' });
+    // Consistent negatives are kept.
+    expect(reconcileRequirement('citizenship', { value: false, quote: 'US citizenship is not required.' }, REQ)).toEqual({ value: false, quote: 'US citizenship is not required.' });
+    expect(reconcileRequirement('clearance', { value: false, quote: 'No security clearance is required for this role.' }, REQ)).toMatchObject({ value: false });
+    expect(reconcileRequirement('citizenship', { value: false, quote: '不限国籍。' }, REQ)).toMatchObject({ value: false });
+  });
+});
+
+describe('employer tag quotes (GoApply)', () => {
+  const CN = ['某某能源集团是一家中央企业。', '缴纳五险一金。', '提供事业编制。', '本岗位不解决户口。', '外资企业，福利完善。', '非国企背景。'].join('\n');
+
+  it('needs the tag\'s own cue, not any substring of the posting (review probe)', () => {
+    expect(verifyEmployerTagQuote('hukou', '缴纳五险一金。', CN)).toBeNull();
+    expect(verifyEmployerTagQuote('bianzhi', '缴纳五险一金。', CN)).toBeNull();
+    expect(verifyEmployerTagQuote('soe', '某某能源集团是一家中央企业。', CN)).toBe('某某能源集团是一家中央企业。');
+    expect(verifyEmployerTagQuote('bianzhi', '提供事业编制。', CN)).toBe('提供事业编制。');
+    expect(verifyEmployerTagQuote('foreign', '外资企业，福利完善。', CN)).toBe('外资企业，福利完善。');
+    expect(verifyEmployerTagQuote('soe', '外资企业，福利完善。', CN)).toBeNull();
+    expect(verifyEmployerTagQuote('soe', '不在帖子里的国企', CN)).toBeNull();
+  });
+
+  it('rejects a negated cue', () => {
+    expect(verifyEmployerTagQuote('hukou', '本岗位不解决户口。', CN)).toBeNull();
+    expect(verifyEmployerTagQuote('soe', '非国企背景。', CN)).toBeNull();
+    expect(quoteSupportsEmployerTag('bianzhi', '无编制')).toBe(false);
+    expect(quoteSupportsEmployerTag('hukou', '协助办理落户')).toBe(true);
+    expect(quoteSupportsEmployerTag('unknown_tag', '落户')).toBe(false);
+  });
+});
+
+describe('the employer industry quote (SM-10)', () => {
+  const POST = [
+    'Acme Fintech Ltd is hiring a data analyst in London.',
+    'Acme Fintech builds payments infrastructure for online merchants.',
+    'Riverside General is a 400-bed teaching hospital.',
+    'We build telehealth software used by 2,000 clinics.',
+    'First Harbor is a retail bank with 120 branches.',
+    'Our client is a leading fintech in the payments space.',
+    'We are recruiting on behalf of a global games studio.',
+    'We help our clients ship faster with our CI/CD platform for developers.',
+    '某某能源集团是一家中央企业，现招聘数据分析师。',
+    '公司主营光伏与储能业务。',
+    '阳光公司专注电子商务平台运营。',
+    '某知名互联网公司招聘游戏策划。',
+  ].join('\n');
+
+  it('has a cue for every industry the model may answer with, and for nothing else', () => {
+    expect(Object.keys(INDUSTRY_TOPIC_CUES).sort()).toEqual([...ENRICH_INDUSTRY_IDS].sort());
+  });
+
+  it('keeps a claim whose quote names the industry outside the company name', () => {
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'Acme Fintech builds payments infrastructure for online merchants.' }, 'Acme Fintech Ltd', POST)).toEqual({
+      value: 'Fintech',
+      quote: 'Acme Fintech builds payments infrastructure for online merchants.',
+    });
+    expect(reconcileIndustry({ value: 'Healthtech', quote: 'We build telehealth software used by 2,000 clinics.' }, 'Carewell', POST)).toMatchObject({ value: 'Healthtech' });
+    expect(reconcileIndustry({ value: 'Climate', quote: '公司主营光伏与储能业务。' }, '某某能源集团', POST)).toMatchObject({ value: 'Climate' });
+    expect(reconcileIndustry({ value: 'E-commerce', quote: '阳光公司专注电子商务平台运营。' }, '阳光电子科技有限公司', POST)).toMatchObject({ value: 'E-commerce' });
+    expect(reconcileIndustry({ value: 'Developer tools', quote: 'We help our clients ship faster with our CI/CD platform for developers.' }, 'Shipfast', POST)).toMatchObject({ value: 'Developer tools' });
+  });
+
+  it('drops a claim the company name alone would carry', () => {
+    // "Fintech" stands only in the name; the rest says the company is hiring.
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'Acme Fintech Ltd is hiring a data analyst in London.' }, 'Acme Fintech Ltd', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Climate', quote: '某某能源集团是一家中央企业，现招聘数据分析师。' }, '某某能源集团', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'Acme Fintech Ltd' }, 'Acme Fintech Ltd', `${POST}\nAcme Fintech Ltd`)).toEqual({ value: null, dropped: 'company_name_only' });
+  });
+
+  it('drops the nearest-fit label: a hospital is not Healthtech, a bank is not Fintech, and one industry does not back another', () => {
+    expect(reconcileIndustry({ value: 'Healthtech', quote: 'Riverside General is a 400-bed teaching hospital.' }, 'Riverside General', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'First Harbor is a retail bank with 120 branches.' }, 'First Harbor', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Gaming', quote: 'We build telehealth software used by 2,000 clinics.' }, 'Carewell', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    // 电子商务 is e-commerce, not electronics.
+    expect(reconcileIndustry({ value: 'Hardware', quote: '阳光公司专注电子商务平台运营。' }, '阳光电子科技有限公司', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Space mining', quote: 'We build telehealth software used by 2,000 clinics.' }, 'Carewell', POST)).toEqual({ value: null, dropped: 'off_topic' });
+  });
+
+  it('drops a quote about a recruiter\'s client, and one that is not in the posting', () => {
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'Our client is a leading fintech in the payments space.' }, 'Northbridge Recruitment', POST)).toEqual({ value: null, dropped: 'client' });
+    expect(reconcileIndustry({ value: 'Gaming', quote: 'We are recruiting on behalf of a global games studio.' }, 'Northbridge Recruitment', POST)).toEqual({ value: null, dropped: 'client' });
+    expect(reconcileIndustry({ value: 'Gaming', quote: '某知名互联网公司招聘游戏策划。' }, '北方猎头', POST)).toEqual({ value: null, dropped: 'client' });
+    expect(quoteSpeaksOfClient('We help our clients ship faster.')).toBe(false);
+    expect(quoteSpeaksOfClient('Our client-facing teams sit in Austin.')).toBe(false);
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'We are a leading payments company.' }, 'Acme', POST)).toEqual({ value: null, dropped: 'quote_not_in_posting' });
+    expect(reconcileIndustry(null, 'Acme', POST)).toBeNull();
+  });
+
+  it('takes the company name out of a quote: the full name, or the leading part the quote uses', () => {
+    expect(quoteWithoutCompanyName('Acme Fintech Ltd is hiring', 'Acme Fintech Ltd').trim()).toBe('is hiring');
+    expect(quoteWithoutCompanyName('Acme Fintech is a fintech company', 'Acme Fintech Ltd').trim()).toBe('is a fintech company');
+    expect(quoteWithoutCompanyName('阳光光伏是一家制造企业', '阳光光伏科技有限公司').trim()).toBe('是一家制造企业');
+    expect(quoteWithoutCompanyName('We build payments software', 'Acme Fintech Ltd')).toBe('we build payments software');
+    // A name is matched by whole words: "Arc" is not taken out of "architecture".
+    expect(quoteWithoutCompanyName('We design architecture software', 'Arc')).toBe('we design architecture software');
+    expect(quoteWithoutCompanyName('anything', '')).toBe('anything');
+  });
+});

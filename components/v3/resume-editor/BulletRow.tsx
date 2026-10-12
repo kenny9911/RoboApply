@@ -25,6 +25,8 @@ import { useTranslations } from 'next-intl';
 
 import { Markdown, IconX, IconCheck, IconRefresh } from '../primitives';
 import { AI_ACTIONS } from './constants';
+import { findPlaceholders } from '../../../lib/resumeAnalyzer';
+import { AiGeneratedBadge } from '../../features/market';
 import type {
   RAResumeRewriteAction,
   ResumeRewriteBody,
@@ -50,6 +52,11 @@ interface Props {
   /** Ack for requestFocus so the page clears its pending-focus token. */
   onFocusHandled?: () => void;
   runRewrite: (body: ResumeRewriteBody) => Promise<ResumeRewriteResponse>;
+  /**
+   * False hides every AI action (GoApply without the AI consent, or no model
+   * for the brand; TASK_PLAN.md §2.2). Default true.
+   */
+  aiEnabled?: boolean;
   /** Optional job context to bias the rewrite. */
   targetJobId?: string | null;
 }
@@ -83,6 +90,7 @@ export function BulletRow({
   requestFocus = false,
   onFocusHandled,
   runRewrite,
+  aiEnabled = true,
   targetJobId,
 }: Props) {
   const t = useTranslations('resume');
@@ -118,6 +126,7 @@ export function BulletRow({
   }, [requestFocus]);
 
   const weak = isWeakBullet(text);
+  const blanks = findPlaceholders(text);
   // Empty bullets are always in edit mode — a read-only empty row is untypeable.
   const showEditor = editing || !text.trim();
 
@@ -170,7 +179,7 @@ export function BulletRow({
   const activeLabel = active ? t(`action.${active}.label`) : '';
 
   return (
-    <div className={`rb-bullet ${weak ? 'weak' : ''}`}>
+    <div className={`rb-bullet ${weak || blanks.length ? 'weak' : ''}`} data-placeholder={blanks.length ? 'true' : undefined}>
       <div className="rb-bullet-row">
         <span className="rb-bullet-dot">•</span>
         {showEditor ? (
@@ -213,7 +222,7 @@ export function BulletRow({
           </span>
         )}
         <div className="rb-bullet-actions">
-          {AI_ACTIONS.map((a) => (
+          {(aiEnabled ? AI_ACTIONS : []).map((a) => (
             <button
               key={a.id}
               type="button"
@@ -225,7 +234,7 @@ export function BulletRow({
               <span className="rb-bact-lbl">{t(`action.${a.id}.label`)}</span>
             </button>
           ))}
-          <span className="rb-bact-sep" aria-hidden="true" />
+          {aiEnabled ? <span className="rb-bact-sep" aria-hidden="true" /> : null}
           <button
             type="button"
             className="rb-bact"
@@ -258,7 +267,12 @@ export function BulletRow({
         </div>
       </div>
 
-      {weak && !draft && !busy ? (
+      {/* A blank an accepted AI suggestion left ("[X]", "[n=__]"): the line is not ready to send. */}
+      {blanks.length && !draft && !busy ? (
+        <div className="rb-bullet-flag" role="status" data-flag="placeholder">
+          <span aria-hidden="true">⚠</span> {t('bullet.placeholder_flag', { placeholders: blanks.join(' ') })}
+        </div>
+      ) : weak && !draft && !busy ? (
         <div className="rb-bullet-flag">
           <span aria-hidden="true">⚠</span> {t('bullet.flag')}
         </div>
@@ -323,6 +337,7 @@ export function BulletRow({
               <div className="rb-rewrite-text">
                 <Markdown>{draft ?? ''}</Markdown>
               </div>
+              <AiGeneratedBadge kind="text" />
               <div className="rb-rewrite-foot">
                 <button
                   type="button"

@@ -127,6 +127,11 @@ export function isTransientLLMError(error: unknown): boolean {
     // returned, so a retry is safe and usually succeeds (observed as 4 burst
     // failures at the start of a match:calibration-eval run, 2026-06-16).
     haystack.includes('premature close') ||
+    // undici's other spelling of the same drop while streaming: "terminated",
+    // caused by SocketError "other side closed" (UND_ERR_SOCKET). Streaming
+    // callers only retry this before anything reached the user (WP-14).
+    haystack.includes('other side closed') ||
+    (error as { cause?: { code?: unknown } }).cause?.code === 'UND_ERR_SOCKET' ||
     haystack.includes('service unavailable') ||
     haystack.includes('high demand') ||
     haystack.includes('rate limit') ||

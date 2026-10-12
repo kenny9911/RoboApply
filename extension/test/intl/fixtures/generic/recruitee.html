@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <title>Backend Developer - Demo Studio</title>
+  <meta property="og:site_name" content="Demo Studio">
+</head>
+<body>
+  <h1>Backend Developer</h1>
+  <form class="application-form" action="/o/backend-developer/c/new" method="post">
+    <div class="field"><label for="candidate_name">Full name *</label><input id="candidate_name" name="candidate[name]" type="text" required></div>
+    <div class="field"><label for="candidate_email">Email address *</label><input id="candidate_email" name="candidate[email]" type="email" required></div>
+    <div class="field"><label for="candidate_phone">Phone number</label><input id="candidate_phone" name="candidate[phone]" type="tel"></div>
+    <div class="field upload"><label for="candidate_cv">CV *</label><input id="candidate_cv" name="candidate[cv]" type="file" required></div>
+    <div class="field upload"><label for="candidate_cover_letter_file">Cover letter</label><input id="candidate_cover_letter_file" name="candidate[cover_letter_file]" type="file"></div>
+    <div class="field"><label for="q_1">What is your experience with Go?</label><textarea id="q_1" name="candidate[open_question_answers_attributes][0][content]"></textarea></div>
+    <div class="field"><input type="checkbox" id="gdpr" name="candidate[gdpr_consent]"><label for="gdpr">Keep my details for one year</label></div>
+    <button type="submit">Apply</button>
+  </form>
+</body>
+</html>

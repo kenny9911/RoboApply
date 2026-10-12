@@ -12,16 +12,33 @@
 // Cost-control layers (the 10k req/month RapidAPI plan is the scarce
 // resource — see docs/design-spec-roboapply-onboarding-chat.md §4.2):
 //   - in-process LRU response cache (6h TTL, 200 entries) — hits cost zero
-//   - per-process daily billed-call budget (RA_ONBOARDING_JSEARCH_DAILY_BUDGET,
-//     default 300), reset on UTC date change
+//   - the call gate (setCallGate): asked before every upstream call and by
+//     isJSearchEnabled(). The inventory pipeline registers it
+//     (features/jobs/ingest/quota.ts): ONE budget per provider, read from the
+//     plan's own quota headers and counted in RAProviderUsage. This client
+//     keeps no call counter of its own (MARKET_STRATEGY §1.2, JI-1)
+//   - the quota listener (setQuotaListener): told what every upstream response
+//     said about the plan (limit, remaining, reset, plan name); never the key
 //   - circuit breaker: 403 not-subscribed / 401 bad-key / monthly 429 open it
 //     for a 1h cooldown; per-second burst 429 gets exactly one jittered retry
 //   - kill switch: RA_ONBOARDING_EXTERNAL_JOBS_DISABLED=true ⇒ always null
 //
+// Employer-direct is decided by the link's host (JI-6): the 2026-10-11 probes
+// found one apply option per job and `is_direct` true on 0 of 58 rows.
+//
 // The RAPID_API_KEY value is never logged and never echoed anywhere.
 
 import { logger } from '../../../services/LoggerService.js';
-import type { ExternalJobNormalized } from './raExternalJobTypes.js';
+import { atsTypeFromUrl, employmentTypeFromLabel, hostOf, isJobBoardHost, isLinkedInHost, safeUrl } from '../../../features/jobs/normalize/index.js';
+import {
+  quotaObservationFrom,
+  settleQuotaListener,
+  type ExternalJobNormalized,
+  type ProviderCallGate,
+  type ProviderCallPurpose,
+  type ProviderQuotaListener,
+  type ProviderSearchOptions,
+} from './raExternalJobTypes.js';
 
 export type { ExternalJobNormalized } from './raExternalJobTypes.js';
 
@@ -31,7 +48,6 @@ const REQUEST_TIMEOUT_MS = 25_000;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 200;
 const BREAKER_COOLDOWN_MS = 60 * 60 * 1000;
-const DEFAULT_DAILY_BUDGET = 300;
 
 // ExternalJobNormalized now lives in raExternalJobTypes.ts (shared across all
 // providers). Work-type / employment-type semantics (critic findings E7 + R4):
@@ -48,7 +64,10 @@ export interface JSearchSearchParams {
   workFromHome?: boolean;
   /** Comma-separated JSearch enums, e.g. 'FULLTIME,CONTRACTOR'. */
   employmentTypes?: string;
-  /** Extra pages are free — one billed request returns numPages×10 jobs. Default 2. */
+  /**
+   * Pages per call (10 jobs each). Default 2. What the second page costs is
+   * not settled (INTL note §3.1): the quota snapshot's `lastCallCost` shows it.
+   */
   numPages?: number;
   page?: number;
 }
@@ -90,12 +109,12 @@ function deepClean<T>(value: T): T {
 function mapEmployment(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const key = raw.toUpperCase().replace(/[^A-Z]/g, '');
-  if (!key) return null;
   if (key === 'FULLTIME') return 'full_time';
   if (key === 'PARTTIME') return 'part_time';
   if (key === 'CONTRACTOR' || key === 'CONTRACT') return 'contract';
   if (key.startsWith('INTERN')) return 'internship';
-  return null;
+  // Chinese display strings (全职, 兼职, 实习, 合同 / 劳务): the one mapping in features/jobs/normalize/level.ts.
+  return employmentTypeFromLabel(raw);
 }
 
 // The /search payload has NO currency field — infer from the request country,
@@ -160,31 +179,64 @@ function parseRelativePostedAt(raw: unknown, fetchedAt: Date): string | null {
   return new Date(fetchedAt.getTime() - value * ms).toISOString();
 }
 
-/** Prefer a publisher-direct apply link over the aggregator default. */
-function pickApplyUrl(j: any): { url: string | null; isDirect: boolean } {
-  const options = Array.isArray(j?.apply_options) ? j.apply_options : [];
-  const direct = options.find((o: any) => o?.is_direct === true && typeof o?.apply_link === 'string');
-  if (direct) return { url: direct.apply_link, isDirect: true };
-  const fallback = typeof j?.job_apply_link === 'string' ? j.job_apply_link : null;
-  return { url: fallback, isDirect: j?.job_apply_is_direct === true };
+/** Where an apply link leads: the employer (its own site or its ATS), a job board, or LinkedIn. */
+type LinkKind = 'employer' | 'board' | 'linkedin';
+
+function linkKind(url: string): LinkKind | null {
+  const host = hostOf(url);
+  if (!host) return null;
+  if (isLinkedInHost(host)) return 'linkedin';
+  // An ATS host or a host we do not know is the employer's; a job board or aggregator is not.
+  if (atsTypeFromUrl(url) !== null) return 'employer';
+  return isJobBoardHost(host) ? 'board' : null;
 }
 
-/** Retain board provenance separately from the best application destination. */
+/**
+ * The apply link of a row, decided by the links' hosts (JI-6). `is_direct` is
+ * not usable: the provider sends one apply option per job and never sets it.
+ * Every valid http(s) link is a candidate (`job_apply_link` first, then
+ * `apply_options` in their order); the first on an employer or ATS host wins,
+ * then a link on a job board other than LinkedIn (one the provider itself
+ * flagged as direct before the others), then a LinkedIn link.
+ * `isDirect` is true exactly when the chosen link is on an employer or ATS
+ * host, or it is a job-board link the provider itself flagged as direct. A
+ * LinkedIn link is never direct, whatever the flag says.
+ */
+function pickApplyUrl(j: any): { url: string | null; isDirect: boolean } {
+  const candidates: Array<{ url: string; kind: LinkKind; flagged: boolean }> = [];
+  const add = (link: unknown, flagged: boolean): void => {
+    if (typeof link !== 'string' || !safeUrl(link)) return;
+    const kind = linkKind(link);
+    if (kind) candidates.push({ url: link, kind, flagged });
+  };
+  add(j?.job_apply_link, j?.job_apply_is_direct === true);
+  for (const option of Array.isArray(j?.apply_options) ? j.apply_options : []) add(option?.apply_link, option?.is_direct === true);
+  const chosen =
+    candidates.find((c) => c.kind === 'employer') ??
+    candidates.find((c) => c.kind === 'board' && c.flagged) ??
+    candidates.find((c) => c.kind === 'board') ??
+    candidates.find((c) => c.kind === 'linkedin') ??
+    null;
+  if (!chosen) return { url: null, isDirect: false };
+  return { url: chosen.url, isDirect: chosen.kind === 'employer' || (chosen.kind === 'board' && chosen.flagged) };
+}
+
+/**
+ * The posting's page at its publisher, kept apart from the best application
+ * destination: the first valid link (`job_apply_link`, then `apply_options`
+ * in their order) that is not on a LinkedIn host. Never a LinkedIn URL
+ * (MARKET_STRATEGY §1.5: no LinkedIn name, logo or URL on any source field);
+ * null when LinkedIn is the row's only link.
+ */
 function pickSourceUrl(j: any): string | null {
   const original = typeof j?.job_apply_link === 'string' ? j.job_apply_link : null;
   const options = Array.isArray(j?.apply_options) ? j.apply_options : [];
   const links: unknown[] = [original, ...options.map((option: any) => option?.apply_link)];
-  const linkedin = links.find((link): link is string => {
-    if (typeof link !== 'string') return false;
-    try {
-      const url = new URL(link);
-      const host = url.hostname.toLowerCase();
-      return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password &&
-        (host === 'linkedin.com' || host.endsWith('.linkedin.com')) &&
-        /^\/jobs\/view\/[^/]+\/?$/.test(url.pathname);
-    } catch { return false; }
-  });
-  return linkedin ?? original;
+  for (const link of links) {
+    if (typeof link !== 'string' || !safeUrl(link)) continue;
+    if (!isLinkedInHost(hostOf(link))) return link;
+  }
+  return null;
 }
 
 /**
@@ -241,20 +293,80 @@ export function normalizeJSearchJob(
     applyIsDirect: apply.isDirect,
     description: typeof j.job_description === 'string' ? j.job_description : '',
     sourcePublisher: typeof j.job_publisher === 'string' ? j.job_publisher : null,
+    // Provider-stated extras for the WP-16b ingest normalizer (absent = not stated).
+    ...jsearchExtras(j),
   });
 }
 
+/** JSearch fields the provider states that the onboarding consumer never read. */
+function jsearchExtras(j: any): Partial<ExternalJobNormalized> {
+  const out: Partial<ExternalJobNormalized> = {};
+  const exp = j.job_required_experience && typeof j.job_required_experience === 'object' ? j.job_required_experience : null;
+  if (exp?.no_experience_required === true) out.experienceMonths = 0;
+  else if (typeof exp?.required_experience_in_months === 'number' && Number.isFinite(exp.required_experience_in_months)) {
+    out.experienceMonths = exp.required_experience_in_months;
+  }
+  const skills = Array.isArray(j.job_required_skills)
+    ? j.job_required_skills.filter((s: unknown): s is string => typeof s === 'string' && s.trim() !== '')
+    : [];
+  if (skills.length) out.skills = skills;
+  if (typeof j.job_offer_expiration_datetime_utc === 'string' && Number.isFinite(Date.parse(j.job_offer_expiration_datetime_utc))) {
+    out.expiresAt = j.job_offer_expiration_datetime_utc;
+  }
+  if (typeof j.employer_website === 'string' && /^https?:\/\//i.test(j.employer_website)) out.companyWebsite = j.employer_website;
+  return out;
+}
+
 // ---------------------------------------------------------------------------
-// Module state: LRU response cache, circuit breaker, daily budget counter.
-// Per-process by design — acceptable at single-instance Render scale because
-// the per-session JSearch cap is DB-persisted on RAOnboardingSession.
+// Module state: LRU response cache and circuit breaker (per process), plus the
+// call gate and the quota listener the inventory pipeline registers. There is
+// no call counter here: the one budget is the pipeline's (RAProviderUsage and
+// the plan's own quota headers).
 // ---------------------------------------------------------------------------
 
 const responseCache = new Map<string, { at: number; jobs: ExternalJobNormalized[] }>();
 
 let breakerOpenedAt: number | null = null;
 
-let dailyState = { day: '', used: 0, warned: false };
+let callGate: ProviderCallGate | null = null;
+let quotaListener: ProviderQuotaListener | null = null;
+
+/** Registers (or, with null, removes) the gate asked before every upstream call and by `isJSearchEnabled()`. */
+export function setCallGate(gate: ProviderCallGate | null): void {
+  callGate = gate;
+}
+
+/** Registers (or, with null, removes) the listener told what every upstream response said about the plan's quota. */
+export function setQuotaListener(listener: ProviderQuotaListener | null): void {
+  quotaListener = listener;
+}
+
+/** The gate's answer; no gate, or a gate that throws, allows the call. */
+function gateAllows(purpose: ProviderCallPurpose, probe: boolean): boolean {
+  if (!callGate) return true;
+  try {
+    return callGate('jsearch', purpose, probe ? { probe: true } : undefined) !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Tells the listener what one upstream response said. A listener that throws
+ * is swallowed. When the listener answers with a promise (the reading closed
+ * or reopened the provider and is being stored), a person's own search gets
+ * that wait back, bounded by QUOTA_LISTENER_WAIT_MS; an ingest call never
+ * waits (its tick awaits the writes).
+ */
+async function reportQuota(response: Response, bodyText: string, purpose: ProviderCallPurpose): Promise<void> {
+  if (!quotaListener) return;
+  try {
+    const answer = quotaListener(quotaObservationFrom('jsearch', response, bodyText, new Date()));
+    if (purpose === 'interactive') await settleQuotaListener(answer);
+  } catch {
+    // The reading is lost; the search goes on.
+  }
+}
 
 function buildCacheKey(p: JSearchSearchParams): string {
   return [
@@ -316,34 +428,18 @@ function openBreaker(
   });
 }
 
-function utcDay(now: number): string {
-  return new Date(now).toISOString().slice(0, 10);
-}
-
-function dailyBudget(): number {
-  const configured = process.env.RA_ONBOARDING_JSEARCH_DAILY_BUDGET;
-  const raw = configured?.trim() ? Number(configured) : DEFAULT_DAILY_BUDGET;
-  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : DEFAULT_DAILY_BUDGET;
-}
-
-function rollDailyWindow(now: number): void {
-  const day = utcDay(now);
-  if (dailyState.day !== day) dailyState = { day, used: 0, warned: false };
-}
-
 /**
  * Whether a billed JSearch call could succeed right now: key present, kill
- * switch off, circuit breaker closed, daily budget left. The provider seam
+ * switch off, circuit breaker closed, and the call gate open for a person's
+ * own search (asked without counting a call). The provider seam
  * (raJobProviders.ts) exposes this so the orchestrator can plan an
  * internal-only round without burning a turn on a doomed fetch.
  */
 export function isJSearchEnabled(): boolean {
   if (process.env.RA_ONBOARDING_EXTERNAL_JOBS_DISABLED === 'true') return false;
   if (!process.env.RAPID_API_KEY?.trim()) return false;
-  const now = Date.now();
-  if (breakerIsOpen(now)) return false;
-  rollDailyWindow(now);
-  return dailyState.used < dailyBudget();
+  if (breakerIsOpen(Date.now())) return false;
+  return gateAllows('interactive', true);
 }
 
 function headerNum(res: Response, name: string): number | null {
@@ -379,12 +475,12 @@ function jitteredDelay(ms: number, signal: AbortSignal): Promise<void> {
 
 /**
  * Run one JSearch /search. Returns `null` (NEVER throws) when disabled,
- * unconfigured, budget-exhausted, breaker-open, or failed — callers treat
- * `null` as "external jobs unavailable" and degrade to internal-only.
+ * unconfigured, refused by the call gate, breaker-open, or failed — callers
+ * treat `null` as "external jobs unavailable" and degrade to internal-only.
  */
 export async function searchJSearchJobs(
   params: JSearchSearchParams,
-  opts?: { requestId?: string; signal?: AbortSignal },
+  opts?: ProviderSearchOptions,
 ): Promise<ExternalJobNormalized[] | null> {
   if (process.env.RA_ONBOARDING_EXTERNAL_JOBS_DISABLED === 'true') return null;
   const apiKey = process.env.RAPID_API_KEY?.trim(); // read per call — never cached, never logged
@@ -408,19 +504,10 @@ export async function searchJSearchJobs(
     return [...cached];
   }
 
-  rollDailyWindow(now);
-  if (dailyState.used >= dailyBudget()) {
-    if (!dailyState.warned) {
-      dailyState.warned = true;
-      logger.warn('RA_V2_JSEARCH_DAILY_BUDGET_EXHAUSTED', 'JSearch daily budget exhausted; external jobs paused until UTC midnight', {
-        used: dailyState.used,
-        budget: dailyBudget(),
-        requestId: opts?.requestId,
-      });
-    }
-    return null;
-  }
-  dailyState.used += 1; // Count every upstream attempt, including a retry below.
+  // One budget per provider: the gate decides (and counts a call ingest has not already counted).
+  // A cache hit above never reaches it.
+  const purpose: ProviderCallPurpose = opts?.reservedByIngest === true ? 'ingest' : 'interactive';
+  if (!gateAllows(purpose, false)) return null;
 
   const numPages = params.numPages ?? 2;
   const search = new URLSearchParams();
@@ -457,18 +544,18 @@ export async function searchJSearchJobs(
 
     if (response.status === 429) {
       const bodyText = await response.text().catch(() => '');
+      await reportQuota(response, bodyText, purpose);
       if (isMonthlyQuota429(bodyText, response)) {
         openBreaker('429_monthly', 429, opts?.requestId);
         return null;
       }
-      // Per-second burst — exactly one jittered retry.
+      // Per-second burst — exactly one jittered retry (a second upstream call: the gate is asked again).
       await jitteredDelay(300 + Math.random() * 500, controller.signal);
-      rollDailyWindow(Date.now());
-      if (dailyState.used >= dailyBudget()) return null;
-      dailyState.used += 1;
+      if (!gateAllows(purpose, false)) return null;
       response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
       if (response.status === 429) {
         const retryText = await response.text().catch(() => '');
+        await reportQuota(response, retryText, purpose);
         if (isMonthlyQuota429(retryText, response)) {
           openBreaker('429_monthly', 429, opts?.requestId);
         } else {
@@ -482,9 +569,12 @@ export async function searchJSearchJobs(
     }
 
     if (response.status === 403 || response.status === 401) {
+      // The body says whether the key has no subscription to this API or was refused for another reason.
+      await reportQuota(response, await response.text().catch(() => ''), purpose);
       openBreaker(response.status === 403 ? '403_not_subscribed' : '401', response.status, opts?.requestId);
       return null;
     }
+    await reportQuota(response, '', purpose);
 
     const rlLimit = headerNum(response, 'x-ratelimit-requests-limit');
     const rlRemaining = headerNum(response, 'x-ratelimit-requests-remaining');
@@ -588,15 +678,14 @@ export const __test = {
   reset(): void {
     responseCache.clear();
     breakerOpenedAt = null;
-    dailyState = { day: '', used: 0, warned: false };
   },
-  state(): { breakerOpen: boolean; dailyUsed: number; cacheSize: number } {
+  state(): { breakerOpen: boolean; cacheSize: number } {
     return {
       breakerOpen: breakerOpenedAt != null,
-      dailyUsed: dailyState.used,
       cacheSize: responseCache.size,
     };
   },
+  pickApplyUrl,
   parseRelativePostedAt,
   mapEmployment,
   currencyForCountry,

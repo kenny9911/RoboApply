@@ -12,7 +12,7 @@ import { MetricGrid } from '../../../components/v3/primitives/MetricGrid';
 import { EmptyState } from '../../../components/v3/primitives/EmptyState';
 import { Btn } from '../../../components/v3/primitives/Btn';
 import { IconRefresh, IconUpload } from '../../../components/v3/primitives/Iconset';
-import { DateRangePicker, DataTable, TierBadge, resolveRange, type RangeValue, type Column, fmtCurrency, fmtCount } from '../../../components/v3/admin';
+import { AdminNav, DateRangePicker, DataTable, TierBadge, resolveRange, type RangeValue, type Column, fmtCurrency, fmtCount } from '../../../components/v3/admin';
 import { fmtNativeAmount } from '../../../components/v3/admin/format';
 import { SessionsTab, RateCardTab } from '../../../components/v3/admin/legacyTabs';
 import styles from './admin.module.css';
@@ -52,6 +52,8 @@ export default function AdminPage() {
           {t(refreshing ? 'refreshing' : 'refresh')}
         </Btn>
       } />
+      {/* WP-74: every admin area (System, Reports to review, credits, announcements, …). */}
+      <AdminNav variant="grid" />
       <div className={styles.toolbar}>
         <div className={styles.period}><DateRangePicker value={range} onChange={setRange} /><span className={styles.meta}>{t('timezone', { tz: resolved.tz })}</span></div>
       </div>

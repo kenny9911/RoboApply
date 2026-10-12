@@ -28,6 +28,8 @@ export interface PurgeCandidate {
   role: string;
   /** User.roles (full list). */
   roles: string[];
+  /** User.brand; selects the retention window (GoApply ≤ 15 days). Absent → RoboApply's window. */
+  brand?: string | null;
 }
 
 export interface PurgePartition {
@@ -48,6 +50,22 @@ export function resolveRetentionDays(raw: string | undefined): number {
   const n = Number((raw ?? '').trim() || NaN);
   if (!Number.isFinite(n) || n < 1) return DEFAULT_PURGE_RETENTION_DAYS;
   return Math.floor(n);
+}
+
+/**
+ * PIPL deletion deadline (GoApply) in calendar days: 15 calendar days is never
+ * more than 15 working days, so the purge always lands inside the legal window.
+ */
+export const PIPL_DELETION_DAYS = 15;
+
+/**
+ * Retention per product brand (WP-10, brand-aware purge). RoboApply uses the
+ * configured window (default 30 days, the published schedule); GoApply uses
+ * the configured window capped at PIPL_DELETION_DAYS.
+ */
+export function retentionDaysFor(brand: string | null | undefined, env: Record<string, string | undefined> = process.env): number {
+  const configured = resolveRetentionDays(env.ACCOUNT_PURGE_RETENTION_DAYS);
+  return brand === 'goapply' ? Math.min(configured, PIPL_DELETION_DAYS) : configured;
 }
 
 /** Latest deletedAt that is old enough to purge (inclusive). */
@@ -86,13 +104,14 @@ export function isPurgeSafeRoleSet(role: string | null | undefined, roles: reado
 export function partitionPurgeCandidates(
   candidates: readonly PurgeCandidate[],
   now: Date,
-  retentionDays: number,
+  retentionDays: number | ((c: PurgeCandidate) => number),
 ): PurgePartition {
   const due: PurgeCandidate[] = [];
   const notYetDue: PurgeCandidate[] = [];
   const unsafeRole: PurgeCandidate[] = [];
   for (const c of candidates) {
-    if (!isPurgeDue(c.deletedAt, now, retentionDays)) {
+    const days = typeof retentionDays === 'function' ? retentionDays(c) : retentionDays;
+    if (!isPurgeDue(c.deletedAt, now, days)) {
       notYetDue.push(c);
     } else if (!isPurgeSafeRoleSet(c.role, c.roles)) {
       unsafeRole.push(c);

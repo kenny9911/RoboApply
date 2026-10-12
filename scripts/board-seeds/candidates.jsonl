@@ -1,0 +1,1450 @@
+# Employer-board candidates for scripts/board-seeds/validate.mjs (MKT-4S).
+# Every line is a GUESS: "this employer hosts its careers on this job-board system under this board id".
+# A line here is not a fact and puts nothing into a seed file. Only the answer of the live board does
+# (report-<date>.json, "valid": true). See README.md in this directory.
+# "aliases": another spelling of the employer's name as its board may state it (Greenhouse, SmartRecruiters), or the
+# board id where the system states no company name (Lever, Ashby) and the id does not spell the name.
+# "aliasSource" (lever, ashby): the document of this repository that confirms such a board id for the employer. Only
+# with it does the board carry the employer's name. Without it a board that answers is seeded under its board id
+# ("board_id_only" in the report): the line still records whose board the author believes it is, nothing more.
+# "countries" (smartrecruiters only): ask with the API's country filter.
+# greenhouse
+{"ats":"greenhouse","token":"stripe","employer":"Stripe"}
+{"ats":"greenhouse","token":"airbnb","employer":"Airbnb"}
+{"ats":"greenhouse","token":"databricks","employer":"Databricks"}
+{"ats":"greenhouse","token":"coupang","employer":"Coupang"}
+{"ats":"greenhouse","token":"mongodb","employer":"MongoDB"}
+{"ats":"greenhouse","token":"agoda","employer":"Agoda"}
+{"ats":"greenhouse","token":"adyen","employer":"Adyen"}
+{"ats":"greenhouse","token":"moloco","employer":"Moloco"}
+{"ats":"greenhouse","token":"applovin","employer":"AppLovin"}
+{"ats":"greenhouse","token":"epicgames","employer":"Epic Games"}
+{"ats":"greenhouse","token":"riotgames","employer":"Riot Games"}
+{"ats":"greenhouse","token":"scopely","employer":"Scopely"}
+{"ats":"greenhouse","token":"flexport","employer":"Flexport"}
+{"ats":"greenhouse","token":"payoneer","employer":"Payoneer"}
+{"ats":"greenhouse","token":"appier","employer":"Appier"}
+{"ats":"greenhouse","token":"ubiquiti","employer":"Ubiquiti"}
+{"ats":"greenhouse","token":"canonical","employer":"Canonical"}
+{"ats":"greenhouse","token":"asteralabs","employer":"Astera Labs"}
+{"ats":"greenhouse","token":"okx","employer":"OKX"}
+{"ats":"greenhouse","token":"dcard","employer":"Dcard"}
+{"ats":"greenhouse","token":"doordashusa","employer":"DoorDash","aliases":["DoorDash USA"]}
+{"ats":"greenhouse","token":"lyft","employer":"Lyft"}
+{"ats":"greenhouse","token":"pinterest","employer":"Pinterest"}
+{"ats":"greenhouse","token":"reddit","employer":"Reddit"}
+{"ats":"greenhouse","token":"discord","employer":"Discord"}
+{"ats":"greenhouse","token":"figma","employer":"Figma"}
+{"ats":"greenhouse","token":"instacart","employer":"Instacart"}
+{"ats":"greenhouse","token":"robinhood","employer":"Robinhood"}
+{"ats":"greenhouse","token":"coinbase","employer":"Coinbase"}
+{"ats":"greenhouse","token":"dropbox","employer":"Dropbox"}
+{"ats":"greenhouse","token":"twilio","employer":"Twilio"}
+{"ats":"greenhouse","token":"datadog","employer":"Datadog"}
+{"ats":"greenhouse","token":"elastic","employer":"Elastic"}
+{"ats":"greenhouse","token":"gitlab","employer":"GitLab"}
+{"ats":"greenhouse","token":"hashicorp","employer":"HashiCorp"}
+{"ats":"greenhouse","token":"cloudflare","employer":"Cloudflare"}
+{"ats":"greenhouse","token":"okta","employer":"Okta"}
+{"ats":"greenhouse","token":"asana","employer":"Asana"}
+{"ats":"greenhouse","token":"affirm","employer":"Affirm"}
+{"ats":"greenhouse","token":"brex","employer":"Brex"}
+{"ats":"greenhouse","token":"chime","employer":"Chime","aliases":["Chime Financial"]}
+{"ats":"greenhouse","token":"gusto","employer":"Gusto"}
+{"ats":"greenhouse","token":"samsara","employer":"Samsara"}
+{"ats":"greenhouse","token":"roblox","employer":"Roblox"}
+{"ats":"greenhouse","token":"unity3d","employer":"Unity","aliases":["Unity Technologies"]}
+{"ats":"greenhouse","token":"twitch","employer":"Twitch"}
+{"ats":"greenhouse","token":"squarespace","employer":"Squarespace"}
+{"ats":"greenhouse","token":"peloton","employer":"Peloton"}
+{"ats":"greenhouse","token":"warbyparker","employer":"Warby Parker"}
+{"ats":"greenhouse","token":"glossier","employer":"Glossier"}
+{"ats":"greenhouse","token":"allbirds","employer":"Allbirds"}
+{"ats":"greenhouse","token":"harrys","employer":"Harry's"}
+{"ats":"greenhouse","token":"oscar","employer":"Oscar Health"}
+{"ats":"greenhouse","token":"flatironhealth","employer":"Flatiron Health"}
+{"ats":"greenhouse","token":"zocdoc","employer":"Zocdoc"}
+{"ats":"greenhouse","token":"betterment","employer":"Betterment"}
+{"ats":"greenhouse","token":"wealthfront","employer":"Wealthfront"}
+{"ats":"greenhouse","token":"sofi","employer":"SoFi"}
+{"ats":"greenhouse","token":"carta","employer":"Carta"}
+{"ats":"greenhouse","token":"toast","employer":"Toast"}
+{"ats":"greenhouse","token":"draftkings","employer":"DraftKings"}
+{"ats":"greenhouse","token":"klaviyo","employer":"Klaviyo"}
+{"ats":"greenhouse","token":"duolingo","employer":"Duolingo"}
+{"ats":"greenhouse","token":"coursera","employer":"Coursera"}
+{"ats":"greenhouse","token":"udemy","employer":"Udemy"}
+{"ats":"greenhouse","token":"khanacademy","employer":"Khan Academy"}
+{"ats":"greenhouse","token":"quizlet","employer":"Quizlet"}
+{"ats":"greenhouse","token":"masterclass","employer":"MasterClass"}
+{"ats":"greenhouse","token":"calm","employer":"Calm","aliases":["Calm.com"]}
+{"ats":"greenhouse","token":"headspace","employer":"Headspace"}
+{"ats":"greenhouse","token":"noom","employer":"Noom"}
+{"ats":"greenhouse","token":"himshers","employer":"Hims & Hers"}
+{"ats":"greenhouse","token":"lyrahealth","employer":"Lyra Health"}
+{"ats":"greenhouse","token":"modernhealth","employer":"Modern Health"}
+{"ats":"greenhouse","token":"springhealth","employer":"Spring Health"}
+{"ats":"greenhouse","token":"omadahealth","employer":"Omada Health"}
+{"ats":"greenhouse","token":"devoted","employer":"Devoted Health"}
+{"ats":"greenhouse","token":"cloverhealth","employer":"Clover Health"}
+{"ats":"greenhouse","token":"tempus","employer":"Tempus"}
+{"ats":"greenhouse","token":"grail","employer":"GRAIL"}
+{"ats":"greenhouse","token":"10xgenomics","employer":"10x Genomics"}
+{"ats":"greenhouse","token":"ginkgobioworks","employer":"Ginkgo Bioworks"}
+{"ats":"greenhouse","token":"benchling","employer":"Benchling"}
+{"ats":"greenhouse","token":"recursionpharmaceuticals","employer":"Recursion","aliases":["Recursion Pharmaceuticals"]}
+{"ats":"greenhouse","token":"insitro","employer":"insitro"}
+{"ats":"greenhouse","token":"color","employer":"Color","aliases":["Color Health"]}
+{"ats":"greenhouse","token":"verily","employer":"Verily"}
+{"ats":"greenhouse","token":"freenome","employer":"Freenome"}
+{"ats":"greenhouse","token":"relaytherapeutics","employer":"Relay Therapeutics"}
+{"ats":"greenhouse","token":"nextdoor","employer":"Nextdoor"}
+{"ats":"greenhouse","token":"eventbrite","employer":"Eventbrite"}
+{"ats":"greenhouse","token":"meetup","employer":"Meetup"}
+{"ats":"greenhouse","token":"bumble","employer":"Bumble"}
+{"ats":"greenhouse","token":"hinge","employer":"Hinge"}
+{"ats":"greenhouse","token":"tinder","employer":"Tinder"}
+{"ats":"greenhouse","token":"grindr","employer":"Grindr"}
+{"ats":"greenhouse","token":"quora","employer":"Quora"}
+{"ats":"greenhouse","token":"medium","employer":"Medium"}
+{"ats":"greenhouse","token":"substack","employer":"Substack"}
+{"ats":"greenhouse","token":"patreon","employer":"Patreon"}
+{"ats":"greenhouse","token":"kickstarter","employer":"Kickstarter"}
+{"ats":"greenhouse","token":"indiegogo","employer":"Indiegogo"}
+{"ats":"greenhouse","token":"gofundme","employer":"GoFundMe"}
+{"ats":"greenhouse","token":"wikimedia","employer":"Wikimedia Foundation"}
+{"ats":"greenhouse","token":"mozilla","employer":"Mozilla"}
+{"ats":"greenhouse","token":"codeorg","employer":"Code.org"}
+{"ats":"greenhouse","token":"donorschoose","employer":"DonorsChoose"}
+{"ats":"greenhouse","token":"charitywater","employer":"charity: water"}
+{"ats":"greenhouse","token":"givedirectly","employer":"GiveDirectly"}
+{"ats":"greenhouse","token":"oneacrefund","employer":"One Acre Fund"}
+{"ats":"greenhouse","token":"evidenceaction","employer":"Evidence Action"}
+{"ats":"greenhouse","token":"openphilanthropy","employer":"Open Philanthropy"}
+{"ats":"greenhouse","token":"thumbtack","employer":"Thumbtack"}
+{"ats":"greenhouse","token":"taskrabbit","employer":"TaskRabbit"}
+{"ats":"greenhouse","token":"upwork","employer":"Upwork"}
+{"ats":"greenhouse","token":"ziprecruiter","employer":"ZipRecruiter"}
+{"ats":"greenhouse","token":"joinhandshake","employer":"Handshake"}
+{"ats":"greenhouse","token":"checkr","employer":"Checkr"}
+{"ats":"greenhouse","token":"vimeo","employer":"Vimeo"}
+{"ats":"greenhouse","token":"roku","employer":"Roku"}
+{"ats":"greenhouse","token":"soundcloud71","employer":"SoundCloud"}
+{"ats":"greenhouse","token":"voxmedia","employer":"Vox Media","aliases":["Vox Media Group"]}
+{"ats":"greenhouse","token":"buzzfeed","employer":"BuzzFeed"}
+{"ats":"greenhouse","token":"axios","employer":"Axios"}
+{"ats":"greenhouse","token":"theatlantic","employer":"The Atlantic"}
+{"ats":"greenhouse","token":"theathletic","employer":"The Athletic"}
+{"ats":"greenhouse","token":"scribd","employer":"Scribd"}
+{"ats":"greenhouse","token":"tripadvisor","employer":"Tripadvisor"}
+{"ats":"greenhouse","token":"hopper","employer":"Hopper"}
+{"ats":"greenhouse","token":"getyourguide","employer":"GetYourGuide"}
+{"ats":"greenhouse","token":"sonder","employer":"Sonder"}
+{"ats":"greenhouse","token":"faire","employer":"Faire"}
+{"ats":"greenhouse","token":"bigcommerce","employer":"BigCommerce"}
+{"ats":"greenhouse","token":"poshmark","employer":"Poshmark"}
+{"ats":"greenhouse","token":"thredup","employer":"thredUP"}
+{"ats":"greenhouse","token":"therealreal","employer":"The RealReal"}
+{"ats":"greenhouse","token":"stockx","employer":"StockX"}
+{"ats":"greenhouse","token":"goatgroup","employer":"GOAT Group"}
+{"ats":"greenhouse","token":"depop","employer":"Depop"}
+{"ats":"greenhouse","token":"stitchfix","employer":"Stitch Fix"}
+{"ats":"greenhouse","token":"renttherunway","employer":"Rent the Runway"}
+{"ats":"greenhouse","token":"everlane","employer":"Everlane"}
+{"ats":"greenhouse","token":"sweetgreen","employer":"sweetgreen"}
+{"ats":"greenhouse","token":"hellofresh","employer":"HelloFresh"}
+{"ats":"greenhouse","token":"gopuff","employer":"Gopuff"}
+{"ats":"greenhouse","token":"thrivemarket","employer":"Thrive Market"}
+{"ats":"greenhouse","token":"impossiblefoods","employer":"Impossible Foods"}
+{"ats":"greenhouse","token":"liquiddeath","employer":"Liquid Death"}
+{"ats":"greenhouse","token":"opendoor","employer":"Opendoor"}
+{"ats":"greenhouse","token":"urbancompass","employer":"Compass"}
+{"ats":"greenhouse","token":"blend","employer":"Blend"}
+{"ats":"greenhouse","token":"lemonade","employer":"Lemonade"}
+{"ats":"greenhouse","token":"root","employer":"Root","aliases":["Root Insurance","Root Inc"]}
+{"ats":"greenhouse","token":"hippo70","employer":"Hippo","aliases":["Hippo Insurance"]}
+{"ats":"greenhouse","token":"nextinsurance66","employer":"Next Insurance"}
+{"ats":"greenhouse","token":"ethoslife","employer":"Ethos","aliases":["Ethos Life"]}
+{"ats":"greenhouse","token":"policygenius","employer":"Policygenius"}
+{"ats":"greenhouse","token":"etsy","employer":"Etsy"}
+{"ats":"greenhouse","token":"lime","employer":"Lime"}
+{"ats":"greenhouse","token":"turo","employer":"Turo"}
+{"ats":"greenhouse","token":"houzz","employer":"Houzz"}
+{"ats":"greenhouse","token":"ezcater","employer":"ezCater"}
+{"ats":"greenhouse","token":"olo","employer":"Olo"}
+{"ats":"greenhouse","token":"bluebottlecoffee","employer":"Blue Bottle Coffee"}
+{"ats":"greenhouse","token":"classpass","employer":"ClassPass"}
+{"ats":"greenhouse","token":"strava","employer":"Strava"}
+{"ats":"greenhouse","token":"alltrails","employer":"AllTrails"}
+{"ats":"greenhouse","token":"tonal","employer":"Tonal"}
+{"ats":"greenhouse","token":"pocketgems","employer":"Pocket Gems"}
+{"ats":"greenhouse","token":"dapperlabs","employer":"Dapper Labs"}
+{"ats":"greenhouse","token":"skymavis","employer":"Sky Mavis"}
+{"ats":"greenhouse","token":"taketwo","employer":"Take-Two Interactive","aliases":["Take-Two Interactive Software"]}
+{"ats":"greenhouse","token":"zynga","employer":"Zynga"}
+{"ats":"greenhouse","token":"jamcity","employer":"Jam City"}
+{"ats":"greenhouse","token":"kabam","employer":"Kabam"}
+{"ats":"greenhouse","token":"niantic","employer":"Niantic"}
+{"ats":"greenhouse","token":"bungie","employer":"Bungie"}
+{"ats":"greenhouse","token":"recroom","employer":"Rec Room"}
+{"ats":"greenhouse","token":"cloudimperiumgames","employer":"Cloud Imperium Games"}
+{"ats":"greenhouse","token":"digitalextremes","employer":"Digital Extremes"}
+{"ats":"greenhouse","token":"thatgamecompany","employer":"thatgamecompany"}
+{"ats":"greenhouse","token":"fortisgames","employer":"Fortis Games"}
+{"ats":"greenhouse","token":"seconddinner","employer":"Second Dinner"}
+{"ats":"greenhouse","token":"mythicalgames","employer":"Mythical Games"}
+{"ats":"greenhouse","token":"theorycraftgames","employer":"Theorycraft Games"}
+{"ats":"greenhouse","token":"probablymonsters","employer":"ProbablyMonsters"}
+{"ats":"greenhouse","token":"singularity6","employer":"Singularity 6"}
+{"ats":"greenhouse","token":"phoenixlabs","employer":"Phoenix Labs"}
+{"ats":"greenhouse","token":"twosigma","employer":"Two Sigma"}
+{"ats":"greenhouse","token":"acorns","employer":"Acorns"}
+{"ats":"greenhouse","token":"stash","employer":"Stash"}
+{"ats":"greenhouse","token":"greenlight","employer":"Greenlight"}
+{"ats":"greenhouse","token":"step","employer":"Step"}
+{"ats":"greenhouse","token":"varomoney","employer":"Varo","aliases":["Varo Bank"]}
+{"ats":"greenhouse","token":"earnin","employer":"EarnIn"}
+{"ats":"greenhouse","token":"tala","employer":"Tala"}
+{"ats":"greenhouse","token":"flywire","employer":"Flywire"}
+{"ats":"greenhouse","token":"airbase","employer":"Airbase"}
+{"ats":"greenhouse","token":"pipe","employer":"Pipe"}
+{"ats":"greenhouse","token":"clearco","employer":"Clearco"}
+{"ats":"greenhouse","token":"capchase","employer":"Capchase"}
+{"ats":"greenhouse","token":"pulley","employer":"Pulley"}
+{"ats":"greenhouse","token":"equityzen","employer":"EquityZen"}
+{"ats":"greenhouse","token":"republic","employer":"Republic"}
+{"ats":"greenhouse","token":"vercel","employer":"Vercel"}
+{"ats":"greenhouse","token":"netlify","employer":"Netlify"}
+{"ats":"greenhouse","token":"planetscale","employer":"PlanetScale"}
+{"ats":"greenhouse","token":"cockroachlabs","employer":"Cockroach Labs"}
+{"ats":"greenhouse","token":"grafanalabs","employer":"Grafana Labs"}
+{"ats":"greenhouse","token":"sumologic","employer":"Sumo Logic"}
+{"ats":"greenhouse","token":"newrelic","employer":"New Relic"}
+{"ats":"greenhouse","token":"pagerduty","employer":"PagerDuty"}
+{"ats":"greenhouse","token":"launchdarkly","employer":"LaunchDarkly"}
+{"ats":"greenhouse","token":"circleci","employer":"CircleCI"}
+{"ats":"greenhouse","token":"sentry","employer":"Sentry"}
+{"ats":"greenhouse","token":"postman","employer":"Postman"}
+{"ats":"greenhouse","token":"fivetran","employer":"Fivetran"}
+{"ats":"greenhouse","token":"dbtlabsinc","employer":"dbt Labs"}
+{"ats":"greenhouse","token":"airbyte","employer":"Airbyte"}
+{"ats":"greenhouse","token":"starburst","employer":"Starburst"}
+{"ats":"greenhouse","token":"dremio","employer":"Dremio"}
+{"ats":"greenhouse","token":"singlestore","employer":"SingleStore"}
+{"ats":"greenhouse","token":"yugabyte","employer":"Yugabyte","aliases":["YugabyteDB"]}
+{"ats":"greenhouse","token":"redis","employer":"Redis"}
+{"ats":"greenhouse","token":"couchbase","employer":"Couchbase"}
+{"ats":"greenhouse","token":"neo4j","employer":"Neo4j"}
+{"ats":"greenhouse","token":"influxdata","employer":"InfluxData"}
+{"ats":"greenhouse","token":"timescale","employer":"Timescale"}
+{"ats":"greenhouse","token":"clickhouse","employer":"ClickHouse"}
+{"ats":"greenhouse","token":"temporaltechnologies","employer":"Temporal","aliases":["Temporal Technologies"]}
+{"ats":"greenhouse","token":"chainguard","employer":"Chainguard"}
+{"ats":"greenhouse","token":"snyk","employer":"Snyk"}
+{"ats":"greenhouse","token":"wizinc","employer":"Wiz"}
+{"ats":"greenhouse","token":"lacework","employer":"Lacework"}
+{"ats":"greenhouse","token":"orcasecurity","employer":"Orca Security"}
+{"ats":"greenhouse","token":"abnormalsecurity","employer":"Abnormal Security","aliases":["Abnormal"]}
+{"ats":"greenhouse","token":"sentinelone","employer":"SentinelOne"}
+{"ats":"greenhouse","token":"tanium","employer":"Tanium"}
+{"ats":"greenhouse","token":"bitwarden","employer":"Bitwarden"}
+{"ats":"greenhouse","token":"fastly","employer":"Fastly"}
+{"ats":"greenhouse","token":"digitalocean98","employer":"DigitalOcean"}
+{"ats":"greenhouse","token":"docker","employer":"Docker"}
+{"ats":"greenhouse","token":"kong","employer":"Kong"}
+{"ats":"greenhouse","token":"mux","employer":"Mux"}
+{"ats":"greenhouse","token":"airtable","employer":"Airtable"}
+{"ats":"greenhouse","token":"coda","employer":"Coda"}
+{"ats":"greenhouse","token":"webflow","employer":"Webflow"}
+{"ats":"greenhouse","token":"calendly","employer":"Calendly"}
+{"ats":"greenhouse","token":"gongio","employer":"Gong","aliases":["Gong.io"]}
+{"ats":"greenhouse","token":"outreach","employer":"Outreach"}
+{"ats":"greenhouse","token":"salesloft","employer":"Salesloft"}
+{"ats":"greenhouse","token":"zoominfo","employer":"ZoomInfo","aliases":["ZoomInfo Technologies"]}
+{"ats":"greenhouse","token":"apolloio","employer":"Apollo.io"}
+{"ats":"greenhouse","token":"clari","employer":"Clari"}
+{"ats":"greenhouse","token":"highspot","employer":"Highspot"}
+{"ats":"greenhouse","token":"braze","employer":"Braze"}
+{"ats":"greenhouse","token":"amplitude","employer":"Amplitude"}
+{"ats":"greenhouse","token":"mixpanel","employer":"Mixpanel"}
+{"ats":"greenhouse","token":"pendo","employer":"Pendo"}
+{"ats":"greenhouse","token":"fullstory","employer":"FullStory"}
+{"ats":"greenhouse","token":"optimizely","employer":"Optimizely"}
+{"ats":"greenhouse","token":"contentful","employer":"Contentful"}
+{"ats":"greenhouse","token":"algolia","employer":"Algolia"}
+{"ats":"greenhouse","token":"yext","employer":"Yext"}
+{"ats":"greenhouse","token":"sproutsocial","employer":"Sprout Social"}
+{"ats":"greenhouse","token":"hootsuite","employer":"Hootsuite"}
+{"ats":"greenhouse","token":"intercom","employer":"Intercom"}
+{"ats":"greenhouse","token":"frontapp","employer":"Front"}
+{"ats":"greenhouse","token":"gorgias","employer":"Gorgias"}
+{"ats":"greenhouse","token":"dialpad","employer":"Dialpad"}
+{"ats":"greenhouse","token":"talkdesk","employer":"Talkdesk"}
+{"ats":"greenhouse","token":"podium81","employer":"Podium"}
+{"ats":"greenhouse","token":"weave","employer":"Weave"}
+{"ats":"greenhouse","token":"qualtrics","employer":"Qualtrics"}
+{"ats":"greenhouse","token":"typeform","employer":"Typeform"}
+{"ats":"greenhouse","token":"lattice","employer":"Lattice"}
+{"ats":"greenhouse","token":"cultureamp","employer":"Culture Amp"}
+{"ats":"greenhouse","token":"rippling","employer":"Rippling"}
+{"ats":"greenhouse","token":"remotecom","employer":"Remote"}
+{"ats":"greenhouse","token":"justworks","employer":"Justworks"}
+{"ats":"greenhouse","token":"greenhouse","employer":"Greenhouse","aliases":["Greenhouse Software"]}
+{"ats":"greenhouse","token":"anthropic","employer":"Anthropic"}
+{"ats":"greenhouse","token":"deepmind","employer":"DeepMind"}
+{"ats":"greenhouse","token":"scaleai","employer":"Scale AI"}
+{"ats":"greenhouse","token":"xai","employer":"xAI"}
+{"ats":"greenhouse","token":"figureai","employer":"Figure","aliases":["Figure AI"]}
+{"ats":"greenhouse","token":"waymo","employer":"Waymo"}
+{"ats":"greenhouse","token":"aurorainnovation","employer":"Aurora","aliases":["Aurora Innovation"]}
+{"ats":"greenhouse","token":"nuro","employer":"Nuro"}
+{"ats":"greenhouse","token":"lucidmotors","employer":"Lucid Motors"}
+{"ats":"greenhouse","token":"jobyaviation","employer":"Joby Aviation"}
+{"ats":"greenhouse","token":"archer56","employer":"Archer","aliases":["Archer Aviation"]}
+{"ats":"greenhouse","token":"andurilindustries","employer":"Anduril Industries"}
+{"ats":"greenhouse","token":"spacex","employer":"SpaceX"}
+{"ats":"greenhouse","token":"relativity","employer":"Relativity Space"}
+{"ats":"greenhouse","token":"rocketlab","employer":"Rocket Lab"}
+{"ats":"greenhouse","token":"planetlabs","employer":"Planet","aliases":["Planet Labs"]}
+{"ats":"greenhouse","token":"astranis","employer":"Astranis"}
+{"ats":"greenhouse","token":"skydio","employer":"Skydio"}
+{"ats":"greenhouse","token":"flyzipline","employer":"Zipline"}
+{"ats":"greenhouse","token":"hadrian","employer":"Hadrian"}
+{"ats":"greenhouse","token":"axiomspace","employer":"Axiom Space"}
+{"ats":"greenhouse","token":"mercury","employer":"Mercury"}
+{"ats":"greenhouse","token":"gemini","employer":"Gemini"}
+{"ats":"greenhouse","token":"circle","employer":"Circle"}
+{"ats":"greenhouse","token":"ripple","employer":"Ripple"}
+{"ats":"greenhouse","token":"chainalysis","employer":"Chainalysis"}
+{"ats":"greenhouse","token":"fireblocks","employer":"Fireblocks"}
+{"ats":"greenhouse","token":"paxos","employer":"Paxos"}
+{"ats":"greenhouse","token":"bitgo","employer":"BitGo"}
+{"ats":"greenhouse","token":"consensys","employer":"Consensys"}
+{"ats":"greenhouse","token":"alchemy","employer":"Alchemy"}
+{"ats":"greenhouse","token":"opensea","employer":"OpenSea"}
+{"ats":"greenhouse","token":"uniswaplabs","employer":"Uniswap Labs"}
+{"ats":"greenhouse","token":"aptoslabs","employer":"Aptos Labs","aliases":["Aptos"]}
+{"ats":"greenhouse","token":"mystenlabs","employer":"Mysten Labs"}
+{"ats":"greenhouse","token":"a16z","employer":"Andreessen Horowitz","aliases":["a16z"]}
+{"ats":"greenhouse","token":"marqeta","employer":"Marqeta"}
+{"ats":"greenhouse","token":"billcom","employer":"Bill","aliases":["BILL","Bill.com"]}
+{"ats":"greenhouse","token":"tripactions","employer":"Navan"}
+{"ats":"greenhouse","token":"tipalti","employer":"Tipalti"}
+{"ats":"greenhouse","token":"melio","employer":"Melio"}
+{"ats":"greenhouse","token":"monzo","employer":"Monzo"}
+{"ats":"greenhouse","token":"n26","employer":"N26"}
+{"ats":"greenhouse","token":"nubank","employer":"Nubank"}
+{"ats":"greenhouse","token":"current81","employer":"Current"}
+{"ats":"greenhouse","token":"dave","employer":"Dave"}
+{"ats":"greenhouse","token":"upstart","employer":"Upstart"}
+{"ats":"greenhouse","token":"angellist","employer":"AngelList"}
+{"ats":"greenhouse","token":"addepar1","employer":"Addepar"}
+{"ats":"greenhouse","token":"janestreet","employer":"Jane Street"}
+{"ats":"greenhouse","token":"wehrtyou","employer":"Hudson River Trading"}
+{"ats":"greenhouse","token":"drweng","employer":"DRW"}
+{"ats":"greenhouse","token":"jumptrading","employer":"Jump Trading"}
+{"ats":"greenhouse","token":"imc","employer":"IMC","aliases":["IMC Trading"]}
+{"ats":"greenhouse","token":"akunacapital","employer":"Akuna Capital"}
+{"ats":"greenhouse","token":"flowtraders","employer":"Flow Traders"}
+{"ats":"greenhouse","token":"towerresearchcapital","employer":"Tower Research Capital"}
+{"ats":"greenhouse","token":"point72","employer":"Point72"}
+{"ats":"greenhouse","token":"aqr","employer":"AQR","aliases":["AQR Capital Management"]}
+{"ats":"greenhouse","token":"schonfeld","employer":"Schonfeld"}
+{"ats":"greenhouse","token":"squarepointcapital","employer":"Squarepoint Capital"}
+{"ats":"greenhouse","token":"xtxmarketstechnologies","employer":"XTX Markets"}
+{"ats":"greenhouse","token":"fiveringsllc","employer":"Five Rings"}
+{"ats":"greenhouse","token":"oldmissioncapital","employer":"Old Mission","aliases":["Old Mission Capital"]}
+{"ats":"greenhouse","token":"chicagotrading","employer":"Chicago Trading Company"}
+{"ats":"greenhouse","token":"pdtpartners","employer":"PDT Partners"}
+{"ats":"greenhouse","token":"voleon","employer":"Voleon"}
+{"ats":"greenhouse","token":"aquaticcapitalmanagement","employer":"Aquatic","aliases":["Aquatic Capital Management"]}
+{"ats":"greenhouse","token":"radixtrading","employer":"Radix","aliases":["Radix Trading"]}
+{"ats":"greenhouse","token":"optiverus","employer":"Optiver"}
+{"ats":"greenhouse","token":"onemedical","employer":"One Medical"}
+{"ats":"greenhouse","token":"carbonhealth","employer":"Carbon Health"}
+{"ats":"greenhouse","token":"cityblockhealth","employer":"Cityblock Health"}
+{"ats":"greenhouse","token":"includedhealth","employer":"Included Health"}
+{"ats":"greenhouse","token":"mavenclinic","employer":"Maven Clinic"}
+{"ats":"greenhouse","token":"hingehealth","employer":"Hinge Health"}
+{"ats":"greenhouse","token":"swordhealth","employer":"Sword Health","aliases":["Sword"]}
+{"ats":"greenhouse","token":"virtahealth","employer":"Virta Health"}
+{"ats":"greenhouse","token":"headway","employer":"Headway"}
+{"ats":"greenhouse","token":"alma","employer":"Alma"}
+{"ats":"greenhouse","token":"doximity","employer":"Doximity"}
+{"ats":"greenhouse","token":"komodohealth","employer":"Komodo Health"}
+{"ats":"greenhouse","token":"23andme","employer":"23andMe"}
+{"ats":"greenhouse","token":"pathai","employer":"PathAI"}
+{"ats":"greenhouse","token":"vizai","employer":"Viz.ai"}
+{"ats":"greenhouse","token":"abridge","employer":"Abridge"}
+{"ats":"greenhouse","token":"collectivehealth","employer":"Collective Health"}
+{"ats":"greenhouse","token":"aledade","employer":"Aledade"}
+{"ats":"greenhouse","token":"cedar","employer":"Cedar"}
+{"ats":"greenhouse","token":"redwoodmaterials","employer":"Redwood Materials"}
+{"ats":"greenhouse","token":"silanano","employer":"Sila","aliases":["Sila Nanotechnologies"]}
+{"ats":"greenhouse","token":"formenergy","employer":"Form Energy"}
+{"ats":"greenhouse","token":"commonwealthfusionsystems","employer":"Commonwealth Fusion Systems"}
+{"ats":"greenhouse","token":"helionenergy","employer":"Helion","aliases":["Helion Energy"]}
+{"ats":"greenhouse","token":"fervoenergy","employer":"Fervo Energy"}
+{"ats":"greenhouse","token":"arcadia","employer":"Arcadia"}
+{"ats":"greenhouse","token":"gomotive","employer":"Motive"}
+{"ats":"greenhouse","token":"verkada","employer":"Verkada"}
+{"ats":"greenhouse","token":"formlabs","employer":"Formlabs"}
+{"ats":"greenhouse","token":"carbon","employer":"Carbon"}
+{"ats":"greenhouse","token":"bostondynamics","employer":"Boston Dynamics"}
+{"ats":"greenhouse","token":"agilityrobotics","employer":"Agility Robotics"}
+{"ats":"greenhouse","token":"locusrobotics","employer":"Locus Robotics"}
+{"ats":"greenhouse","token":"covariant","employer":"Covariant"}
+{"ats":"greenhouse","token":"brightmachines","employer":"Bright Machines"}
+{"ats":"greenhouse","token":"whoop","employer":"WHOOP"}
+{"ats":"greenhouse","token":"oura","employer":"Oura"}
+{"ats":"greenhouse","token":"sonos","employer":"Sonos"}
+{"ats":"greenhouse","token":"simplisafe","employer":"SimpliSafe"}
+{"ats":"greenhouse","token":"nothing","employer":"Nothing"}
+{"ats":"greenhouse","token":"sifive","employer":"SiFive"}
+{"ats":"greenhouse","token":"cerebrassystems","employer":"Cerebras","aliases":["Cerebras Systems"]}
+{"ats":"greenhouse","token":"groq","employer":"Groq"}
+{"ats":"greenhouse","token":"sambanovasystems","employer":"SambaNova","aliases":["SambaNova Systems"]}
+{"ats":"greenhouse","token":"lightmatter","employer":"Lightmatter"}
+{"ats":"greenhouse","token":"ayarlabs","employer":"Ayar Labs"}
+{"ats":"greenhouse","token":"rivosinc","employer":"Rivos"}
+{"ats":"greenhouse","token":"tenstorrent","employer":"Tenstorrent"}
+{"ats":"greenhouse","token":"amperecomputing","employer":"Ampere","aliases":["Ampere Computing"]}
+{"ats":"greenhouse","token":"psiquantum","employer":"PsiQuantum"}
+{"ats":"greenhouse","token":"ionq","employer":"IonQ"}
+{"ats":"greenhouse","token":"rigetti","employer":"Rigetti","aliases":["Rigetti Computing"]}
+{"ats":"greenhouse","token":"quantinuum","employer":"Quantinuum"}
+{"ats":"greenhouse","token":"meter","employer":"Meter"}
+{"ats":"greenhouse","token":"deliveroo","employer":"Deliveroo"}
+{"ats":"greenhouse","token":"glovo","employer":"Glovo"}
+{"ats":"greenhouse","token":"traderepublicbank","employer":"Trade Republic"}
+{"ats":"greenhouse","token":"sumup","employer":"SumUp"}
+{"ats":"greenhouse","token":"mollie","employer":"Mollie"}
+{"ats":"greenhouse","token":"king","employer":"King"}
+{"ats":"greenhouse","token":"supercell","employer":"Supercell"}
+{"ats":"greenhouse","token":"rovio","employer":"Rovio"}
+{"ats":"greenhouse","token":"wooga","employer":"Wooga"}
+{"ats":"greenhouse","token":"celonis","employer":"Celonis"}
+{"ats":"greenhouse","token":"personio","employer":"Personio"}
+{"ats":"greenhouse","token":"babbel","employer":"Babbel"}
+{"ats":"greenhouse","token":"flix","employer":"Flix"}
+{"ats":"greenhouse","token":"helsing","employer":"Helsing"}
+{"ats":"greenhouse","token":"deepl","employer":"DeepL"}
+{"ats":"greenhouse","token":"dataiku","employer":"Dataiku"}
+{"ats":"greenhouse","token":"doctolib","employer":"Doctolib"}
+{"ats":"greenhouse","token":"blablacar","employer":"BlaBlaCar"}
+{"ats":"greenhouse","token":"ledger","employer":"Ledger"}
+{"ats":"greenhouse","token":"pipedrive","employer":"Pipedrive"}
+{"ats":"greenhouse","token":"veriff","employer":"Veriff"}
+{"ats":"greenhouse","token":"skyscanner","employer":"Skyscanner"}
+{"ats":"greenhouse","token":"gocardless","employer":"GoCardless"}
+{"ats":"greenhouse","token":"onfido","employer":"Onfido"}
+{"ats":"greenhouse","token":"thoughtmachine","employer":"Thought Machine"}
+{"ats":"greenhouse","token":"improbable","employer":"Improbable"}
+{"ats":"greenhouse","token":"wayve","employer":"Wayve"}
+{"ats":"greenhouse","token":"graphcore","employer":"Graphcore"}
+{"ats":"greenhouse","token":"gousto","employer":"Gousto"}
+{"ats":"greenhouse","token":"tide","employer":"Tide"}
+{"ats":"greenhouse","token":"zopa","employer":"Zopa"}
+{"ats":"greenhouse","token":"zego","employer":"Zego"}
+{"ats":"greenhouse","token":"marshmallow","employer":"Marshmallow"}
+{"ats":"greenhouse","token":"paddle","employer":"Paddle"}
+{"ats":"greenhouse","token":"cabify","employer":"Cabify"}
+{"ats":"greenhouse","token":"wallapop","employer":"Wallapop"}
+{"ats":"greenhouse","token":"factorial","employer":"Factorial"}
+{"ats":"greenhouse","token":"travelperk","employer":"TravelPerk"}
+{"ats":"greenhouse","token":"picnic","employer":"Picnic"}
+{"ats":"greenhouse","token":"miro","employer":"Miro"}
+{"ats":"greenhouse","token":"bird","employer":"Bird"}
+{"ats":"greenhouse","token":"backbase","employer":"Backbase"}
+{"ats":"greenhouse","token":"einride","employer":"Einride"}
+{"ats":"greenhouse","token":"voitechnology","employer":"Voi","aliases":["Voi Technology"]}
+{"ats":"greenhouse","token":"epidemicsound","employer":"Epidemic Sound"}
+{"ats":"greenhouse","token":"cognite","employer":"Cognite"}
+{"ats":"greenhouse","token":"remarkable","employer":"reMarkable"}
+{"ats":"greenhouse","token":"toogoodtogo","employer":"Too Good To Go"}
+{"ats":"greenhouse","token":"pleo","employer":"Pleo"}
+{"ats":"greenhouse","token":"trustpilot","employer":"Trustpilot"}
+{"ats":"greenhouse","token":"aiven","employer":"Aiven"}
+{"ats":"greenhouse","token":"smartlyio","employer":"Smartly","aliases":["Smartly.io"]}
+{"ats":"greenhouse","token":"docplanner","employer":"Docplanner"}
+{"ats":"greenhouse","token":"brainly","employer":"Brainly"}
+{"ats":"greenhouse","token":"productboard","employer":"Productboard"}
+{"ats":"greenhouse","token":"mews","employer":"Mews"}
+{"ats":"greenhouse","token":"taboola","employer":"Taboola"}
+{"ats":"greenhouse","token":"outbrain","employer":"Outbrain"}
+{"ats":"greenhouse","token":"appsflyer","employer":"AppsFlyer"}
+{"ats":"greenhouse","token":"similarweb","employer":"Similarweb"}
+{"ats":"greenhouse","token":"riskified","employer":"Riskified"}
+{"ats":"greenhouse","token":"forter","employer":"Forter"}
+{"ats":"greenhouse","token":"via","employer":"Via"}
+{"ats":"greenhouse","token":"jfrog","employer":"JFrog"}
+{"ats":"greenhouse","token":"armissecurity","employer":"Armis"}
+{"ats":"greenhouse","token":"claroty","employer":"Claroty"}
+{"ats":"greenhouse","token":"axonius","employer":"Axonius"}
+{"ats":"greenhouse","token":"island","employer":"Island"}
+{"ats":"greenhouse","token":"saltsecurity","employer":"Salt Security"}
+{"ats":"greenhouse","token":"aquasecurity","employer":"Aqua Security"}
+{"ats":"greenhouse","token":"bigid","employer":"BigID"}
+{"ats":"greenhouse","token":"papayaglobal","employer":"Papaya Global"}
+{"ats":"greenhouse","token":"hibob","employer":"HiBob"}
+{"ats":"greenhouse","token":"rapyd","employer":"Rapyd"}
+{"ats":"greenhouse","token":"pagaya","employer":"Pagaya"}
+{"ats":"greenhouse","token":"lightricks","employer":"Lightricks"}
+{"ats":"greenhouse","token":"moonactive","employer":"Moon Active"}
+{"ats":"greenhouse","token":"mondaycom","employer":"monday.com"}
+{"ats":"greenhouse","token":"fiverr","employer":"Fiverr"}
+{"ats":"greenhouse","token":"etoro","employer":"eToro"}
+{"ats":"greenhouse","token":"catonetworks","employer":"Cato Networks"}
+{"ats":"greenhouse","token":"safetyculture","employer":"SafetyCulture"}
+{"ats":"greenhouse","token":"linktree","employer":"Linktree"}
+{"ats":"greenhouse","token":"employmenthero","employer":"Employment Hero"}
+{"ats":"greenhouse","token":"immutable","employer":"Immutable"}
+{"ats":"greenhouse","token":"rokt","employer":"Rokt"}
+{"ats":"greenhouse","token":"carousell","employer":"Carousell"}
+{"ats":"greenhouse","token":"ninjavan","employer":"Ninja Van"}
+{"ats":"greenhouse","token":"xendit","employer":"Xendit"}
+{"ats":"greenhouse","token":"nium","employer":"Nium"}
+{"ats":"greenhouse","token":"aspire","employer":"Aspire"}
+{"ats":"greenhouse","token":"stashaway","employer":"StashAway"}
+{"ats":"greenhouse","token":"endowus","employer":"Endowus"}
+{"ats":"greenhouse","token":"codapayments","employer":"Coda Payments"}
+{"ats":"greenhouse","token":"mercari","employer":"Mercari"}
+{"ats":"greenhouse","token":"smartnews","employer":"SmartNews"}
+{"ats":"greenhouse","token":"klook","employer":"Klook"}
+{"ats":"greenhouse","token":"lalamove","employer":"Lalamove"}
+{"ats":"greenhouse","token":"welab","employer":"WeLab"}
+{"ats":"greenhouse","token":"ambergroup","employer":"Amber Group"}
+{"ats":"greenhouse","token":"ponyai","employer":"Pony.ai"}
+{"ats":"greenhouse","token":"momenta","employer":"Momenta"}
+{"ats":"greenhouse","token":"tusimple","employer":"TuSimple"}
+{"ats":"greenhouse","token":"plus","employer":"Plus"}
+{"ats":"greenhouse","token":"xpeng","employer":"XPeng"}
+{"ats":"greenhouse","token":"nio","employer":"NIO"}
+{"ats":"greenhouse","token":"agora","employer":"Agora"}
+{"ats":"greenhouse","token":"zilliz","employer":"Zilliz"}
+{"ats":"greenhouse","token":"alluxio","employer":"Alluxio"}
+{"ats":"greenhouse","token":"liftoff","employer":"Liftoff"}
+{"ats":"greenhouse","token":"funplus","employer":"FunPlus"}
+{"ats":"greenhouse","token":"rappi","employer":"Rappi"}
+{"ats":"greenhouse","token":"kavak","employer":"Kavak"}
+{"ats":"greenhouse","token":"clip","employer":"Clip"}
+{"ats":"greenhouse","token":"bitso","employer":"Bitso"}
+{"ats":"greenhouse","token":"dlocal","employer":"dLocal"}
+{"ats":"greenhouse","token":"wildlifestudios","employer":"Wildlife Studios"}
+{"ats":"greenhouse","token":"quintoandar","employer":"QuintoAndar","aliases":["Grupo QuintoAndar"]}
+{"ats":"greenhouse","token":"loft","employer":"Loft"}
+{"ats":"greenhouse","token":"creditas","employer":"Creditas"}
+{"ats":"greenhouse","token":"gympass","employer":"Wellhub","aliases":["Gympass"]}
+{"ats":"greenhouse","token":"vtex","employer":"VTEX"}
+{"ats":"greenhouse","token":"loggi","employer":"Loggi"}
+{"ats":"greenhouse","token":"cloudwalk","employer":"CloudWalk"}
+{"ats":"greenhouse","token":"notco","employer":"NotCo"}
+{"ats":"greenhouse","token":"mural","employer":"Mural"}
+{"ats":"greenhouse","token":"pomelo","employer":"Pomelo"}
+{"ats":"greenhouse","token":"browserstack","employer":"BrowserStack"}
+{"ats":"greenhouse","token":"chargebee","employer":"Chargebee"}
+{"ats":"greenhouse","token":"druva","employer":"Druva"}
+{"ats":"greenhouse","token":"innovaccer","employer":"Innovaccer"}
+{"ats":"greenhouse","token":"rubrik","employer":"Rubrik"}
+{"ats":"greenhouse","token":"cohesity","employer":"Cohesity"}
+{"ats":"greenhouse","token":"thoughtspot","employer":"ThoughtSpot"}
+{"ats":"greenhouse","token":"hasura","employer":"Hasura"}
+{"ats":"greenhouse","token":"zeta","employer":"Zeta"}
+{"ats":"greenhouse","token":"groww","employer":"Groww"}
+{"ats":"greenhouse","token":"sharechat","employer":"ShareChat"}
+{"ats":"greenhouse","token":"inmobi","employer":"InMobi"}
+{"ats":"greenhouse","token":"grammarly","employer":"Grammarly"}
+{"ats":"greenhouse","token":"zapier","employer":"Zapier"}
+{"ats":"greenhouse","token":"boxinc","employer":"Box"}
+{"ats":"greenhouse","token":"hubspotjobs","employer":"HubSpot"}
+{"ats":"greenhouse","token":"credosemiconductor","employer":"Credo","aliases":["Credo Semiconductor"]}
+{"ats":"greenhouse","token":"luminartech","employer":"Luminar","aliases":["Luminar Technologies"]}
+{"ats":"greenhouse","token":"aeva","employer":"Aeva"}
+{"ats":"greenhouse","token":"ouster","employer":"Ouster"}
+{"ats":"greenhouse","token":"appliedintuition","employer":"Applied Intuition"}
+{"ats":"greenhouse","token":"kodiak","employer":"Kodiak Robotics","aliases":["Kodiak"]}
+{"ats":"greenhouse","token":"gatik","employer":"Gatik"}
+{"ats":"greenhouse","token":"maymobility","employer":"May Mobility"}
+{"ats":"greenhouse","token":"motional","employer":"Motional"}
+{"ats":"greenhouse","token":"wisk","employer":"Wisk"}
+{"ats":"greenhouse","token":"beta","employer":"BETA Technologies"}
+{"ats":"greenhouse","token":"boomsupersonic","employer":"Boom Supersonic"}
+{"ats":"greenhouse","token":"impulsespace","employer":"Impulse Space"}
+{"ats":"greenhouse","token":"ablspacesystems","employer":"ABL Space Systems"}
+{"ats":"greenhouse","token":"umbra","employer":"Umbra"}
+{"ats":"greenhouse","token":"capellaspace","employer":"Capella Space"}
+{"ats":"greenhouse","token":"hawkeye360","employer":"HawkEye 360"}
+{"ats":"greenhouse","token":"spire","employer":"Spire"}
+{"ats":"greenhouse","token":"slingshotaerospace","employer":"Slingshot Aerospace"}
+{"ats":"greenhouse","token":"trueanomalyinc","employer":"True Anomaly"}
+{"ats":"greenhouse","token":"fireflyspace","employer":"Firefly Aerospace"}
+{"ats":"greenhouse","token":"epirus","employer":"Epirus"}
+{"ats":"greenhouse","token":"rebelliondefense","employer":"Rebellion Defense"}
+{"ats":"greenhouse","token":"vannevarlabs","employer":"Vannevar Labs","aliases":["Vannevar"]}
+{"ats":"greenhouse","token":"c3iot","employer":"C3 AI","aliases":["C3.ai"]}
+{"ats":"greenhouse","token":"datarobot","employer":"DataRobot"}
+{"ats":"greenhouse","token":"dominodatalab","employer":"Domino Data Lab","aliases":["Domino"]}
+{"ats":"greenhouse","token":"runwayml","employer":"Runway"}
+{"ats":"greenhouse","token":"stabilityai","employer":"Stability AI"}
+{"ats":"greenhouse","token":"inworldai","employer":"Inworld AI"}
+{"ats":"greenhouse","token":"cresta","employer":"Cresta"}
+{"ats":"greenhouse","token":"moveworks","employer":"Moveworks"}
+{"ats":"greenhouse","token":"gleanwork","employer":"Glean"}
+{"ats":"greenhouse","token":"hebbia","employer":"Hebbia"}
+{"ats":"greenhouse","token":"goclio","employer":"Clio"}
+{"ats":"greenhouse","token":"everlaw","employer":"Everlaw"}
+{"ats":"greenhouse","token":"ironcladapp","employer":"Ironclad"}
+{"ats":"greenhouse","token":"geckorobotics","employer":"Gecko Robotics"}
+{"ats":"greenhouse","token":"dexterity","employer":"Dexterity"}
+{"ats":"greenhouse","token":"carbonrobotics","employer":"Carbon Robotics"}
+{"ats":"greenhouse","token":"serverobotics","employer":"Serve Robotics"}
+{"ats":"greenhouse","token":"picklerobot","employer":"Pickle Robot"}
+{"ats":"greenhouse","token":"palmetto","employer":"Palmetto"}
+{"ats":"greenhouse","token":"aurorasolar","employer":"Aurora Solar"}
+{"ats":"greenhouse","token":"span","employer":"Span"}
+{"ats":"greenhouse","token":"antoraenergy","employer":"Antora Energy"}
+{"ats":"greenhouse","token":"twelve","employer":"Twelve"}
+{"ats":"greenhouse","token":"watershed","employer":"Watershed"}
+{"ats":"greenhouse","token":"heirloomcarbon","employer":"Heirloom","aliases":["Heirloom Carbon"]}
+{"ats":"greenhouse","token":"koboldmetals","employer":"KoBold Metals"}
+{"ats":"greenhouse","token":"lilacsolutions","employer":"Lilac Solutions"}
+{"ats":"greenhouse","token":"mainspringenergy","employer":"Mainspring Energy"}
+{"ats":"greenhouse","token":"ascendelements","employer":"Ascend Elements"}
+{"ats":"greenhouse","token":"kairospower","employer":"Kairos Power"}
+{"ats":"greenhouse","token":"coreweave","employer":"CoreWeave"}
+{"ats":"greenhouse","token":"togetherai","employer":"Together AI"}
+{"ats":"greenhouse","token":"crusoeenergy","employer":"Crusoe","aliases":["Crusoe Energy"]}
+{"ats":"greenhouse","token":"thoughtworks","employer":"Thoughtworks"}
+{"ats":"greenhouse","token":"rga","employer":"R/GA"}
+{"ats":"greenhouse","token":"ideo","employer":"IDEO"}
+{"ats":"greenhouse","token":"workco","employer":"Work & Co"}
+{"ats":"greenhouse","token":"instrument","employer":"Instrument"}
+{"ats":"greenhouse","token":"hugeinc","employer":"Huge","aliases":["HugeInc"]}
+{"ats":"greenhouse","token":"guild","employer":"Guild","aliases":["Guild Education"]}
+{"ats":"greenhouse","token":"coursehero","employer":"Course Hero"}
+{"ats":"greenhouse","token":"codecademy","employer":"Codecademy"}
+{"ats":"greenhouse","token":"skillshare","employer":"Skillshare"}
+{"ats":"greenhouse","token":"classdojo","employer":"ClassDojo"}
+{"ats":"greenhouse","token":"newsela","employer":"Newsela"}
+{"ats":"greenhouse","token":"amplify","employer":"Amplify"}
+{"ats":"greenhouse","token":"zearn","employer":"Zearn"}
+{"ats":"greenhouse","token":"kajabi","employer":"Kajabi"}
+{"ats":"greenhouse","token":"teachable","employer":"Teachable"}
+{"ats":"greenhouse","token":"uncommonschools","employer":"Uncommon Schools"}
+{"ats":"greenhouse","token":"forbes","employer":"Forbes"}
+{"ats":"greenhouse","token":"bdg","employer":"BDG","aliases":["Bustle Digital Group"]}
+{"ats":"greenhouse","token":"theskimm","employer":"theSkimm"}
+{"ats":"greenhouse","token":"morningbrew","employer":"Morning Brew"}
+{"ats":"greenhouse","token":"semafor","employer":"Semafor"}
+{"ats":"greenhouse","token":"tidal","employer":"TIDAL"}
+{"ats":"greenhouse","token":"splice","employer":"Splice"}
+{"ats":"greenhouse","token":"ableton","employer":"Ableton"}
+{"ats":"greenhouse","token":"nativeinstruments","employer":"Native Instruments"}
+{"ats":"greenhouse","token":"acast","employer":"Acast"}
+{"ats":"greenhouse","token":"fubotv","employer":"fuboTV","aliases":["Fubo"]}
+{"ats":"greenhouse","token":"underdogfantasy","employer":"Underdog","aliases":["Underdog Fantasy"]}
+{"ats":"greenhouse","token":"prizepicks","employer":"PrizePicks"}
+{"ats":"greenhouse","token":"fanduel","employer":"FanDuel"}
+{"ats":"greenhouse","token":"pointsbet","employer":"PointsBet"}
+{"ats":"greenhouse","token":"chanzuckerberginitiative","employer":"Chan Zuckerberg Initiative"}
+{"ats":"greenhouse","token":"arcinstitute","employer":"Arc Institute"}
+{"ats":"greenhouse","token":"altoslabs","employer":"Altos Labs"}
+{"ats":"greenhouse","token":"calicolabs","employer":"Calico","aliases":["Calico Life Sciences"]}
+{"ats":"greenhouse","token":"workato","employer":"Workato"}
+{"ats":"greenhouse","token":"mparticle","employer":"mParticle"}
+{"ats":"greenhouse","token":"iterable","employer":"Iterable"}
+{"ats":"greenhouse","token":"yotpo","employer":"Yotpo"}
+{"ats":"greenhouse","token":"recharge","employer":"Recharge"}
+{"ats":"greenhouse","token":"siftscience","employer":"Sift"}
+{"ats":"greenhouse","token":"signifyd","employer":"Signifyd"}
+{"ats":"greenhouse","token":"mx","employer":"MX"}
+{"ats":"greenhouse","token":"lightspeedhq","employer":"Lightspeed","aliases":["Lightspeed Commerce"]}
+{"ats":"greenhouse","token":"touchbistro","employer":"TouchBistro"}
+{"ats":"greenhouse","token":"sevenrooms","employer":"SevenRooms"}
+{"ats":"greenhouse","token":"chownow","employer":"ChowNow"}
+{"ats":"greenhouse","token":"slice","employer":"Slice"}
+{"ats":"greenhouse","token":"dailyharvest","employer":"Daily Harvest"}
+{"ats":"greenhouse","token":"hungryroot","employer":"Hungryroot"}
+{"ats":"greenhouse","token":"thefarmersdog","employer":"The Farmer's Dog"}
+{"ats":"greenhouse","token":"bark","employer":"BARK"}
+{"ats":"greenhouse","token":"rover","employer":"Rover"}
+{"ats":"greenhouse","token":"fetchrewards","employer":"Fetch","aliases":["Fetch Rewards"]}
+{"ats":"greenhouse","token":"ibotta","employer":"Ibotta"}
+{"ats":"greenhouse","token":"missionlane","employer":"Mission Lane"}
+{"ats":"greenhouse","token":"avant","employer":"Avant"}
+{"ats":"greenhouse","token":"fundingcircle","employer":"Funding Circle"}
+{"ats":"greenhouse","token":"bluevine","employer":"BlueVine"}
+{"ats":"greenhouse","token":"fundbox","employer":"Fundbox"}
+{"ats":"greenhouse","token":"novo","employer":"Novo"}
+{"ats":"greenhouse","token":"rho","employer":"Rho"}
+{"ats":"greenhouse","token":"attentive","employer":"Attentive"}
+{"ats":"greenhouse","token":"vanta","employer":"Vanta"}
+{"ats":"greenhouse","token":"drata","employer":"Drata"}
+{"ats":"greenhouse","token":"cameo","employer":"Cameo"}
+{"ats":"greenhouse","token":"albert","employer":"Albert"}
+{"ats":"greenhouse","token":"empower","employer":"Empower"}
+{"ats":"greenhouse","token":"creditkarma","employer":"Credit Karma"}
+{"ats":"greenhouse","token":"nerdwallet","employer":"NerdWallet"}
+{"ats":"greenhouse","token":"homelight","employer":"HomeLight"}
+{"ats":"greenhouse","token":"orchard","employer":"Orchard"}
+{"ats":"greenhouse","token":"divvyhomes","employer":"Divvy Homes"}
+{"ats":"greenhouse","token":"bungalow","employer":"Bungalow"}
+{"ats":"greenhouse","token":"vacasa","employer":"Vacasa"}
+{"ats":"greenhouse","token":"hipcamp","employer":"Hipcamp"}
+{"ats":"greenhouse","token":"outdoorsy","employer":"Outdoorsy"}
+{"ats":"greenhouse","token":"hopskipdrive","employer":"HopSkipDrive"}
+{"ats":"greenhouse","token":"adjust","employer":"Adjust"}
+{"ats":"greenhouse","token":"thetradedesk","employer":"The Trade Desk"}
+{"ats":"greenhouse","token":"pubmatic","employer":"PubMatic"}
+{"ats":"greenhouse","token":"indexexchange","employer":"Index Exchange"}
+{"ats":"greenhouse","token":"doubleverify","employer":"DoubleVerify"}
+{"ats":"greenhouse","token":"integraladscience","employer":"Integral Ad Science"}
+{"ats":"greenhouse","token":"celestialai","employer":"Celestial AI"}
+{"ats":"greenhouse","token":"enfabrica","employer":"Enfabrica"}
+{"ats":"greenhouse","token":"dmatrix","employer":"d-Matrix"}
+{"ats":"greenhouse","token":"frameworkcomputer","employer":"Framework","aliases":["Framework Computer"]}
+{"ats":"greenhouse","token":"seyond","employer":"Seyond"}
+# lever
+{"ats":"lever","token":"veeva","employer":"Veeva"}
+{"ats":"lever","token":"weride","employer":"WeRide"}
+{"ats":"lever","token":"binance","employer":"Binance"}
+{"ats":"lever","token":"piccollage","employer":"PicCollage"}
+{"ats":"lever","token":"shopback-2","employer":"ShopBack","aliases":["shopback-2"],"aliasSource":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5"}
+{"ats":"lever","token":"crypto","employer":"Crypto.com","aliases":["crypto"],"aliasSource":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5"}
+{"ats":"lever","token":"netflix","employer":"Netflix"}
+{"ats":"lever","token":"spotify","employer":"Spotify"}
+{"ats":"lever","token":"palantir","employer":"Palantir"}
+{"ats":"lever","token":"plaid","employer":"Plaid"}
+{"ats":"lever","token":"shieldai","employer":"Shield AI"}
+{"ats":"lever","token":"zoox","employer":"Zoox"}
+{"ats":"lever","token":"saildrone","employer":"Saildrone"}
+{"ats":"lever","token":"outreach","employer":"Outreach"}
+{"ats":"lever","token":"highspot","employer":"Highspot"}
+{"ats":"lever","token":"attentive","employer":"Attentive"}
+{"ats":"lever","token":"fanatics","employer":"Fanatics"}
+{"ats":"lever","token":"cloudkitchens","employer":"CloudKitchens"}
+{"ats":"lever","token":"thrasio","employer":"Thrasio"}
+{"ats":"lever","token":"udacity","employer":"Udacity"}
+{"ats":"lever","token":"quizlet","employer":"Quizlet"}
+{"ats":"lever","token":"color","employer":"Color"}
+{"ats":"lever","token":"ro","employer":"Ro"}
+{"ats":"lever","token":"brilliant","employer":"Brilliant"}
+{"ats":"lever","token":"outschool","employer":"Outschool"}
+{"ats":"lever","token":"voodoo","employer":"Voodoo"}
+{"ats":"lever","token":"sorare","employer":"Sorare"}
+{"ats":"lever","token":"alan","employer":"Alan"}
+{"ats":"lever","token":"qonto","employer":"Qonto"}
+{"ats":"lever","token":"payfit","employer":"PayFit"}
+{"ats":"lever","token":"aircall","employer":"Aircall"}
+{"ats":"lever","token":"swile","employer":"Swile"}
+{"ats":"lever","token":"backmarket","employer":"Back Market"}
+{"ats":"lever","token":"spendesk","employer":"Spendesk"}
+{"ats":"lever","token":"pennylane","employer":"Pennylane"}
+{"ats":"lever","token":"contentsquare","employer":"Contentsquare"}
+{"ats":"lever","token":"mirakl","employer":"Mirakl"}
+{"ats":"lever","token":"owkin","employer":"Owkin"}
+{"ats":"lever","token":"photoroom","employer":"Photoroom"}
+{"ats":"lever","token":"octoenergy","employer":"Octopus Energy","aliases":["octoenergy"]}
+{"ats":"lever","token":"tractable","employer":"Tractable"}
+{"ats":"lever","token":"synthesia","employer":"Synthesia"}
+{"ats":"lever","token":"elliptic","employer":"Elliptic"}
+{"ats":"lever","token":"blockchain","employer":"Blockchain.com","aliases":["blockchain"]}
+{"ats":"lever","token":"taxfix","employer":"Taxfix"}
+{"ats":"lever","token":"wefox","employer":"wefox"}
+{"ats":"lever","token":"forto","employer":"Forto"}
+{"ats":"lever","token":"sennder","employer":"sennder"}
+{"ats":"lever","token":"omio","employer":"Omio"}
+{"ats":"lever","token":"blinkist","employer":"Blinkist"}
+{"ats":"lever","token":"enpal","employer":"Enpal"}
+{"ats":"lever","token":"raisin","employer":"Raisin"}
+{"ats":"lever","token":"mambu","employer":"Mambu"}
+{"ats":"lever","token":"pitch","employer":"Pitch"}
+{"ats":"lever","token":"ecosia","employer":"Ecosia"}
+{"ats":"lever","token":"wetransfer","employer":"WeTransfer"}
+{"ats":"lever","token":"framer","employer":"Framer"}
+{"ats":"lever","token":"sendcloud","employer":"Sendcloud"}
+{"ats":"lever","token":"ninjavan","employer":"Ninja Van"}
+{"ats":"lever","token":"patsnap","employer":"PatSnap"}
+{"ats":"lever","token":"trax","employer":"Trax"}
+{"ats":"lever","token":"thunes","employer":"Thunes"}
+{"ats":"lever","token":"lalamove","employer":"Lalamove"}
+{"ats":"lever","token":"animocabrands","employer":"Animoca Brands"}
+{"ats":"lever","token":"woven-by-toyota","employer":"Woven by Toyota"}
+{"ats":"lever","token":"paidy","employer":"Paidy"}
+{"ats":"lever","token":"17live","employer":"17LIVE"}
+{"ats":"lever","token":"gogoro","employer":"Gogoro"}
+{"ats":"lever","token":"ikala","employer":"iKala"}
+{"ats":"lever","token":"xrex","employer":"XREX"}
+{"ats":"lever","token":"kneron","employer":"Kneron"}
+{"ats":"lever","token":"pingcap","employer":"PingCAP"}
+{"ats":"lever","token":"zilliz","employer":"Zilliz"}
+{"ats":"lever","token":"ponyai","employer":"Pony.ai"}
+{"ats":"lever","token":"jina-ai","employer":"Jina AI"}
+{"ats":"lever","token":"anker","employer":"Anker"}
+{"ats":"lever","token":"matchgroup","employer":"Match Group"}
+{"ats":"lever","token":"eventbrite","employer":"Eventbrite"}
+{"ats":"lever","token":"kayak","employer":"KAYAK"}
+{"ats":"lever","token":"medium","employer":"Medium"}
+{"ats":"lever","token":"blend","employer":"Blend"}
+{"ats":"lever","token":"cerebral","employer":"Cerebral"}
+{"ats":"lever","token":"mammothbiosciences","employer":"Mammoth Biosciences"}
+{"ats":"lever","token":"sonatype","employer":"Sonatype"}
+{"ats":"lever","token":"teleport","employer":"Teleport"}
+{"ats":"lever","token":"nylas","employer":"Nylas"}
+{"ats":"lever","token":"pipedrive","employer":"Pipedrive"}
+{"ats":"lever","token":"factorial","employer":"Factorial"}
+{"ats":"lever","token":"jobandtalent","employer":"Jobandtalent"}
+{"ats":"lever","token":"paack","employer":"Paack"}
+{"ats":"lever","token":"redpoints","employer":"Red Points"}
+{"ats":"lever","token":"seedtag","employer":"Seedtag"}
+{"ats":"lever","token":"clarity-ai","employer":"Clarity AI"}
+{"ats":"lever","token":"belvo","employer":"Belvo"}
+{"ats":"lever","token":"kushki","employer":"Kushki"}
+{"ats":"lever","token":"ontop","employer":"Ontop"}
+{"ats":"lever","token":"jeeves","employer":"Jeeves"}
+{"ats":"lever","token":"yuno","employer":"Yuno"}
+{"ats":"lever","token":"addi","employer":"Addi"}
+{"ats":"lever","token":"habi","employer":"Habi"}
+{"ats":"lever","token":"merama","employer":"Merama"}
+{"ats":"lever","token":"clara","employer":"Clara"}
+{"ats":"lever","token":"konfio","employer":"Konfío"}
+{"ats":"lever","token":"stori","employer":"Stori"}
+{"ats":"lever","token":"kueski","employer":"Kueski"}
+{"ats":"lever","token":"mistral","employer":"Mistral AI","aliases":["mistral"]}
+{"ats":"lever","token":"welocalize","employer":"Welocalize"}
+{"ats":"lever","token":"toptal","employer":"Toptal"}
+{"ats":"lever","token":"pattern","employer":"Pattern"}
+{"ats":"lever","token":"misfitsmarket","employer":"Misfits Market"}
+{"ats":"lever","token":"wonder","employer":"Wonder"}
+{"ats":"lever","token":"boweryfarming","employer":"Bowery Farming"}
+{"ats":"lever","token":"plenty","employer":"Plenty"}
+{"ats":"lever","token":"apeel","employer":"Apeel"}
+{"ats":"lever","token":"eatjust","employer":"Eat Just"}
+{"ats":"lever","token":"upsidefoods","employer":"UPSIDE Foods"}
+{"ats":"lever","token":"cmrsurgical","employer":"CMR Surgical"}
+{"ats":"lever","token":"benevolentai","employer":"BenevolentAI"}
+{"ats":"lever","token":"faculty","employer":"Faculty"}
+{"ats":"lever","token":"polyai","employer":"PolyAI"}
+{"ats":"lever","token":"quantexa","employer":"Quantexa"}
+{"ats":"lever","token":"featurespace","employer":"Featurespace"}
+{"ats":"lever","token":"complyadvantage","employer":"ComplyAdvantage"}
+{"ats":"lever","token":"copper","employer":"Copper"}
+{"ats":"lever","token":"nexo","employer":"Nexo"}
+{"ats":"lever","token":"flink","employer":"Flink"}
+{"ats":"lever","token":"tiermobility","employer":"TIER Mobility"}
+{"ats":"lever","token":"hometogo","employer":"HomeToGo"}
+{"ats":"lever","token":"clue","employer":"Clue"}
+{"ats":"lever","token":"kry","employer":"Kry"}
+{"ats":"lever","token":"1komma5grad","employer":"1KOMMA5°","aliases":["1komma5grad"]}
+{"ats":"lever","token":"zolar","employer":"Zolar"}
+{"ats":"lever","token":"thermondo","employer":"Thermondo"}
+{"ats":"lever","token":"scalablecapital","employer":"Scalable Capital"}
+{"ats":"lever","token":"solaris","employer":"Solaris"}
+{"ats":"lever","token":"moonfare","employer":"Moonfare"}
+{"ats":"lever","token":"auto1","employer":"Auto1"}
+{"ats":"lever","token":"mcmakler","employer":"McMakler"}
+{"ats":"lever","token":"bunq","employer":"bunq"}
+{"ats":"lever","token":"messagebird","employer":"MessageBird"}
+{"ats":"lever","token":"otrium","employer":"Otrium"}
+{"ats":"lever","token":"swapfiets","employer":"Swapfiets"}
+{"ats":"lever","token":"templafy","employer":"Templafy"}
+{"ats":"lever","token":"carro","employer":"Carro"}
+{"ats":"lever","token":"glints","employer":"Glints"}
+{"ats":"lever","token":"kredivo","employer":"Kredivo"}
+{"ats":"lever","token":"gojek","employer":"Gojek"}
+{"ats":"lever","token":"gotocompany","employer":"GoTo Company"}
+{"ats":"lever","token":"traveloka","employer":"Traveloka"}
+{"ats":"lever","token":"bukalapak","employer":"Bukalapak"}
+{"ats":"lever","token":"ruangguru","employer":"Ruangguru"}
+{"ats":"lever","token":"fundingsocieties","employer":"Funding Societies"}
+{"ats":"lever","token":"gogox","employer":"GoGoX"}
+{"ats":"lever","token":"sandboxvr","employer":"Sandbox VR"}
+{"ats":"lever","token":"moonpay","employer":"MoonPay"}
+{"ats":"lever","token":"bitfinex","employer":"Bitfinex"}
+{"ats":"lever","token":"deribit","employer":"Deribit"}
+{"ats":"lever","token":"bybit","employer":"Bybit"}
+{"ats":"lever","token":"moneyforward","employer":"Money Forward"}
+{"ats":"lever","token":"freee","employer":"freee"}
+{"ats":"lever","token":"legalontech","employer":"LegalOn Technologies","aliases":["legalontech"]}
+{"ats":"lever","token":"kkday","employer":"KKday"}
+{"ats":"lever","token":"pinkoi","employer":"Pinkoi"}
+{"ats":"lever","token":"hahow","employer":"Hahow"}
+{"ats":"lever","token":"perfectcorp","employer":"Perfect Corp"}
+{"ats":"lever","token":"coolbitx","employer":"CoolBitX"}
+{"ats":"lever","token":"umbocv","employer":"Umbo CV"}
+{"ats":"lever","token":"amazingtalker","employer":"AmazingTalker"}
+{"ats":"lever","token":"snapask","employer":"Snapask"}
+{"ats":"lever","token":"agora","employer":"Agora"}
+{"ats":"lever","token":"momenta","employer":"Momenta"}
+{"ats":"lever","token":"xiaopeng","employer":"XPeng","aliases":["xiaopeng"]}
+{"ats":"lever","token":"nio","employer":"NIO"}
+{"ats":"lever","token":"tusimple","employer":"TuSimple"}
+{"ats":"lever","token":"xreal","employer":"XREAL"}
+{"ats":"lever","token":"insta360","employer":"Insta360"}
+{"ats":"lever","token":"ichef","employer":"iCHEF"}
+{"ats":"lever","token":"woo","employer":"WOO"}
+{"ats":"lever","token":"imtoken","employer":"imToken"}
+{"ats":"lever","token":"cobo","employer":"Cobo"}
+{"ats":"lever","token":"btse","employer":"BTSE"}
+{"ats":"lever","token":"matterlabs","employer":"Matter Labs"}
+{"ats":"lever","token":"offchainlabs","employer":"Offchain Labs"}
+{"ats":"lever","token":"chainlinklabs","employer":"Chainlink Labs"}
+{"ats":"lever","token":"avalabs","employer":"Ava Labs"}
+{"ats":"lever","token":"nansen","employer":"Nansen"}
+{"ats":"lever","token":"messari","employer":"Messari"}
+{"ats":"lever","token":"kaiko","employer":"Kaiko"}
+{"ats":"lever","token":"bitstamp","employer":"Bitstamp"}
+{"ats":"lever","token":"lime","employer":"Lime"}
+{"ats":"lever","token":"bolt","employer":"Bolt"}
+{"ats":"lever","token":"getaround","employer":"Getaround"}
+{"ats":"lever","token":"getir","employer":"Getir"}
+{"ats":"lever","token":"zapp","employer":"Zapp"}
+{"ats":"lever","token":"rohlik","employer":"Rohlik"}
+{"ats":"lever","token":"oda","employer":"Oda"}
+{"ats":"lever","token":"vinted","employer":"Vinted"}
+{"ats":"lever","token":"marleyspoon","employer":"Marley Spoon"}
+{"ats":"lever","token":"holded","employer":"Holded"}
+{"ats":"lever","token":"edreamsodigeo","employer":"eDreams ODIGEO"}
+{"ats":"lever","token":"civitatis","employer":"Civitatis"}
+{"ats":"lever","token":"lodgify","employer":"Lodgify"}
+{"ats":"lever","token":"fever","employer":"Fever"}
+{"ats":"lever","token":"wallbox","employer":"Wallbox"}
+{"ats":"lever","token":"cobee","employer":"Cobee"}
+{"ats":"lever","token":"devo","employer":"Devo"}
+{"ats":"lever","token":"carto","employer":"Carto"}
+{"ats":"lever","token":"zwift","employer":"Zwift"}
+{"ats":"lever","token":"eightsleep","employer":"Eight Sleep"}
+{"ats":"lever","token":"levels","employer":"Levels"}
+{"ats":"lever","token":"thirtymadison","employer":"Thirty Madison"}
+{"ats":"lever","token":"kindbody","employer":"Kindbody"}
+{"ats":"lever","token":"carrotfertility","employer":"Carrot Fertility"}
+{"ats":"lever","token":"tia","employer":"Tia"}
+{"ats":"lever","token":"parsleyhealth","employer":"Parsley Health"}
+{"ats":"lever","token":"lob","employer":"Lob"}
+{"ats":"lever","token":"shippo","employer":"Shippo"}
+{"ats":"lever","token":"easypost","employer":"EasyPost"}
+{"ats":"lever","token":"flexe","employer":"Flexe"}
+{"ats":"lever","token":"stord","employer":"Stord"}
+{"ats":"lever","token":"shipbob","employer":"ShipBob"}
+{"ats":"lever","token":"bringg","employer":"Bringg"}
+{"ats":"lever","token":"project44","employer":"project44"}
+{"ats":"lever","token":"fourkites","employer":"FourKites"}
+{"ats":"lever","token":"loadsmart","employer":"Loadsmart"}
+{"ats":"lever","token":"transfix","employer":"Transfix"}
+{"ats":"lever","token":"flockfreight","employer":"Flock Freight"}
+{"ats":"lever","token":"nuvocargo","employer":"Nuvocargo"}
+{"ats":"lever","token":"zencargo","employer":"Zencargo"}
+# ashby
+{"ats":"ashby","token":"ramp","employer":"Ramp"}
+{"ats":"ashby","token":"airwallex","employer":"Airwallex"}
+{"ats":"ashby","token":"kraken.com","employer":"Kraken","aliases":["kraken.com"],"aliasSource":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5"}
+{"ats":"ashby","token":"notion","employer":"Notion"}
+{"ats":"ashby","token":"openai","employer":"OpenAI"}
+{"ats":"ashby","token":"linear","employer":"Linear"}
+{"ats":"ashby","token":"vercel","employer":"Vercel"}
+{"ats":"ashby","token":"replit","employer":"Replit"}
+{"ats":"ashby","token":"deel","employer":"Deel"}
+{"ats":"ashby","token":"posthog","employer":"PostHog"}
+{"ats":"ashby","token":"supabase","employer":"Supabase"}
+{"ats":"ashby","token":"plaid","employer":"Plaid"}
+{"ats":"ashby","token":"retool","employer":"Retool"}
+{"ats":"ashby","token":"rippling","employer":"Rippling"}
+{"ats":"ashby","token":"zapier","employer":"Zapier"}
+{"ats":"ashby","token":"1password","employer":"1Password"}
+{"ats":"ashby","token":"cohere","employer":"Cohere"}
+{"ats":"ashby","token":"perplexity","employer":"Perplexity"}
+{"ats":"ashby","token":"elevenlabs","employer":"ElevenLabs"}
+{"ats":"ashby","token":"runway","employer":"Runway"}
+{"ats":"ashby","token":"harvey","employer":"Harvey"}
+{"ats":"ashby","token":"sierra","employer":"Sierra"}
+{"ats":"ashby","token":"cursor","employer":"Cursor"}
+{"ats":"ashby","token":"cognition","employer":"Cognition"}
+{"ats":"ashby","token":"glean","employer":"Glean"}
+{"ats":"ashby","token":"modal","employer":"Modal"}
+{"ats":"ashby","token":"baseten","employer":"Baseten"}
+{"ats":"ashby","token":"togetherai","employer":"Together AI"}
+{"ats":"ashby","token":"replicate","employer":"Replicate"}
+{"ats":"ashby","token":"pinecone","employer":"Pinecone"}
+{"ats":"ashby","token":"weaviate","employer":"Weaviate"}
+{"ats":"ashby","token":"chroma","employer":"Chroma"}
+{"ats":"ashby","token":"langchain","employer":"LangChain"}
+{"ats":"ashby","token":"llamaindex","employer":"LlamaIndex"}
+{"ats":"ashby","token":"anyscale","employer":"Anyscale"}
+{"ats":"ashby","token":"lambda","employer":"Lambda"}
+{"ats":"ashby","token":"crusoe","employer":"Crusoe"}
+{"ats":"ashby","token":"fireworksai","employer":"Fireworks AI"}
+{"ats":"ashby","token":"poolside","employer":"Poolside"}
+{"ats":"ashby","token":"sanity","employer":"Sanity"}
+{"ats":"ashby","token":"raycast","employer":"Raycast"}
+{"ats":"ashby","token":"thebrowsercompany","employer":"The Browser Company"}
+{"ats":"ashby","token":"warp","employer":"Warp"}
+{"ats":"ashby","token":"railway","employer":"Railway"}
+{"ats":"ashby","token":"render","employer":"Render"}
+{"ats":"ashby","token":"flyio","employer":"Fly.io"}
+{"ats":"ashby","token":"neon","employer":"Neon"}
+{"ats":"ashby","token":"turso","employer":"Turso"}
+{"ats":"ashby","token":"convex","employer":"Convex"}
+{"ats":"ashby","token":"clerk","employer":"Clerk"}
+{"ats":"ashby","token":"workos","employer":"WorkOS"}
+{"ats":"ashby","token":"stytch","employer":"Stytch"}
+{"ats":"ashby","token":"resend","employer":"Resend"}
+{"ats":"ashby","token":"inngest","employer":"Inngest"}
+{"ats":"ashby","token":"triggerdev","employer":"Trigger.dev"}
+{"ats":"ashby","token":"prisma","employer":"Prisma"}
+{"ats":"ashby","token":"hasura","employer":"Hasura"}
+{"ats":"ashby","token":"tailscale","employer":"Tailscale"}
+{"ats":"ashby","token":"ngrok","employer":"ngrok"}
+{"ats":"ashby","token":"vanta","employer":"Vanta"}
+{"ats":"ashby","token":"drata","employer":"Drata"}
+{"ats":"ashby","token":"secureframe","employer":"Secureframe"}
+{"ats":"ashby","token":"semgrep","employer":"Semgrep"}
+{"ats":"ashby","token":"socket","employer":"Socket"}
+{"ats":"ashby","token":"docker","employer":"Docker"}
+{"ats":"ashby","token":"gitpod","employer":"Gitpod"}
+{"ats":"ashby","token":"sourcegraph","employer":"Sourcegraph"}
+{"ats":"ashby","token":"codeium","employer":"Codeium"}
+{"ats":"ashby","token":"tabnine","employer":"Tabnine"}
+{"ats":"ashby","token":"lovable","employer":"Lovable"}
+{"ats":"ashby","token":"stackblitz","employer":"StackBlitz"}
+{"ats":"ashby","token":"mercury","employer":"Mercury"}
+{"ats":"ashby","token":"pilot","employer":"Pilot"}
+{"ats":"ashby","token":"moderntreasury","employer":"Modern Treasury"}
+{"ats":"ashby","token":"column","employer":"Column"}
+{"ats":"ashby","token":"lithic","employer":"Lithic"}
+{"ats":"ashby","token":"unit","employer":"Unit"}
+{"ats":"ashby","token":"increase","employer":"Increase"}
+{"ats":"ashby","token":"privy","employer":"Privy"}
+{"ats":"ashby","token":"bridge","employer":"Bridge"}
+{"ats":"ashby","token":"kalshi","employer":"Kalshi"}
+{"ats":"ashby","token":"polymarket","employer":"Polymarket"}
+{"ats":"ashby","token":"alchemy","employer":"Alchemy"}
+{"ats":"ashby","token":"phantom","employer":"Phantom"}
+{"ats":"ashby","token":"uniswap","employer":"Uniswap"}
+{"ats":"ashby","token":"eigenlabs","employer":"Eigen Labs"}
+{"ats":"ashby","token":"paradigm","employer":"Paradigm"}
+{"ats":"ashby","token":"flashbots","employer":"Flashbots"}
+{"ats":"ashby","token":"blockaid","employer":"Blockaid"}
+{"ats":"ashby","token":"trmlabs","employer":"TRM Labs"}
+{"ats":"ashby","token":"cleo","employer":"Cleo"}
+{"ats":"ashby","token":"lendable","employer":"Lendable"}
+{"ats":"ashby","token":"9fin","employer":"9fin"}
+{"ats":"ashby","token":"griffin","employer":"Griffin"}
+{"ats":"ashby","token":"juro","employer":"Juro"}
+{"ats":"ashby","token":"pleo","employer":"Pleo"}
+{"ats":"ashby","token":"payhawk","employer":"Payhawk"}
+{"ats":"ashby","token":"moss","employer":"Moss"}
+{"ats":"ashby","token":"upvest","employer":"Upvest"}
+{"ats":"ashby","token":"tacto","employer":"Tacto"}
+{"ats":"ashby","token":"langfuse","employer":"Langfuse"}
+{"ats":"ashby","token":"deepset","employer":"deepset"}
+{"ats":"ashby","token":"parloa","employer":"Parloa"}
+{"ats":"ashby","token":"cognigy","employer":"Cognigy"}
+{"ats":"ashby","token":"n8n","employer":"n8n"}
+{"ats":"ashby","token":"sanalabs","employer":"Sana Labs"}
+{"ats":"ashby","token":"legora","employer":"Legora"}
+{"ats":"ashby","token":"abridge","employer":"Abridge"}
+{"ats":"ashby","token":"ambiencehealthcare","employer":"Ambience Healthcare"}
+{"ats":"ashby","token":"hippocraticai","employer":"Hippocratic AI"}
+{"ats":"ashby","token":"openevidence","employer":"OpenEvidence"}
+{"ats":"ashby","token":"tennr","employer":"Tennr"}
+{"ats":"ashby","token":"rula","employer":"Rula"}
+{"ats":"ashby","token":"growtherapy","employer":"Grow Therapy"}
+{"ats":"ashby","token":"functionhealth","employer":"Function Health"}
+{"ats":"ashby","token":"superpower","employer":"Superpower"}
+{"ats":"ashby","token":"levels","employer":"Levels"}
+{"ats":"ashby","token":"eightsleep","employer":"Eight Sleep"}
+{"ats":"ashby","token":"whatnot","employer":"Whatnot"}
+{"ats":"ashby","token":"superhuman","employer":"Superhuman"}
+{"ats":"ashby","token":"shortwave","employer":"Shortwave"}
+{"ats":"ashby","token":"granola","employer":"Granola"}
+{"ats":"ashby","token":"substack","employer":"Substack"}
+{"ats":"ashby","token":"beehiiv","employer":"beehiiv"}
+{"ats":"ashby","token":"suno","employer":"Suno"}
+{"ats":"ashby","token":"udio","employer":"Udio"}
+{"ats":"ashby","token":"pika","employer":"Pika"}
+{"ats":"ashby","token":"lumaai","employer":"Luma AI"}
+{"ats":"ashby","token":"captions","employer":"Captions"}
+{"ats":"ashby","token":"descript","employer":"Descript"}
+{"ats":"ashby","token":"gamma","employer":"Gamma"}
+{"ats":"ashby","token":"mural","employer":"Mural"}
+{"ats":"ashby","token":"clickup","employer":"ClickUp"}
+{"ats":"ashby","token":"attio","employer":"Attio"}
+{"ats":"ashby","token":"claylabs","employer":"Clay Labs"}
+{"ats":"ashby","token":"commonroom","employer":"Common Room"}
+{"ats":"ashby","token":"default","employer":"Default"}
+{"ats":"ashby","token":"unify","employer":"Unify"}
+{"ats":"ashby","token":"apollo.io","employer":"Apollo.io"}
+{"ats":"ashby","token":"lemlist","employer":"lemlist"}
+{"ats":"ashby","token":"instantly","employer":"Instantly"}
+{"ats":"ashby","token":"ashby","employer":"Ashby"}
+{"ats":"ashby","token":"gem","employer":"Gem"}
+{"ats":"ashby","token":"dover","employer":"Dover"}
+{"ats":"ashby","token":"metaview","employer":"Metaview"}
+{"ats":"ashby","token":"juicebox","employer":"Juicebox"}
+{"ats":"ashby","token":"mercor","employer":"Mercor"}
+{"ats":"ashby","token":"micro1","employer":"micro1"}
+{"ats":"ashby","token":"turing","employer":"Turing"}
+{"ats":"ashby","token":"oyster","employer":"Oyster"}
+{"ats":"ashby","token":"lattice","employer":"Lattice"}
+{"ats":"ashby","token":"leapsome","employer":"Leapsome"}
+{"ats":"ashby","token":"1xtechnologies","employer":"1X Technologies"}
+{"ats":"ashby","token":"physicalintelligence","employer":"Physical Intelligence"}
+{"ats":"ashby","token":"skildai","employer":"Skild AI"}
+{"ats":"ashby","token":"formic","employer":"Formic"}
+{"ats":"ashby","token":"saronic","employer":"Saronic"}
+{"ats":"ashby","token":"hermeus","employer":"Hermeus"}
+{"ats":"ashby","token":"castelion","employer":"Castelion"}
+{"ats":"ashby","token":"varda","employer":"Varda"}
+{"ats":"ashby","token":"k2space","employer":"K2 Space"}
+{"ats":"ashby","token":"apexspace","employer":"Apex Space"}
+{"ats":"ashby","token":"impulsespace","employer":"Impulse Space"}
+{"ats":"ashby","token":"stokespace","employer":"Stoke Space"}
+{"ats":"ashby","token":"radiantnuclear","employer":"Radiant Nuclear"}
+{"ats":"ashby","token":"valaratomics","employer":"Valar Atomics"}
+{"ats":"ashby","token":"zapenergy","employer":"Zap Energy"}
+{"ats":"ashby","token":"basepower","employer":"Base Power"}
+{"ats":"ashby","token":"heronpower","employer":"Heron Power"}
+{"ats":"ashby","token":"etched","employer":"Etched"}
+{"ats":"ashby","token":"extropic","employer":"Extropic"}
+{"ats":"ashby","token":"atomicsemi","employer":"Atomic Semi"}
+{"ats":"ashby","token":"mistral","employer":"Mistral"}
+{"ats":"ashby","token":"huggingface","employer":"Hugging Face"}
+{"ats":"ashby","token":"stabilityai","employer":"Stability AI"}
+{"ats":"ashby","token":"character","employer":"Character"}
+{"ats":"ashby","token":"adept","employer":"Adept"}
+{"ats":"ashby","token":"imbue","employer":"Imbue"}
+{"ats":"ashby","token":"reka","employer":"Reka"}
+{"ats":"ashby","token":"twelvelabs","employer":"Twelve Labs"}
+{"ats":"ashby","token":"contextualai","employer":"Contextual AI"}
+{"ats":"ashby","token":"writer","employer":"Writer"}
+{"ats":"ashby","token":"jasper","employer":"Jasper"}
+{"ats":"ashby","token":"copyai","employer":"Copy.ai"}
+{"ats":"ashby","token":"typeface","employer":"Typeface"}
+{"ats":"ashby","token":"heygen","employer":"HeyGen"}
+{"ats":"ashby","token":"tavus","employer":"Tavus"}
+{"ats":"ashby","token":"d-id","employer":"D-ID"}
+{"ats":"ashby","token":"speak","employer":"Speak"}
+{"ats":"ashby","token":"synthesis","employer":"Synthesis"}
+{"ats":"ashby","token":"magicschool","employer":"MagicSchool"}
+{"ats":"ashby","token":"schoolai","employer":"SchoolAI"}
+{"ats":"ashby","token":"briskteaching","employer":"Brisk Teaching"}
+{"ats":"ashby","token":"curipod","employer":"Curipod"}
+{"ats":"ashby","token":"numerade","employer":"Numerade"}
+{"ats":"ashby","token":"preply","employer":"Preply"}
+{"ats":"ashby","token":"framer","employer":"Framer"}
+{"ats":"ashby","token":"tldraw","employer":"tldraw"}
+{"ats":"ashby","token":"spline","employer":"Spline"}
+{"ats":"ashby","token":"rive","employer":"Rive"}
+{"ats":"ashby","token":"lottiefiles","employer":"LottieFiles"}
+{"ats":"ashby","token":"maze","employer":"Maze"}
+{"ats":"ashby","token":"dovetail","employer":"Dovetail"}
+{"ats":"ashby","token":"sprig","employer":"Sprig"}
+{"ats":"ashby","token":"koala","employer":"Koala"}
+{"ats":"ashby","token":"vouch","employer":"Vouch"}
+{"ats":"ashby","token":"newfront","employer":"Newfront"}
+{"ats":"ashby","token":"at-bay","employer":"At-Bay"}
+{"ats":"ashby","token":"coalition","employer":"Coalition"}
+{"ats":"ashby","token":"corgi","employer":"Corgi"}
+{"ats":"ashby","token":"pieinsurance","employer":"Pie Insurance"}
+{"ats":"ashby","token":"kininsurance","employer":"Kin Insurance"}
+{"ats":"ashby","token":"openly","employer":"Openly"}
+{"ats":"ashby","token":"clearcover","employer":"Clearcover"}
+{"ats":"ashby","token":"ledgy","employer":"Ledgy"}
+{"ats":"ashby","token":"finix","employer":"Finix"}
+{"ats":"ashby","token":"flocksafety","employer":"Flock Safety"}
+{"ats":"ashby","token":"fleetio","employer":"Fleetio"}
+{"ats":"ashby","token":"pallet","employer":"Pallet"}
+{"ats":"ashby","token":"vooma","employer":"Vooma"}
+{"ats":"ashby","token":"happyrobot","employer":"HappyRobot"}
+{"ats":"ashby","token":"loop","employer":"Loop"}
+{"ats":"ashby","token":"augment","employer":"Augment"}
+{"ats":"ashby","token":"parade","employer":"Parade"}
+{"ats":"ashby","token":"roserocket","employer":"Rose Rocket"}
+{"ats":"ashby","token":"alvys","employer":"Alvys"}
+{"ats":"ashby","token":"drayalliance","employer":"Dray Alliance"}
+{"ats":"ashby","token":"cargado","employer":"Cargado"}
+{"ats":"ashby","token":"ziphq","employer":"Zip","aliases":["ziphq"]}
+{"ats":"ashby","token":"vicai","employer":"Vic.ai"}
+{"ats":"ashby","token":"rillet","employer":"Rillet"}
+{"ats":"ashby","token":"numeric","employer":"Numeric"}
+{"ats":"ashby","token":"puzzle","employer":"Puzzle"}
+{"ats":"ashby","token":"digits","employer":"Digits"}
+{"ats":"ashby","token":"campfire","employer":"Campfire"}
+{"ats":"ashby","token":"light","employer":"Light"}
+{"ats":"ashby","token":"meshpayments","employer":"Mesh Payments"}
+{"ats":"ashby","token":"payem","employer":"PayEm"}
+{"ats":"ashby","token":"soldo","employer":"Soldo"}
+{"ats":"ashby","token":"finom","employer":"Finom"}
+{"ats":"ashby","token":"wealthsimple","employer":"Wealthsimple"}
+{"ats":"ashby","token":"koho","employer":"Koho"}
+{"ats":"ashby","token":"neofinancial","employer":"Neo Financial"}
+{"ats":"ashby","token":"float","employer":"Float"}
+{"ats":"ashby","token":"borrowell","employer":"Borrowell"}
+{"ats":"ashby","token":"shakepay","employer":"Shakepay"}
+{"ats":"ashby","token":"titan","employer":"Titan"}
+{"ats":"ashby","token":"public","employer":"Public"}
+{"ats":"ashby","token":"alpaca","employer":"Alpaca"}
+{"ats":"ashby","token":"drivewealth","employer":"DriveWealth"}
+{"ats":"ashby","token":"atomic","employer":"Atomic"}
+{"ats":"ashby","token":"methodfinancial","employer":"Method Financial"}
+{"ats":"ashby","token":"pinwheel","employer":"Pinwheel"}
+{"ats":"ashby","token":"argyle","employer":"Argyle"}
+{"ats":"ashby","token":"truework","employer":"Truework"}
+{"ats":"ashby","token":"teller","employer":"Teller"}
+{"ats":"ashby","token":"moov","employer":"Moov"}
+{"ats":"ashby","token":"sardine","employer":"Sardine"}
+{"ats":"ashby","token":"alloy","employer":"Alloy"}
+{"ats":"ashby","token":"unit21","employer":"Unit21"}
+{"ats":"ashby","token":"hummingbird","employer":"Hummingbird"}
+{"ats":"ashby","token":"persona","employer":"Persona"}
+{"ats":"ashby","token":"socure","employer":"Socure"}
+{"ats":"ashby","token":"sift","employer":"Sift"}
+{"ats":"ashby","token":"middesk","employer":"Middesk"}
+{"ats":"ashby","token":"footprint","employer":"Footprint"}
+{"ats":"ashby","token":"incode","employer":"Incode"}
+{"ats":"ashby","token":"sumsub","employer":"Sumsub"}
+{"ats":"ashby","token":"fingerprint","employer":"Fingerprint"}
+{"ats":"ashby","token":"castle","employer":"Castle"}
+{"ats":"ashby","token":"arkoselabs","employer":"Arkose Labs"}
+{"ats":"ashby","token":"human","employer":"HUMAN"}
+{"ats":"ashby","token":"datadome","employer":"DataDome"}
+{"ats":"ashby","token":"reliablerobotics","employer":"Reliable Robotics"}
+{"ats":"ashby","token":"xwing","employer":"Xwing"}
+{"ats":"ashby","token":"merlin","employer":"Merlin"}
+{"ats":"ashby","token":"astromechanica","employer":"Astro Mechanica"}
+{"ats":"ashby","token":"machinalabs","employer":"Machina Labs"}
+{"ats":"ashby","token":"divergent","employer":"Divergent"}
+{"ats":"ashby","token":"rebuildmanufacturing","employer":"Re:Build Manufacturing"}
+{"ats":"ashby","token":"rangeview","employer":"Rangeview"}
+{"ats":"ashby","token":"atomicindustries","employer":"Atomic Industries"}
+{"ats":"ashby","token":"daedalus","employer":"Daedalus"}
+{"ats":"ashby","token":"senrasystems","employer":"Senra Systems"}
+{"ats":"ashby","token":"evenup","employer":"EvenUp"}
+{"ats":"ashby","token":"quora","employer":"Quora"}
+{"ats":"ashby","token":"watershed","employer":"Watershed"}
+{"ats":"ashby","token":"ironclad","employer":"Ironclad"}
+# smartrecruiters
+{"ats":"smartrecruiters","token":"BoschGroup","employer":"Bosch Group","countries":["CN"]}
+{"ats":"smartrecruiters","token":"BoschGroup","employer":"Bosch Group","countries":["TW"]}
+{"ats":"smartrecruiters","token":"AbbVie","employer":"AbbVie"}
+{"ats":"smartrecruiters","token":"WesternDigital","employer":"Western Digital"}
+{"ats":"smartrecruiters","token":"Continental","employer":"Continental"}
+{"ats":"smartrecruiters","token":"NielsenIQ","employer":"NielsenIQ"}
+{"ats":"smartrecruiters","token":"Wabtec","employer":"Wabtec"}
+{"ats":"smartrecruiters","token":"Ubisoft2","employer":"Ubisoft"}
+{"ats":"smartrecruiters","token":"Eurofins","employer":"Eurofins"}
+{"ats":"smartrecruiters","token":"Canva","employer":"Canva"}
+{"ats":"smartrecruiters","token":"Visa","employer":"Visa"}
+{"ats":"smartrecruiters","token":"ServiceNow","employer":"ServiceNow"}
+{"ats":"smartrecruiters","token":"Square","employer":"Square"}
+{"ats":"smartrecruiters","token":"Sandisk","employer":"Sandisk"}
+{"ats":"smartrecruiters","token":"Gameloft","employer":"Gameloft"}
+{"ats":"smartrecruiters","token":"CDPROJEKTRED","employer":"CD PROJEKT RED"}
+{"ats":"smartrecruiters","token":"Techland","employer":"Techland"}
+{"ats":"smartrecruiters","token":"Wargaming","employer":"Wargaming"}
+{"ats":"smartrecruiters","token":"DeliveryHero","employer":"Delivery Hero"}
+{"ats":"smartrecruiters","token":"AECOM","employer":"AECOM"}
+{"ats":"smartrecruiters","token":"TurnerTownsend","employer":"Turner & Townsend"}
+{"ats":"smartrecruiters","token":"PublicisGroupe","employer":"Publicis Groupe"}
+{"ats":"smartrecruiters","token":"AccorHotel","employer":"Accor","aliases":["AccorHotel"]}
+{"ats":"smartrecruiters","token":"FourSeasons","employer":"Four Seasons"}
+{"ats":"smartrecruiters","token":"Equinox","employer":"Equinox"}
+{"ats":"smartrecruiters","token":"SoulCycle","employer":"SoulCycle"}
+{"ats":"smartrecruiters","token":"McDonaldsCorporation","employer":"McDonald's","aliases":["McDonald's Corporation"]}
+{"ats":"smartrecruiters","token":"HMGroup","employer":"H&M Group"}
+{"ats":"smartrecruiters","token":"IKEA","employer":"IKEA"}
+{"ats":"smartrecruiters","token":"LVMH","employer":"LVMH"}
+{"ats":"smartrecruiters","token":"Sephora","employer":"Sephora"}
+{"ats":"smartrecruiters","token":"SGS","employer":"SGS"}
+{"ats":"smartrecruiters","token":"Experian","employer":"Experian"}
+{"ats":"smartrecruiters","token":"Devoteam","employer":"Devoteam"}
+{"ats":"smartrecruiters","token":"Endava","employer":"Endava"}
+{"ats":"smartrecruiters","token":"Avaloq","employer":"Avaloq"}
+{"ats":"smartrecruiters","token":"Deezer","employer":"Deezer"}
+{"ats":"smartrecruiters","token":"Colas","employer":"Colas"}
+{"ats":"smartrecruiters","token":"SopraSteria1","employer":"Sopra Steria"}
+{"ats":"smartrecruiters","token":"Worldline","employer":"Worldline"}
+{"ats":"smartrecruiters","token":"CERN","employer":"CERN"}
+{"ats":"smartrecruiters","token":"OECD","employer":"OECD"}
+{"ats":"smartrecruiters","token":"NBCUniversal3","employer":"NBCUniversal"}
+{"ats":"smartrecruiters","token":"Freshworks","employer":"Freshworks"}
+{"ats":"smartrecruiters","token":"Collabera","employer":"Collabera"}
+{"ats":"smartrecruiters","token":"Veeam2","employer":"Veeam","aliases":["Veeam Software"]}
+{"ats":"smartrecruiters","token":"Luxoft","employer":"Luxoft"}
+{"ats":"smartrecruiters","token":"PaloAltoNetworks2","employer":"Palo Alto Networks"}
+{"ats":"smartrecruiters","token":"Skechers","employer":"Skechers"}
+{"ats":"smartrecruiters","token":"Dentsu","employer":"Dentsu"}
+{"ats":"smartrecruiters","token":"Havas","employer":"Havas"}
+{"ats":"smartrecruiters","token":"Criteo","employer":"Criteo"}
+{"ats":"smartrecruiters","token":"Teads","employer":"Teads"}
+{"ats":"smartrecruiters","token":"Dailymotion","employer":"Dailymotion"}
+{"ats":"smartrecruiters","token":"Believe","employer":"Believe"}
+{"ats":"smartrecruiters","token":"BandaiNamco","employer":"Bandai Namco"}
+{"ats":"smartrecruiters","token":"SEGA","employer":"SEGA"}
+{"ats":"smartrecruiters","token":"SquareEnix","employer":"Square Enix"}
+{"ats":"smartrecruiters","token":"Forvia","employer":"Forvia"}
+{"ats":"smartrecruiters","token":"Valeo","employer":"Valeo"}
+{"ats":"smartrecruiters","token":"Servier","employer":"Servier"}
+{"ats":"smartrecruiters","token":"bioMerieux","employer":"bioMérieux"}
+{"ats":"smartrecruiters","token":"Alstom","employer":"Alstom"}
+{"ats":"smartrecruiters","token":"RenaultGroup","employer":"Renault Group"}
+{"ats":"smartrecruiters","token":"Veolia","employer":"Veolia"}
+{"ats":"smartrecruiters","token":"Sodexo","employer":"Sodexo"}
+{"ats":"smartrecruiters","token":"Lush","employer":"Lush"}
+{"ats":"smartrecruiters","token":"Primark","employer":"Primark"}
+{"ats":"smartrecruiters","token":"Decathlon","employer":"Decathlon"}
+{"ats":"smartrecruiters","token":"FootLocker","employer":"Foot Locker"}
+{"ats":"smartrecruiters","token":"Swarovski","employer":"Swarovski"}
+{"ats":"smartrecruiters","token":"Kempinski","employer":"Kempinski"}
+{"ats":"smartrecruiters","token":"RadissonHotelGroup","employer":"Radisson Hotel Group"}
+{"ats":"smartrecruiters","token":"Jumeirah","employer":"Jumeirah"}
+{"ats":"smartrecruiters","token":"Rotana","employer":"Rotana"}
+{"ats":"smartrecruiters","token":"Topgolf","employer":"Topgolf"}
+{"ats":"smartrecruiters","token":"Dominos","employer":"Domino's"}
+{"ats":"smartrecruiters","token":"Nandos","employer":"Nando's"}
+{"ats":"smartrecruiters","token":"Securitas","employer":"Securitas"}
+{"ats":"smartrecruiters","token":"FREENOW","employer":"Free Now"}
+{"ats":"smartrecruiters","token":"PedidosYa","employer":"PedidosYa"}
+{"ats":"smartrecruiters","token":"talabat","employer":"talabat"}
+{"ats":"smartrecruiters","token":"Glovo","employer":"Glovo"}
+{"ats":"smartrecruiters","token":"Kitopi","employer":"Kitopi"}
+{"ats":"smartrecruiters","token":"PropertyFinder","employer":"Property Finder"}
+{"ats":"smartrecruiters","token":"Evolution","employer":"Evolution"}
+{"ats":"smartrecruiters","token":"KindredGroup","employer":"Kindred Group"}
+{"ats":"smartrecruiters","token":"BetssonGroup","employer":"Betsson Group"}
+{"ats":"smartrecruiters","token":"LeoVegas","employer":"LeoVegas"}
+{"ats":"smartrecruiters","token":"Hotelbeds","employer":"Hotelbeds"}
+{"ats":"smartrecruiters","token":"Bitdefender","employer":"Bitdefender"}
+{"ats":"smartrecruiters","token":"Sophos","employer":"Sophos"}
+{"ats":"smartrecruiters","token":"TomTom","employer":"TomTom"}
+{"ats":"smartrecruiters","token":"Informatica","employer":"Informatica"}
+{"ats":"smartrecruiters","token":"Inetum","employer":"Inetum"}
+{"ats":"smartrecruiters","token":"Alten","employer":"Alten"}
+{"ats":"smartrecruiters","token":"Akkodis","employer":"Akkodis"}
+{"ats":"smartrecruiters","token":"Expleo","employer":"Expleo"}
+{"ats":"smartrecruiters","token":"Ayvens","employer":"Ayvens"}
+{"ats":"smartrecruiters","token":"Arcadis","employer":"Arcadis"}
+{"ats":"smartrecruiters","token":"Ramboll","employer":"Ramboll"}
+{"ats":"smartrecruiters","token":"Mace","employer":"Mace"}
+{"ats":"smartrecruiters","token":"Lendlease","employer":"Lendlease"}
+{"ats":"smartrecruiters","token":"Worley","employer":"Worley"}
+{"ats":"smartrecruiters","token":"DataArt","employer":"DataArt"}
+{"ats":"smartrecruiters","token":"Ciklum","employer":"Ciklum"}
+{"ats":"smartrecruiters","token":"NiX","employer":"N-iX"}
+{"ats":"smartrecruiters","token":"Intellias","employer":"Intellias"}
+{"ats":"smartrecruiters","token":"SigmaSoftware","employer":"Sigma Software"}
+{"ats":"smartrecruiters","token":"Virtuos","employer":"Virtuos"}
+{"ats":"smartrecruiters","token":"KeywordsStudios","employer":"Keywords Studios"}
+{"ats":"smartrecruiters","token":"GlobalLogic","employer":"GlobalLogic"}
+{"ats":"smartrecruiters","token":"GridDynamics","employer":"Grid Dynamics"}
+{"ats":"smartrecruiters","token":"TTEC","employer":"TTEC"}
+{"ats":"smartrecruiters","token":"Majorel","employer":"Majorel"}
+{"ats":"smartrecruiters","token":"Foundever","employer":"Foundever"}
+{"ats":"smartrecruiters","token":"Webhelp","employer":"Webhelp"}
+{"ats":"smartrecruiters","token":"Transcom","employer":"Transcom"}
+{"ats":"smartrecruiters","token":"AxelSpringer","employer":"Axel Springer"}
+{"ats":"smartrecruiters","token":"ProSiebenSat1","employer":"ProSiebenSat.1"}
+{"ats":"smartrecruiters","token":"Hilti","employer":"Hilti"}
+{"ats":"smartrecruiters","token":"Dyson","employer":"Dyson"}
+{"ats":"smartrecruiters","token":"Wise","employer":"Wise"}
+{"ats":"smartrecruiters","token":"smartrecruiters","employer":"SmartRecruiters","aliases":["SmartRecruiters Inc"]}
+# lever_eu: Lever boards that answered 404 on api.lever.co and belong to employers based in Europe, asked on the EU host.
+# A valid lever_eu board is reported only: the server has no connector for the EU host yet (JI-8), so it is not seeded.
+{"ats":"lever_eu","token":"sorare","employer":"Sorare"}
+{"ats":"lever_eu","token":"alan","employer":"Alan"}
+{"ats":"lever_eu","token":"payfit","employer":"PayFit"}
+{"ats":"lever_eu","token":"backmarket","employer":"Back Market"}
+{"ats":"lever_eu","token":"spendesk","employer":"Spendesk"}
+{"ats":"lever_eu","token":"pennylane","employer":"Pennylane"}
+{"ats":"lever_eu","token":"mirakl","employer":"Mirakl"}
+{"ats":"lever_eu","token":"owkin","employer":"Owkin"}
+{"ats":"lever_eu","token":"photoroom","employer":"Photoroom"}
+{"ats":"lever_eu","token":"tractable","employer":"Tractable"}
+{"ats":"lever_eu","token":"synthesia","employer":"Synthesia"}
+{"ats":"lever_eu","token":"elliptic","employer":"Elliptic"}
+{"ats":"lever_eu","token":"taxfix","employer":"Taxfix"}
+{"ats":"lever_eu","token":"wefox","employer":"wefox"}
+{"ats":"lever_eu","token":"forto","employer":"Forto"}
+{"ats":"lever_eu","token":"sennder","employer":"sennder"}
+{"ats":"lever_eu","token":"omio","employer":"Omio"}
+{"ats":"lever_eu","token":"blinkist","employer":"Blinkist"}
+{"ats":"lever_eu","token":"enpal","employer":"Enpal"}
+{"ats":"lever_eu","token":"raisin","employer":"Raisin"}
+{"ats":"lever_eu","token":"mambu","employer":"Mambu"}
+{"ats":"lever_eu","token":"pitch","employer":"Pitch"}
+{"ats":"lever_eu","token":"ecosia","employer":"Ecosia"}
+{"ats":"lever_eu","token":"wetransfer","employer":"WeTransfer"}
+{"ats":"lever_eu","token":"framer","employer":"Framer"}
+{"ats":"lever_eu","token":"sendcloud","employer":"Sendcloud"}
+{"ats":"lever_eu","token":"factorial","employer":"Factorial"}
+{"ats":"lever_eu","token":"paack","employer":"Paack"}
+{"ats":"lever_eu","token":"redpoints","employer":"Red Points"}
+{"ats":"lever_eu","token":"seedtag","employer":"Seedtag"}
+{"ats":"lever_eu","token":"clarity-ai","employer":"Clarity AI"}
+{"ats":"lever_eu","token":"cmrsurgical","employer":"CMR Surgical"}
+{"ats":"lever_eu","token":"benevolentai","employer":"BenevolentAI"}
+{"ats":"lever_eu","token":"faculty","employer":"Faculty"}
+{"ats":"lever_eu","token":"polyai","employer":"PolyAI"}
+{"ats":"lever_eu","token":"quantexa","employer":"Quantexa"}
+{"ats":"lever_eu","token":"featurespace","employer":"Featurespace"}
+{"ats":"lever_eu","token":"complyadvantage","employer":"ComplyAdvantage"}
+{"ats":"lever_eu","token":"flink","employer":"Flink"}
+{"ats":"lever_eu","token":"tiermobility","employer":"TIER Mobility"}
+{"ats":"lever_eu","token":"hometogo","employer":"HomeToGo"}
+{"ats":"lever_eu","token":"clue","employer":"Clue"}
+{"ats":"lever_eu","token":"kry","employer":"Kry"}
+{"ats":"lever_eu","token":"1komma5grad","employer":"1KOMMA5°","aliases":["1komma5grad"]}
+{"ats":"lever_eu","token":"zolar","employer":"Zolar"}
+{"ats":"lever_eu","token":"thermondo","employer":"Thermondo"}
+{"ats":"lever_eu","token":"scalablecapital","employer":"Scalable Capital"}
+{"ats":"lever_eu","token":"solaris","employer":"Solaris"}
+{"ats":"lever_eu","token":"moonfare","employer":"Moonfare"}
+{"ats":"lever_eu","token":"auto1","employer":"Auto1"}
+{"ats":"lever_eu","token":"mcmakler","employer":"McMakler"}
+{"ats":"lever_eu","token":"bunq","employer":"bunq"}
+{"ats":"lever_eu","token":"messagebird","employer":"MessageBird"}
+{"ats":"lever_eu","token":"otrium","employer":"Otrium"}
+{"ats":"lever_eu","token":"swapfiets","employer":"Swapfiets"}
+{"ats":"lever_eu","token":"templafy","employer":"Templafy"}
+{"ats":"lever_eu","token":"bitstamp","employer":"Bitstamp"}
+{"ats":"lever_eu","token":"getir","employer":"Getir"}
+{"ats":"lever_eu","token":"zapp","employer":"Zapp"}
+{"ats":"lever_eu","token":"rohlik","employer":"Rohlik"}
+{"ats":"lever_eu","token":"oda","employer":"Oda"}
+{"ats":"lever_eu","token":"vinted","employer":"Vinted"}
+{"ats":"lever_eu","token":"marleyspoon","employer":"Marley Spoon"}
+{"ats":"lever_eu","token":"holded","employer":"Holded"}
+{"ats":"lever_eu","token":"edreamsodigeo","employer":"eDreams ODIGEO"}
+{"ats":"lever_eu","token":"civitatis","employer":"Civitatis"}
+{"ats":"lever_eu","token":"fever","employer":"Fever"}
+{"ats":"lever_eu","token":"wallbox","employer":"Wallbox"}
+{"ats":"lever_eu","token":"cobee","employer":"Cobee"}
+{"ats":"lever_eu","token":"devo","employer":"Devo"}
+{"ats":"lever_eu","token":"carto","employer":"Carto"}
+{"ats":"lever_eu","token":"voodoo","employer":"Voodoo"}
+{"ats":"lever_eu","token":"mistral","employer":"Mistral AI","aliases":["mistral"]}
+{"ats":"lever_eu","token":"zencargo","employer":"Zencargo"}
+# smartrecruiters, asked with the API's country filter: a board too long to list whole, read for the two countries a seed file is routed by.
+{"ats":"smartrecruiters","token":"AccorHotel","employer":"Accor","aliases":["AccorHotel"],"countries":["CN"]}
+{"ats":"smartrecruiters","token":"AccorHotel","employer":"Accor","aliases":["AccorHotel"],"countries":["TW"]}
+# smartrecruiters, asked with the API's country filter: every board the mainland or the Taiwan seed file names, read the way the
+# server reads it for that file (country=cn, country=tw). Its count in that file is this answer's, under the final location rule.
+{"ats":"smartrecruiters","token":"AbbVie","employer":"AbbVie","countries":["CN"]}
+{"ats":"smartrecruiters","token":"Believe","employer":"Believe","countries":["CN"]}
+{"ats":"smartrecruiters","token":"Canva","employer":"Canva","countries":["CN"]}
+{"ats":"smartrecruiters","token":"Continental","employer":"Continental","countries":["CN"]}
+{"ats":"smartrecruiters","token":"Eurofins","employer":"Eurofins","countries":["CN"]}
+{"ats":"smartrecruiters","token":"HMGroup","employer":"H&M Group","countries":["CN"]}
+{"ats":"smartrecruiters","token":"NBCUniversal3","employer":"NBCUniversal","countries":["CN"]}
+{"ats":"smartrecruiters","token":"NielsenIQ","employer":"NielsenIQ","countries":["CN"]}
+{"ats":"smartrecruiters","token":"Primark","employer":"Primark","countries":["CN"]}
+{"ats":"smartrecruiters","token":"TurnerTownsend","employer":"Turner & Townsend","countries":["CN"]}
+{"ats":"smartrecruiters","token":"Ubisoft2","employer":"Ubisoft","countries":["CN"]}
+{"ats":"smartrecruiters","token":"Wabtec","employer":"Wabtec","countries":["CN"]}
+{"ats":"smartrecruiters","token":"WesternDigital","employer":"Western Digital","countries":["CN"]}
+{"ats":"smartrecruiters","token":"AbbVie","employer":"AbbVie","countries":["TW"]}
+{"ats":"smartrecruiters","token":"Eurofins","employer":"Eurofins","countries":["TW"]}
+{"ats":"smartrecruiters","token":"HMGroup","employer":"H&M Group","countries":["TW"]}
+{"ats":"smartrecruiters","token":"NielsenIQ","employer":"NielsenIQ","countries":["TW"]}
+{"ats":"smartrecruiters","token":"SGS","employer":"SGS","countries":["TW"]}
+{"ats":"smartrecruiters","token":"TurnerTownsend","employer":"Turner & Townsend","countries":["TW"]}

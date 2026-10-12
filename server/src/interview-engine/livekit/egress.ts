@@ -17,29 +17,39 @@
 
 import { EgressClient } from 'livekit-server-sdk';
 import { EncodedFileOutput, EncodedFileType, S3Upload, type EgressInfo } from '@livekit/protocol';
-import { getLiveKitCreds, getLiveKitHttpUrl, getR2Creds } from '../config.js';
+import { getLiveKitCreds, getLiveKitHttpUrl, getR2WriteCreds } from '../config.js';
 import { logger } from '../../services/LoggerService.js';
 
-let egressClient: EgressClient | null = null;
+// Per brand (WP-63a; D5): the LiveKit project is the plane the session runs on
+// and the bucket is the brand's (the `storage` group): the shared bucket for
+// both brands by default, CN_S3_* when GoApply has its own. Whether video is
+// recorded is the provider's media policy plus the session's two consents.
+const egressClients = new Map<string, EgressClient>();
 
 function getEgressClient(): EgressClient {
-  if (!egressClient) {
-    const { apiKey, apiSecret } = getLiveKitCreds();
-    egressClient = new EgressClient(getLiveKitHttpUrl(), apiKey, apiSecret);
+  const { apiKey, apiSecret } = getLiveKitCreds();
+  const url = getLiveKitHttpUrl();
+  const key = `${url}|${apiKey}`;
+  let client = egressClients.get(key);
+  if (!client) {
+    client = new EgressClient(url, apiKey, apiSecret);
+    egressClients.set(key, client);
   }
-  return egressClient;
+  return client;
 }
 
 export function __resetEgressClientForTest(): void {
-  egressClient = null;
+  egressClients.clear();
 }
 
 /**
  * Build the EncodedFileOutput that writes the recording into R2 at `filepath`.
- * Returns null when R2 is not configured (recording silently disabled).
+ * Returns null when the brand has no store for new recordings (not configured,
+ * or GoApply under CN_RESIDENCY_STRICT without a bucket of its own): recording
+ * is then disabled.
  */
 export function buildR2FileOutput(filepath: string): EncodedFileOutput | null {
-  const r2 = getR2Creds();
+  const r2 = getR2WriteCreds();
   if (!r2) return null;
   return new EncodedFileOutput({
     fileType: EncodedFileType.MP4,

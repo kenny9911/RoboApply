@@ -1,53 +1,23 @@
-// robots.txt — the marketing surface is open to everyone, including AI
-// crawlers (being cited by ChatGPT/Perplexity/Claude answers is a growth
-// channel — GEO). The authed app surface is disallowed: those URLs only
-// bounce crawlers to /login and dilute the crawl budget.
+// robots.txt — host-aware (ARCHITECTURE.md §9.5; TASK_PLAN.md WP-56):
+//   - every crawler: the marketing pages are open; the authenticated app
+//     (PROTECTED_PREFIXES) and /api/ are disallowed — "requires a session"
+//     and "not worth crawling" are the same set — and so are the utility
+//     routes reached from private links (UTILITY_DISALLOW_PATHS in
+//     lib/seo.ts: /alerts/confirm/, /unsubscribe/, /r/). Free-tool results
+//     have no page URL (API only), so /api/ already covers them;
+//   - AI crawlers (GPTBot, ClaudeBot, PerplexityBot, …): welcome on the
+//     marketing pages (being cited in AI answers is a growth channel), but
+//     disallowed on /job/* until recruiter-bank syndication consent exists
+//     (OPS-A4);
+//   - brands Baidu indexes (GoApply) get a Baiduspider group;
+//   - `sitemap:` points at this host's /sitemap.xml.
+// The rules live in lib/seo.ts `robotsFor(brand)`.
 
 import type { MetadataRoute } from 'next';
 
-import { SITE_URL } from '../lib/seo';
+import { robotsFor } from '../lib/seo';
+import { getServerBrandId } from '../lib/server/brand';
 
-// The four destinations plus the two non-destination authed surfaces — the
-// same list as PROTECTED_PREFIXES in lib/proxyPaths.ts, and it should stay that
-// way: "requires a session" and "not worth crawling" are the same set here.
-// The pre-2026 routes (/home, /tracker, /resumes, /queue, /activity, /account,
-// /preferences, /mock-interview, /plans, /choose-plan, /onboarding, /mission,
-// /apps) are gone; next.config.mjs redirects() 308s each one, and a crawler
-// following a stale link lands on a path this list already covers.
-const APP_PATHS = [
-  '/api/',
-  '/jobs',
-  '/resume',
-  '/applications',
-  '/practice',
-  '/settings',
-  '/admin',
-];
-
-export default function robots(): MetadataRoute.Robots {
-  return {
-    rules: [
-      { userAgent: '*', allow: '/', disallow: APP_PATHS },
-      // AI assistants explicitly welcome on the marketing pages — same app
-      // disallows, spelled out so "are we blocking AI crawlers?" has an
-      // unambiguous answer in the file itself.
-      {
-        userAgent: [
-          'GPTBot',
-          'OAI-SearchBot',
-          'ChatGPT-User',
-          'ClaudeBot',
-          'Claude-User',
-          'PerplexityBot',
-          'Perplexity-User',
-          'Google-Extended',
-          'Applebot-Extended',
-          'CCBot',
-        ],
-        allow: '/',
-        disallow: APP_PATHS,
-      },
-    ],
-    sitemap: `${SITE_URL}/sitemap.xml`,
-  };
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  return robotsFor(await getServerBrandId());
 }

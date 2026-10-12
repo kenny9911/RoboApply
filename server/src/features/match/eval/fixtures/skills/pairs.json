@@ -1,0 +1,5743 @@
+{
+ "_synthetic": true,
+ "_labels": "authored",
+ "_note": "100 synthetic resume-job pairs for the skills gate (MARKET_STRATEGY 2.6: precision of \"Not shown\" at least 95%). Every resume, posting and employer is invented; the roles and most skill names are those of the MKT-1D role groups (eval/fixtures/seed/groups.json), referenced by basedOn. Each posting skill carries the state a person reading the resume would give it and a one-line reason. shown: the resume names the skill itself, under any of its usual names and in any script, in its skill list or in a sentence. related: it does not name the skill, and it names a more specific one that shows it (PostgreSQL for \"relational databases\"). not_shown: neither. The labels were written by the engineer of the check (authored), before the check was run on them, and were not graded by a recruiter. softSkills are listed by the posting and carry no state: a soft skill is never an item of the check.",
+ "pairs": [
+  {
+   "id": "sk-en-01",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "Backend Engineer",
+    "skills": [
+     "Java",
+     "Go",
+     "PostgreSQL",
+     "Kubernetes",
+     "Redis",
+     "Kafka"
+    ],
+    "markdown": "# Skills pair SK-EN-01 (synthetic)\n\n## Experience\nBackend Engineer, Harborline Example Co. (synthetic)\n- Responsible for payment and order services, working with Java and Go.\n- Led improvements to the internal platform APIs using PostgreSQL.\n\n## Skills\nJava, Go, PostgreSQL, Kubernetes, Redis, Kafka"
+   },
+   "posting": {
+    "title": "Senior Backend Engineer",
+    "skills": [
+     {
+      "name": "Java",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed, and named in the first bullet."
+     },
+     {
+      "name": "Relational databases",
+      "required": true,
+      "expected": "related",
+      "reason": "PostgreSQL is listed; the broader term is never written."
+     },
+     {
+      "name": "Message queues",
+      "required": false,
+      "expected": "related",
+      "reason": "Kafka is listed; the broader term is not written."
+     },
+     {
+      "name": "Docker",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Kubernetes is listed, Docker is never named."
+     },
+     {
+      "name": "TypeScript",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "softSkills": [
+     "Communication"
+    ]
+   }
+  },
+  {
+   "id": "sk-en-02",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "Backend Developer",
+    "skills": [
+     "Python",
+     "Django",
+     "MySQL",
+     "Docker",
+     "AWS"
+    ],
+    "markdown": "# Skills pair SK-EN-02 (synthetic)\n\n## Experience\nBackend Developer, Harborline Example Co. (synthetic)\n- Built REST APIs for the booking service in Django.\n- Moved the nightly batch jobs to AWS Lambda.\n\n## Skills\nPython, Django, MySQL, Docker, AWS"
+   },
+   "posting": {
+    "title": "Backend Engineer",
+    "skills": [
+     {
+      "name": "Python",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "related",
+      "reason": "MySQL is listed; SQL itself is not written."
+     },
+     {
+      "name": "REST APIs",
+      "required": true,
+      "expected": "shown",
+      "reason": "The first bullet says REST APIs."
+     },
+     {
+      "name": "Cloud infrastructure",
+      "required": false,
+      "expected": "related",
+      "reason": "AWS is listed."
+     },
+     {
+      "name": "AWS Lambda",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the second bullet only."
+     },
+     {
+      "name": "Kubernetes",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "keywords": [
+     {
+      "name": "Docker",
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Terraform",
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-03",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "fullstack_engineer"
+   },
+   "resume": {
+    "title": "Full-Stack Engineer",
+    "skills": [
+     "TypeScript",
+     "React",
+     "Node.js",
+     "GraphQL",
+     "PostgreSQL"
+    ],
+    "markdown": "# Skills pair SK-EN-03 (synthetic)\n\n## Experience\nFull-Stack Engineer, Harborline Example Co. (synthetic)\n- Shipped the merchant dashboard in React and TypeScript.\n- Wrote the GraphQL layer on Node.js.\n\n## Skills\nTypeScript, React, Node.js, GraphQL, PostgreSQL"
+   },
+   "posting": {
+    "title": "Full-Stack Engineer",
+    "skills": [
+     {
+      "name": "NodeJS",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Node.js: the same skill under another spelling."
+     },
+     {
+      "name": "Postgres",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as PostgreSQL."
+     },
+     {
+      "name": "Frontend frameworks",
+      "required": true,
+      "expected": "related",
+      "reason": "React is listed."
+     },
+     {
+      "name": "API design",
+      "required": false,
+      "expected": "related",
+      "reason": "GraphQL is listed."
+     },
+     {
+      "name": "Vue",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-04",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_frontend",
+    "roleId": "frontend_engineer"
+   },
+   "resume": {
+    "title": "Frontend Engineer",
+    "skills": [
+     "React",
+     "TypeScript",
+     "CSS",
+     "Next.js",
+     "Jest",
+     "Webpack"
+    ],
+    "markdown": "# Skills pair SK-EN-04 (synthetic)\n\n## Experience\nFrontend Engineer, Harborline Example Co. (synthetic)\n- Built the checkout flow in Next.js.\n- Raised test coverage of the cart with Jest.\n\n## Skills\nReact, TypeScript, CSS, Next.js, Jest, Webpack"
+   },
+   "posting": {
+    "title": "Senior Frontend Engineer",
+    "skills": [
+     {
+      "name": "React",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "CSS",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Automated testing",
+      "required": false,
+      "expected": "related",
+      "reason": "Jest is listed; the broader term is not written."
+     },
+     {
+      "name": "Web accessibility",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Angular",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "softSkills": [
+     "Teamwork"
+    ]
+   }
+  },
+  {
+   "id": "sk-en-05",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_frontend",
+    "roleId": "ios_engineer"
+   },
+   "resume": {
+    "title": "iOS Engineer",
+    "skills": [
+     "Swift",
+     "SwiftUI",
+     "UIKit",
+     "Xcode",
+     "Core Data"
+    ],
+    "markdown": "# Skills pair SK-EN-05 (synthetic)\n\n## Experience\niOS Engineer, Harborline Example Co. (synthetic)\n- Shipped the order tracking app in Swift and SwiftUI.\n\n## Skills\nSwift, SwiftUI, UIKit, Xcode, Core Data"
+   },
+   "posting": {
+    "title": "iOS Engineer",
+    "skills": [
+     {
+      "name": "Swift",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed, and named in the bullet."
+     },
+     {
+      "name": "Object-oriented programming",
+      "required": false,
+      "expected": "related",
+      "reason": "Swift is listed."
+     },
+     {
+      "name": "Xcode",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "XCTest",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Kotlin",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-06",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "ml_ai",
+    "roleId": "ml_engineer"
+   },
+   "resume": {
+    "title": "Machine Learning Engineer",
+    "skills": [
+     "Python",
+     "PyTorch",
+     "TensorFlow",
+     "MLflow",
+     "SQL"
+    ],
+    "markdown": "# Skills pair SK-EN-06 (synthetic)\n\n## Experience\nMachine Learning Engineer, Harborline Example Co. (synthetic)\n- Trained ranking models in PyTorch.\n- Tracked every experiment in MLflow.\n\n## Skills\nPython, PyTorch, TensorFlow, MLflow, SQL"
+   },
+   "posting": {
+    "title": "ML Engineer",
+    "skills": [
+     {
+      "name": "Python",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Machine learning frameworks",
+      "required": true,
+      "expected": "related",
+      "reason": "PyTorch and TensorFlow are listed."
+     },
+     {
+      "name": "Machine learning",
+      "required": true,
+      "expected": "shown",
+      "reason": "The title line says Machine Learning Engineer."
+     },
+     {
+      "name": "scikit-learn",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Feature engineering",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "MLflow",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed, and named in the second bullet."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-07",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "ml_ai",
+    "roleId": "nlp_engineer"
+   },
+   "resume": {
+    "title": "NLP Engineer",
+    "skills": [
+     "Python",
+     "Transformers",
+     "PyTorch",
+     "Prompt engineering"
+    ],
+    "markdown": "# Skills pair SK-EN-07 (synthetic)\n\n## Experience\nNLP Engineer, Harborline Example Co. (synthetic)\n- Fine-tuned transformer models for ticket routing.\n- Built a retrieval-augmented generation pipeline for the help centre.\n\n## Skills\nPython, Transformers, PyTorch, Prompt engineering"
+   },
+   "posting": {
+    "title": "LLM Engineer",
+    "skills": [
+     {
+      "name": "Python",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Model fine-tuning",
+      "required": true,
+      "expected": "shown",
+      "reason": "The first bullet says the models were fine-tuned."
+     },
+     {
+      "name": "RAG",
+      "required": true,
+      "expected": "shown",
+      "reason": "The second bullet writes it out: retrieval-augmented generation."
+     },
+     {
+      "name": "Prompt engineering",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Natural language processing",
+      "required": false,
+      "expected": "shown",
+      "reason": "The title line says NLP Engineer."
+     },
+     {
+      "name": "LangChain",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-08",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_analyst"
+   },
+   "resume": {
+    "title": "Data Analyst",
+    "skills": [
+     "SQL",
+     "Python",
+     "Tableau",
+     "A/B testing",
+     "Statistics",
+     "Excel"
+    ],
+    "markdown": "# Skills pair SK-EN-08 (synthetic)\n\n## Experience\nData Analyst, Harborline Example Co. (synthetic)\n- Responsible for the weekly business report, using SQL and Python.\n- Led pricing analysis with Tableau.\n\n## Skills\nSQL, Python, Tableau, A/B testing, Statistics, Excel"
+   },
+   "posting": {
+    "title": "Data Analyst",
+    "skills": [
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Data visualization",
+      "required": true,
+      "expected": "related",
+      "reason": "Tableau is listed."
+     },
+     {
+      "name": "Spreadsheets",
+      "required": false,
+      "expected": "related",
+      "reason": "Excel is listed."
+     },
+     {
+      "name": "A/B testing",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "dbt",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Power BI",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-09",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_scientist"
+   },
+   "resume": {
+    "title": "Data Scientist",
+    "skills": [
+     "Machine learning",
+     "Predictive modeling",
+     "Python",
+     "Statistics"
+    ],
+    "markdown": "# Skills pair SK-EN-09 (synthetic)\n\n## Experience\nData Scientist, Harborline Example Co. (synthetic)\n- Built churn models and led experiment design reviews.\n\n## Skills\nMachine learning, Predictive modeling, Python, Statistics"
+   },
+   "posting": {
+    "title": "Data Scientist",
+    "skills": [
+     {
+      "name": "Machine learning",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Predictive modelling",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as Predictive modeling (the US spelling)."
+     },
+     {
+      "name": "Experiment design",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet."
+     },
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Deep learning",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-10",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "it_ops",
+    "roleId": "sysadmin"
+   },
+   "resume": {
+    "title": "Systems Administrator",
+    "skills": [
+     "Linux",
+     "Windows Server",
+     "Active Directory",
+     "Bash",
+     "VMware"
+    ],
+    "markdown": "# Skills pair SK-EN-10 (synthetic)\n\n## Experience\nSystems Administrator, Harborline Example Co. (synthetic)\n- Ran the Ubuntu fleet and its patching.\n\n## Skills\nLinux, Windows Server, Active Directory, Bash, VMware"
+   },
+   "posting": {
+    "title": "Systems Administrator",
+    "skills": [
+     {
+      "name": "Linux",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Unix",
+      "required": false,
+      "expected": "related",
+      "reason": "Linux is listed."
+     },
+     {
+      "name": "Scripting",
+      "required": true,
+      "expected": "related",
+      "reason": "Bash is listed."
+     },
+     {
+      "name": "VMware",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "PowerShell",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Network troubleshooting",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-11",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "it_ops",
+    "roleId": "it_support"
+   },
+   "resume": {
+    "title": "IT Support Specialist",
+    "skills": [
+     "Active Directory",
+     "Windows Server"
+    ],
+    "markdown": "# Skills pair SK-EN-11 (synthetic)\n\n## Experience\nIT Support Specialist, Harborline Example Co. (synthetic)\n- Handled network troubleshooting for 300 staff.\n\n## Skills\nActive Directory, Windows Server"
+   },
+   "posting": {
+    "title": "IT Support Specialist",
+    "skills": [
+     {
+      "name": "Active Directory",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Network troubleshooting",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "Linux",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "VMware",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Bash",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-12",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "product_design",
+    "roleId": "ux_designer"
+   },
+   "resume": {
+    "title": "UX Designer",
+    "skills": [
+     "Figma",
+     "User research",
+     "Wireframing",
+     "Prototyping",
+     "Usability testing"
+    ],
+    "markdown": "# Skills pair SK-EN-12 (synthetic)\n\n## Experience\nUX Designer, Harborline Example Co. (synthetic)\n- Ran user interviews and usability testing for the booking flow.\n\n## Skills\nFigma, User research, Wireframing, Prototyping, Usability testing"
+   },
+   "posting": {
+    "title": "Product Designer",
+    "skills": [
+     {
+      "name": "Figma",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Design tools",
+      "required": false,
+      "expected": "related",
+      "reason": "Figma is listed."
+     },
+     {
+      "name": "User research",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Design systems",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Interaction design",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Adobe XD",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-13",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "product_design",
+    "roleId": "ui_designer"
+   },
+   "resume": {
+    "title": "UI Designer",
+    "skills": [
+     "Figma",
+     "Design systems"
+    ],
+    "markdown": "# Skills pair SK-EN-13 (synthetic)\n\n## Experience\nUI Designer, Harborline Example Co. (synthetic)\n- I sketch three directions before any high-fidelity work.\n- Maintained the design systems library.\n\n## Skills\nFigma, Design systems"
+   },
+   "posting": {
+    "title": "UI Designer",
+    "skills": [
+     {
+      "name": "Sketch",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "The resume uses \"sketch\" as a verb; the tool is never named."
+     },
+     {
+      "name": "Figma",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Design systems",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed, and named in the second bullet."
+     },
+     {
+      "name": "Prototyping",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Usability testing",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-14",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "visual_design",
+    "roleId": "graphic_designer"
+   },
+   "resume": {
+    "title": "Graphic Designer",
+    "skills": [
+     "Adobe Illustrator",
+     "Adobe Photoshop",
+     "Adobe InDesign"
+    ],
+    "markdown": "# Skills pair SK-EN-14 (synthetic)\n\n## Experience\nGraphic Designer, Harborline Example Co. (synthetic)\n- Produced print layouts in InDesign.\n\n## Skills\nAdobe Illustrator, Adobe Photoshop, Adobe InDesign"
+   },
+   "posting": {
+    "title": "Graphic Designer",
+    "skills": [
+     {
+      "name": "Illustrator",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Adobe Illustrator."
+     },
+     {
+      "name": "Photoshop",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Adobe Photoshop."
+     },
+     {
+      "name": "InDesign",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed, and named in the bullet."
+     },
+     {
+      "name": "Design tools",
+      "required": false,
+      "expected": "related",
+      "reason": "Illustrator, Photoshop and InDesign are design tools."
+     },
+     {
+      "name": "Figma",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-15",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "marketing_brand",
+    "roleId": "marketing_manager"
+   },
+   "resume": {
+    "title": "Marketing Manager",
+    "skills": [
+     "Campaign planning",
+     "Market research",
+     "Budget management",
+     "Google Analytics",
+     "CRM"
+    ],
+    "markdown": "# Skills pair SK-EN-15 (synthetic)\n\n## Experience\nMarketing Manager, Harborline Example Co. (synthetic)\n- Planned four product campaigns a year.\n- Reported results from Google Analytics.\n\n## Skills\nCampaign planning, Market research, Budget management, Google Analytics, CRM"
+   },
+   "posting": {
+    "title": "Marketing Manager",
+    "skills": [
+     {
+      "name": "Campaign planning",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Web analytics",
+      "required": false,
+      "expected": "related",
+      "reason": "Google Analytics is listed."
+     },
+     {
+      "name": "CRM",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Brand strategy",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Content strategy",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "SEO",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "softSkills": [
+     "Leadership"
+    ]
+   }
+  },
+  {
+   "id": "sk-en-16",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "marketing_brand",
+    "roleId": "brand_manager"
+   },
+   "resume": {
+    "title": "Brand Manager",
+    "skills": [
+     "Brand strategy",
+     "Copywriting",
+     "Market research"
+    ],
+    "markdown": "# Skills pair SK-EN-16 (synthetic)\n\n## Experience\nBrand Manager, Harborline Example Co. (synthetic)\n- Owned brand positioning for two product lines.\n\n## Skills\nBrand strategy, Copywriting, Market research"
+   },
+   "posting": {
+    "title": "Brand Manager",
+    "skills": [
+     {
+      "name": "Brand strategy",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Market research",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Copywriting",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Google Analytics",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Budget management",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-17",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "digital_marketing",
+    "roleId": "seo_specialist"
+   },
+   "resume": {
+    "title": "SEO Specialist",
+    "skills": [
+     "SEO",
+     "Keyword research",
+     "Google Analytics"
+    ],
+    "markdown": "# Skills pair SK-EN-17 (synthetic)\n\n## Experience\nSEO Specialist, Harborline Example Co. (synthetic)\n- Grew organic traffic 40% through technical SEO fixes.\n\n## Skills\nSEO, Keyword research, Google Analytics"
+   },
+   "posting": {
+    "title": "SEO Specialist",
+    "skills": [
+     {
+      "name": "Search engine optimization",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as SEO."
+     },
+     {
+      "name": "Keyword research",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "GA4",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as Google Analytics."
+     },
+     {
+      "name": "Content strategy",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Paid social",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-18",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "digital_marketing",
+    "roleId": "social_media_manager"
+   },
+   "resume": {
+    "title": "Social Media Manager",
+    "skills": [
+     "Community management",
+     "Social media advertising",
+     "Copywriting"
+    ],
+    "markdown": "# Skills pair SK-EN-18 (synthetic)\n\n## Experience\nSocial Media Manager, Harborline Example Co. (synthetic)\n- Ran paid social for the autumn launch.\n\n## Skills\nCommunity management, Social media advertising, Copywriting"
+   },
+   "posting": {
+    "title": "Social Media Manager",
+    "skills": [
+     {
+      "name": "Community management",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Paid social",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet, and listed as Social media advertising."
+     },
+     {
+      "name": "Copywriting",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Content strategy",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "SEO",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-19",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "sales_roles",
+    "roleId": "account_executive"
+   },
+   "resume": {
+    "title": "Account Executive",
+    "skills": [
+     "Salesforce",
+     "Prospecting",
+     "Contract negotiation",
+     "Pipeline management"
+    ],
+    "markdown": "# Skills pair SK-EN-19 (synthetic)\n\n## Experience\nAccount Executive, Harborline Example Co. (synthetic)\n- Closed 30 new accounts through cold calling and referrals.\n\n## Skills\nSalesforce, Prospecting, Contract negotiation, Pipeline management"
+   },
+   "posting": {
+    "title": "Account Executive",
+    "skills": [
+     {
+      "name": "Salesforce",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "CRM",
+      "required": false,
+      "expected": "related",
+      "reason": "Salesforce is a CRM, and it is listed."
+     },
+     {
+      "name": "Cold calling",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "Contract negotiation",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Sales forecasting",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-20",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "sales_roles",
+    "roleId": "account_manager"
+   },
+   "resume": {
+    "title": "Account Manager",
+    "skills": [
+     "Account planning",
+     "Salesforce",
+     "Contract negotiation"
+    ],
+    "markdown": "# Skills pair SK-EN-20 (synthetic)\n\n## Experience\nAccount Manager, Harborline Example Co. (synthetic)\n- Ran quarterly business reviews for 25 accounts.\n\n## Skills\nAccount planning, Salesforce, Contract negotiation"
+   },
+   "posting": {
+    "title": "Account Manager",
+    "skills": [
+     {
+      "name": "Account planning",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Contract negotiation",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Salesforce",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "HubSpot",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Pipeline management",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-21",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "financial_analyst"
+   },
+   "resume": {
+    "title": "Financial Analyst",
+    "skills": [
+     "Financial modeling",
+     "Excel",
+     "Budgeting",
+     "Variance analysis",
+     "SQL"
+    ],
+    "markdown": "# Skills pair SK-EN-21 (synthetic)\n\n## Experience\nFinancial Analyst, Harborline Example Co. (synthetic)\n- Built the three-statement model for the annual plan.\n- Explained budget variances every month.\n\n## Skills\nFinancial modeling, Excel, Budgeting, Variance analysis, SQL"
+   },
+   "posting": {
+    "title": "Financial Analyst",
+    "skills": [
+     {
+      "name": "Financial modelling",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Financial modeling (the US spelling)."
+     },
+     {
+      "name": "Excel",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Variance analysis",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Power BI",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "CFA",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "No certificate is named."
+     },
+     {
+      "name": "Credit analysis",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-22",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "financial_analyst"
+   },
+   "resume": {
+    "title": "Senior Financial Analyst",
+    "skills": [
+     "Financial modeling",
+     "Excel",
+     "Power BI"
+    ],
+    "markdown": "# Skills pair SK-EN-22 (synthetic)\n\n## Experience\nSenior Financial Analyst, Harborline Example Co. (synthetic)\n- CFA charterholder since 2021.\n- Certified Public Accountant (inactive).\n\n## Skills\nFinancial modeling, Excel, Power BI"
+   },
+   "posting": {
+    "title": "Finance Manager",
+    "skills": [
+     {
+      "name": "CFA",
+      "required": true,
+      "expected": "shown",
+      "reason": "The first bullet says CFA charterholder."
+     },
+     {
+      "name": "CPA",
+      "required": false,
+      "expected": "shown",
+      "reason": "Written out: Certified Public Accountant."
+     },
+     {
+      "name": "Power BI",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Data visualization",
+      "required": false,
+      "expected": "related",
+      "reason": "Power BI is listed."
+     },
+     {
+      "name": "Tableau",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "SQL",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-23",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "digital_marketing",
+    "roleId": "social_media_manager"
+   },
+   "resume": {
+    "title": "Performance Marketer",
+    "skills": [
+     "Social media advertising",
+     "Google Analytics"
+    ],
+    "markdown": "# Skills pair SK-EN-23 (synthetic)\n\n## Experience\nPerformance Marketer, Harborline Example Co. (synthetic)\n- Cut CPA by 20% across paid social.\n\n## Skills\nSocial media advertising, Google Analytics"
+   },
+   "posting": {
+    "title": "Marketing Finance Analyst",
+    "skills": [
+     {
+      "name": "CPA",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "CPA here is cost per acquisition, not the accounting licence."
+     },
+     {
+      "name": "Google Analytics",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Paid social",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet."
+     },
+     {
+      "name": "Excel",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Budgeting",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-24",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "risk_analyst"
+   },
+   "resume": {
+    "title": "Risk Analyst",
+    "skills": [
+     "Credit analysis",
+     "Risk modeling",
+     "SQL",
+     "Python"
+    ],
+    "markdown": "# Skills pair SK-EN-24 (synthetic)\n\n## Experience\nRisk Analyst, Harborline Example Co. (synthetic)\n- Maintained the credit scorecards in Python.\n\n## Skills\nCredit analysis, Risk modeling, SQL, Python"
+   },
+   "posting": {
+    "title": "Risk Analyst",
+    "skills": [
+     {
+      "name": "Credit analysis",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Risk modelling",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Risk modeling (the US spelling)."
+     },
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Scripting",
+      "required": false,
+      "expected": "related",
+      "reason": "Python is listed."
+     },
+     {
+      "name": "Tableau",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Machine learning",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-25",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "human_resources",
+    "roleId": "hr_generalist"
+   },
+   "resume": {
+    "title": "HR Generalist",
+    "skills": [
+     "Employee relations",
+     "Payroll",
+     "HRIS",
+     "Workday"
+    ],
+    "markdown": "# Skills pair SK-EN-25 (synthetic)\n\n## Experience\nHR Generalist, Harborline Example Co. (synthetic)\n- Ran new hire onboarding for 120 people a year.\n\n## Skills\nEmployee relations, Payroll, HRIS, Workday"
+   },
+   "posting": {
+    "title": "HR Generalist",
+    "skills": [
+     {
+      "name": "Employee relations",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Employee onboarding",
+      "required": true,
+      "expected": "shown",
+      "reason": "The bullet says new hire onboarding."
+     },
+     {
+      "name": "Workday",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Performance management",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Employment law",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "softSkills": [
+     "Communication"
+    ]
+   }
+  },
+  {
+   "id": "sk-en-26",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "human_resources",
+    "roleId": "compensation_benefits"
+   },
+   "resume": {
+    "title": "Compensation and Benefits Specialist",
+    "skills": [
+     "Excel"
+    ],
+    "markdown": "# Skills pair SK-EN-26 (synthetic)\n\n## Experience\nCompensation and Benefits Specialist, Harborline Example Co. (synthetic)\n- Ran payroll processing for three entities.\n\n## Skills\nExcel"
+   },
+   "posting": {
+    "title": "Payroll Specialist",
+    "skills": [
+     {
+      "name": "Payroll",
+      "required": true,
+      "expected": "shown",
+      "reason": "The bullet says payroll processing."
+     },
+     {
+      "name": "Excel",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Spreadsheets",
+      "required": false,
+      "expected": "related",
+      "reason": "Excel is listed."
+     },
+     {
+      "name": "HRIS",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Employment law",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-27",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "clinical",
+    "roleId": "registered_nurse"
+   },
+   "resume": {
+    "title": "Registered Nurse",
+    "skills": [
+     "Patient assessment",
+     "Medication administration",
+     "Wound care",
+     "IV therapy"
+    ],
+    "markdown": "# Skills pair SK-EN-27 (synthetic)\n\n## Experience\nRegistered Nurse, Harborline Example Co. (synthetic)\n- Charted in the EMR on every shift.\n- BLS certified.\n\n## Skills\nPatient assessment, Medication administration, Wound care, IV therapy"
+   },
+   "posting": {
+    "title": "Registered Nurse",
+    "skills": [
+     {
+      "name": "Patient assessment",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Electronic health records",
+      "required": true,
+      "expected": "shown",
+      "reason": "The first bullet says EMR."
+     },
+     {
+      "name": "BLS certification",
+      "required": true,
+      "expected": "shown",
+      "reason": "The second bullet says BLS certified."
+     },
+     {
+      "name": "IV therapy",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Infection control",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-28",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "clinical",
+    "roleId": "registered_nurse"
+   },
+   "resume": {
+    "title": "Staff Nurse",
+    "skills": [
+     "Wound care",
+     "Infection control"
+    ],
+    "markdown": "# Skills pair SK-EN-28 (synthetic)\n\n## Experience\nStaff Nurse, Harborline Example Co. (synthetic)\n- Gave intravenous therapy on the surgical ward.\n- Basic Life Support renewed in 2026.\n\n## Skills\nWound care, Infection control"
+   },
+   "posting": {
+    "title": "Registered Nurse",
+    "skills": [
+     {
+      "name": "IV therapy",
+      "required": true,
+      "expected": "shown",
+      "reason": "Written out: intravenous therapy."
+     },
+     {
+      "name": "BLS certification",
+      "required": true,
+      "expected": "shown",
+      "reason": "Written out: Basic Life Support."
+     },
+     {
+      "name": "Wound care",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Medication administration",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Patient assessment",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-29",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "teaching",
+    "roleId": "school_teacher"
+   },
+   "resume": {
+    "title": "School Teacher",
+    "skills": [
+     "Lesson planning",
+     "Classroom management",
+     "Student assessment"
+    ],
+    "markdown": "# Skills pair SK-EN-29 (synthetic)\n\n## Experience\nSchool Teacher, Harborline Example Co. (synthetic)\n- Mentored two student teachers.\n\n## Skills\nLesson planning, Classroom management, Student assessment"
+   },
+   "posting": {
+    "title": "Secondary School Teacher",
+    "skills": [
+     {
+      "name": "Lesson planning",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Classroom management",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Student assessment",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Curriculum development",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Teacher qualification certificate",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "No certificate is named."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-30",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "teaching",
+    "roleId": "language_teacher"
+   },
+   "resume": {
+    "title": "Language Teacher",
+    "skills": [
+     "Lesson planning"
+    ],
+    "markdown": "# Skills pair SK-EN-30 (synthetic)\n\n## Experience\nLanguage Teacher, Harborline Example Co. (synthetic)\n- Planned curriculum development workshops for new staff.\n\n## Skills\nLesson planning"
+   },
+   "posting": {
+    "title": "Language Teacher",
+    "skills": [
+     {
+      "name": "Curriculum development",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "Lesson planning",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Classroom management",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Student assessment",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-31",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "online_operations",
+    "roleId": "user_operations"
+   },
+   "resume": {
+    "title": "User Operations Specialist",
+    "skills": [
+     "User growth",
+     "Retention analysis",
+     "SQL"
+    ],
+    "markdown": "# Skills pair SK-EN-31 (synthetic)\n\n## Experience\nUser Operations Specialist, Harborline Example Co. (synthetic)\n- Ran weekly retention analysis for the growth team.\n\n## Skills\nUser growth, Retention analysis, SQL"
+   },
+   "posting": {
+    "title": "Growth Operations Specialist",
+    "skills": [
+     {
+      "name": "User growth",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Retention analysis",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed, and named in the bullet."
+     },
+     {
+      "name": "SQL",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Community operations",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Content planning",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "A/B testing",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-32",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "Platform Engineer",
+    "skills": [
+     "K8s",
+     "Terraform",
+     "GitHub Actions",
+     "AWS",
+     "Prometheus"
+    ],
+    "markdown": "# Skills pair SK-EN-32 (synthetic)\n\n## Experience\nPlatform Engineer, Harborline Example Co. (synthetic)\n- Moved the build to GitHub Actions and the clusters to EKS.\n\n## Skills\nK8s, Terraform, GitHub Actions, AWS, Prometheus"
+   },
+   "posting": {
+    "title": "DevOps Engineer",
+    "skills": [
+     {
+      "name": "Kubernetes",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as K8s."
+     },
+     {
+      "name": "Infrastructure as code",
+      "required": true,
+      "expected": "related",
+      "reason": "Terraform is listed."
+     },
+     {
+      "name": "CI/CD",
+      "required": true,
+      "expected": "related",
+      "reason": "GitHub Actions is listed."
+     },
+     {
+      "name": "Cloud infrastructure",
+      "required": true,
+      "expected": "related",
+      "reason": "AWS is listed."
+     },
+     {
+      "name": "Docker",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Grafana",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "keywords": [
+     {
+      "name": "Prometheus",
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Ansible",
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-33",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "Software Engineer",
+    "skills": [],
+    "markdown": "# Skills pair SK-EN-33 (synthetic)\n\n## Experience\nSoftware Engineer, Harborline Example Co. (synthetic)\n- Wrote the ingestion services in Go and Rust.\n- Stored events in Postgres and cached them in Redis.\n- Deployed with Docker on Kubernetes."
+   },
+   "posting": {
+    "title": "Backend Engineer",
+    "skills": [
+     {
+      "name": "Go",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the first bullet."
+     },
+     {
+      "name": "PostgreSQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Written as Postgres in the second bullet."
+     },
+     {
+      "name": "Rust",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the first bullet."
+     },
+     {
+      "name": "NoSQL",
+      "required": false,
+      "expected": "related",
+      "reason": "Redis is named."
+     },
+     {
+      "name": "Containers",
+      "required": false,
+      "expected": "related",
+      "reason": "Docker and Kubernetes are named."
+     },
+     {
+      "name": "Java",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-34",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "marketing_brand",
+    "roleId": "marketing_manager"
+   },
+   "resume": {
+    "title": "Product Marketing Manager",
+    "skills": [
+     "Campaign planning",
+     "Copywriting"
+    ],
+    "markdown": "# Skills pair SK-EN-34 (synthetic)\n\n## Experience\nProduct Marketing Manager, Harborline Example Co. (synthetic)\n- Owned the go-to-market plan for two launches.\n- Wrote express checkout copy for the spring sale.\n\n## Skills\nCampaign planning, Copywriting"
+   },
+   "posting": {
+    "title": "Backend Engineer",
+    "skills": [
+     {
+      "name": "Go",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "\"Go-to-market\" is not the Go language."
+     },
+     {
+      "name": "Express",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "\"Express checkout\" is not Express.js."
+     },
+     {
+      "name": "Spring",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "\"Spring sale\" is the season, not the framework."
+     },
+     {
+      "name": "Copywriting",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "PostgreSQL",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-35",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "QA Engineer",
+    "skills": [
+     "Selenium",
+     "Python",
+     "Jira"
+    ],
+    "markdown": "# Skills pair SK-EN-35 (synthetic)\n\n## Experience\nQA Engineer, Harborline Example Co. (synthetic)\n- Wrote end-to-end suites for the billing app.\n\n## Skills\nSelenium, Python, Jira"
+   },
+   "posting": {
+    "title": "QA Engineer",
+    "skills": [
+     {
+      "name": "Selenium",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Automated testing",
+      "required": true,
+      "expected": "related",
+      "reason": "Selenium is listed."
+     },
+     {
+      "name": "Jira",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Cypress",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "CI/CD",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-36",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "fullstack_engineer"
+   },
+   "resume": {
+    "title": "Backend Engineer",
+    "skills": [
+     "PostgreSQL",
+     "Node.js",
+     "TypeScript"
+    ],
+    "markdown": "# Skills pair SK-EN-36 (synthetic)\n\n## Experience\nBackend Engineer, Harborline Example Co. (synthetic)\n- Maintained the order APIs on Node.js.\n\n## Skills\nPostgreSQL, Node.js, TypeScript"
+   },
+   "posting": {
+    "title": "Backend Engineer",
+    "skills": [
+     {
+      "name": "Postgres",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as PostgreSQL."
+     },
+     {
+      "name": "PostgreSQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Node.js",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "NodeJS",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as Node.js."
+     },
+     {
+      "name": "TypeScript",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "MongoDB",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-37",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "Search Engineer",
+    "skills": [
+     "Java",
+     "Kafka"
+    ],
+    "markdown": "# Skills pair SK-EN-37 (synthetic)\n\n## Experience\nSearch Engineer, Harborline Example Co. (synthetic)\n- Tuned relevance on our Elastic Search cluster.\n\n## Skills\nJava, Kafka"
+   },
+   "posting": {
+    "title": "Search Engineer",
+    "skills": [
+     {
+      "name": "Elasticsearch",
+      "required": true,
+      "expected": "shown",
+      "reason": "The bullet names it, written as two words."
+     },
+     {
+      "name": "Java",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Kafka",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "OpenSearch",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Python",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-38",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_analyst"
+   },
+   "resume": {
+    "title": "Operations Analyst",
+    "skills": [
+     "SQL"
+    ],
+    "markdown": "# Skills pair SK-EN-38 (synthetic)\n\n## Experience\nOperations Analyst, Harborline Example Co. (synthetic)\n- Built the weekly report in Excel pivot tables.\n\n## Skills\nSQL"
+   },
+   "posting": {
+    "title": "Business Analyst",
+    "skills": [
+     {
+      "name": "Excel",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet."
+     },
+     {
+      "name": "Spreadsheets",
+      "required": true,
+      "expected": "related",
+      "reason": "Excel is named in the bullet."
+     },
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Tableau",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Python",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-39",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_analyst"
+   },
+   "resume": {
+    "title": "Data Engineer",
+    "skills": [
+     "Cloud infrastructure",
+     "Relational databases",
+     "Scripting"
+    ],
+    "markdown": "# Skills pair SK-EN-39 (synthetic)\n\n## Experience\nData Engineer, Harborline Example Co. (synthetic)\n- Ran data pipelines on cloud platforms.\n\n## Skills\nCloud infrastructure, Relational databases, Scripting"
+   },
+   "posting": {
+    "title": "Data Engineer",
+    "skills": [
+     {
+      "name": "AWS",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "The resume says cloud platforms; it never names AWS."
+     },
+     {
+      "name": "PostgreSQL",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "It lists relational databases; it never names PostgreSQL."
+     },
+     {
+      "name": "Python",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "It lists scripting; it never names Python."
+     },
+     {
+      "name": "Cloud infrastructure",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Airflow",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-40",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_analyst"
+   },
+   "resume": {
+    "title": "Data Engineer",
+    "skills": [
+     "Python",
+     "Airflow",
+     "Snowflake",
+     "dbt",
+     "SQL"
+    ],
+    "markdown": "# Skills pair SK-EN-40 (synthetic)\n\n## Experience\nData Engineer, Harborline Example Co. (synthetic)\n- Built loading jobs in Apache Airflow.\n\n## Skills\nPython, Airflow, Snowflake, dbt, SQL"
+   },
+   "posting": {
+    "title": "Analytics Engineer",
+    "skills": [
+     {
+      "name": "Apache Airflow",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Airflow, and written out in the bullet."
+     },
+     {
+      "name": "Snowflake",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "dbt",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Spark",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "BigQuery",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-41",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_frontend",
+    "roleId": "ios_engineer"
+   },
+   "resume": {
+    "title": "Android Engineer",
+    "skills": [
+     "Kotlin",
+     "Android",
+     "Gradle"
+    ],
+    "markdown": "# Skills pair SK-EN-41 (synthetic)\n\n## Experience\nAndroid Engineer, Harborline Example Co. (synthetic)\n- Rewrote the feed in Kotlin.\n\n## Skills\nKotlin, Android, Gradle"
+   },
+   "posting": {
+    "title": "Mobile Engineer",
+    "skills": [
+     {
+      "name": "Kotlin",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Android",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Object-oriented programming",
+      "required": false,
+      "expected": "related",
+      "reason": "Kotlin is listed."
+     },
+     {
+      "name": "Gradle",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Swift",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Flutter",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-42",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "risk_analyst"
+   },
+   "resume": {
+    "title": "Compliance Analyst",
+    "skills": [
+     "SOC 2",
+     "ISO 27001",
+     "GDPR"
+    ],
+    "markdown": "# Skills pair SK-EN-42 (synthetic)\n\n## Experience\nCompliance Analyst, Harborline Example Co. (synthetic)\n- Led the SOC 2 Type II audit.\n\n## Skills\nSOC 2, ISO 27001, GDPR"
+   },
+   "posting": {
+    "title": "Compliance Analyst",
+    "skills": [
+     {
+      "name": "SOC 2",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "GDPR",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "ISO 27001",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "HIPAA",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "PCI DSS",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-43",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "online_operations",
+    "roleId": "content_operations"
+   },
+   "resume": {
+    "title": "Project Manager",
+    "skills": [
+     "Jira",
+     "Scrum"
+    ],
+    "markdown": "# Skills pair SK-EN-43 (synthetic)\n\n## Experience\nProject Manager, Harborline Example Co. (synthetic)\n- PMP certified, 2022.\n\n## Skills\nJira, Scrum"
+   },
+   "posting": {
+    "title": "Technical Project Manager",
+    "skills": [
+     {
+      "name": "PMP",
+      "required": true,
+      "expected": "shown",
+      "reason": "The bullet says PMP certified."
+     },
+     {
+      "name": "Agile",
+      "required": true,
+      "expected": "related",
+      "reason": "Scrum is listed."
+     },
+     {
+      "name": "Jira",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Kanban",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Six Sigma",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-44",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "Java Developer",
+    "skills": [
+     "Java",
+     "Spring Boot",
+     "MySQL",
+     "Jenkins"
+    ],
+    "markdown": "# Skills pair SK-EN-44 (synthetic)\n\n## Experience\nJava Developer, Harborline Example Co. (synthetic)\n- Built the claims service on Spring Boot.\n\n## Skills\nJava, Spring Boot, MySQL, Jenkins"
+   },
+   "posting": {
+    "title": "Java Engineer",
+    "skills": [
+     {
+      "name": "Java",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Spring",
+      "required": true,
+      "expected": "related",
+      "reason": "Spring Boot is listed."
+     },
+     {
+      "name": "CI/CD",
+      "required": false,
+      "expected": "related",
+      "reason": "Jenkins is listed."
+     },
+     {
+      "name": "Relational databases",
+      "required": false,
+      "expected": "related",
+      "reason": "MySQL is listed."
+     },
+     {
+      "name": "Kafka",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Kubernetes",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-en-45",
+   "market": "intl",
+   "subset": "en",
+   "resumeLang": "en",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_frontend",
+    "roleId": "frontend_engineer"
+   },
+   "resume": {
+    "title": "Junior Developer",
+    "skills": [
+     "HTML",
+     "CSS",
+     "JavaScript"
+    ],
+    "markdown": "# Skills pair SK-EN-45 (synthetic)\n\n## Experience\nJunior Developer, Harborline Example Co. (synthetic)\n- Built the website of a local sports club.\n\n## Skills\nHTML, CSS, JavaScript"
+   },
+   "posting": {
+    "title": "Frontend Engineer",
+    "skills": [
+     {
+      "name": "JS",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as JavaScript."
+     },
+     {
+      "name": "HTML",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "React",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "TypeScript",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Version control",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-01",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "后端开发工程师",
+    "skills": [
+     "Java",
+     "Go",
+     "PostgreSQL",
+     "Kubernetes",
+     "Redis",
+     "Kafka"
+    ],
+    "markdown": "# 技能对照 SK-CN-01（虚构）\n\n## 工作经历\n后端开发工程师，枕山示例公司（虚构）\n- 负责支付与订单服务，使用 Java 和 Go。\n- 主导内部平台接口的改进，使用 PostgreSQL。\n\n## 专业技能\nJava、Go、PostgreSQL、Kubernetes、Redis、Kafka"
+   },
+   "posting": {
+    "title": "高级后端开发工程师",
+    "skills": [
+     {
+      "name": "Java",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed, and named in the first bullet."
+     },
+     {
+      "name": "关系型数据库",
+      "required": true,
+      "expected": "related",
+      "reason": "PostgreSQL is listed; the broader term is never written."
+     },
+     {
+      "name": "消息队列",
+      "required": false,
+      "expected": "related",
+      "reason": "Kafka is listed."
+     },
+     {
+      "name": "容器技术",
+      "required": false,
+      "expected": "related",
+      "reason": "Kubernetes is listed."
+     },
+     {
+      "name": "Docker",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "softSkills": [
+     "沟通能力"
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-02",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "后端开发工程师",
+    "skills": [],
+    "markdown": "# 技能对照 SK-CN-02（虚构）\n\n## 工作经历\n后端开发工程师，枕山示例公司（虚构）\n- 熟悉Java和Python，使用Go开发后端服务。\n- 用MySQL和Redis存储数据。"
+   },
+   "posting": {
+    "title": "后端开发工程师",
+    "skills": [
+     {
+      "name": "Java",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the first bullet, written next to Chinese text."
+     },
+     {
+      "name": "Go",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the first bullet: 使用Go开发."
+     },
+     {
+      "name": "Python",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the first bullet."
+     },
+     {
+      "name": "MySQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the second bullet."
+     },
+     {
+      "name": "关系型数据库",
+      "required": false,
+      "expected": "related",
+      "reason": "MySQL is named."
+     },
+     {
+      "name": "Kubernetes",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-03",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "fullstack_engineer"
+   },
+   "resume": {
+    "title": "全栈工程师",
+    "skills": [
+     "TypeScript",
+     "React",
+     "Node.js",
+     "GraphQL"
+    ],
+    "markdown": "# 技能对照 SK-CN-03（虚构）\n\n## 工作经历\n全栈工程师，枕山示例公司（虚构）\n- 负责商家后台及其接口，使用 React 和 TypeScript。\n\n## 专业技能\nTypeScript、React、Node.js、GraphQL"
+   },
+   "posting": {
+    "title": "全栈工程师",
+    "skills": [
+     {
+      "name": "前端框架",
+      "required": true,
+      "expected": "related",
+      "reason": "React is listed."
+     },
+     {
+      "name": "Node.js",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "API 设计",
+      "required": false,
+      "expected": "related",
+      "reason": "GraphQL is listed."
+     },
+     {
+      "name": "Vue",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "MongoDB",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-04",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "swe_frontend",
+    "roleId": "frontend_engineer"
+   },
+   "resume": {
+    "title": "前端开发工程师",
+    "skills": [
+     "React",
+     "TypeScript",
+     "CSS",
+     "Next.js",
+     "Jest"
+    ],
+    "markdown": "# 技能对照 SK-CN-04（虚构）\n\n## 工作经历\n前端开发工程师，枕山示例公司（虚构）\n- 主导下单流程的改版，使用 Next.js。\n\n## 专业技能\nReact、TypeScript、CSS、Next.js、Jest"
+   },
+   "posting": {
+    "title": "高级前端开发工程师",
+    "skills": [
+     {
+      "name": "React",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "CSS",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "自动化测试",
+      "required": false,
+      "expected": "related",
+      "reason": "Jest is listed."
+     },
+     {
+      "name": "无障碍设计",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Webpack",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-05",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "ml_ai",
+    "roleId": "ml_engineer"
+   },
+   "resume": {
+    "title": "机器学习工程师",
+    "skills": [
+     "Python",
+     "PyTorch",
+     "TensorFlow",
+     "模型部署",
+     "特征工程"
+    ],
+    "markdown": "# 技能对照 SK-CN-05（虚构）\n\n## 工作经历\n机器学习工程师，枕山示例公司（虚构）\n- 负责推荐排序模型的训练与上线，使用 PyTorch。\n\n## 专业技能\nPython、PyTorch、TensorFlow、模型部署、特征工程"
+   },
+   "posting": {
+    "title": "机器学习工程师",
+    "skills": [
+     {
+      "name": "机器学习",
+      "required": true,
+      "expected": "shown",
+      "reason": "The title line says 机器学习工程师."
+     },
+     {
+      "name": "机器学习框架",
+      "required": true,
+      "expected": "related",
+      "reason": "PyTorch and TensorFlow are listed."
+     },
+     {
+      "name": "模型部署",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "SQL",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "MLflow",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-06",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "ml_ai",
+    "roleId": "nlp_engineer"
+   },
+   "resume": {
+    "title": "大模型算法工程师",
+    "skills": [
+     "Python",
+     "Transformers",
+     "提示词工程",
+     "模型微调"
+    ],
+    "markdown": "# 技能对照 SK-CN-06（虚构）\n\n## 工作经历\n大模型算法工程师，枕山示例公司（虚构）\n- 负责客服工单分类模型，完成文本分类与模型微调。\n\n## 专业技能\nPython、Transformers、提示词工程、模型微调"
+   },
+   "posting": {
+    "title": "大模型算法工程师",
+    "skills": [
+     {
+      "name": "模型微调",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed, and named in the bullet."
+     },
+     {
+      "name": "文本分类",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "提示词工程",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "大语言模型",
+      "required": true,
+      "expected": "shown",
+      "reason": "The title says 大模型, the usual short name of 大语言模型."
+     },
+     {
+      "name": "LangChain",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-07",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_analyst"
+   },
+   "resume": {
+    "title": "数据分析师",
+    "skills": [
+     "SQL",
+     "Python",
+     "Tableau",
+     "A/B 测试",
+     "统计分析"
+    ],
+    "markdown": "# 技能对照 SK-CN-07（虚构）\n\n## 工作经历\n数据分析师，枕山示例公司（虚构）\n- 负责每周经营报表，使用 SQL 和 Python。\n- 主导定价与留存分析的改进，使用 Tableau。\n\n## 专业技能\nSQL、Python、Tableau、A/B 测试、统计分析"
+   },
+   "posting": {
+    "title": "数据分析师",
+    "skills": [
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "数据可视化",
+      "required": true,
+      "expected": "related",
+      "reason": "Tableau is listed."
+     },
+     {
+      "name": "A/B 测试",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "留存分析",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the second bullet."
+     },
+     {
+      "name": "Excel",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "dbt",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "keywords": [
+     {
+      "name": "Python",
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Power BI",
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-08",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_scientist"
+   },
+   "resume": {
+    "title": "数据科学家",
+    "skills": [
+     "机器学习",
+     "预测建模",
+     "Python",
+     "统计分析"
+    ],
+    "markdown": "# 技能对照 SK-CN-08（虚构）\n\n## 工作经历\n数据科学家，枕山示例公司（虚构）\n- 负责用户流失预测模型。\n\n## 专业技能\n机器学习、预测建模、Python、统计分析"
+   },
+   "posting": {
+    "title": "数据科学家",
+    "skills": [
+     {
+      "name": "机器学习",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "预测建模",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "实验设计",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "深度学习",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-09",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "product_design",
+    "roleId": "ux_designer"
+   },
+   "resume": {
+    "title": "交互设计师",
+    "skills": [
+     "Figma",
+     "用户研究",
+     "线框图",
+     "原型设计"
+    ],
+    "markdown": "# 技能对照 SK-CN-09（虚构）\n\n## 工作经历\n交互设计师，枕山示例公司（虚构）\n- 主导预约流程的可用性测试。\n\n## 专业技能\nFigma、用户研究、线框图、原型设计"
+   },
+   "posting": {
+    "title": "交互设计师",
+    "skills": [
+     {
+      "name": "Figma",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "设计工具",
+      "required": false,
+      "expected": "related",
+      "reason": "Figma is listed."
+     },
+     {
+      "name": "可用性测试",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "交互设计",
+      "required": false,
+      "expected": "shown",
+      "reason": "The title line says 交互设计师."
+     },
+     {
+      "name": "设计系统",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-10",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "marketing_brand",
+    "roleId": "marketing_manager"
+   },
+   "resume": {
+    "title": "市场经理",
+    "skills": [
+     "营销活动策划",
+     "市场调研",
+     "预算管理",
+     "Google Analytics"
+    ],
+    "markdown": "# 技能对照 SK-CN-10（虚构）\n\n## 工作经历\n市场经理，枕山示例公司（虚构）\n- 负责每年四次新品营销活动策划。\n\n## 专业技能\n营销活动策划、市场调研、预算管理、Google Analytics"
+   },
+   "posting": {
+    "title": "市场经理",
+    "skills": [
+     {
+      "name": "营销活动策划",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "网站分析",
+      "required": false,
+      "expected": "related",
+      "reason": "Google Analytics is listed."
+     },
+     {
+      "name": "预算管理",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "品牌策略",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "内容策略",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "softSkills": [
+     "团队合作"
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-11",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "digital_marketing",
+    "roleId": "social_media_manager"
+   },
+   "resume": {
+    "title": "新媒体运营",
+    "skills": [
+     "社群管理",
+     "文案撰写"
+    ],
+    "markdown": "# 技能对照 SK-CN-11（虚构）\n\n## 工作经历\n新媒体运营，枕山示例公司（虚构）\n- 负责社交媒体广告投放与短视频内容。\n\n## 专业技能\n社群管理、文案撰写"
+   },
+   "posting": {
+    "title": "新媒体运营",
+    "skills": [
+     {
+      "name": "社群管理",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "社交媒体广告",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "文案撰写",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "SEO",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "关键词研究",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-12",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "online_operations",
+    "roleId": "user_operations"
+   },
+   "resume": {
+    "title": "用户运营",
+    "skills": [
+     "用户增长",
+     "留存分析",
+     "SQL",
+     "社群运营"
+    ],
+    "markdown": "# 技能对照 SK-CN-12（虚构）\n\n## 工作经历\n用户运营，枕山示例公司（虚构）\n- 负责新用户增长活动与用户分层。\n\n## 专业技能\n用户增长、留存分析、SQL、社群运营"
+   },
+   "posting": {
+    "title": "用户运营",
+    "skills": [
+     {
+      "name": "用户增长",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "社群运营",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "SQL",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "内容策划",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "A/B 测试",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-13",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "sales_roles",
+    "roleId": "account_executive"
+   },
+   "resume": {
+    "title": "销售代表",
+    "skills": [
+     "Salesforce",
+     "客户开发",
+     "合同谈判"
+    ],
+    "markdown": "# 技能对照 SK-CN-13（虚构）\n\n## 工作经历\n销售代表，枕山示例公司（虚构）\n- 通过电话销售和转介绍开发新客户。\n\n## 专业技能\nSalesforce、客户开发、合同谈判"
+   },
+   "posting": {
+    "title": "销售代表",
+    "skills": [
+     {
+      "name": "客户开发",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "电话销售",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "Salesforce",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "销售预测",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "销售漏斗管理",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-14",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "financial_analyst"
+   },
+   "resume": {
+    "title": "财务分析师",
+    "skills": [
+     "财务建模",
+     "Excel",
+     "预算编制",
+     "差异分析"
+    ],
+    "markdown": "# 技能对照 SK-CN-14（虚构）\n\n## 工作经历\n财务分析师，枕山示例公司（虚构）\n- 负责年度预算编制与月度差异分析。\n\n## 专业技能\n财务建模、Excel、预算编制、差异分析"
+   },
+   "posting": {
+    "title": "财务分析师",
+    "skills": [
+     {
+      "name": "财务建模",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Excel",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "电子表格",
+      "required": false,
+      "expected": "related",
+      "reason": "Excel is listed."
+     },
+     {
+      "name": "财务预测",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Power BI",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "注册会计师",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "No certificate is named."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-15",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "financial_analyst"
+   },
+   "resume": {
+    "title": "财务分析师",
+    "skills": [
+     "Excel",
+     "财务建模"
+    ],
+    "markdown": "# 技能对照 SK-CN-15（虚构）\n\n## 工作经历\n财务分析师，枕山示例公司（虚构）\n- 已通过注会全部科目。\n- 持有英语六级证书。\n\n## 专业技能\nExcel、财务建模"
+   },
+   "posting": {
+    "title": "高级财务分析师",
+    "skills": [
+     {
+      "name": "注册会计师",
+      "required": true,
+      "expected": "shown",
+      "reason": "The first bullet says 注会, the usual short name."
+     },
+     {
+      "name": "大学英语六级",
+      "required": false,
+      "expected": "shown",
+      "reason": "The second bullet says 英语六级."
+     },
+     {
+      "name": "财务建模",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "预算编制",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "特许金融分析师",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-16",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "risk_analyst"
+   },
+   "resume": {
+    "title": "风控分析师",
+    "skills": [
+     "信用分析",
+     "风险建模",
+     "SQL"
+    ],
+    "markdown": "# 技能对照 SK-CN-16（虚构）\n\n## 工作经历\n风控分析师，枕山示例公司（虚构）\n- 负责信贷评分卡的维护，使用Python。\n\n## 专业技能\n信用分析、风险建模、SQL"
+   },
+   "posting": {
+    "title": "风控分析师",
+    "skills": [
+     {
+      "name": "信用分析",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "风险建模",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Python",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet: 使用Python."
+     },
+     {
+      "name": "机器学习",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Tableau",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-17",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "human_resources",
+    "roleId": "hr_generalist"
+   },
+   "resume": {
+    "title": "人事专员",
+    "skills": [
+     "员工关系",
+     "薪资核算",
+     "绩效管理"
+    ],
+    "markdown": "# 技能对照 SK-CN-17（虚构）\n\n## 工作经历\n人事专员，枕山示例公司（虚构）\n- 负责每年约120人的入职管理。\n\n## 专业技能\n员工关系、薪资核算、绩效管理"
+   },
+   "posting": {
+    "title": "人事专员",
+    "skills": [
+     {
+      "name": "员工关系",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "入职管理",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "薪资核算",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "劳动法",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "HRIS",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-18",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "clinical",
+    "roleId": "registered_nurse"
+   },
+   "resume": {
+    "title": "护士",
+    "skills": [
+     "病情评估",
+     "给药护理",
+     "伤口护理"
+    ],
+    "markdown": "# 技能对照 SK-CN-18（虚构）\n\n## 工作经历\n护士，枕山示例公司（虚构）\n- 负责外科病房的静脉输液与电子病历记录。\n\n## 专业技能\n病情评估、给药护理、伤口护理"
+   },
+   "posting": {
+    "title": "护士",
+    "skills": [
+     {
+      "name": "病情评估",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "静脉输液",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "电子病历",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "感染控制",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "BLS 证书",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "No certificate is named."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-19",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "teaching",
+    "roleId": "school_teacher"
+   },
+   "resume": {
+    "title": "中小学教师",
+    "skills": [
+     "备课",
+     "课堂管理"
+    ],
+    "markdown": "# 技能对照 SK-CN-19（虚构）\n\n## 工作经历\n中小学教师，枕山示例公司（虚构）\n- 持有教师资格证和普通话水平测试二级甲等证书。\n\n## 专业技能\n备课、课堂管理"
+   },
+   "posting": {
+    "title": "初中教师",
+    "skills": [
+     {
+      "name": "教师资格证",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet."
+     },
+     {
+      "name": "普通话等级证书",
+      "required": false,
+      "expected": "shown",
+      "reason": "The bullet names the 普通话水平测试 certificate."
+     },
+     {
+      "name": "课堂管理",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "课程开发",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "学生评价",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-20",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "it_ops",
+    "roleId": "sysadmin"
+   },
+   "resume": {
+    "title": "运维工程师",
+    "skills": [
+     "K8s",
+     "Terraform",
+     "阿里云",
+     "Prometheus"
+    ],
+    "markdown": "# 技能对照 SK-CN-20（虚构）\n\n## 工作经历\n运维工程师，枕山示例公司（虚构）\n- 负责集群从自建机房迁移到阿里云。\n\n## 专业技能\nK8s、Terraform、阿里云、Prometheus"
+   },
+   "posting": {
+    "title": "运维工程师",
+    "skills": [
+     {
+      "name": "Kubernetes",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as K8s."
+     },
+     {
+      "name": "云计算",
+      "required": true,
+      "expected": "related",
+      "reason": "阿里云 is listed."
+     },
+     {
+      "name": "基础设施即代码",
+      "required": false,
+      "expected": "related",
+      "reason": "Terraform is listed."
+     },
+     {
+      "name": "容器技术",
+      "required": false,
+      "expected": "related",
+      "reason": "K8s is listed."
+     },
+     {
+      "name": "Docker",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "腾讯云",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-21",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "Java开发工程师",
+    "skills": [
+     "Java",
+     "Spring Boot",
+     "MySQL",
+     "Redis"
+    ],
+    "markdown": "# 技能对照 SK-CN-21（虚构）\n\n## 工作经历\nJava开发工程师，枕山示例公司（虚构）\n- 负责理赔服务的开发，使用 Spring Boot。\n\n## 专业技能\nJava、Spring Boot、MySQL、Redis"
+   },
+   "posting": {
+    "title": "Java开发工程师",
+    "skills": [
+     {
+      "name": "Java",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Spring",
+      "required": true,
+      "expected": "related",
+      "reason": "Spring Boot is listed."
+     },
+     {
+      "name": "关系型数据库",
+      "required": false,
+      "expected": "related",
+      "reason": "MySQL is listed."
+     },
+     {
+      "name": "消息队列",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Kafka",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Docker",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-22",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "测试工程师",
+    "skills": [
+     "Selenium",
+     "Python",
+     "Jira"
+    ],
+    "markdown": "# 技能对照 SK-CN-22（虚构）\n\n## 工作经历\n测试工程师，枕山示例公司（虚构）\n- 编写接口自动化测试用例。\n\n## 专业技能\nSelenium、Python、Jira"
+   },
+   "posting": {
+    "title": "测试开发工程师",
+    "skills": [
+     {
+      "name": "自动化测试",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet."
+     },
+     {
+      "name": "Selenium",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Jira",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "持续集成",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Jenkins",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-23",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "ml_ai",
+    "roleId": "ml_engineer"
+   },
+   "resume": {
+    "title": "算法工程师",
+    "skills": [
+     "机器学习",
+     "Python"
+    ],
+    "markdown": "# 技能对照 SK-CN-23（虚构）\n\n## 工作经历\n算法工程师，枕山示例公司（虚构）\n- 参与推荐算法优化。\n\n## 专业技能\n机器学习、Python"
+   },
+   "posting": {
+    "title": "算法工程师",
+    "skills": [
+     {
+      "name": "机器学习",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "ML",
+      "required": false,
+      "expected": "shown",
+      "reason": "The same skill as 机器学习, which is listed."
+     },
+     {
+      "name": "Python",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "PyTorch",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "深度学习",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "TensorFlow",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-24",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "online_operations",
+    "roleId": "content_operations"
+   },
+   "resume": {
+    "title": "项目经理",
+    "skills": [],
+    "markdown": "# 技能对照 SK-CN-24（虚构）\n\n## 工作经历\n项目经理，枕山示例公司（虚构）\n- 证书：一建、PMP。\n- 负责写字楼项目的进度与成本。"
+   },
+   "posting": {
+    "title": "工程项目经理",
+    "skills": [
+     {
+      "name": "一级建造师",
+      "required": true,
+      "expected": "shown",
+      "reason": "The certificate line says 一建."
+     },
+     {
+      "name": "PMP",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named on the certificate line."
+     },
+     {
+      "name": "预算管理",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "The resume says 成本, it never names 预算管理."
+     },
+     {
+      "name": "Scrum",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "敏捷开发",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-25",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "it_ops",
+    "roleId": "sysadmin"
+   },
+   "resume": {
+    "title": "数据平台工程师",
+    "skills": [
+     "云计算",
+     "关系型数据库",
+     "脚本语言"
+    ],
+    "markdown": "# 技能对照 SK-CN-25（虚构）\n\n## 工作经历\n数据平台工程师，枕山示例公司（虚构）\n- 负责数据平台在云平台上的运维。\n\n## 专业技能\n云计算、关系型数据库、脚本语言"
+   },
+   "posting": {
+    "title": "数据平台工程师",
+    "skills": [
+     {
+      "name": "阿里云",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "The resume says 云平台; it never names 阿里云."
+     },
+     {
+      "name": "MySQL",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "It lists 关系型数据库; it never names MySQL."
+     },
+     {
+      "name": "Python",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "It lists 脚本语言; it never names Python."
+     },
+     {
+      "name": "云服务",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as 云计算, the same skill."
+     },
+     {
+      "name": "Shell",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-26",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "swe_frontend",
+    "roleId": "frontend_engineer"
+   },
+   "resume": {
+    "title": "前端开发工程师",
+    "skills": [],
+    "markdown": "# 技能对照 SK-CN-26（虚构）\n\n## 工作经历\n前端开发工程师，枕山示例公司（虚构）\n- 使用React和TypeScript开发管理后台。\n- 熟悉Vue。"
+   },
+   "posting": {
+    "title": "前端开发工程师",
+    "skills": [
+     {
+      "name": "React",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the first bullet: 使用React."
+     },
+     {
+      "name": "TypeScript",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the first bullet."
+     },
+     {
+      "name": "Vue",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the second bullet."
+     },
+     {
+      "name": "前端框架",
+      "required": false,
+      "expected": "related",
+      "reason": "React and Vue are named."
+     },
+     {
+      "name": "Angular",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-cn-27",
+   "market": "cn",
+   "subset": "zh-CN",
+   "resumeLang": "zh-CN",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "swe_frontend",
+    "roleId": "frontend_engineer"
+   },
+   "resume": {
+    "title": "前端实习生",
+    "skills": [
+     "HTML",
+     "CSS",
+     "JavaScript"
+    ],
+    "markdown": "# 技能对照 SK-CN-27（虚构）\n\n## 工作经历\n前端实习生，枕山示例公司（虚构）\n- 独立完成社团官网开发。\n\n## 专业技能\nHTML、CSS、JavaScript"
+   },
+   "posting": {
+    "title": "前端开发工程师",
+    "skills": [
+     {
+      "name": "JavaScript",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "React",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "TypeScript",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Git",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "版本控制",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-01",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "後端工程師",
+    "skills": [
+     "Java",
+     "Go",
+     "PostgreSQL",
+     "Kubernetes",
+     "Redis",
+     "Kafka"
+    ],
+    "markdown": "# 技能對照 SK-TW-01（虛構）\n\n## 工作經歷\n後端工程師，澄淵示例公司（虛構）\n- 負責金流與訂單服務，使用 Java 與 Go。\n- 主導內部平台 API 的改善，使用 PostgreSQL。\n\n## 專業技能\nJava、Go、PostgreSQL、Kubernetes、Redis、Kafka"
+   },
+   "posting": {
+    "title": "資深後端工程師",
+    "skills": [
+     {
+      "name": "Java",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed, and named in the first bullet."
+     },
+     {
+      "name": "關聯式資料庫",
+      "required": true,
+      "expected": "related",
+      "reason": "PostgreSQL is listed; the broader term is never written."
+     },
+     {
+      "name": "訊息佇列",
+      "required": false,
+      "expected": "related",
+      "reason": "Kafka is listed."
+     },
+     {
+      "name": "Docker",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "TypeScript",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ],
+    "softSkills": [
+     "溝通能力"
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-02",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "swe_frontend",
+    "roleId": "frontend_engineer"
+   },
+   "resume": {
+    "title": "前端工程師",
+    "skills": [
+     "React",
+     "TypeScript",
+     "CSS",
+     "Next.js",
+     "Jest"
+    ],
+    "markdown": "# 技能對照 SK-TW-02（虛構）\n\n## 工作經歷\n前端工程師，澄淵示例公司（虛構）\n- 負責結帳流程改版，使用 Next.js。\n\n## 專業技能\nReact、TypeScript、CSS、Next.js、Jest"
+   },
+   "posting": {
+    "title": "資深前端工程師",
+    "skills": [
+     {
+      "name": "React",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "前端框架",
+      "required": false,
+      "expected": "related",
+      "reason": "React and Next.js are listed."
+     },
+     {
+      "name": "自動化測試",
+      "required": false,
+      "expected": "related",
+      "reason": "Jest is listed."
+     },
+     {
+      "name": "無障礙設計",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Vue",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-03",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "ml_ai",
+    "roleId": "ml_engineer"
+   },
+   "resume": {
+    "title": "機器學習工程師",
+    "skills": [
+     "Python",
+     "PyTorch",
+     "模型部署",
+     "特徵工程"
+    ],
+    "markdown": "# 技能對照 SK-TW-03（虛構）\n\n## 工作經歷\n機器學習工程師，澄淵示例公司（虛構）\n- 負責推薦排序模型的訓練與上線。\n\n## 專業技能\nPython、PyTorch、模型部署、特徵工程"
+   },
+   "posting": {
+    "title": "機器學習工程師",
+    "skills": [
+     {
+      "name": "機器學習",
+      "required": true,
+      "expected": "shown",
+      "reason": "The title line says 機器學習工程師."
+     },
+     {
+      "name": "機器學習框架",
+      "required": true,
+      "expected": "related",
+      "reason": "PyTorch is listed."
+     },
+     {
+      "name": "特徵工程",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "深度學習",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "SQL",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-04",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_analyst"
+   },
+   "resume": {
+    "title": "資料分析師",
+    "skills": [
+     "SQL",
+     "Python",
+     "Tableau",
+     "A/B 測試",
+     "統計分析"
+    ],
+    "markdown": "# 技能對照 SK-TW-04（虛構）\n\n## 工作經歷\n資料分析師，澄淵示例公司（虛構）\n- 負責每週營運報表，使用 SQL 與 Python。\n\n## 專業技能\nSQL、Python、Tableau、A/B 測試、統計分析"
+   },
+   "posting": {
+    "title": "資料分析師",
+    "skills": [
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "資料視覺化",
+      "required": true,
+      "expected": "related",
+      "reason": "Tableau is listed."
+     },
+     {
+      "name": "A/B 測試",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "試算表",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "No spreadsheet tool is named."
+     },
+     {
+      "name": "預測建模",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-05",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "marketing_brand",
+    "roleId": "marketing_manager"
+   },
+   "resume": {
+    "title": "行銷經理",
+    "skills": [
+     "行銷活動企劃",
+     "市場調查",
+     "預算管理",
+     "Google Analytics"
+    ],
+    "markdown": "# 技能對照 SK-TW-05（虛構）\n\n## 工作經歷\n行銷經理，澄淵示例公司（虛構）\n- 每年規劃四檔新品行銷活動。\n\n## 專業技能\n行銷活動企劃、市場調查、預算管理、Google Analytics"
+   },
+   "posting": {
+    "title": "行銷經理",
+    "skills": [
+     {
+      "name": "行銷活動企劃",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "網站分析",
+      "required": false,
+      "expected": "related",
+      "reason": "Google Analytics is listed."
+     },
+     {
+      "name": "市場調查",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "品牌策略",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "內容策略",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-06",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "sales_roles",
+    "roleId": "account_executive"
+   },
+   "resume": {
+    "title": "業務代表",
+    "skills": [
+     "Salesforce",
+     "客戶開發",
+     "合約談判"
+    ],
+    "markdown": "# 技能對照 SK-TW-06（虛構）\n\n## 工作經歷\n業務代表，澄淵示例公司（虛構）\n- 透過電話銷售與轉介紹開發新客戶。\n\n## 專業技能\nSalesforce、客戶開發、合約談判"
+   },
+   "posting": {
+    "title": "業務代表",
+    "skills": [
+     {
+      "name": "客戶開發",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "合約談判",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "電話銷售",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "銷售預測",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "銷售漏斗管理",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-07",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "financial_analyst"
+   },
+   "resume": {
+    "title": "財務分析師",
+    "skills": [
+     "財務建模",
+     "Excel",
+     "預算編製"
+    ],
+    "markdown": "# 技能對照 SK-TW-07（虛構）\n\n## 工作經歷\n財務分析師，澄淵示例公司（虛構）\n- 負責年度預算編製與每月差異分析。\n\n## 專業技能\n財務建模、Excel、預算編製"
+   },
+   "posting": {
+    "title": "財務分析師",
+    "skills": [
+     {
+      "name": "財務建模",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "差異分析",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "試算表",
+      "required": false,
+      "expected": "related",
+      "reason": "Excel is listed."
+     },
+     {
+      "name": "財務預測",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Power BI",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-08",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "human_resources",
+    "roleId": "hr_generalist"
+   },
+   "resume": {
+    "title": "人資專員",
+    "skills": [
+     "員工關係",
+     "薪資核算",
+     "績效管理"
+    ],
+    "markdown": "# 技能對照 SK-TW-08（虛構）\n\n## 工作經歷\n人資專員，澄淵示例公司（虛構）\n- 負責每年約 120 人的到職管理。\n\n## 專業技能\n員工關係、薪資核算、績效管理"
+   },
+   "posting": {
+    "title": "人資專員",
+    "skills": [
+     {
+      "name": "員工關係",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "到職管理",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the bullet only."
+     },
+     {
+      "name": "績效管理",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "勞動法規",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "HRIS",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-09",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "fullstack_engineer"
+   },
+   "resume": {
+    "title": "全端工程師",
+    "skills": [],
+    "markdown": "# 技能對照 SK-TW-09（虛構）\n\n## 工作經歷\n全端工程師，澄淵示例公司（虛構）\n- 使用Node.js與React開發商家後台。\n- 資料庫採用Postgres。"
+   },
+   "posting": {
+    "title": "全端工程師",
+    "skills": [
+     {
+      "name": "Node.js",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the first bullet."
+     },
+     {
+      "name": "React",
+      "required": true,
+      "expected": "shown",
+      "reason": "Named in the first bullet: 與React開發."
+     },
+     {
+      "name": "PostgreSQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Written as Postgres in the second bullet."
+     },
+     {
+      "name": "關聯式資料庫",
+      "required": false,
+      "expected": "related",
+      "reason": "Postgres is named."
+     },
+     {
+      "name": "GraphQL",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-10",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "risk_analyst"
+   },
+   "resume": {
+    "title": "風險分析師",
+    "skills": [
+     "信用分析",
+     "風險建模",
+     "SQL"
+    ],
+    "markdown": "# 技能對照 SK-TW-10（虛構）\n\n## 工作經歷\n風險分析師，澄淵示例公司（虛構）\n- 維護信用評分卡，使用Python。\n\n## 專業技能\n信用分析、風險建模、SQL"
+   },
+   "posting": {
+    "title": "風險分析師",
+    "skills": [
+     {
+      "name": "信用分析",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "風險建模",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Python",
+      "required": false,
+      "expected": "shown",
+      "reason": "Named in the bullet: 使用Python."
+     },
+     {
+      "name": "機器學習",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Tableau",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-11",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "marketing_brand",
+    "roleId": "brand_manager"
+   },
+   "resume": {
+    "title": "品牌經理",
+    "skills": [
+     "品牌策略",
+     "文案撰寫"
+    ],
+    "markdown": "# 技能對照 SK-TW-11（虛構）\n\n## 工作經歷\n品牌經理，澄淵示例公司（虛構）\n- 負責兩條產品線的品牌定位。\n\n## 專業技能\n品牌策略、文案撰寫"
+   },
+   "posting": {
+    "title": "品牌經理",
+    "skills": [
+     {
+      "name": "品牌策略",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "文案撰寫",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "市場調查",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Google Analytics",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "預算管理",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-tw-12",
+   "market": "intl",
+   "subset": "zh-TW",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "it_ops",
+    "roleId": "sysadmin"
+   },
+   "resume": {
+    "title": "網站可靠性工程師",
+    "skills": [
+     "K8s",
+     "Terraform",
+     "AWS"
+    ],
+    "markdown": "# 技能對照 SK-TW-12（虛構）\n\n## 工作經歷\n網站可靠性工程師，澄淵示例公司（虛構）\n- 將建置流程遷移到 GitHub Actions。\n\n## 專業技能\nK8s、Terraform、AWS"
+   },
+   "posting": {
+    "title": "維運工程師",
+    "skills": [
+     {
+      "name": "Kubernetes",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as K8s."
+     },
+     {
+      "name": "持續整合",
+      "required": true,
+      "expected": "related",
+      "reason": "GitHub Actions is named in the bullet."
+     },
+     {
+      "name": "容器技術",
+      "required": false,
+      "expected": "related",
+      "reason": "K8s is listed."
+     },
+     {
+      "name": "雲端運算",
+      "required": false,
+      "expected": "related",
+      "reason": "AWS is listed."
+     },
+     {
+      "name": "Docker",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Grafana",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-01",
+   "market": "intl",
+   "subset": "cross",
+   "resumeLang": "en",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "Backend Engineer",
+    "skills": [
+     "Java",
+     "Go",
+     "PostgreSQL",
+     "Kubernetes"
+    ],
+    "markdown": "# Skills pair SK-X-01 (synthetic)\n\n## Experience\nBackend Engineer, Harborline Example Co. (synthetic)\n- Responsible for payment and order services, working with Java and Go.\n\n## Skills\nJava, Go, PostgreSQL, Kubernetes"
+   },
+   "posting": {
+    "title": "後端工程師",
+    "skills": [
+     {
+      "name": "Java",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Kubernetes",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "關聯式資料庫",
+      "required": true,
+      "expected": "related",
+      "reason": "PostgreSQL is listed."
+     },
+     {
+      "name": "訊息佇列",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "No message queue is named."
+     },
+     {
+      "name": "機器學習",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-02",
+   "market": "intl",
+   "subset": "cross",
+   "resumeLang": "zh-TW",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_analyst"
+   },
+   "resume": {
+    "title": "資料分析師",
+    "skills": [
+     "SQL",
+     "Python",
+     "Tableau",
+     "統計分析",
+     "機器學習"
+    ],
+    "markdown": "# 技能對照 SK-X-02（虛構）\n\n## 工作經歷\n資料分析師，澄淵示例公司（虛構）\n- 負責每週營運報表，使用 SQL 與 Python。\n\n## 專業技能\nSQL、Python、Tableau、統計分析、機器學習"
+   },
+   "posting": {
+    "title": "Data Analyst",
+    "skills": [
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Statistics",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 統計分析."
+     },
+     {
+      "name": "Machine learning",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as 機器學習."
+     },
+     {
+      "name": "Data visualization",
+      "required": true,
+      "expected": "related",
+      "reason": "Tableau is listed."
+     },
+     {
+      "name": "A/B testing",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Excel",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-03",
+   "market": "intl",
+   "subset": "cross",
+   "resumeLang": "en",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "ml_ai",
+    "roleId": "ml_engineer"
+   },
+   "resume": {
+    "title": "Machine Learning Engineer",
+    "skills": [
+     "Python",
+     "PyTorch",
+     "Feature engineering",
+     "Model deployment"
+    ],
+    "markdown": "# Skills pair SK-X-03 (synthetic)\n\n## Experience\nMachine Learning Engineer, Harborline Example Co. (synthetic)\n- Trained ranking models in PyTorch.\n\n## Skills\nPython, PyTorch, Feature engineering, Model deployment"
+   },
+   "posting": {
+    "title": "機器學習工程師",
+    "skills": [
+     {
+      "name": "特徵工程",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Feature engineering."
+     },
+     {
+      "name": "模型部署",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Model deployment."
+     },
+     {
+      "name": "機器學習框架",
+      "required": false,
+      "expected": "related",
+      "reason": "PyTorch is listed."
+     },
+     {
+      "name": "TensorFlow",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "提示工程",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-04",
+   "market": "intl",
+   "subset": "cross",
+   "resumeLang": "zh-TW",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "marketing_brand",
+    "roleId": "marketing_manager"
+   },
+   "resume": {
+    "title": "行銷經理",
+    "skills": [
+     "行銷活動企劃",
+     "市場調查",
+     "內容策略"
+    ],
+    "markdown": "# 技能對照 SK-X-04（虛構）\n\n## 工作經歷\n行銷經理，澄淵示例公司（虛構）\n- 每年規劃四檔新品行銷活動。\n\n## 專業技能\n行銷活動企劃、市場調查、內容策略"
+   },
+   "posting": {
+    "title": "Marketing Manager",
+    "skills": [
+     {
+      "name": "Campaign planning",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 行銷活動企劃."
+     },
+     {
+      "name": "Market research",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 市場調查."
+     },
+     {
+      "name": "Content strategy",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as 內容策略."
+     },
+     {
+      "name": "SEO",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Google Analytics",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-05",
+   "market": "intl",
+   "subset": "cross",
+   "resumeLang": "en",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "financial_analyst"
+   },
+   "resume": {
+    "title": "Financial Analyst",
+    "skills": [
+     "Financial modeling",
+     "Excel",
+     "Budgeting"
+    ],
+    "markdown": "# Skills pair SK-X-05 (synthetic)\n\n## Experience\nFinancial Analyst, Harborline Example Co. (synthetic)\n- Built the three-statement model for the annual plan.\n\n## Skills\nFinancial modeling, Excel, Budgeting"
+   },
+   "posting": {
+    "title": "財務分析師",
+    "skills": [
+     {
+      "name": "財務建模",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Financial modeling."
+     },
+     {
+      "name": "預算編製",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Budgeting."
+     },
+     {
+      "name": "試算表",
+      "required": false,
+      "expected": "related",
+      "reason": "Excel is listed."
+     },
+     {
+      "name": "差異分析",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "信用分析",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-06",
+   "market": "intl",
+   "subset": "cross",
+   "resumeLang": "zh-TW",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "human_resources",
+    "roleId": "hr_generalist"
+   },
+   "resume": {
+    "title": "人資專員",
+    "skills": [
+     "員工關係",
+     "薪資核算"
+    ],
+    "markdown": "# 技能對照 SK-X-06（虛構）\n\n## 工作經歷\n人資專員，澄淵示例公司（虛構）\n- 負責員工關係與每月薪資核算。\n\n## 專業技能\n員工關係、薪資核算"
+   },
+   "posting": {
+    "title": "HR Generalist",
+    "skills": [
+     {
+      "name": "Employee relations",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 員工關係."
+     },
+     {
+      "name": "Payroll",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 薪資核算."
+     },
+     {
+      "name": "Employee onboarding",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Performance management",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Workday",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-07",
+   "market": "intl",
+   "subset": "cross",
+   "resumeLang": "en",
+   "postingLang": "zh-TW",
+   "basedOn": {
+    "groupId": "swe_frontend",
+    "roleId": "frontend_engineer"
+   },
+   "resume": {
+    "title": "Frontend Engineer",
+    "skills": [
+     "React",
+     "TypeScript",
+     "CSS",
+     "Web accessibility"
+    ],
+    "markdown": "# Skills pair SK-X-07 (synthetic)\n\n## Experience\nFrontend Engineer, Harborline Example Co. (synthetic)\n- Built the checkout flow in React.\n\n## Skills\nReact, TypeScript, CSS, Web accessibility"
+   },
+   "posting": {
+    "title": "前端工程師",
+    "skills": [
+     {
+      "name": "React",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "無障礙設計",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as Web accessibility."
+     },
+     {
+      "name": "前端框架",
+      "required": false,
+      "expected": "related",
+      "reason": "React is listed."
+     },
+     {
+      "name": "自動化測試",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "No testing tool is named."
+     },
+     {
+      "name": "Next.js",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-08",
+   "market": "intl",
+   "subset": "cross",
+   "resumeLang": "zh-TW",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "sales_roles",
+    "roleId": "account_executive"
+   },
+   "resume": {
+    "title": "業務代表",
+    "skills": [
+     "Salesforce",
+     "客戶開發",
+     "合約談判",
+     "銷售預測"
+    ],
+    "markdown": "# 技能對照 SK-X-08（虛構）\n\n## 工作經歷\n業務代表，澄淵示例公司（虛構）\n- 負責企業客戶的開發與續約。\n\n## 專業技能\nSalesforce、客戶開發、合約談判、銷售預測"
+   },
+   "posting": {
+    "title": "Account Executive",
+    "skills": [
+     {
+      "name": "Prospecting",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 客戶開發."
+     },
+     {
+      "name": "Contract negotiation",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 合約談判."
+     },
+     {
+      "name": "Sales forecasting",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as 銷售預測."
+     },
+     {
+      "name": "Cold calling",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "HubSpot",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-09",
+   "market": "cn",
+   "subset": "cross",
+   "resumeLang": "en",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_scientist"
+   },
+   "resume": {
+    "title": "Data Scientist",
+    "skills": [
+     "Machine learning",
+     "Python",
+     "Statistics",
+     "Predictive modeling"
+    ],
+    "markdown": "# Skills pair SK-X-09 (synthetic)\n\n## Experience\nData Scientist, Harborline Example Co. (synthetic)\n- Built churn models for a subscription product.\n\n## Skills\nMachine learning, Python, Statistics, Predictive modeling"
+   },
+   "posting": {
+    "title": "数据科学家",
+    "skills": [
+     {
+      "name": "机器学习",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Machine learning."
+     },
+     {
+      "name": "统计分析",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Statistics."
+     },
+     {
+      "name": "预测建模",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as Predictive modeling."
+     },
+     {
+      "name": "SQL",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "实验设计",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-10",
+   "market": "cn",
+   "subset": "cross",
+   "resumeLang": "zh-CN",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "swe_backend",
+    "roleId": "backend_engineer"
+   },
+   "resume": {
+    "title": "后端开发工程师",
+    "skills": [
+     "Java",
+     "MySQL",
+     "Redis",
+     "Kafka"
+    ],
+    "markdown": "# 技能对照 SK-X-10（虚构）\n\n## 工作经历\n后端开发工程师，枕山示例公司（虚构）\n- 负责支付与订单服务，使用 Java。\n\n## 专业技能\nJava、MySQL、Redis、Kafka"
+   },
+   "posting": {
+    "title": "Backend Engineer",
+    "skills": [
+     {
+      "name": "Java",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Relational databases",
+      "required": true,
+      "expected": "related",
+      "reason": "MySQL is listed."
+     },
+     {
+      "name": "Message queues",
+      "required": false,
+      "expected": "related",
+      "reason": "Kafka is listed."
+     },
+     {
+      "name": "Kubernetes",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "Go",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-11",
+   "market": "cn",
+   "subset": "cross",
+   "resumeLang": "en",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "product_design",
+    "roleId": "ux_designer"
+   },
+   "resume": {
+    "title": "Product Designer",
+    "skills": [
+     "Figma",
+     "User research",
+     "Prototyping",
+     "Usability testing"
+    ],
+    "markdown": "# Skills pair SK-X-11 (synthetic)\n\n## Experience\nProduct Designer, Harborline Example Co. (synthetic)\n- Ran usability testing for the booking flow.\n\n## Skills\nFigma, User research, Prototyping, Usability testing"
+   },
+   "posting": {
+    "title": "交互设计师",
+    "skills": [
+     {
+      "name": "用户研究",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as User research."
+     },
+     {
+      "name": "原型设计",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Prototyping."
+     },
+     {
+      "name": "可用性测试",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as Usability testing."
+     },
+     {
+      "name": "设计工具",
+      "required": false,
+      "expected": "related",
+      "reason": "Figma is listed."
+     },
+     {
+      "name": "设计系统",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-12",
+   "market": "cn",
+   "subset": "cross",
+   "resumeLang": "zh-CN",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "financial_analysis",
+    "roleId": "financial_analyst"
+   },
+   "resume": {
+    "title": "财务分析师",
+    "skills": [
+     "财务建模",
+     "Excel",
+     "注册会计师"
+    ],
+    "markdown": "# 技能对照 SK-X-12（虚构）\n\n## 工作经历\n财务分析师，枕山示例公司（虚构）\n- 负责年度预算与月度经营分析。\n\n## 专业技能\n财务建模、Excel、注册会计师"
+   },
+   "posting": {
+    "title": "Financial Analyst",
+    "skills": [
+     {
+      "name": "Financial modeling",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 财务建模."
+     },
+     {
+      "name": "CPA",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 注册会计师."
+     },
+     {
+      "name": "Excel",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed."
+     },
+     {
+      "name": "Power BI",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "SQL",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-13",
+   "market": "cn",
+   "subset": "cross",
+   "resumeLang": "en",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "marketing_brand",
+    "roleId": "marketing_manager"
+   },
+   "resume": {
+    "title": "Marketing Manager",
+    "skills": [
+     "Campaign planning",
+     "Copywriting",
+     "Budget management"
+    ],
+    "markdown": "# Skills pair SK-X-13 (synthetic)\n\n## Experience\nMarketing Manager, Harborline Example Co. (synthetic)\n- Planned four product campaigns a year.\n\n## Skills\nCampaign planning, Copywriting, Budget management"
+   },
+   "posting": {
+    "title": "市场经理",
+    "skills": [
+     {
+      "name": "营销活动策划",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Campaign planning."
+     },
+     {
+      "name": "文案撰写",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as Copywriting."
+     },
+     {
+      "name": "预算管理",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as Budget management."
+     },
+     {
+      "name": "市场调研",
+      "required": true,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "品牌策略",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-14",
+   "market": "cn",
+   "subset": "cross",
+   "resumeLang": "zh-CN",
+   "postingLang": "en",
+   "basedOn": {
+    "groupId": "ml_ai",
+    "roleId": "ml_engineer"
+   },
+   "resume": {
+    "title": "机器学习工程师",
+    "skills": [
+     "Python",
+     "PyTorch",
+     "模型部署",
+     "特征工程"
+    ],
+    "markdown": "# 技能对照 SK-X-14（虚构）\n\n## 工作经历\n机器学习工程师，枕山示例公司（虚构）\n- 负责推荐排序模型的训练与上线。\n\n## 专业技能\nPython、PyTorch、模型部署、特征工程"
+   },
+   "posting": {
+    "title": "ML Engineer",
+    "skills": [
+     {
+      "name": "Model deployment",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 模型部署."
+     },
+     {
+      "name": "Feature engineering",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 特征工程."
+     },
+     {
+      "name": "Machine learning",
+      "required": true,
+      "expected": "shown",
+      "reason": "The title line says 机器学习工程师."
+     },
+     {
+      "name": "Machine learning frameworks",
+      "required": false,
+      "expected": "related",
+      "reason": "PyTorch is listed."
+     },
+     {
+      "name": "MLflow",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "SQL",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-15",
+   "market": "cn",
+   "subset": "cross",
+   "resumeLang": "en",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "human_resources",
+    "roleId": "hr_generalist"
+   },
+   "resume": {
+    "title": "HR Generalist",
+    "skills": [
+     "Employee relations",
+     "Payroll",
+     "Performance management"
+    ],
+    "markdown": "# Skills pair SK-X-15 (synthetic)\n\n## Experience\nHR Generalist, Harborline Example Co. (synthetic)\n- Ran the annual review cycle for 200 people.\n\n## Skills\nEmployee relations, Payroll, Performance management"
+   },
+   "posting": {
+    "title": "人事专员",
+    "skills": [
+     {
+      "name": "员工关系",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Employee relations."
+     },
+     {
+      "name": "薪资核算",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as Payroll."
+     },
+     {
+      "name": "绩效管理",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as Performance management."
+     },
+     {
+      "name": "劳动法",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "入职管理",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  },
+  {
+   "id": "sk-x-16",
+   "market": "cn",
+   "subset": "cross",
+   "resumeLang": "zh-TW",
+   "postingLang": "zh-CN",
+   "basedOn": {
+    "groupId": "data_analytics",
+    "roleId": "data_scientist"
+   },
+   "resume": {
+    "title": "資料科學家",
+    "skills": [
+     "機器學習",
+     "預測建模",
+     "Python",
+     "統計分析"
+    ],
+    "markdown": "# 技能對照 SK-X-16（虛構）\n\n## 工作經歷\n資料科學家，澄淵示例公司（虛構）\n- 負責用戶流失預測模型。\n\n## 專業技能\n機器學習、預測建模、Python、統計分析"
+   },
+   "posting": {
+    "title": "数据科学家",
+    "skills": [
+     {
+      "name": "机器学习",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 機器學習 (Traditional script)."
+     },
+     {
+      "name": "预测建模",
+      "required": true,
+      "expected": "shown",
+      "reason": "Listed as 預測建模 (Traditional script)."
+     },
+     {
+      "name": "统计分析",
+      "required": false,
+      "expected": "shown",
+      "reason": "Listed as 統計分析 (Traditional script)."
+     },
+     {
+      "name": "深度学习",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     },
+     {
+      "name": "SQL",
+      "required": false,
+      "expected": "not_shown",
+      "reason": "Not on the resume."
+     }
+    ]
+   }
+  }
+ ]
+}

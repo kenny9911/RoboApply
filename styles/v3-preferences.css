@@ -186,6 +186,23 @@
   font-weight: inherit;
   color: inherit;
 }
+/* A text field and, under it, its message. Takes the width .pref-input-wrap
+ * had on its own, so a row looks the same with or without a message. */
+.pref-field {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 420px;
+  min-width: 0;
+}
+.pref-field > .pref-input-wrap { max-width: none; }
+/* What is wrong with a field, under it, for as long as it is wrong. */
+.pref-field-error {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-body);
+  color: var(--danger);
+}
 .pref-sub {
   font-size: var(--fs-body);
   color: var(--text-2);
@@ -1213,7 +1230,15 @@
     z-index: 2;
   }
   .pref-rail-head { padding: 0; }
+  /* The section row scrolls inside itself and never widens the page. Its
+   * width is tied to the viewport (minus .main-inner's side padding at this
+   * breakpoint), not only to its parent: when something else on the page was
+   * wider than the screen, a 100%-wide row grew with it and its last items
+   * could only be reached by scrolling the whole page sideways. */
+  .pref-rail { min-width: 0; max-width: calc(100vw - 2 * var(--sp-5)); }
   .pref-nav {
+    min-width: 0;
+    max-width: 100%;
     flex-direction: row;
     gap: var(--sp-1);
     overflow-x: auto;

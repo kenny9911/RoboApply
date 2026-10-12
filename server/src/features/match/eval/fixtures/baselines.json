@@ -1,0 +1,12 @@
+{
+  "_generatedBy": "npm run eval:match -- --write-baseline",
+  "writtenAt": "2026-10-11T02:43:14.773Z",
+  "source": "the fit order of this checkout (getFits) on the committed fixtures",
+  "fixturesHash": "5b4aa710cea809c726ff77a7b79394b969a62ea5493dc69c304011435d5f8da4",
+  "values": {
+    "ranking/ndcg_at_10/cn/all": 0.941762,
+    "ranking/ndcg_at_10/intl/all": 0.951479,
+    "ranking/ndcg_at_20/cn/all": 0.959775,
+    "ranking/ndcg_at_20/intl/all": 0.963831
+  }
+}

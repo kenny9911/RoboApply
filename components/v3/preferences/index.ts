@@ -7,16 +7,18 @@
 //
 // Gone with auto-apply and the recruiter-profile claim (rulings R1, C19):
 // AgentSection (aggressiveness + daily cap), PlanSection and IntegSection,
-// IntegrationCard, and the profile-visibility control.
+// IntegrationCard, and the profile-visibility control. Gone with INT-12: the
+// DataSection wrapper (#privacy is the compliance area's section).
 
 export { SaveBar } from './SaveBar';
 export { WipeDataModal } from './WipeDataModal';
 export * from './controls';
 
 export { IdentitySection } from './sections/IdentitySection';
-export { HuntSection } from './sections/HuntSection';
+export { SearchIntro, SearchNotes } from './sections/HuntSection';
 export { ResumeSection } from './sections/ResumeSection';
-export { AppearanceSection } from './sections/AppearanceSection';
-export { NotifSection } from './sections/NotifSection';
-export { BlocklistSection, DataSection } from './sections/PrivacySection';
+export { BlocklistSection } from './sections/PrivacySection';
 export { DangerSection } from './sections/DangerSection';
+// Not exported any more (INT-12): AppearanceSection and NotifSection. Their
+// sections render the brand and notifications area components; the two files
+// stay only for the tests outside this folder that still import them.

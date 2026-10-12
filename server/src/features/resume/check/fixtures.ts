@@ -1,0 +1,28 @@
+// server/src/features/resume/check/fixtures.ts — fictional resumes shared by the WP-22 tests.
+
+export const GOOD_INTL = [
+  '# Ada Lovelace',
+  '*ada@example.test · +1 415 555 0100 · London*',
+  '',
+  '## Summary',
+  '',
+  'Backend engineer with six years building payment systems in Python and Go; led the move of billing to event-driven services.',
+  '',
+  '## Experience',
+  '',
+  '### Analytical Engines · Senior Engineer · 01/2020 – Present',
+  '- Built a ledger service handling 2M payments a day with 99.95% uptime.',
+  '- Cut settlement time from 3 days to 4 hours by redesigning the batch jobs.',
+  '- Led a team of 5 engineers through the migration to Kubernetes.',
+  '',
+  '### Difference Co · Engineer · 06/2017 – 12/2019',
+  '- Shipped 12 internal tools used by 300 analysts.',
+  '',
+  '## Education',
+  '',
+  '### BS Computer Science · University of London · 2013 – 2017',
+  '',
+  '## Skills',
+  '',
+  'Python · Go · PostgreSQL · Kafka · Kubernetes · AWS',
+].join('\n');

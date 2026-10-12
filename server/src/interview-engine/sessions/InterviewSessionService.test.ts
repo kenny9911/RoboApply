@@ -157,7 +157,7 @@ vi.mock('../livekit/liveKitClient.js', () => ({
 }));
 vi.mock('../livekit/egress.js', () => ({ startRoomRecording: vi.fn(async () => null), stopRecording: vi.fn(async () => {}) }));
 vi.mock('../storage/r2Storage.js', () => ({
-  interviewR2Storage: { isConfigured: () => false, recordingKey: (id: string) => `rec/${id}.mp4` },
+  interviewR2Storage: { isConfigured: () => false, canStore: () => false, recordingKey: (id: string) => `rec/${id}.mp4` },
 }));
 vi.mock('../prompt/interviewPromptService.js', () => ({ interviewPromptService: { generate: h.generate } }));
 vi.mock('../prompt/InterviewBlueprintAgent.js', () => ({ inferRoleFromJd: () => 'Inferred Role' }));

@@ -1,0 +1,35 @@
+{
+  "jobs": [
+    {
+      "absolute_url": "https://boards.greenhouse.io/globalco/jobs/7",
+      "application_deadline": null,
+      "company_name": "Global Co",
+      "data_compliance": [{ "type": "gdpr", "requires_consent": false, "requires_processing_consent": false, "requires_retention_consent": false, "retention_period": null, "demographic_data_consent_applies": false }],
+      "first_published": "2026-09-01T00:00:00-04:00",
+      "id": 7,
+      "internal_job_id": 5007,
+      "language": "en",
+      "location": { "name": "Shanghai, China" },
+      "metadata": null,
+      "requisition_id": "REQ-7",
+      "title": "Software Engineer",
+      "updated_at": "2026-10-01T00:00:00-04:00"
+    },
+    {
+      "absolute_url": "https://boards.greenhouse.io/globalco/jobs/8",
+      "application_deadline": null,
+      "company_name": "Global Co",
+      "data_compliance": [{ "type": "gdpr", "requires_consent": false, "requires_processing_consent": false, "requires_retention_consent": false, "retention_period": null, "demographic_data_consent_applies": false }],
+      "first_published": "2026-09-03T00:00:00-04:00",
+      "id": 8,
+      "internal_job_id": 5008,
+      "language": "en",
+      "location": { "name": "APAC" },
+      "metadata": null,
+      "requisition_id": "REQ-8",
+      "title": "Account Executive",
+      "updated_at": "2026-10-02T00:00:00-04:00"
+    }
+  ],
+  "meta": { "total": 2 }
+}

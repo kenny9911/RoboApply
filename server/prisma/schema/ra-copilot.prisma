@@ -1,0 +1,85 @@
+// ra-copilot.prisma: COP area models (ARCHITECTURE.md §2.10, §5).
+// Added by FND-1b (Jobright clone). UI name: "Assistant" / 求职助手; the code
+// area stays `copilot` (TASK_PLAN.md R-10).
+
+model RACopilotThread {
+  id                  String              @id @default(cuid())
+  userId              String
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand               String
+  title               String?
+  contextJobId        String?
+  /// Rolling summary of older turns.
+  summary             String?             @db.Text
+  summarizedThroughId String?
+  messageCount        Int                 @default(0)
+  tokensIn            Int                 @default(0)
+  tokensOut           Int                 @default(0)
+  costUsd             Decimal             @default(0) @db.Decimal(10, 6)
+  lastMessageAt       DateTime            @default(now())
+  archivedAt          DateTime?
+  createdAt           DateTime            @default(now())
+  messages            RACopilotMessage[]
+  proposals           RACopilotProposal[]
+
+  @@index([userId, lastMessageAt(sort: Desc)])
+}
+
+model RACopilotMessage {
+  id           String          @id @default(cuid())
+  threadId     String
+  thread       RACopilotThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  /// 'user' | 'assistant' | 'tool'
+  role         String
+  content      String          @db.Text
+  /// Typed cards (ARCH §5.4; wire contract in server/src/features/copilot/contract.ts).
+  cards        Json            @default("[]")
+  /// `[{ id, name, args, resultDigest, ms, ok }]`
+  toolCalls    Json?
+  model        String?
+  tokensIn     Int?
+  tokensOut    Int?
+  /// 'up' | 'down'
+  feedback     String?
+  feedbackNote String?
+  createdAt    DateTime        @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+/// A change the assistant proposes; nothing is applied until the user confirms.
+model RACopilotProposal {
+  id        String          @id @default(cuid())
+  threadId  String
+  thread    RACopilotThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 'filter_change' | 'credit_action' | 'memory_add'
+  kind      String
+  /// filter_change: `{ searchProfileId, baseVersion, ops: [{ op: 'add'|'remove'|'set', path, value }] }`;
+  /// credit_action: `{ action: 'tailor'|'cover_letter'|'outreach', args, bucket, cost }`
+  payload   Json
+  /// 'pending' | 'applied' | 'dismissed' | 'expired' | 'conflict'
+  status    String          @default("pending")
+  expiresAt DateTime
+  appliedAt DateTime?
+  createdAt DateTime        @default(now())
+
+  @@index([userId, status])
+  @@index([threadId])
+}
+
+/// User-visible, deletable long-term facts (consent `copilot_memory`).
+model RACopilotMemory {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// ≤200 chars
+  fact      String
+  /// 'user_said' | 'user_confirmed'
+  source    String
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([userId, deletedAt])
+}

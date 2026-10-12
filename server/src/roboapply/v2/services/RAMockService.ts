@@ -22,8 +22,10 @@
 //                the user's previous completed session.
 //
 // LLM: the question plan + per-turn follow-ups come from
-// `RAMockInterviewerAgent` (configured interview model, persona-aware). The SCORE is a
-// deterministic transcript heuristic — robust, free, and never 500s. Mock is
+// `RAMockInterviewerAgent` (configured interview model, persona-aware). The SCORE is the
+// engine's deterministic text-check scorer (interview-engine/scoring/interviewScorer:
+// localized to the session language, CJK-aware) — robust, free, and never 500s. It is
+// told how many questions went unanswered, so a skipped question is counted and named. Mock is
 // NOT a billed SKU yet (no quota gating / no UsageDeductionLog row); if it
 // becomes one, gate `start`/`nextTurn` through `lib/matchBilling`-style
 // primitives and note it here.
@@ -33,19 +35,44 @@
 // `nextTurn` falls back to a canned interviewer turn, so every endpoint returns
 // a valid shape with no LLM key.
 //
+// WRITTEN practice: every exchange here is typed (the candidate reads a
+// question and sends text). The model is told so on every call — in the type
+// line of the question plan and at the top of each turn's brief — because the
+// catalog's type and persona lines describe live formats ("shared editor",
+// "whiteboard") and would otherwise produce "stay off the keyboard" or
+// microphone wording in a text box.
+//
+// GoApply (WP-66): the cn market lists its AI-interview practice format first
+// (`catalog('cn')`); `start` passes the job post, the market and the session
+// id (the question-selection seed) to the prompt generator, which then runs
+// the format's script and saves its timing plan on `blueprint.cnFormat`; and
+// `score` adds the `cn` report block (communication / logic / story answers,
+// STAR and filler-word checks — text checks only, no model). RoboApply is
+// unchanged: no market format, no `cn` block.
+//
 // Ownership: every session-scoped method loads `{ id, userId }` and 404s
 // otherwise (single-user product — no team scope; see raVisibility.ts).
 
+import { randomUUID } from 'node:crypto';
 import prisma from '../../../lib/prisma.js';
-import { getCurrentRequestId } from '../../../lib/requestContext.js';
+import { getCurrentBrandId, getCurrentRequestId } from '../../../lib/requestContext.js';
+import { getBrand } from '../../../platform/brand/index.js';
+import {
+  CN_AI_INTERVIEW_FORMAT_ID,
+  buildCnPracticeReport,
+  normalizeCnTurns,
+  type CnPracticeReport,
+} from '../../../features/cn/interview/index.js';
 import { logger } from '../../../services/LoggerService.js';
 import {
-  RA_MOCK_CATALOG,
+  catalogForMarket,
+  findAnyType,
   findInterviewer,
   findType,
   interviewerNameFor,
   typeLabelFor,
   type RAMockCatalog,
+  type RAMockMarket,
 } from '../lib/raMockCatalog.js';
 import {
   RAMockInterviewerAgent,
@@ -57,6 +84,8 @@ import {
 } from '../agents/RAMockInterviewerAgent.js';
 import { raInterviewPromptService } from './RAInterviewPromptService.js';
 import { normalizeRaLocale } from '../lib/raLocale.js';
+import { normalizeScorerLocale, scoreTranscript } from '../../../interview-engine/scoring/interviewScorer.js';
+import type { TranscriptTurn } from '../../../interview-engine/types.js';
 
 // ─── Wire types (mirror roboapply/lib/api/v2/types.ts exactly) ────────────
 
@@ -82,9 +111,18 @@ export interface MockRecentSessionsResult {
   sessions: RAMockSessionSummary[];
 }
 
+/** Per-question timing of the GoApply AI-interview format, in question order. */
+export interface MockCnFormatTiming {
+  formatId: string;
+  minutes: number;
+  questions: Array<{ prepSeconds: number; answerSeconds: number; story: boolean }>;
+}
+
 export interface MockStartResult {
   sessionId: string;
   questions: Array<{ q: string; hint: string; coachTip: RAMockCoachTip }>;
+  /** Only when the session runs the GoApply AI-interview format (one entry per question). */
+  cnFormat?: MockCnFormatTiming | null;
 }
 
 export interface MockNextTurnResult {
@@ -103,6 +141,8 @@ export interface MockScoreResult {
   strengths: string[];
   gaps: string[];
   durationMinutes: number;
+  /** GoApply only: the practice report block (text checks; no model). */
+  cn?: CnPracticeReport;
 }
 
 // ─── Request shapes ───────────────────────────────────────────────────────
@@ -116,6 +156,12 @@ export interface MockStartInput {
   language?: string;
   /** Planned interview length in minutes (defaults to the type's minutes). */
   durationMinutes?: number;
+  /** The job post the practice is for; given to the question plan as evidence. */
+  jdText?: string;
+  /** The brand's market; defaults to the request's brand (intl when none). */
+  market?: RAMockMarket;
+  /** The RAJob the practice was started from (already market-checked by the caller). */
+  jobId?: string | null;
 }
 
 export interface MockNextTurnInput {
@@ -145,6 +191,84 @@ export class MockSessionNotFoundError extends Error {
 // ─── Constants ──────────────────────────────────────────────────────────
 
 const DEFAULT_QUESTION_COUNT = 5;
+
+/** Job post text handed to the generator (the engine's own cap). */
+const JD_TEXT_MAX_CHARS = 8000;
+
+/**
+ * Put first in the type line handed to the question plan and the interviewer.
+ * Short on purpose: the agents keep only the first 200 characters of that
+ * line, and the longest type description in the catalog (GoApply's format) is
+ * 103 characters, so the note has to leave room for it.
+ */
+export const WRITTEN_PRACTICE_TYPE_NOTE =
+  'WRITTEN practice: answers are typed. Never mention voice, video, microphones or a shared editor.';
+
+/** What the interviewer agent keeps of the type line and of a turn's brief. */
+export const AGENT_TYPE_LINE_MAX_CHARS = 200;
+export const AGENT_BRIEF_MAX_CHARS = 2000;
+
+/**
+ * Put first in the brief of every interviewer turn. One sentence: the agent
+ * keeps 2,000 characters of the brief and a generated session brief can be
+ * longer than that, so every character here is taken from the end of the
+ * session's own brief (its adaptation rules and format line).
+ */
+export const WRITTEN_PRACTICE_BRIEF =
+  'Written practice: the candidate types every answer. No audio, video, microphone or shared editor; never refer to them or to waiting before typing.';
+
+/** The type as the model sees it in a written practice: the note, then the type's own line. */
+function writtenTypeContext(type: { id: string; label: string; sub: string }): RAMockTypeContext {
+  return { id: type.id, label: type.label, sub: `${WRITTEN_PRACTICE_TYPE_NOTE} ${type.sub}` };
+}
+
+/** The turn brief of a written practice: the medium first, then the session's own brief (when it has one). */
+function writtenBrief(sessionBrief: string | undefined): string {
+  return sessionBrief ? `${WRITTEN_PRACTICE_BRIEF}\n${sessionBrief}` : WRITTEN_PRACTICE_BRIEF;
+}
+
+/** The market of the request's brand; intl when there is no brand context. */
+function currentMarket(): RAMockMarket {
+  try {
+    const id = getCurrentBrandId();
+    return id && getBrand(id).market === 'cn' ? 'cn' : 'intl';
+  } catch {
+    return 'intl';
+  }
+}
+
+/**
+ * The timing plan saved by the generator (`blueprint.cnFormat`), when it has
+ * one entry per question. Anything else (no plan, a fallback question set of
+ * another length) is null, so the UI never shows a timing for the wrong question.
+ */
+function cnTimingFrom(blueprint: unknown, questionCount: number): MockCnFormatTiming | null {
+  if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) return null;
+  const plan = (blueprint as Record<string, unknown>).cnFormat;
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return null;
+  const p = plan as Record<string, unknown>;
+  if (!Array.isArray(p.questions) || p.questions.length !== questionCount || questionCount === 0) return null;
+  const questions: MockCnFormatTiming['questions'] = [];
+  for (const row of p.questions) {
+    const r = (row ?? {}) as Record<string, unknown>;
+    const prep = Number(r.prepSeconds);
+    const answer = Number(r.answerSeconds);
+    if (!Number.isFinite(prep) || prep < 0 || !Number.isFinite(answer) || answer <= 0) return null;
+    questions.push({ prepSeconds: Math.round(prep), answerSeconds: Math.round(answer), story: r.story === true });
+  }
+  return {
+    formatId: typeof p.formatId === 'string' && p.formatId ? p.formatId : CN_AI_INTERVIEW_FORMAT_ID,
+    minutes: Number.isFinite(Number(p.minutes)) ? Math.round(Number(p.minutes)) : 0,
+    questions,
+  };
+}
+
+/** True when the stored blueprint carries the AI-interview format plan. */
+function hasCnFormatPlan(blueprint: unknown): boolean {
+  if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) return false;
+  const plan = (blueprint as Record<string, unknown>).cnFormat;
+  return !!plan && typeof plan === 'object' && !Array.isArray(plan);
+}
 
 /** Clamp a requested interview duration to a sane 5..120 minute window. */
 function clampDurationMinutes(value: unknown): number | undefined {
@@ -344,12 +468,22 @@ function fallbackQuestions(typeId: string, count: number): RAMockQuestion[] {
   }));
 }
 
-/** A canned interviewer turn used when the agent fails on nextTurn. Stays in a
- *  generic-but-professional voice and transitions into the next question. */
+/**
+ * A canned interviewer turn used when the agent fails on nextTurn.
+ *
+ * The canned lines exist in English only. In an English session they keep the
+ * old generic-but-professional voice. In any other session language an English
+ * sentence would be the wrong language, so the turn is just the next question
+ * (already written in the session language), with no closing line and no tip.
+ */
 function fallbackTurns(
   answer: string,
   nextQuestion: string | null,
+  language?: string | null,
 ): { turns: RAMockTurn[]; coachTip: RAMockCoachTip | null } {
+  if (normalizeScorerLocale(language) !== 'en') {
+    return { turns: nextQuestion ? [{ who: 'them', text: nextQuestion }] : [], coachTip: null };
+  }
   const answered = answer.trim().length > 0;
   const turns: RAMockTurn[] = [];
   if (nextQuestion) {
@@ -373,198 +507,88 @@ function fallbackTurns(
   return { turns, coachTip };
 }
 
-// ─── Heuristic scorer (deterministic, free, never throws) ─────────────────
+// ─── Score input (the engine's text-check scorer does the scoring) ────────
 //
-// Reads the accumulated transcript (the candidate's "you" turns) and derives a
-// bounded 0..100 score across 5 dimensions, plus strengths + gaps. The score
-// rewards: substantive answers (length), specificity (numbers / metrics),
-// structure (multiple clauses / situation→action→result markers), and
-// completeness (didn't skip). Difficulty modestly tightens the bar.
+// The score itself comes from interview-engine/scoring/interviewScorer: one
+// scorer for the voice engine and the written practice, localized to the
+// session language and CJK-aware. This file used to carry its own
+// English-only copy that split answers on whitespace (a whole Chinese answer
+// counted as one word, so every Chinese answer was "very short") and never saw
+// a skipped question (a skip is an empty answer, and empty turns are dropped
+// when the transcript is read back), so it reported "engaged with every
+// prompt" after four skips out of five.
 
-interface ScoreSignals {
-  answerCount: number;
-  totalWords: number;
-  numericAnswers: number;
-  structuredAnswers: number;
-  emptyAnswers: number;
-  avgWords: number;
+/** Interviewer personas are graded 1..3 here; the scorer's scale is 1..5 with 3 as "no penalty". */
+const SCORER_DIFFICULTY_OFFSET = 2;
+
+interface ScorerInput {
+  /** One candidate turn per answered question, for the scorer. */
+  turns: TranscriptTurn[];
+  /** The stored transcript without re-sent answers (for the GoApply report block). */
+  transcript: RAMockTurn[];
+  /** Distinct planned questions that got a non-blank answer. */
+  answered: number;
+  unanswered: number;
 }
 
-const NUMBER_RE = /\b\d[\d.,%]*\b|\b(?:percent|x|%|\$)\b/i;
-const STRUCTURE_RE = /\b(because|so that|which|then|after|resulted|led to|so we|as a result|increased|reduced|shipped|launched)\b/i;
-
-function gatherSignals(transcript: RAMockTurn[]): ScoreSignals {
-  const youTurns = transcript.filter((t) => t.who === 'you');
-  let totalWords = 0;
-  let numericAnswers = 0;
-  let structuredAnswers = 0;
-  let emptyAnswers = 0;
-  for (const t of youTurns) {
-    const text = (t.text ?? '').trim();
-    const words = text ? text.split(/\s+/).length : 0;
-    totalWords += words;
-    if (words === 0) emptyAnswers++;
-    if (NUMBER_RE.test(text)) numericAnswers++;
-    if (STRUCTURE_RE.test(text) || text.split(/[.;]/).filter((s) => s.trim()).length >= 3) {
-      structuredAnswers++;
-    }
-  }
-  const answerCount = youTurns.length;
-  return {
-    answerCount,
-    totalWords,
-    numericAnswers,
-    structuredAnswers,
-    emptyAnswers,
-    avgWords: answerCount > 0 ? totalWords / answerCount : 0,
+/**
+ * The transcript as the scorer reads it, and how many planned questions got
+ * no answer.
+ *
+ * Questions are counted, not candidate turns. `nextTurn` appends an answer on
+ * every call, and the room re-sends the same question when a request fails on
+ * the client after the server stored it (a gateway timeout on the slow
+ * interviewer call), so one question can hold the same answer twice. Counting
+ * turns would then report a skipped question as answered. `nextTurn` records
+ * the planned question in front of each answer, so each answer is filed under
+ * the planned question that precedes it:
+ *   - an answer identical to one already filed under that question is a
+ *     re-send and is dropped (with the repeated question in front of it);
+ *   - different answers to one question (an edited re-send) are scored as one
+ *     answer, so the scorer's answer count equals the questions answered.
+ * A skipped question leaves no answer, so `unanswered` is the plan's question
+ * count minus the questions answered.
+ */
+function scorerInput(stored: RAMockTurn[], questions: RAMockQuestion[]): ScorerInput {
+  const planned = questions.map((q) => q.q.trim());
+  /** The planned question this text is, looking forward from the current one first. */
+  const plannedIndex = (text: string, from: number): number => {
+    const ahead = planned.indexOf(text, Math.max(0, from));
+    return ahead >= 0 ? ahead : planned.indexOf(text);
   };
-}
 
-function clampScore(n: number): number {
-  return Math.max(0, Math.min(100, Math.round(n)));
-}
-
-/** Map avg words (0..~120) to a 0..100 sub-score with diminishing returns. */
-function lengthScore(avgWords: number): number {
-  // 0 words → ~30; 40 words → ~80; 80+ words → ~90 (plateau).
-  if (avgWords <= 0) return 30;
-  return clampScore(30 + 60 * (1 - Math.exp(-avgWords / 45)));
-}
-
-function ratioScore(part: number, whole: number, floor: number, ceil: number): number {
-  if (whole <= 0) return floor;
-  const r = part / whole;
-  return clampScore(floor + (ceil - floor) * r);
-}
-
-interface HeuristicReport {
-  overall: number;
-  breakdown: Array<{ key: string; value: number; note: string }>;
-  strengths: string[];
-  gaps: string[];
-  note: string;
-}
-
-function heuristicScore(
-  transcript: RAMockTurn[],
-  difficulty: number,
-): HeuristicReport {
-  const s = gatherSignals(transcript);
-
-  // Difficulty 1..3 → penalty 0..~6 points (harder personas grade tighter).
-  const difficultyPenalty = Math.max(0, (difficulty - 1)) * 3;
-
-  const structure = clampScore(ratioScore(s.structuredAnswers, Math.max(1, s.answerCount), 55, 92) - difficultyPenalty);
-  const specificity = clampScore(ratioScore(s.numericAnswers, Math.max(1, s.answerCount), 50, 95) - difficultyPenalty);
-  const communication = clampScore(lengthScore(s.avgWords) - difficultyPenalty / 2);
-  const completeness = clampScore(
-    ratioScore(Math.max(0, s.answerCount - s.emptyAnswers), Math.max(1, s.answerCount), 40, 95),
-  );
-  const confidence = clampScore(
-    // A blend: structure + a small nudge for not skipping, minus difficulty.
-    (structure * 0.5 + completeness * 0.5) - difficultyPenalty,
-  );
-
-  const breakdown = [
-    { key: 'Structure', value: structure, note: structureNote(structure, s) },
-    { key: 'Specificity', value: specificity, note: specificityNote(specificity, s) },
-    { key: 'Communication', value: communication, note: communicationNote(communication, s) },
-    { key: 'Confidence', value: confidence, note: confidenceNote(confidence, s) },
-    { key: 'Role fit', value: completeness, note: roleFitNote(completeness, s) },
-  ];
-
-  const overall = clampScore(
-    breakdown.reduce((sum, b) => sum + b.value, 0) / breakdown.length,
-  );
-
-  const { strengths, gaps } = strengthsAndGaps(breakdown, s);
-  const note = summaryNote(overall, s);
-
-  return { overall, breakdown, strengths, gaps, note };
-}
-
-function structureNote(v: number, s: ScoreSignals): string {
-  if (s.answerCount === 0) return 'No answers were recorded this session.';
-  return v >= 80
-    ? 'Clear arc on most answers — situation, action, and result were easy to follow.'
-    : v >= 60
-      ? 'Mostly structured; a couple of answers jumped straight to the result.'
-      : 'Answers tended to ramble — set up the situation, then the action, then the result.';
-}
-
-function specificityNote(v: number, s: ScoreSignals): string {
-  return v >= 80
-    ? 'Strong use of concrete numbers — interviewers trust figures over adjectives.'
-    : s.numericAnswers > 0
-      ? 'Some answers carried metrics; aim for at least one number per story.'
-      : 'No measurable outcomes surfaced — add a number to each story (before → after).';
-}
-
-function communicationNote(v: number, s: ScoreSignals): string {
-  if (s.avgWords < 15) return 'Answers were very short — give the interviewer enough to evaluate.';
-  if (v >= 80) return 'Good depth and pacing across answers.';
-  return 'Reasonable depth; trim filler and lead with the headline.';
-}
-
-function confidenceNote(v: number, _s: ScoreSignals): string {
-  return v >= 80
-    ? 'Answers read as decisive and owned.'
-    : v >= 60
-      ? 'Mostly assured; a few answers hedged where a clear position would land better.'
-      : 'Tended to hedge — commit to a position and use ownership verbs (I led / I owned).';
-}
-
-function roleFitNote(v: number, s: ScoreSignals): string {
-  if (s.emptyAnswers > 0) return `${s.emptyAnswers} question(s) went unanswered — completing every prompt strengthens fit signal.`;
-  return v >= 80
-    ? 'Engaged with every prompt — completeness reads as genuine interest.'
-    : 'Answered most prompts; fuller engagement on each strengthens the signal.';
-}
-
-function strengthsAndGaps(
-  breakdown: Array<{ key: string; value: number; note: string }>,
-  s: ScoreSignals,
-): { strengths: string[]; gaps: string[] } {
-  const sorted = [...breakdown].sort((a, b) => b.value - a.value);
-  const strengths: string[] = [];
-  const gaps: string[] = [];
-
-  if (s.answerCount === 0) {
-    return {
-      strengths: ['Session started — complete a few answers to get a graded report.'],
-      gaps: ['No answers were recorded. Run the interview through to the end for a real score.'],
-    };
+  const transcript: RAMockTurn[] = [];
+  const answers = new Map<number, string[]>();
+  // -1: an answer with no planned question in front of it (not written by nextTurn).
+  let current = -1;
+  for (const turn of stored) {
+    const text = (turn.text ?? '').trim();
+    if (!text) continue;
+    if (turn.who !== 'you') {
+      const idx = plannedIndex(text, current);
+      if (idx >= 0) current = idx;
+      transcript.push(turn);
+      continue;
+    }
+    const filed = answers.get(current) ?? [];
+    if (filed.includes(text)) {
+      const last = transcript[transcript.length - 1];
+      if (last && last.who === 'them' && plannedIndex(last.text.trim(), current) === current) transcript.pop();
+      continue;
+    }
+    filed.push(text);
+    answers.set(current, filed);
+    transcript.push(turn);
   }
 
-  for (const b of sorted.slice(0, 2)) {
-    if (b.value >= 70) strengths.push(`${b.key}: ${b.note}`);
-  }
-  if (s.numericAnswers > 0 && !strengths.some((x) => x.startsWith('Specificity'))) {
-    strengths.push('You backed claims with concrete numbers in at least one answer.');
-  }
-  if (strengths.length === 0) {
-    strengths.push('You engaged with the prompts — there is a clear base to build on.');
-  }
-
-  for (const b of [...sorted].reverse().slice(0, 2)) {
-    if (b.value < 75) gaps.push(`${b.key}: ${b.note}`);
-  }
-  if (s.emptyAnswers > 0 && !gaps.some((x) => x.startsWith('Role fit'))) {
-    gaps.push(`Answer every prompt — ${s.emptyAnswers} were skipped this session.`);
-  }
-  if (gaps.length === 0) {
-    gaps.push('Keep tightening: one crisp metric per answer and a clear position on every question.');
-  }
-
-  return { strengths: strengths.slice(0, 3), gaps: gaps.slice(0, 3) };
-}
-
-function summaryNote(overall: number, s: ScoreSignals): string {
-  if (s.answerCount === 0) return 'No answers recorded.';
-  if (overall >= 85) return 'Authentic and specific. Best session signal yet.';
-  if (overall >= 75) return 'Strong on metrics. Watch hedging on the harder questions.';
-  if (overall >= 60) return 'Good framing. Get to the point faster and quantify more.';
-  return 'A solid first rep — add structure and concrete numbers next time.';
+  const turns: TranscriptTurn[] = [...answers.values()].map((texts) => ({
+    role: 'candidate',
+    text: texts.join('\n'),
+    ts: 0,
+  }));
+  const total = planned.length;
+  const answered = total > 0 ? Math.min(answers.size, total) : answers.size;
+  return { turns, transcript, answered, unanswered: Math.max(0, total - answered) };
 }
 
 // ─── Relative-time formatter ("2 days ago") ───────────────────────────────
@@ -625,9 +649,9 @@ function asTranscript(value: unknown): RAMockTurn[] {
 // ─── Service ──────────────────────────────────────────────────────────────
 
 export class RAMockService {
-  /** The STATIC setup catalog. No DB, no LLM. */
-  catalog(): MockCatalogResult {
-    return { catalog: RA_MOCK_CATALOG };
+  /** The STATIC setup catalog. No DB, no LLM. GoApply (`cn`) lists its AI-interview practice format first. */
+  catalog(market: RAMockMarket = currentMarket()): MockCatalogResult {
+    return { catalog: catalogForMarket(market) };
   }
 
   /** The user's COMPLETED sessions → recent-session cards. */
@@ -663,8 +687,10 @@ export class RAMockService {
 
   /** Create a session row + generate the ordered question set. */
   async start(userId: string, body: MockStartInput, locale?: string): Promise<MockStartResult> {
+    const market: RAMockMarket = body?.market === 'cn' || body?.market === 'intl' ? body.market : currentMarket();
     const interviewer = findInterviewer(body?.interviewerId ?? '');
-    const type = findType(body?.typeId ?? '');
+    // A market's own format (GoApply's AI-interview practice) is valid on that market only.
+    const type = findType(body?.typeId ?? '', market);
     if (!interviewer || !type) {
       throw new MockValidationError('Unknown interviewer or interview type');
     }
@@ -680,13 +706,18 @@ export class RAMockService {
       style: interviewer.style,
       blurb: interviewer.blurb,
     };
-    const typeCtx: RAMockTypeContext = { id: type.id, label: type.label, sub: type.sub };
+    // The model reads the type line with the written-practice note in front.
+    const typeCtx = writtenTypeContext(type);
 
     // Resolve the interview language + planned duration from the request,
     // falling back to the UI locale / the interview type's default minutes.
     const language = normalizeRaLocale(body.language) ?? normalizeRaLocale(locale) ?? 'en';
     const durationMinutes = clampDurationMinutes(body.durationMinutes) ?? type.minutes;
     const resumeContext = await this.loadResumeContext(userId);
+    const jdText = typeof body.jdText === 'string' ? body.jdText.trim().slice(0, JD_TEXT_MAX_CHARS) : '';
+    // The row's id is chosen up front: it seeds the question selection of the
+    // GoApply format, so one session can be replayed and two sessions differ.
+    const sessionId = randomUUID();
 
     // ── Interview Prompt Generator pipeline (Tavily + 4 agents + composer) ──
     // Never throws — returns heuristic fallbacks for any stage that fails.
@@ -703,6 +734,9 @@ export class RAMockService {
         resumeContext,
         questionCount: DEFAULT_QUESTION_COUNT,
         requestId,
+        jdText: jdText || undefined,
+        market,
+        seed: sessionId,
       });
       interviewPrompt = gen.interviewPrompt;
       // Persist the condensed live brief inside the blueprint so nextTurn can
@@ -736,8 +770,10 @@ export class RAMockService {
       }
     }
 
+    const jobId = typeof body.jobId === 'string' && body.jobId.trim() ? body.jobId.trim().slice(0, 64) : null;
     const created = await prisma.rAMockSession.create({
       data: {
+        id: sessionId,
         userId,
         role,
         interviewerId: interviewer.id,
@@ -751,9 +787,12 @@ export class RAMockService {
         questions: questions as unknown as object,
         transcript: [] as unknown as object,
         status: 'in_progress',
+        // SCHEMA-3 column: the job this practice is for (feeds the job's "Practiced" step).
+        ...(jobId ? { jobId } : {}),
       },
       select: { id: true },
     });
+    const cnFormat = cnTimingFrom(blueprint, questions.length);
 
     logger.info('RA_V2_MOCK', 'session started', {
       userId,
@@ -764,12 +803,16 @@ export class RAMockService {
       durationMinutes,
       questionCount: questions.length,
       generated: !!interviewPrompt,
+      market,
+      jobPost: jdText ? true : undefined,
+      cnFormat: cnFormat ? true : undefined,
       requestId,
     });
 
     return {
       sessionId: created.id,
       questions: questions.map((q) => ({ q: q.q, hint: q.hint, coachTip: q.coachTip })),
+      ...(cnFormat ? { cnFormat } : {}),
     };
   }
 
@@ -785,7 +828,7 @@ export class RAMockService {
     // The interview was generated in a specific language + with an adaptive
     // brief — keep follow-ups in that language and steered by that brief, even
     // if the per-request locale differs.
-    const interviewerBrief = briefFromBlueprint(session.blueprint);
+    const interviewerBrief = writtenBrief(briefFromBlueprint(session.blueprint));
     const turnLocale = session.language ?? locale;
 
     const questions = asQuestions(session.questions);
@@ -812,7 +855,8 @@ export class RAMockService {
 
     // 2) Generate the interviewer's reaction + transition.
     const interviewer = findInterviewer(session.interviewerId);
-    const type = findType(session.typeId);
+    // A stored session may be in a market format (GoApply's AI-interview practice).
+    const type = findAnyType(session.typeId);
     let turns: RAMockTurn[];
     let coachTip: RAMockCoachTip | null;
 
@@ -825,7 +869,7 @@ export class RAMockService {
         style: interviewer.style,
         blurb: interviewer.blurb,
       };
-      const typeCtx: RAMockTypeContext = { id: type.id, label: type.label, sub: type.sub };
+      const typeCtx = writtenTypeContext(type);
       try {
         const agent = new RAMockInterviewerAgent();
         const out = await agent.run(
@@ -845,7 +889,7 @@ export class RAMockService {
           turns = out.turns;
           coachTip = out.coachTip ?? null;
         } else {
-          const fb = fallbackTurns(answer, nextQuestion);
+          const fb = fallbackTurns(answer, nextQuestion, turnLocale);
           turns = fb.turns;
           coachTip = fb.coachTip;
         }
@@ -855,12 +899,12 @@ export class RAMockService {
           sessionId,
           error: err instanceof Error ? err.message : String(err),
         });
-        const fb = fallbackTurns(answer, nextQuestion);
+        const fb = fallbackTurns(answer, nextQuestion, turnLocale);
         turns = fb.turns;
         coachTip = fb.coachTip;
       }
     } else {
-      const fb = fallbackTurns(answer, nextQuestion);
+      const fb = fallbackTurns(answer, nextQuestion, turnLocale);
       turns = fb.turns;
       coachTip = fb.coachTip;
     }
@@ -876,8 +920,12 @@ export class RAMockService {
     return { nextIndex, turns, coachTip };
   }
 
-  /** Mark the session complete + produce the scored report. */
-  async score(userId: string, sessionId: string): Promise<MockScoreResult> {
+  /**
+   * Mark the session complete + produce the scored report. On GoApply
+   * (`market: 'cn'`, default: the request's brand) the result also carries the
+   * `cn` practice report block; RoboApply results never do.
+   */
+  async score(userId: string, sessionId: string, opts: { market?: RAMockMarket } = {}): Promise<MockScoreResult> {
     const id = (sessionId ?? '').trim();
     if (!id) throw new MockValidationError('sessionId is required');
 
@@ -886,7 +934,15 @@ export class RAMockService {
     const interviewer = findInterviewer(session.interviewerId);
     const difficulty = interviewer?.difficulty ?? 2;
 
-    const report = heuristicScore(transcript, difficulty);
+    // Scored in the session language. Questions that got no answer are counted.
+    const input = scorerInput(transcript, asQuestions(session.questions));
+    const scored = scoreTranscript(
+      input.turns,
+      difficulty + SCORER_DIFFICULTY_OFFSET,
+      session.language ?? undefined,
+      { unanswered: input.unanswered },
+    );
+    const report = { ...scored, note: scored.summary };
 
     // delta vs the user's previous COMPLETED session (exclude this one).
     const previous = await prisma.rAMockSession.findFirst({
@@ -920,6 +976,28 @@ export class RAMockService {
       },
     });
 
+    // GoApply: the practice report block. The breakdown above comes from text
+    // checks on the transcript (no model), and the block says so (`basis`).
+    // `formatId` names the AI-interview format only when the session ran it.
+    const market = opts.market ?? currentMarket();
+    let cn: CnPracticeReport | undefined;
+    if (market === 'cn') {
+      try {
+        cn = buildCnPracticeReport({
+          // Without re-sent answers, so a retried answer's filler words count once.
+          turns: normalizeCnTurns(input.transcript),
+          breakdown: report.breakdown,
+          basis: 'text_checks',
+          language: session.language || 'zh',
+          formatId: hasCnFormatPlan(session.blueprint) ? CN_AI_INTERVIEW_FORMAT_ID : session.typeId || 'general',
+        });
+      } catch (err) {
+        logger.warn('RA_V2_MOCK', 'score: cn report block failed; scored without it', {
+          userId, sessionId: id, error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     logger.info('RA_V2_MOCK', 'session scored', {
       userId,
       sessionId: id,
@@ -927,6 +1005,9 @@ export class RAMockService {
       delta,
       durationMinutes,
       turnCount: transcript.length,
+      answered: input.answered,
+      unanswered: input.unanswered,
+      cnReport: cn ? true : undefined,
     });
 
     return {
@@ -936,6 +1017,7 @@ export class RAMockService {
       strengths: report.strengths,
       gaps: report.gaps,
       durationMinutes,
+      ...(cn ? { cn } : {}),
     };
   }
 
@@ -999,8 +1081,7 @@ export default raMockService;
 export const __test = {
   fallbackQuestions,
   fallbackTurns,
-  heuristicScore,
-  gatherSignals,
+  scorerInput,
   relativeWhen,
   asQuestions,
   asTranscript,

@@ -1,6 +1,6 @@
 // roboapply/lib/api/interviewEngine.ts
 //
-// Typed client for the RoboHire Interview Engine — the real-time AI voice
+// Typed client for the Interview Engine — the real-time AI voice
 // interview backend (backend/src/interview-engine/*), mounted at
 // /api/v1/interview-engine. Uses the shared `roboApi` wrapper so it inherits
 // cookie + Bearer auth and the X-Robo-Locale header.
@@ -200,6 +200,10 @@ export interface IESessionDetail extends IESessionSummary {
   reportPending?: boolean;
   recordingAvailable: boolean;
   transcriptAvailable: boolean;
+  /** The server's media policy for this session, known before the room is
+   *  joined: false = a video practice keeps the camera as a local preview
+   *  (nothing is published). Absent on an older API: read as allowed. */
+  cameraPublish?: boolean;
 }
 
 export type IECoachMode = 'hint' | 'nudge';
@@ -225,6 +229,9 @@ export interface IEConnection {
    *  page joins Parley with `parley` instead of a LiveKit room. */
   transport?: 'parley';
   parley?: IEParleyJoin;
+  /** False when the server's join token cannot publish a camera (the media
+   *  policy keeps it a local preview). Absent = legacy server, treat as allowed. */
+  cameraPublish?: boolean;
 }
 
 /** What the browser needs to join a Parley session (WebRTC straight to the node). */
@@ -250,6 +257,8 @@ export interface IEReport {
   transcriptUrl: string | null;
 }
 
+/** The fields a session is created from. Sessions are created through
+ *  `practiceApi.create` (PracticeCreateBody), the one first-party create route. */
 export interface IECreateBody {
   role: string;
   /** Optional pasted job description — rewritten into the interview brief. */
@@ -262,6 +271,190 @@ export interface IECreateBody {
   characteristics?: Partial<IECharacteristics>;
   candidateName?: string;
   resumeContext?: string;
+}
+
+// ─── Practice from a job (WP-43) ───────────────────────────────────────────
+//
+// First-party practice routes on the engine router (cookie only):
+//   GET  /api/v1/interview-engine/v1/practice/setup?job=&resume=
+//   POST /api/v1/interview-engine/v1/practice/sessions
+//   GET  /api/v1/interview-engine/v1/practice/sessions/:id
+//   GET  /api/v1/interview-engine/v1/practice/jobs?ids=
+// Written practice (GoApply without voice) — first-party wrappers over the
+// text interview that check the brand gate (phone, AI consent), load the job
+// server-side, meter credits and tick the checklist when scored:
+//   POST /api/v1/interview-engine/v1/practice/text/start | /next-turn | /:id/score
+
+/** What the user asked to record for one session; the server honours it only with consent. */
+export interface PracticeRecordingRequest {
+  audio: boolean;
+  video: boolean;
+}
+
+/** POST /practice/sessions body: the engine create body plus the job, resume and recording choice. */
+export interface PracticeCreateBody extends Omit<IECreateBody, 'resumeContext'> {
+  jobId?: string | null;
+  /** Resume (variant) to practise with; omitted → the job's tailored one, else the primary. */
+  resumeId?: string | null;
+  recording?: PracticeRecordingRequest;
+}
+
+export interface PracticeCreateResponse {
+  session: IESessionDetail;
+  practice: { jobId: string | null; resumeId: string | null; recording: PracticeRecordingRequest };
+}
+
+export type PracticeGateReason = 'phone_binding_required' | 'ai_consent_required' | 'voice_unavailable';
+export type FirstPracticeGrant = 'granted' | 'already_granted' | 'in_progress' | 'no_profile' | 'failed';
+
+export interface PracticeFirstState {
+  /** Email verification (RoboApply) or a verified phone (GoApply) unlocks the free first practice. */
+  method: 'email' | 'phone';
+  verified: boolean;
+  grant: FirstPracticeGrant | null;
+}
+
+export interface PracticeSetupJob {
+  id: string;
+  title: string;
+  companyName: string;
+  location: string | null;
+  jdText: string;
+  closed: boolean;
+}
+
+export interface PracticeSetup {
+  market: 'intl' | 'cn';
+  job: PracticeSetupJob | null;
+  resume: { id: string; name: string; kind: 'chosen' | 'tailored' | 'primary' | 'latest' } | null;
+  firstPractice: PracticeFirstState;
+  voice: { available: boolean; reason: PracticeGateReason | null };
+  ai: { allowed: boolean; reason: PracticeGateReason | null };
+  /** `available` = recording can happen at all here; `consent` = the user's standing grants. */
+  recording: { available: boolean; consent: PracticeRecordingRequest };
+  /** The server's media policy (the same on both brands unless an operator
+   *  turned camera publishing off). Absent on an older API: read as allowed. */
+  media?: { cameraPublish: boolean; recordVideo: boolean };
+}
+
+export interface PracticeSessionInfo {
+  sessionId: string;
+  status: InterviewStatus;
+  job: { id: string; title: string | null; companyName: string | null } | null;
+  recording: { consented: boolean; video: boolean; available: boolean };
+  completedAt: string | null;
+}
+
+const PRACTICE = `${BASE}/v1/practice`;
+
+export const practiceApi = {
+  setup: (query: { job?: string | null; resume?: string | null } = {}) => {
+    const params = new URLSearchParams();
+    if (query.job) params.set('job', query.job);
+    if (query.resume) params.set('resume', query.resume);
+    const qs = params.toString();
+    return roboApi.get<PracticeSetup>(`${PRACTICE}/setup${qs ? `?${qs}` : ''}`);
+  },
+  create: (body: PracticeCreateBody) => roboApi.post<PracticeCreateResponse>(`${PRACTICE}/sessions`, body),
+  info: (sessionId: string) =>
+    roboApi.get<{ practice: PracticeSessionInfo }>(`${PRACTICE}/sessions/${encodeURIComponent(sessionId)}`),
+  /** The job checklist's "Practiced" step: jobId → ISO time of the latest completed practice. */
+  practicedJobs: (jobIds: string[]) =>
+    roboApi.get<{ practiced: Record<string, string> }>(
+      `${PRACTICE}/jobs?ids=${jobIds.map(encodeURIComponent).join(',')}`,
+    ),
+};
+
+// Written practice (no voice).
+const TEXT = `${PRACTICE}/text`;
+
+export interface TextPracticeStartBody {
+  /** Used when there is no job; with a job the server uses the job's title. */
+  role: string;
+  interviewerId: string;
+  typeId: string;
+  language?: string;
+  durationMinutes?: number;
+  /** Loaded and market-checked on the server (404 job_not_found). */
+  jobId?: string | null;
+}
+
+export interface TextPracticeQuestion {
+  q: string;
+  hint: string;
+  coachTip: { kind: 'good' | 'careful'; text: string } | null;
+}
+
+export interface TextPracticeTurn {
+  who: 'them' | 'you';
+  text: string;
+}
+
+export interface TextPracticeScore {
+  overall: number;
+  delta: number | null;
+  breakdown: Array<{ key: string; value: number; note: string }>;
+  strengths: string[];
+  gaps: string[];
+  durationMinutes: number;
+  /**
+   * GoApply only: the practice report block (communication / logic / story
+   * answers, STAR, filler words). Read it with `asCnPracticeReport`
+   * (components/features/practice-cn) and render `<CnReportView>`.
+   */
+  cn?: unknown;
+}
+
+/** GoApply AI-interview format: thinking and answer time per question, in question order. */
+export interface TextPracticeCnFormat {
+  formatId: string;
+  minutes: number;
+  questions: Array<{ prepSeconds: number; answerSeconds: number; story: boolean }>;
+}
+
+export interface TextPracticeStartResult {
+  sessionId: string;
+  questions: TextPracticeQuestion[];
+  jobId: string | null;
+  /** Present only when the practice runs the GoApply AI-interview format. */
+  cnFormat?: TextPracticeCnFormat | null;
+}
+
+export interface TextPracticeScoreResult extends TextPracticeScore {
+  /** The practice was answered: it counted for the checklist and the job's "Practiced" step. */
+  practiceCounted: boolean;
+  jobId: string | null;
+}
+
+export const textPracticeApi = {
+  start: (body: TextPracticeStartBody) =>
+    roboApi.post<TextPracticeStartResult>(`${TEXT}/start`, body),
+  nextTurn: (body: { sessionId: string; answer: string; questionIndex: number }) =>
+    roboApi.post<{ nextIndex: number | null; turns: TextPracticeTurn[]; coachTip: TextPracticeQuestion['coachTip'] }>(
+      `${TEXT}/next-turn`,
+      body,
+    ),
+  score: (sessionId: string) =>
+    roboApi.post<TextPracticeScoreResult>(`${TEXT}/${encodeURIComponent(sessionId)}/score`, {}),
+};
+
+/** Machine fields of a practice create/setup error (beyond IEErrorInfo). */
+export interface PracticeErrorInfo {
+  code: 'job_not_found' | 'phone_binding_required' | 'ai_unavailable' | 'insufficient_credits' | null;
+  reason: string | null;
+  firstPractice: PracticeFirstState | null;
+}
+
+export function practiceErrorInfo(err: unknown): PracticeErrorInfo {
+  if (!(err instanceof RoboApiError)) return { code: null, reason: null, firstPractice: null };
+  const p = (err.payload ?? {}) as Record<string, unknown>;
+  const raw = typeof p.error === 'string' ? p.error : null;
+  const code =
+    raw === 'job_not_found' || raw === 'phone_binding_required' || raw === 'ai_unavailable' || raw === 'insufficient_credits'
+      ? raw
+      : null;
+  const fp = p.firstPractice && typeof p.firstPractice === 'object' ? (p.firstPractice as PracticeFirstState) : null;
+  return { code, reason: typeof p.reason === 'string' ? p.reason : null, firstPractice: fp };
 }
 
 /** Pre-launch "Market Job Requirements" preview — no session/room created. */
@@ -359,7 +552,9 @@ export const interviewEngineApi = {
   catalog: () => roboApi.get<IECatalog>(`${BASE}/catalog`),
   preview: (body: IEPreviewBody) => roboApi.post<IEPreviewResponse>(`${BASE}/requirements/preview`, body),
   recent: () => roboApi.get<{ sessions: IESessionSummary[] }>(`${BASE}/sessions/recent`),
-  create: (body: IECreateBody) => roboApi.post<{ session: IESessionDetail }>(`${BASE}/sessions`, body),
+  // Sessions are created through `practiceApi.create` only: the server loads
+  // the job, picks and redacts the resume and checks the recording consent.
+  // The old browser `POST /sessions` could do none of that and was removed.
   get: (id: string) => roboApi.get<{ session: IESessionDetail }>(`${BASE}/sessions/${encodeURIComponent(id)}`),
   connection: (id: string) =>
     roboApi.post<{ connection: IEConnection }>(`${BASE}/sessions/${encodeURIComponent(id)}/connection`, {}),

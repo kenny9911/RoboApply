@@ -1,0 +1,4 @@
+# Filled runtime env for the GoApply worker (secrets). Fill worker.env from
+# worker.env.example; it must never be committed.
+worker.env
+*.env.local

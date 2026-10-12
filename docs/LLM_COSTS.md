@@ -76,9 +76,17 @@ Anything still unmatched falls back to $1 in / $3 out per 1M, and `calculateMode
 | `whisper-1` | $0.006 |
 | `whisper` | $0.006 |
 
+## Embedding models (input tokens)
+
+Rates of `EMBEDDING_MODEL_PRICING_PER_1M` in [`server/src/lib/modelPricing.ts`](../server/src/lib/modelPricing.ts), keyed by the bare model id. A usage row (`UsageDeductionLog`, SKU `ra_embed`) carries a cost only for a model listed here that was called on its vendor's own endpoint; any other call is logged with its tokens and an unknown cost, never an assumed price.
+
+| Model | Input $/1M |
+| --- | ---: |
+| `text-embedding-3-small` | $0.02 |
+
 ## Keeping this current
 
-1. Edit the row in `server/src/lib/modelCostTable.ts`.
+1. Edit the row in `server/src/lib/modelCostTable.ts` (an embedding model: `EMBEDDING_MODEL_PRICING_PER_1M` in `server/src/lib/modelPricing.ts`).
 2. `npm run llm:costs -- --write` to regenerate this file.
 3. `npx vitest run server/src/lib/modelCostTable.test.ts`.
 

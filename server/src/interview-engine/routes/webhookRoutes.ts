@@ -11,7 +11,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { logger } from '../../services/LoggerService.js';
-import { receiveWebhook } from '../livekit/webhookReceiver.js';
+import { receiveBrandWebhook } from '../livekit/webhookReceiver.js';
 import { interviewSessionService } from '../sessions/InterviewSessionService.js';
 
 const router = Router();
@@ -28,9 +28,15 @@ router.post('/livekit', async (req: Request, res: Response) => {
   else if (typeof req.body === 'string') rawBody = req.body;
   else rawBody = JSON.stringify(req.body ?? {});
 
+  // The LiveKit project whose key signed the event, and the brands on it (two
+  // brands may share one): the handlers ignore an event for a session that
+  // runs on another project.
   let event;
+  let signer;
   try {
-    event = await receiveWebhook(rawBody, req.headers.authorization);
+    const received = await receiveBrandWebhook(rawBody, req.headers.authorization);
+    event = received.event;
+    signer = { apiKey: received.apiKey, brands: received.brands };
   } catch (err) {
     logger.warn('INTERVIEW_ENGINE_WEBHOOK', 'signature verification failed', {
       error: err instanceof Error ? err.message : String(err),
@@ -56,11 +62,12 @@ router.post('/livekit', async (req: Request, res: Response) => {
           sizeBytes,
           durationSec,
           location: fr?.location,
+          signer,
         });
       }
     } else if (name === 'room_finished') {
       const roomName = (event as any).room?.name;
-      if (roomName) await interviewSessionService.handleRoomFinished(roomName);
+      if (roomName) await interviewSessionService.handleRoomFinished(roomName, signer);
     }
   } catch (err) {
     logger.error('INTERVIEW_ENGINE_WEBHOOK', 'processing failed', {

@@ -4,15 +4,41 @@ import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { Btn, EmptyState, PageHeader } from '../v3/primitives';
-import { jobSearchApi, JOB_SEARCH_OPENAPI_URL } from '../../lib/api/job-search';
+import { jobSearchApi, keysReadNoSource, JOB_SEARCH_OPENAPI_URL } from '../../lib/api/job-search';
 import type { JobSearchKey } from '../../lib/api/job-search-types';
 import { jobDate } from './format';
+import { useBrand } from '../../lib/brand/BrandProvider';
+import { useCapabilities } from '../../lib/flags';
+import { CN_RECRUITER_BANK_NAME } from '../features/market';
+
+/**
+ * True when the site's job listings are switched off, which is the one state
+ * in which the Job Search API answers 404 (server/src/job-search/routes.ts).
+ * Unknown (loading, or the capability request failed) counts as available: the
+ * page then shows the API's own answer.
+ */
+export function useJobSearchOff(): boolean {
+  const { flags, status } = useCapabilities();
+  return status === 'ready' && flags?.['jobs.feed'] === false;
+}
+
+/** What both job-search pages show in that state. */
+export function JobSearchUnavailable() {
+  const t = useTranslations('common');
+  return <EmptyState title={t('not_available')} />;
+}
 
 export function ApiKeyWorkspace() {
   const t = useTranslations('jobSearchApi');
   const tSearch = useTranslations('jobSearch');
   const locale = useLocale();
+  const cn = useTranslations('jobsCn.searchApi');
+  const tJobs = useTranslations('jobs.searchApi');
+  const mainland = useBrand().market === 'cn';
+  const off = useJobSearchOff();
   const [keys, setKeys] = useState<JobSearchKey[] | null>(null);
+  // The server says a key can read no source right now: say so before a first call fails.
+  const [noSource, setNoSource] = useState(false);
   const [reload, setReload] = useState(0);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -25,13 +51,16 @@ export function ApiKeyWorkspace() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
+    // The API is closed with the site's job listings: nothing to load.
+    if (off) return;
     const controller = new AbortController();
     setError(null);
-    jobSearchApi.keys(controller.signal).then(({ keys: items }) => {
-      if (!controller.signal.aborted) setKeys(items);
+    jobSearchApi.keys(controller.signal).then(({ keys: items, sources }) => {
+      if (controller.signal.aborted) return;
+      setKeys(items); setNoSource(keysReadNoSource(sources));
     }).catch(() => { if (!controller.signal.aborted) setError('keys_error'); });
     return () => controller.abort();
-  }, [reload]);
+  }, [reload, off]);
 
   async function createKey(event: FormEvent) {
     event.preventDefault();
@@ -61,12 +90,15 @@ export function ApiKeyWorkspace() {
     finally { setRevoking(null); }
   }
 
+  if (off) return <div className="job-search-workspace job-search-key-workspace"><JobSearchUnavailable /></div>;
+
   return (
     <div className="job-search-workspace job-search-key-workspace">
       <nav className="job-search-nav" aria-label={t('keys_title')}><Link href="/job-search">← {tSearch('title')}</Link><Link href="/developers/job-search">{t('docs')} ↗</Link></nav>
       <div className="job-search-hero"><PageHeader eyebrow={t('eyebrow')} title={t('keys_title')} sub={t('keys_intro')} /></div>
       {error ? <div className="job-search-notice is-warning" role="alert">{t(error)}{error === 'keys_error' ? <Btn onClick={() => setReload((value) => value + 1)}>{tSearch('retry')}</Btn> : null}</div> : null}
       {notice ? <p role="status" className="job-search-notice">{t(notice)}</p> : null}
+      {noSource ? <p role="status" className="job-search-notice is-warning" data-testid="job-search-keys-no-source">{tJobs('keySourcesOff')}</p> : null}
       {secret ? <section className="job-search-secret" aria-labelledby="job-search-secret-title">
         <h2 id="job-search-secret-title">{t('secret_title')}</h2><p>{t('secret_body')}</p>
         <label className="job-search-field">{t('secret_label')}<input value={secret} readOnly spellCheck={false} autoComplete="off" onFocus={(event) => event.target.select()} /></label>
@@ -88,7 +120,7 @@ export function ApiKeyWorkspace() {
             </li>;
           })}</ul> : null}
         </section>
-        <aside className="job-search-key-aside"><h2>{t('access_title')}</h2><p>{t('access_body')}</p><h2>{t('terms_title')}</h2><p>{t('terms_body')}</p><Btn as="a" href={JOB_SEARCH_OPENAPI_URL} target="_blank" rel="noopener noreferrer">{t('openapi')} ↗</Btn></aside>
+        <aside className="job-search-key-aside"><h2>{t('access_title')}</h2><p>{t('access_body')}</p><h2>{t('terms_title')}</h2><p>{mainland ? cn('sources', { sourceName: CN_RECRUITER_BANK_NAME }) : t('terms_body')}</p>{mainland ? <p>{cn('keyScope')}</p> : null}<Btn as="a" href={JOB_SEARCH_OPENAPI_URL} target="_blank" rel="noopener noreferrer">{t('openapi')} ↗</Btn></aside>
       </div>
     </div>
   );

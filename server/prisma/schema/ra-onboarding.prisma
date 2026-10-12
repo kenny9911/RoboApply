@@ -1,0 +1,32 @@
+// ra-onboarding.prisma: ONB area models (ARCHITECTURE.md §2.1).
+// Moved verbatim from the former single-file schema.prisma; no DDL change.
+// The original RoboApply V2 section note lives at the top of ra-jobs.prisma.
+
+/// Conversational onboarding chat session (RoboApply "Onboarding Chat v4").
+/// One active session per user (app-enforced — bootstrap abandons the prior
+/// active row). Persisted so the 7-day restore window, server-enforced caps
+/// (turns / rounds / JSearch calls / sessions-per-day), and the funnel
+/// metrics survive restarts and multi-instance deploys.
+/// Spec: docs/design-spec-roboapply-onboarding-chat.md §5.
+model RAOnboardingSession {
+  id                   String    @id @default(cuid())
+  userId               String
+  status               String    @default("active") // active | completed | skipped | abandoned
+  resumeVariantId      String?
+  locale               String    @default("en")
+  transcript           Json      @default("[]") // [{role:'user'|'assistant', content, at}]
+  draftPreferences     Json      @default("{}") // OnboardingDraftPreferences
+  askedTopics          Json      @default("[]") // topic enums asked or declined
+  openingPrompt        String?   @db.Text
+  chips                Json      @default("[]")
+  surfacedJobIds       Json      @default("[]") // RAJob ids, all rounds
+  passedJobIds         Json      @default("[]")
+  turnCount            Int       @default(0)
+  recommendationRounds Int       @default(0)
+  jsearchCallCount     Int       @default(0)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  completedAt          DateTime?
+
+  @@index([userId, status])
+}

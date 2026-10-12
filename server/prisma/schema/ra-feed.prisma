@@ -1,0 +1,105 @@
+// ra-feed.prisma: FEED area models (ARCHITECTURE.md §2.6).
+// Added by FND-1b (Jobright clone). "Liked" = saved for later = an
+// RATrackerEntry with status 'bookmarked' and source 'feed'; there is no like table.
+
+/// One row per (user, job) with the user's current state. Used for NOT EXISTS /
+/// joins in the feed query.
+model RAJobUserState {
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId            String
+  job              RAJob     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  hiddenAt         DateTime?
+  /// Reason code (ARCH §4.9).
+  hiddenReason     String?
+  viewedAt         DateTime?
+  applyClickedAt   DateTime?
+  impressions      Int       @default(0)
+  lastImpressionAt DateTime?
+
+  @@id([userId, jobId])
+  @@index([userId, hiddenAt])
+  @@index([jobId])
+}
+
+/// Append-only interaction log (feedback loop + analytics).
+model RAJobInteraction {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId         String
+  /// 'view' | 'save' | 'unsave' | 'hide' | 'unhide' | 'report' | 'apply_click' |
+  /// 'applied' | 'unapplied' | 'share' | 'copilot_open' |
+  /// 'admin_review' (WP-74 interim job decision, under the admin's userId,
+  /// until features/admin/reports.ts moves to RAJobReview)
+  kind          String
+  reasonCode    String?
+  detail        Json?
+  feedSessionId String?
+  position      Int?
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([jobId, kind])
+  // SCHEMA-5 (SR-74-3): the admin reported-jobs read (kind = 'report', newest).
+  @@index([kind, createdAt])
+}
+
+/// A ranked, paginated snapshot of the feed (ARCH §4.8).
+model RAFeedSession {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  searchProfileId String?
+  profileVersion  Int?
+  /// 'recommended' | 'newest' | 'best_fit' | 'highest_pay' | 'deadline' (GoApply)
+  sort            String
+  queryHash       String
+  jobIds          String[]
+  /// `[{ jobId, fit, kind: 'pre'|'ai', rank }]`. Until the feed reads
+  /// `windowEndsId` (SR-32-4) the feed repo may store the envelope
+  /// `{ entries: [...], windowEndsId }` here instead of the bare array; readers
+  /// accept both (features/feed/repo.ts packRanks/unpackRanks).
+  ranks           Json
+  totalEstimate   Int
+  /// Older boundary of the retrieval window (for the next refill).
+  windowEndsAt    DateTime
+  /// Keyset id paired with windowEndsAt: refills read `(postedAt, id) <
+  /// (windowEndsAt, windowEndsId)` to match `ORDER BY postedAt DESC, id DESC`
+  /// (SCHEMA-3, SR-32-4). Null = a short window (strict postedAt < windowEndsAt).
+  windowEndsId    String?
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([expiresAt])
+}
+
+/// Daily feed rating (0–10) with reasons (calibration).
+model RAFeedRating {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayKey        String
+  /// 0–10
+  score         Int
+  reasons       String[] @default([])
+  note          String?
+  feedSessionId String?
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, dayKey])
+}
+
+/// Learned per-user affinities from interactions (ranking factor; listed on /help/ranking).
+model RAUserAffinity {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// `{ taxonomyId: -1..1 }`
+  taxonomyWeights Json     @default("{}")
+  companyWeights  Json     @default("{}")
+  skillWeights    Json     @default("{}")
+  /// { normalizedTitleKey: -1..0 } negative weights from "Not interested: wrong title". SM-12 (MKT-0, additive).
+  titleWeights    Json     @default("{}")
+  updatedAt       DateTime @updatedAt
+}
