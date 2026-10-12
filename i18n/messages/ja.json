@@ -1628,7 +1628,83 @@
       "creditCost": "{n, plural, other {#クレジット}}を使います",
       "creditsRemaining": "残り{n, plural, other {#クレジット}}",
       "insufficientCredits": "この面接には{required, plural, other {#クレジット}}が必要ですが、残りは{balance}です。続けるにはクレジットを追加してください。",
-      "insufficientCreditsNoPurchase": "この面接には{required, plural, other {#クレジット}}が必要ですが、残りは{balance}です。"
+      "insufficientCreditsNoPurchase": "この面接には{required, plural, other {#クレジット}}が必要ですが、残りは{balance}です。",
+      "prep": {
+        "target": {
+          "tabFind": "求人を探す",
+          "searchLabel": "職種名",
+          "searchPlaceholder": "職種名（例：AI フォワードデプロイドエンジニア）",
+          "companyLabel": "志望企業（任意）",
+          "companyPlaceholder": "例：トヨタ、ソニー、Google",
+          "clearCompany": "企業をクリア",
+          "companyHint": "企業名を入れると、その企業で知られている面接スタイルで練習できます。",
+          "industriesLabel": "まだ決まっていなければ、業界から探す",
+          "moreIndustries": "業界をもっと見る",
+          "fewerIndustries": "業界を閉じる",
+          "otherIndustry": "その他の業界…",
+          "otherIndustryPlaceholder": "業界を入力（例：宇宙産業）",
+          "otherIndustryApply": "職種を表示",
+          "industryRolesTitle": "{industry}の主な職種",
+          "industryRolesLoading": "{industry}が採用している職種を探しています…",
+          "industryRolesError": "この業界の職種を表示できませんでした。",
+          "searching": "求人を検索しています…",
+          "searchError": "求人検索から応答がありませんでした。",
+          "retry": "もう一度試す",
+          "rolesTitle": "一致する職種",
+          "postingsTitle": "募集中の求人",
+          "postingsTitleIn": "{market}で募集中の求人",
+          "noPostings": "「{query}」の募集中の求人は見つかりませんでした。この職種で練習するか、求人票を貼り付けてください。",
+          "noResults": "「{query}」に一致するものはありません。別の職種名で試すか、求人票を貼り付けてください。",
+          "practiceFor": "{company}の{title}で練習する",
+          "practiceForRole": "{title}で練習する",
+          "viewPost": "求人を見る",
+          "webNote": "ウェブ検索の結果です。求人ページを開いて、まだ募集中か確認してください。",
+          "boardsUnavailable": "一部の求人サイトから応答がなかったため、取得できた求人のみ表示しています。",
+          "selectedTitle": "練習する求人",
+          "roleOnly": "特定の求人ではなく、この職種の一般的な面接",
+          "findJobsForRole": "この職種の募集中の求人を探す",
+          "change": "変更"
+        },
+        "source": {
+          "index": "%BRAND% の求人",
+          "provider": "求人サイト",
+          "web": "ウェブ · {host}"
+        },
+        "plan": {
+          "loadingTitle": "面接を準備しています",
+          "steps": {
+            "reading": "求人内容を読んでいます",
+            "company": "{company}の面接スタイルを調べています",
+            "panel": "この求人の面接官を選んでいます"
+          },
+          "error": "この面接を準備できませんでした。",
+          "hint": "この求人に合わせて作成しました。どれでも変えられます。",
+          "fallbackHint": "いまは一般的な面接官と形式です。どれでも変えられます。"
+        },
+        "difficulty": {
+          "1": "やさしい",
+          "2": "標準",
+          "3": "厳しい"
+        },
+        "launchTitle": "{role}・{company}",
+        "brief": {
+          "title": "面接対策メモ",
+          "requirements": "この求人で見られること",
+          "mustHave": "必須条件",
+          "focusTopics": "{focus}で扱うテーマ：{topics}",
+          "company": "{company}の面接",
+          "companySourced": "公開情報を AI がまとめたものです。選考は変わることがあるので、リンク先も確認してください。",
+          "companyGeneral": "{company}の面接について信頼できる公開情報が見つからなかったため、同じような企業で一般的な面接の進め方を示しています。",
+          "values": "評価される価値観",
+          "evaluates": "重視される点",
+          "sources": "出典：",
+          "strategy": "この練習の進め方",
+          "minutes": "{n} 分",
+          "tactics": "面接官が行うこと",
+          "prepTips": "始める前に準備すること",
+          "aiNote": "求人と公開情報をもとに AI が作成しました。面接官はシミュレーションです。"
+        }
+      }
     },
     "live": {
       "loading": "面接ルームを準備しています…",

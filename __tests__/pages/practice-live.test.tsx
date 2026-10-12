@@ -173,8 +173,8 @@ async function renderLive() {
 }
 
 /** Load a 'created' session, pass the device check, land in the room. */
-async function joinRoom() {
-  api.get.mockResolvedValue({ session: makeSession() });
+async function joinRoom(session: Partial<IESessionDetail> = {}) {
+  api.get.mockResolvedValue({ session: makeSession(session) });
   await renderLive();
   const join = await screen.findByRole('button', { name: 'Join the interview' });
   await waitFor(() => expect((join as HTMLButtonElement).disabled).toBe(false));
@@ -316,6 +316,12 @@ describe('/practice/[id] room', () => {
     });
     expect(lk.roomProps!.onError).toBe(firstOnError);
     expect(lk.roomProps!.onDisconnected).toBe(firstOnDisconnected);
+  });
+
+  it('a planned practice names its own interviewer in the room (the catalog persona only lends the voice)', async () => {
+    await joinRoom({ personaId: 'kai', interviewer: { name: 'Dana Okafor', title: 'Staff backend engineer' } });
+    expect(await screen.findByText('Dana Okafor')).toBeInTheDocument();
+    expect(screen.getByText(/Staff backend engineer/)).toBeInTheDocument();
   });
 
   it('a camera publish failure keeps the interview running with a Camera off tile', async () => {

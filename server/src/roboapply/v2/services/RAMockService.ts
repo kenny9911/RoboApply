@@ -83,6 +83,8 @@ import {
   type RAMockTypeContext,
 } from '../agents/RAMockInterviewerAgent.js';
 import { raInterviewPromptService } from './RAInterviewPromptService.js';
+import type { StoredPrep } from '../../../interview-engine/prep/contract.js';
+import { buildPrepPromptContext, renderPrepForBlueprint } from '../../../interview-engine/prep/promptContext.js';
 import { normalizeRaLocale } from '../lib/raLocale.js';
 import { normalizeScorerLocale, scoreTranscript } from '../../../interview-engine/scoring/interviewScorer.js';
 import type { TranscriptTurn } from '../../../interview-engine/types.js';
@@ -162,6 +164,13 @@ export interface MockStartInput {
   market?: RAMockMarket;
   /** The RAJob the practice was started from (already market-checked by the caller). */
   jobId?: string | null;
+  /**
+   * The interview prep planned at setup (interview-engine/prep): the
+   * generated interviewer and focus replace the catalog persona's and type's
+   * text, and the plan briefs the question writer. `interviewerId` / `typeId`
+   * are then the catalog ids the plan maps onto. Kept in `blueprint.prep`.
+   */
+  prep?: StoredPrep | null;
 }
 
 export interface MockNextTurnInput {
@@ -698,16 +707,18 @@ export class RAMockService {
     const role = (body.role ?? '').trim();
 
     const requestId = getCurrentRequestId() ?? undefined;
+    const prep = body.prep ?? null;
     const persona: RAMockPersona = {
       id: interviewer.id,
-      name: interviewer.name,
-      role: interviewer.role,
-      difficulty: interviewer.difficulty,
-      style: interviewer.style,
-      blurb: interviewer.blurb,
+      name: prep?.interviewer.name ?? interviewer.name,
+      role: prep?.interviewer.title ?? interviewer.role,
+      difficulty: prep?.interviewer.difficulty ?? interviewer.difficulty,
+      style: prep?.interviewer.style || interviewer.style,
+      blurb: prep?.interviewer.background || interviewer.blurb,
     };
     // The model reads the type line with the written-practice note in front.
-    const typeCtx = writtenTypeContext(type);
+    const typeCtx = writtenTypeContext(prep ? { id: type.id, label: prep.focus.label, sub: prep.focus.description || type.sub } : type);
+    const prepBrief = prep ? renderPrepForBlueprint(buildPrepPromptContext(prep)) : undefined;
 
     // Resolve the interview language + planned duration from the request,
     // falling back to the UI locale / the interview type's default minutes.
@@ -737,11 +748,12 @@ export class RAMockService {
         jdText: jdText || undefined,
         market,
         seed: sessionId,
+        prepBrief,
       });
       interviewPrompt = gen.interviewPrompt;
       // Persist the condensed live brief inside the blueprint so nextTurn can
       // read it back and conduct the interview adaptively.
-      blueprint = { ...gen.blueprint, interviewerBrief: gen.interviewerBrief };
+      blueprint = { ...gen.blueprint, interviewerBrief: gen.interviewerBrief, ...(prep ? { prep } : {}) };
       questions = gen.seedQuestions.map((q) => ({ q: q.q, hint: q.hint, coachTip: q.coachTip }));
     } catch (err) {
       logger.warn('RA_V2_MOCK', 'start: prompt generator failed; falling back to plan agent', {

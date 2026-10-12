@@ -10,6 +10,7 @@ import { findPersona } from '../catalog/interviewCatalog.js';
 import type { InterviewArchetype } from '../catalog/interviewArchetypes.js';
 import { getDomainExpert } from '../catalog/domainExperts.js';
 import { interviewCoachAgent, type CoachMode, type CoachTip } from './InterviewCoachAgent.js';
+import { readStoredPrep } from '../prep/contract.js';
 
 /** What the coach should push the candidate toward, per archetype. One line each;
  *  ID-aligned with interviewArchetypes.ts. */
@@ -54,7 +55,9 @@ export const interviewCoachService = {
       const session = await interviewSessionService.getOwned(req.userId, req.sessionId);
 
       const persona = session.personaId ? findPersona(session.personaId) : undefined;
-      const archetype = (persona?.archetype ?? 'behavioral') as InterviewArchetype;
+      // A planned practice's generated interviewer (blueprint.prep) is who the candidate is facing.
+      const prep = readStoredPrep(session.blueprint);
+      const archetype = (prep?.interviewer.archetype ?? persona?.archetype ?? 'behavioral') as InterviewArchetype;
       const archetypeFocus = COACH_DIRECTIVES[archetype] ?? COACH_DIRECTIVES.behavioral;
 
       // Domain lens: the blueprint JSON carries the domain resolved at create
@@ -69,10 +72,13 @@ export const interviewCoachService = {
           question,
           answerSoFar: answer,
           role: session.role || '',
-          personaName: persona?.name ?? 'the interviewer',
-          personaRole: persona?.role ?? '',
+          personaName: prep?.interviewer.name ?? persona?.name ?? 'the interviewer',
+          personaRole: prep?.interviewer.title ?? persona?.role ?? '',
           archetypeFocus,
-          domainFocus: domainExpert ? `${domainExpert.labelEn}: ${domainExpert.summary}` : undefined,
+          domainFocus: [
+            domainExpert ? `${domainExpert.labelEn}: ${domainExpert.summary}` : '',
+            prep ? `Practice focus: ${prep.focus.label}${prep.focus.topics.length ? ` (${prep.focus.topics.join('; ')})` : ''}${prep.company ? `; target company: ${prep.company}` : ''}` : '',
+          ].filter(Boolean).join('\n') || undefined,
           language: session.language || 'en',
         },
         { requestId: req.requestId, signal: req.signal },

@@ -58,10 +58,13 @@ describe('rubric parity (client mirror = server)', () => {
 
 // INT-09 — the format's id and length rule on the client (format.ts) equal the server's.
 describe('format parity (client mirror = server)', () => {
-  it('same id and the same 20–30 minute range, default 25', () => {
+  it('same id and the same 20–30 minute range, default 20 (the practice default)', () => {
     expect(clientFormat.CN_FORMAT_MIN_MINUTES).toBe(server.CN_FORMAT_MIN_MINUTES);
     expect(clientFormat.CN_FORMAT_MAX_MINUTES).toBe(server.CN_FORMAT_MAX_MINUTES);
     expect(clientFormat.CN_FORMAT_DEFAULT_MINUTES).toBe(server.CN_FORMAT_DEFAULT_MINUTES);
+    expect(clientFormat.CN_FORMAT_DEFAULT_MINUTES).toBe(20);
+    // The setup offers the practice lengths (15, 20, 30) that fit the format.
+    expect(clientFormat.CN_FORMAT_DURATIONS).toEqual([20, 30]);
     expect(clientFormat.isCnFormatType(server.CN_AI_INTERVIEW_FORMAT_ID)).toBe(true);
     expect(clientFormat.isCnFormatType('behavioral')).toBe(false);
     expect(clientFormat.isCnFormatType(null)).toBe(false);

@@ -18,10 +18,10 @@ import { CN_AI_INTERVIEW_FORMAT_ID, type CnPracticeReport } from './rubric';
 
 export const CN_FORMAT_MIN_MINUTES = 20;
 export const CN_FORMAT_MAX_MINUTES = 30;
-export const CN_FORMAT_DEFAULT_MINUTES = 25;
+export const CN_FORMAT_DEFAULT_MINUTES = 20;
 
-/** The lengths the setup offers for the format. */
-export const CN_FORMAT_DURATIONS: readonly number[] = [CN_FORMAT_MIN_MINUTES, CN_FORMAT_DEFAULT_MINUTES, CN_FORMAT_MAX_MINUTES];
+/** The lengths the setup offers for the format: the practice lengths (15, 20, 30) that fit its 20–30 minutes. */
+export const CN_FORMAT_DURATIONS: readonly number[] = [CN_FORMAT_MIN_MINUTES, CN_FORMAT_MAX_MINUTES];
 
 export function isCnFormatType(typeId: string | null | undefined): boolean {
   return typeId === CN_AI_INTERVIEW_FORMAT_ID;

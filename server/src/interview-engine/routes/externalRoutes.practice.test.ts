@@ -28,6 +28,7 @@ const m = vi.hoisted(() => {
     info: vi.fn(),
     practiced: vi.fn(),
     textStart: vi.fn(),
+    getOwned: vi.fn(),
     textTurn: vi.fn(),
     textScore: vi.fn(),
     loadJob: vi.fn(),
@@ -66,6 +67,7 @@ vi.mock('../sessions/InterviewSessionService.js', () => ({
     getPracticeInfo: m.info,
     practicedJobs: m.practiced,
     startTextPractice: m.textStart,
+    getOwned: m.getOwned,
     textPracticeTurn: m.textTurn,
     scoreTextPractice: m.textScore,
   },
@@ -397,6 +399,75 @@ describe('report extras and the Practiced step', () => {
     const res = await get('/ie/v1/practice/jobs?ids=j1,%20j2,,');
     expect(await res.json()).toEqual({ practiced: { j1: '2026-10-10T00:00:00.000Z' } });
     expect(m.practiced).toHaveBeenCalledWith('u1', ['j1', 'j2']);
+  });
+});
+
+/** A plan as the setup screen sends it (prep/contract.ts PrepPlan, the fields the server keeps). */
+const PLAN = {
+  role: 'Forward Deployed Engineer',
+  company: 'Databricks',
+  industry: null,
+  market: 'us',
+  requirements: { summary: 'Ships GenAI for customers', seniority: 'Senior', mustHave: ['RAG'], niceToHave: [], responsibilities: [], competencies: [] },
+  companyStyle: null,
+  interviewers: [
+    { key: 'i1', name: 'Rohan Mehta', title: 'Hiring manager', background: 'Leads deployments', style: 'Starts from a customer problem', archetype: 'potential', difficulty: 3, voiceGender: 'male', focusKeys: ['f1'], patterns: ['customer-scenario'] },
+    { key: 'i2', name: 'Ana Rao', title: 'Recruiter', background: '', style: 'Warm', archetype: 'warmup', difficulty: 1, voiceGender: 'female', focusKeys: [], patterns: [] },
+  ],
+  focuses: [
+    { key: 'f1', label: 'Customer AI architecture', description: 'Frame a customer need', format: 'system', patterns: ['problem-decomposition'], topics: ['RAG trade-offs'] },
+    { key: 'f2', label: 'Motivation', description: 'Why this role', format: 'culture', patterns: [], topics: [] },
+  ],
+  strategy: { summary: 'Starts from a customer problem.', stages: [], tactics: [], prepTips: [] },
+};
+
+describe('the interview plan at Start (prep)', () => {
+  it('a live practice keeps the chosen interviewer and focus, cleaned, mapped onto a catalog persona', async () => {
+    const res = await post('/ie/v1/practice/sessions', {
+      role: 'Forward Deployed Engineer', personaId: 'okonkwo', interviewType: 'system', durationMinutes: 20,
+      prep: { plan: PLAN, interviewerKey: 'i1', focusKey: 'f1' },
+    });
+    expect(res.status).toBe(200);
+    const prep = m.create.mock.calls[0][0].prep;
+    expect(prep).toMatchObject({
+      role: 'Forward Deployed Engineer',
+      company: 'Databricks',
+      market: 'us',
+      interviewer: { key: 'i1', name: 'Rohan Mehta', archetype: 'potential', difficulty: 3, voiceGender: 'male' },
+      focus: { key: 'f1', format: 'system', topics: ['RAG trade-offs'] },
+    });
+    // The engine runs on a catalog persona of the same interviewing style.
+    expect(typeof prep.interviewer.baseId).toBe('string');
+  });
+
+  it('no plan in the body (an older client): the session is created as before', async () => {
+    await post('/ie/v1/practice/sessions', { role: 'PM', personaId: 'maya', interviewType: 'behavioral' });
+    expect(m.create.mock.calls[0][0].prep).toBeNull();
+  });
+
+  it('the written practice takes the plan from the body, else from the live session it was switched from', async () => {
+    m.brand = { id: 'goapply', market: 'cn', name: 'GoApply' };
+    m.voiceOn.mockReturnValue(false);
+    await post('/ie/v1/practice/text/start', {
+      interviewerId: 'okonkwo', typeId: 'system', prep: { plan: PLAN, interviewerKey: 'i2', focusKey: 'f2' },
+    });
+    expect(m.textStart.mock.calls[0][0].prep).toMatchObject({ interviewer: { name: 'Ana Rao' }, focus: { label: 'Motivation' } });
+    expect(m.getOwned).not.toHaveBeenCalled();
+
+    const stored = { v: 1, ...PLAN, interviewer: PLAN.interviewers[0], focus: PLAN.focuses[0] };
+    m.getOwned.mockResolvedValue(row({ id: 'live1', blueprint: { prep: stored } }));
+    await post('/ie/v1/practice/text/start', { interviewerId: 'okonkwo', typeId: 'system', fromSessionId: 'live1' });
+    expect(m.getOwned).toHaveBeenCalledWith('u1', 'live1');
+    expect(m.textStart.mock.calls[1][0].prep).toMatchObject({ interviewer: { name: 'Rohan Mehta' }, focus: { label: 'Customer AI architecture' } });
+  });
+
+  it("another user's session (or none) gives the written practice no plan", async () => {
+    m.brand = { id: 'goapply', market: 'cn', name: 'GoApply' };
+    m.voiceOn.mockReturnValue(false);
+    m.getOwned.mockRejectedValue(new m.NotFound('not yours'));
+    const res = await post('/ie/v1/practice/text/start', { interviewerId: 'maya', typeId: 'behavioral', fromSessionId: 'theirs' });
+    expect(res.status).toBe(200);
+    expect(m.textStart.mock.calls[0][0].prep).toBeNull();
   });
 });
 

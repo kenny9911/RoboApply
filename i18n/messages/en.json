@@ -1628,7 +1628,83 @@
       "showFewer": "Show fewer",
       "startErrorNetwork": "We couldn't reach the server. Check your internet connection and try again.",
       "startErrorBusy": "The interview service is busy right now. Wait a minute, then try again.",
-      "insufficientCreditsNoPurchase": "This interview needs {required, plural, one {# credit} other {# credits}} and you have {balance}."
+      "insufficientCreditsNoPurchase": "This interview needs {required, plural, one {# credit} other {# credits}} and you have {balance}.",
+      "prep": {
+        "target": {
+          "tabFind": "Find a job",
+          "searchLabel": "Job title",
+          "searchPlaceholder": "Job title, e.g. AI forward deployed engineer",
+          "companyLabel": "Target company (optional)",
+          "companyPlaceholder": "e.g. Google, Tencent, Boeing",
+          "clearCompany": "Clear the company",
+          "companyHint": "Name a company and the interview follows the way it's known to interview.",
+          "industriesLabel": "Not sure yet? Browse by industry",
+          "moreIndustries": "More industries",
+          "fewerIndustries": "Fewer industries",
+          "otherIndustry": "Other industry…",
+          "otherIndustryPlaceholder": "Type an industry, e.g. space technology",
+          "otherIndustryApply": "Show roles",
+          "industryRolesTitle": "Roles in {industry}",
+          "industryRolesLoading": "Finding the roles {industry} hires for…",
+          "industryRolesError": "We couldn't list the roles for this industry.",
+          "searching": "Searching jobs…",
+          "searchError": "The job search didn't answer.",
+          "retry": "Try again",
+          "rolesTitle": "Roles that match",
+          "postingsTitle": "Open jobs",
+          "postingsTitleIn": "Open jobs in {market}",
+          "noPostings": "No open jobs found for “{query}”. You can still practice the role, or paste a job post.",
+          "noResults": "Nothing matched “{query}”. Try another title, or paste a job post.",
+          "practiceFor": "Practice for {title} at {company}",
+          "practiceForRole": "Practice for {title}",
+          "viewPost": "View post",
+          "webNote": "Found on the web: open the post to check that it's still open.",
+          "boardsUnavailable": "Some job boards didn't answer, so these are the jobs we could reach.",
+          "selectedTitle": "You're practicing for",
+          "roleOnly": "The role in general, not one job post",
+          "findJobsForRole": "Find open jobs for this role",
+          "change": "Change"
+        },
+        "source": {
+          "index": "%BRAND% jobs",
+          "provider": "Job board",
+          "web": "Web · {host}"
+        },
+        "plan": {
+          "loadingTitle": "Preparing your interview",
+          "steps": {
+            "reading": "Reading the job",
+            "company": "Researching how {company} interviews",
+            "panel": "Choosing the interviewers for this job"
+          },
+          "error": "We couldn't prepare this interview.",
+          "hint": "Written for this job. Change anything.",
+          "fallbackHint": "General interviewers and formats for now. Change anything."
+        },
+        "difficulty": {
+          "1": "Gentle",
+          "2": "Balanced",
+          "3": "Demanding"
+        },
+        "launchTitle": "{role} · {company}",
+        "brief": {
+          "title": "Your prep brief",
+          "requirements": "What this job tests",
+          "mustHave": "Must-haves",
+          "focusTopics": "{focus} covers: {topics}",
+          "company": "How {company} interviews",
+          "companySourced": "From public sources, summarized by AI. Processes change, so check the links.",
+          "companyGeneral": "We found no reliable public description of {company}'s interviews, so this is how companies like it usually interview.",
+          "values": "Values they assess",
+          "evaluates": "What they look for",
+          "sources": "Sources:",
+          "strategy": "How this practice will run",
+          "minutes": "{n} min",
+          "tactics": "What your interviewer will do",
+          "prepTips": "Prepare before you start",
+          "aiNote": "Written by AI from the job and public sources. The interviewers are simulated."
+        }
+      }
     },
     "live": {
       "loading": "Setting up your room…",

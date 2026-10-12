@@ -48,6 +48,7 @@ import { getBrand } from '../../../platform/brand/index.js';
 import { assertNoPiInPayload } from '../../../platform/residency/egressPolicy.js';
 import { getCurrentBrandId } from '../../../lib/requestContext.js';
 import {
+  CN_AI_INTERVIEW_FORMAT_ID,
   CN_FORMAT_FOCUS_AREAS,
   buildCnScript,
   cnStrategyPhases,
@@ -125,6 +126,14 @@ export interface RAInterviewPromptInput {
    * that carries one is not sent; the practice is planned without web evidence.
    */
   knownValues?: KnownValues;
+  /**
+   * The interview prep planned at setup (prep/promptContext.ts
+   * renderPrepForBlueprint): interviewer, focus, company style, the loop's
+   * patterns and market norms. Given to the requirements agent as evidence
+   * and to the question writer as a binding brief. A planned practice runs
+   * the AI-interview format only when the plan chose it.
+   */
+  prepBrief?: string;
 }
 
 /** The cn format's plan, saved in the blueprint (timing per question). */
@@ -398,7 +407,10 @@ export class RAInterviewPromptService {
     const market = input.market ?? currentMarket();
     // A general type runs the format only when the chosen length already fits
     // 20–30 min, so the script, the stored plan and the credit gate agree.
-    if (usesCnFormat({ market, typeId: input.type.id, minutes: input.durationMinutes })) return this.generateCn(input);
+    const runsCn = input.prepBrief
+      ? input.type.id === CN_AI_INTERVIEW_FORMAT_ID
+      : usesCnFormat({ market, typeId: input.type.id, minutes: input.durationMinutes });
+    if (runsCn) return this.generateCn(input);
 
     const { role, persona, type, durationMinutes, language, resumeContext, requestId, signal } = input;
     const opts = { requestId, locale: language, signal };
@@ -438,7 +450,7 @@ export class RAInterviewPromptService {
           typeSub: type.sub,
           seniorityHint: persona.role,
           resumeContext,
-          webEvidence: [jobPostEvidence(input.jdText), webEvidence].filter(Boolean).join('\n\n'),
+          webEvidence: [jobPostEvidence(input.jdText), input.prepBrief ?? '', webEvidence].filter(Boolean).join('\n\n'),
         },
         opts,
       );
@@ -503,6 +515,7 @@ export class RAInterviewPromptService {
           strategy,
           tactics,
           resumeContext,
+          prepBrief: input.prepBrief,
           count: input.questionCount ?? 6,
         },
         opts,

@@ -799,9 +799,9 @@ describe('GoApply AI-interview format at create (WP-66)', () => {
 
   it('a general practice of 20–30 minutes is created as cn_ai_interview and prepared with its directive', async () => {
     for (const interviewType of ['behavioral', 'screening', 'culture']) {
-      const s = await svc.createSession({ ...CN, interviewType, durationMinutes: 25 });
+      const s = await svc.createSession({ ...CN, interviewType, durationMinutes: 20 });
       expect(s.interviewType).toBe('cn_ai_interview');
-      expect(s.plannedDurationMinutes).toBe(25);
+      expect(s.plannedDurationMinutes).toBe(20);
     }
     const s = await svc.createSession({ ...CN, interviewType: 'behavioral', durationMinutes: 30 });
     await svc.prepareSession({ sessionId: s.id, userId: 'u1' });
@@ -809,13 +809,14 @@ describe('GoApply AI-interview format at create (WP-66)', () => {
     expect(h.generate).toHaveBeenCalledWith(expect.objectContaining({ typeId: 'cn_ai_interview', typeLabel: 'AI Interview Practice', durationMinutes: 30 }));
   });
 
-  it('a general practice of another length keeps its own type and length', async () => {
-    const long = await svc.createSession({ ...CN, interviewType: 'behavioral', durationMinutes: 45 });
-    expect(long).toMatchObject({ interviewType: 'behavioral', plannedDurationMinutes: 45 });
+  it('a general practice of 15 minutes keeps its own type; longer requests are brought to 30', async () => {
     const short = await svc.createSession({ ...CN, interviewType: 'screening', durationMinutes: 15 });
     expect(short).toMatchObject({ interviewType: 'screening', plannedDurationMinutes: 15 });
-    // Behavioural defaults to 40 minutes: no length given means its own format.
-    expect((await svc.createSession({ ...CN, interviewType: 'behavioral' })).interviewType).toBe('behavioral');
+    // A practice runs 15, 20 or 30 minutes: an older link asking 45 runs 30, which is the format's length.
+    const long = await svc.createSession({ ...CN, interviewType: 'behavioral', durationMinutes: 45 });
+    expect(long).toMatchObject({ interviewType: 'cn_ai_interview', plannedDurationMinutes: 30 });
+    // No length given means the default 20 minutes.
+    expect(await svc.createSession({ ...CN, interviewType: 'behavioral' })).toMatchObject({ interviewType: 'cn_ai_interview', plannedDurationMinutes: 20 });
   });
 
   it('a skill exercise is never re-typed, whatever its length', async () => {
@@ -825,7 +826,7 @@ describe('GoApply AI-interview format at create (WP-66)', () => {
 
   it('the format picked by name runs 20–30 minutes: the length and the credit gate agree', async () => {
     const byDefault = await svc.createSession({ ...CN, interviewType: 'cn_ai_interview' });
-    expect(byDefault).toMatchObject({ interviewType: 'cn_ai_interview', plannedDurationMinutes: 25 });
+    expect(byDefault).toMatchObject({ interviewType: 'cn_ai_interview', plannedDurationMinutes: 20 });
     h.gate.mockClear();
     const long = await svc.createSession({ ...CN, interviewType: 'cn_ai_interview', durationMinutes: 45 });
     expect(long).toMatchObject({ interviewType: 'cn_ai_interview', plannedDurationMinutes: 30 });
@@ -841,8 +842,8 @@ describe('GoApply AI-interview format at create (WP-66)', () => {
   });
 
   it('RoboApply is unchanged: no re-typing, and the GoApply format is not a type there', async () => {
-    const general = await svc.createSession({ userId: 'u1', role: 'PM', market: 'intl', interviewType: 'behavioral', durationMinutes: 25 });
-    expect(general).toMatchObject({ interviewType: 'behavioral', plannedDurationMinutes: 25 });
+    const general = await svc.createSession({ userId: 'u1', role: 'PM', market: 'intl', interviewType: 'behavioral', durationMinutes: 20 });
+    expect(general).toMatchObject({ interviewType: 'behavioral', plannedDurationMinutes: 20 });
     const named = await svc.createSession({ userId: 'u1', role: 'PM', market: 'intl', interviewType: 'cn_ai_interview', durationMinutes: 25 });
     expect(named.interviewType).toBe('behavioral'); // unknown id → the default type, as for any unknown id
   });
@@ -1167,5 +1168,175 @@ describe('GoApply voice and video practice with only the shared credentials (D5)
     } finally {
       delete process.env.CN_LLM_DOMESTIC_ONLY;
     }
+  });
+});
+
+// ─── Interview prep: a planned practice (prep/) ─────────────────────────────
+//
+// The plan chosen at setup (prep/contract.ts storedPrepFromBody) decides the
+// session: the generated interviewer's catalog persona, voice and difficulty,
+// the focus's format and must-cover topics, kept in blueprint.prep from the
+// start and handed to the prompt generator at prepare.
+
+const { storedPrepFromBody } = await import('../prep/contract.js');
+const { buildPrepPromptContext } = await import('../prep/promptContext.js');
+const { resolveVoice } = await import('../voice/voiceCatalog.js');
+const { toSessionSummary } = await import('../routes/serialize.js');
+
+describe('a planned practice (interview prep)', () => {
+  const PLAN = {
+    role: 'Backend Engineer',
+    company: 'Acme',
+    industry: 'Software & Internet',
+    market: 'us',
+    requirements: { summary: 'Builds payment APIs', seniority: 'Senior', mustHave: ['Go', 'Postgres'], niceToHave: [], responsibilities: ['Own the ledger'], competencies: ['Ownership'] },
+    companyStyle: {
+      company: 'Acme',
+      summary: 'A recruiter screen, a system design round and a values round.',
+      stages: [{ name: 'Values round', description: 'Principles' }],
+      values: ['Ownership'],
+      evaluates: ['Incident ownership'],
+      questionThemes: [],
+      tips: [],
+      patterns: ['values-principles'],
+      sources: [{ title: 'Acme careers', url: 'https://acme.example/careers' }],
+      basis: 'sources',
+    },
+    interviewers: [
+      // No male warm-up persona exists: this interviewer runs on a female catalog persona (june, difficulty 2) with a male voice.
+      { key: 'i1', name: 'Daniel Hart', title: 'Recruiter', background: 'Hires the platform team', style: 'Brisk and friendly', archetype: 'warmup', difficulty: 3, voiceGender: 'male', focusKeys: ['f2'], patterns: ['hr-final'] },
+      // Runs on voss (depth, female, difficulty 3) at this plan's difficulty 2.
+      { key: 'i2', name: 'Lea Braun', title: 'Hiring manager, payments', background: 'Runs the payments platform', style: 'Numbers first', archetype: 'depth', difficulty: 2, voiceGender: 'female', focusKeys: ['f1'], patterns: ['project-deep-dive'] },
+    ],
+    focuses: [
+      { key: 'f1', label: 'Payments system design', description: 'Design and defend a ledger', format: 'system', patterns: ['project-deep-dive'], topics: ['Idempotent payment APIs', 'Reconciliation'] },
+      { key: 'f2', label: 'Motivation', description: 'Why Acme, why now', format: 'behavioral', patterns: [], topics: ['Why this company'] },
+    ],
+    strategy: { summary: 'Starts with the ledger.', stages: [{ name: 'Core', goal: 'Depth', share: 0.7 }], tactics: ['Asks for numbers'], prepTips: [] },
+  };
+
+  function planned(choice: { interviewerKey?: string; focusKey?: string; plan?: Record<string, unknown> } = {}, market: 'intl' | 'cn' = 'intl') {
+    const prep = storedPrepFromBody(
+      { plan: { ...PLAN, ...choice.plan }, interviewerKey: choice.interviewerKey ?? 'i1', focusKey: choice.focusKey ?? 'f1' },
+      market,
+      market === 'cn' ? 'cn' : 'us',
+    );
+    if (!prep) throw new Error('fixture plan did not clean');
+    return prep;
+  }
+
+  it('runs on the planned interviewer and focus: their catalog persona and format, voice, difficulty and must-cover topics', async () => {
+    const prep = planned();
+    expect(prep.interviewer.baseId).toBe('june');
+    const s = await svc.createSession({ userId: 'u1', role: 'Backend Engineer', market: 'intl', personaId: 'maya', interviewType: 'behavioral', durationMinutes: 30, prep });
+    // The plan wins over the catalog picks sent beside it.
+    expect(s).toMatchObject({ personaId: 'june', interviewType: 'system', plannedDurationMinutes: 30 });
+    // The interviewer's own voice, not the catalog persona's.
+    expect(resolveVoice('en', 'male')).not.toEqual(resolveVoice('en', 'female'));
+    expect(s.voice).toEqual(resolveVoice('en', 'male'));
+    // Difficulty 3 seeds 5/5 (june's own 2 would seed 3); the focus brings its topics.
+    expect(s.characteristics).toMatchObject({ difficulty: 5, mustCoverTopics: ['Idempotent payment APIs', 'Reconciliation'] });
+    expect(h.rows.get(s.id)!.blueprint).toEqual({ prep });
+    expect(h.gate).toHaveBeenCalledWith('u1', 30);
+  });
+
+  it('the caller’s own must-cover topics and difficulty win over the plan’s', async () => {
+    const prep = planned();
+    const own = await svc.createSession({ userId: 'u1', role: 'Backend Engineer', market: 'intl', prep, characteristics: { mustCoverTopics: ['Kafka'], difficulty: 2 } });
+    expect(own.characteristics).toMatchObject({ mustCoverTopics: ['Kafka'], difficulty: 2 });
+    const tone = await svc.createSession({ userId: 'u1', role: 'Backend Engineer', market: 'intl', prep, characteristics: { tone: 'formal' } });
+    expect(tone.characteristics).toMatchObject({ tone: 'formal', mustCoverTopics: prep.focus.topics, difficulty: 5 });
+  });
+
+  it('GoApply: a planned behavioral focus of 20 minutes stays behavioral; a planned AI-interview focus runs that format', async () => {
+    const behavioral = planned({ focusKey: 'f2' }, 'cn');
+    expect(behavioral.focus.format).toBe('behavioral');
+    const s = await svc.createSession({ userId: 'u1', role: '产品经理', market: 'cn', durationMinutes: 20, prep: behavioral });
+    expect(s).toMatchObject({ interviewType: 'behavioral', plannedDurationMinutes: 20 });
+    // The same request without a plan is re-typed as the AI-interview format (WP-66).
+    const unplanned = await svc.createSession({ userId: 'u1', role: '产品经理', market: 'cn', interviewType: 'behavioral', durationMinutes: 20 });
+    expect(unplanned.interviewType).toBe('cn_ai_interview');
+
+    const aiFocus = planned({ plan: { focuses: [{ key: 'f1', label: 'AI 面试', description: '限时作答', format: 'cn_ai_interview', topics: ['自我介绍'] }] } }, 'cn');
+    expect(aiFocus.focus.format).toBe('cn_ai_interview');
+    const cn = await svc.createSession({ userId: 'u1', role: '产品经理', market: 'cn', durationMinutes: 15, prep: aiFocus });
+    // The format runs 20–30 minutes: a 15-minute request runs 20, and the credit gate sees 20.
+    expect(cn).toMatchObject({ interviewType: 'cn_ai_interview', plannedDurationMinutes: 20 });
+    expect(h.gate).toHaveBeenLastCalledWith('u1', 20);
+    expect((h.rows.get(cn.id)!.blueprint as Row).prep.focus.format).toBe('cn_ai_interview');
+  });
+
+  it('a RoboApply session never runs the GoApply format, even from a plan that names it', async () => {
+    const aiFocus = planned({ plan: { focuses: [{ key: 'f1', label: 'AI', format: 'cn_ai_interview', topics: [] }] } }, 'cn');
+    const s = await svc.createSession({ userId: 'u1', role: 'PM', market: 'intl', prep: aiFocus });
+    expect(s.interviewType).toBe('behavioral');
+  });
+
+  it('prepare briefs the generator with the planned interviewer and focus, and keeps the plan in the blueprint', async () => {
+    const prep = planned({ interviewerKey: 'i2', focusKey: 'f1' });
+    expect(prep.interviewer.baseId).toBe('voss');
+    const s = await svc.createSession({ userId: 'u1', role: 'Backend Engineer', market: 'intl', prep });
+    await svc.prepareSession({ sessionId: s.id, userId: 'u1' });
+    expect(h.generate).toHaveBeenCalledTimes(1);
+    const input = h.generate.mock.calls[0]![0];
+    expect(input).toMatchObject({
+      personaName: 'Lea Braun',
+      personaRole: 'Hiring manager, payments',
+      personaStyle: 'Numbers first',
+      personaDifficulty: 2,
+      archetype: 'depth',
+      typeLabel: 'Payments system design',
+      typeSub: 'Design and defend a ledger',
+      typeId: 'system',
+    });
+    expect(input.prep).toEqual(buildPrepPromptContext(prep));
+    expect(input.prep).toMatchObject({ company: 'Acme', companySourced: true, focusTopics: ['Idempotent payment APIs', 'Reconciliation'] });
+    const row = h.rows.get(s.id)!;
+    expect(row.status).toBe('created');
+    expect(row.blueprint.prep).toEqual(prep);
+    // The generator's own blueprint and brief are written beside it.
+    expect(row.blueprint).toMatchObject({ interviewerBrief: 'b', requirements: { roleSummary: 'x' } });
+  });
+
+  it('a practice without a plan prepares exactly as before', async () => {
+    const s = await svc.createSession({ userId: 'u1', role: 'Engineer', market: 'intl', personaId: 'maya', interviewType: 'screening' });
+    expect(h.rows.get(s.id)!.blueprint).toBeNull();
+    await svc.prepareSession({ sessionId: s.id, userId: 'u1' });
+    expect(h.generate).toHaveBeenCalledWith(expect.objectContaining({ personaName: 'Maya', typeLabel: 'Phone Screen', typeId: 'screening', prep: null }));
+    expect(h.rows.get(s.id)!.blueprint).not.toHaveProperty('prep');
+  });
+
+  it('external API and recruiter sessions ignore a plan', async () => {
+    const prep = planned();
+    const ext = await svc.createSession({ userId: 'u1', role: 'PM', source: 'external', apiKeyId: 'k1', personaId: 'maya', interviewType: 'screening', durationMinutes: 45, prep });
+    // The API keeps its own catalog picks and its 5–120 minute range.
+    expect(ext).toMatchObject({ personaId: 'maya', interviewType: 'screening', plannedDurationMinutes: 45, blueprint: null });
+    const rec = await svc.createSession({ userId: 'u1', role: 'PM', source: 'recruiter', personaId: 'kai', interviewType: 'technical', prep });
+    expect(rec).toMatchObject({ personaId: 'kai', interviewType: 'technical', blueprint: null });
+    expect(rec.characteristics).toMatchObject({ mustCoverTopics: [] });
+  });
+
+  it('the written practice runs on the planned interviewer and focus', async () => {
+    const prep = planned({ interviewerKey: 'i2' });
+    await svc.startTextPractice({ userId: 'u1', role: 'Backend Engineer', interviewerId: 'maya', typeId: 'behavioral', durationMinutes: 25, job: null, prep });
+    expect(deps.textStart).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({ interviewerId: 'voss', typeId: 'system', durationMinutes: 20, prep }),
+      undefined,
+      undefined,
+    );
+  });
+
+  it('the session list shows the planned interviewer, focus and company', async () => {
+    const prep = planned({ interviewerKey: 'i2' });
+    const s = await svc.createSession({ userId: 'u1', role: 'Backend Engineer', market: 'intl', jobId: 'j_intl', prep });
+    expect(toSessionSummary(h.rows.get(s.id) as never)).toMatchObject({
+      interviewer: { name: 'Lea Braun', title: 'Hiring manager, payments' },
+      focusLabel: 'Payments system design',
+      company: 'Acme',
+      jobId: 'j_intl',
+    });
+    const plain = await svc.createSession({ userId: 'u1', role: 'Engineer', market: 'intl' });
+    expect(toSessionSummary(h.rows.get(plain.id) as never)).toMatchObject({ interviewer: null, focusLabel: null, company: null, jobId: null });
   });
 });

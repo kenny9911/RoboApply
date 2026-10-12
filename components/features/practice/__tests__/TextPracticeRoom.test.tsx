@@ -8,7 +8,7 @@
 // block carries the AI label. RoboApply shows none of these.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
@@ -20,6 +20,7 @@ import { CHECKLIST_QUERY_KEY } from '../../../../hooks/growth';
 import { BrandProvider } from '../../../../lib/brand/BrandProvider';
 import { clientBrandFor } from '../../../../lib/brand/client';
 import { buildCnPracticeReport, normalizeCnTurns } from '../../practice-cn';
+import { prepPlan } from '../../../../__tests__/utils/prepFixtures';
 
 const m = vi.hoisted(() => ({ start: vi.fn(), nextTurn: vi.fn(), score: vi.fn() }));
 vi.mock('../../../../lib/api/interviewEngine', () => ({
@@ -99,6 +100,24 @@ describe('TextPracticeRoom', () => {
     expect(m.score).toHaveBeenCalledWith('t1');
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: CHECKLIST_QUERY_KEY }));
     expect(spy).toHaveBeenCalledWith({ queryKey: ['account', 'credits'] });
+  });
+
+  it('forwards the interview plan from the setup, or the live session it replaces', async () => {
+    const plan = prepPlan();
+    renderRoom(vi.fn(), { prep: { plan, interviewerKey: 'i2', focusKey: 'f2' }, jobId: 'j1' });
+    expect(await screen.findByText('Tell me about yourself.')).toBeTruthy();
+    expect(m.start).toHaveBeenCalledWith({
+      role: 'Backend Engineer', interviewerId: 'maya', typeId: 'behavioral', language: 'zh', durationMinutes: undefined, jobId: 'j1',
+      prep: { plan, interviewerKey: 'i2', focusKey: 'f2' },
+    });
+
+    // A live practice switched to writing: the server reads that session's plan.
+    cleanup();
+    m.start.mockClear();
+    renderRoom(vi.fn(), { fromSessionId: 's1' });
+    expect(await screen.findByText('Tell me about yourself.')).toBeTruthy();
+    expect(m.start).toHaveBeenCalledWith(expect.objectContaining({ fromSessionId: 's1' }));
+    expect(m.start.mock.calls[0][0]).not.toHaveProperty('prep');
   });
 
   it('an unanswered practice does not refresh the checklist', async () => {

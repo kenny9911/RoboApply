@@ -37,6 +37,10 @@ import { getInterviewMediaPolicy, isRecordingEnabled, resolveSessionCallbackBase
 import { shouldUseParley } from '../parley/parleyConfig.js';
 import type { InterviewSource } from '../types.js';
 import { aiGateOpen, currentBrand, gateBody, gateStatus, loadConsent, marketOf, practiceGate } from './practiceGate.js';
+import { createPrepRouter } from '../prep/routes.js';
+import { readStoredPrep, storedPrepFromBody, type StoredPrep } from '../prep/contract.js';
+import { resolveMarketNorms } from '../skills/index.js';
+import type { ProductBrand } from '../../platform/brand/registry.js';
 
 export { practiceGate } from './practiceGate.js';
 export type { PracticeGate, PracticeGateReason } from './practiceGate.js';
@@ -195,6 +199,25 @@ function requireFirstParty(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Interview prep (job search, industry roles, the interview plan): prep/routes.ts.
+router.use('/practice/prep', createPrepRouter({ requireAuth, requireFirstParty }));
+
+/** The interview prep a Start body carries (the plan + the interviewer and focus chosen), cleaned; null without one. */
+function prepFromBody(body: Record<string, unknown>, brand: ProductBrand): StoredPrep | null {
+  const language = typeof body.language === 'string' ? body.language : null;
+  return storedPrepFromBody(body.prep, marketOf(brand), resolveMarketNorms({ brandMarket: brand.market, language }).key);
+}
+
+/**
+ * The prep of a live session the user owns (a live practice switched to
+ * writing keeps its plan); null when there is none or the session is not theirs.
+ */
+async function prepFromSession(userId: string, sessionId: string | null): Promise<StoredPrep | null> {
+  if (!sessionId) return null;
+  const session = await interviewSessionService.getOwned(userId, sessionId).catch(() => null);
+  return session ? readStoredPrep(session.blueprint) : null;
+}
+
 function str(value: unknown, max = 64): string | null {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
 }
@@ -328,6 +351,7 @@ router.post('/practice/sessions', requireAuth, requireFirstParty, async (req: Re
       market: marketOf(brand),
       recording: { audio: rec.audio === true, video: rec.video === true },
       requestId: getCurrentRequestId() ?? undefined,
+      prep: prepFromBody(b, brand),
     });
     const meta = readPracticeMeta(session.liveMetrics);
     return res.json({
@@ -392,6 +416,7 @@ router.post('/practice/text/start', requireAuth, requireFirstParty, async (req: 
       locale: await requestLocale(req),
       // The account name never goes to the web-search vendor (as in the live practice).
       knownValues: [req.user!.name ?? ''],
+      prep: prepFromBody(b, brand) ?? (await prepFromSession(userId, str(b.fromSessionId))),
     });
     return res.json(started);
   } catch (err) {

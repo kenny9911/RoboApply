@@ -285,8 +285,12 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   // The catalog only names the interviewer. A focus refetch would re-render
   // the page that hosts the room for nothing, so it is off here.
   const catalogQuery = useMockCatalog({ refetchOnWindowFocus: false });
-  const interviewer: RAMockInterviewer =
+  const catalogInterviewer: RAMockInterviewer =
     catalogQuery.data?.catalog.interviewers.find((i) => i.id === session?.personaId) ?? FALLBACK_INTERVIEWER;
+  // A planned practice names its own interviewer (the catalog persona only lends the orb's palette).
+  const interviewer: RAMockInterviewer = session?.interviewer
+    ? { ...catalogInterviewer, name: session.interviewer.name, role: session.interviewer.title, company: session.company ?? '' }
+    : catalogInterviewer;
 
   const reportHref = `/practice/${id}/report`;
 
@@ -704,6 +708,8 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
           role={session.role}
           interviewerId={session.personaId ?? ''}
           typeId={session.interviewType}
+          // A planned practice keeps its plan in writing (the server reads it from this session).
+          fromSessionId={session.id}
           language={session.language}
           durationMinutes={session.durationMinutes}
           jobId={textJobId}

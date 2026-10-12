@@ -186,7 +186,7 @@ describe('internal routes', () => {
     expect(intl.types[0].id).toBe('screening');
     m.brand = { id: 'goapply', market: 'cn', name: 'GoApply' };
     const cn = await (await get('/ie/catalog')).json();
-    expect(cn.types[0]).toMatchObject({ id: 'cn_ai_interview', minutes: 25 });
+    expect(cn.types[0]).toMatchObject({ id: 'cn_ai_interview', minutes: 20 });
     // The shared list follows, unchanged; the directive never goes over the wire.
     expect(cn.types.slice(1)).toEqual(intl.types);
     expect(JSON.stringify(cn.types[0])).not.toContain('blueprintDirective');

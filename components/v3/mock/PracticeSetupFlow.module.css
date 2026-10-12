@@ -924,11 +924,7 @@
   background: var(--surface);
 }
 
-/* ─── Preview ───────────────────────────────────────────────────────────── */
-
-.previewShell {
-  margin-top: var(--sp-4);
-}
+/* ─── The prep brief's toggle ────────────────────────────────────────────── */
 
 .previewToggle {
   min-height: var(--control-lg);
@@ -958,24 +954,6 @@
 
 .chevronUp {
   transform: rotate(180deg);
-}
-
-.previewBody {
-  margin-top: var(--sp-2);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  padding: var(--sp-5);
-}
-
-.previewBody > :global(.iv-step) {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.previewBody :global(.iv-step-head) {
-  margin-bottom: var(--sp-3);
 }
 
 /* ─── Responsive ────────────────────────────────────────────────────────── */
@@ -1219,4 +1197,490 @@
 .introAside a:focus-visible {
   outline: 2px solid var(--action);
   outline-offset: 2px;
+}
+
+/* ─── Interview prep: the job search, the company, industries ─────────── */
+
+.companyField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin-top: var(--sp-3);
+}
+
+.companyField label {
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.fieldHint {
+  margin: var(--sp-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta);
+}
+
+.inputClear {
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.inputClear:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border: 2px solid var(--rule);
+  border-top-color: var(--action);
+  border-radius: var(--r-pill);
+  animation: prepSpin 0.8s linear infinite;
+}
+
+@keyframes prepSpin {
+  to { transform: rotate(360deg); }
+}
+
+.searchStatus {
+  margin: var(--sp-3) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
+}
+
+.results[aria-busy='true'] .postings,
+.results[aria-busy='true'] .roleGrid {
+  opacity: 0.6;
+}
+
+.resultGroup {
+  margin-top: var(--sp-4);
+}
+
+.results .resultGroup {
+  margin-top: 0;
+}
+
+.resultGroup h3,
+.industryRoles h3 {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.resultGroup > .roleGrid,
+.industryRoles > .roleGrid {
+  margin-top: var(--sp-2);
+}
+
+.categoryGhost,
+.categories .categoryGhost {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+.otherIndustry {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.otherIndustry .search {
+  flex: 1 1 auto;
+}
+
+.industryRoles {
+  margin-top: var(--sp-4);
+}
+
+.postings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.posting {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  transition: border-color var(--dur-hover) var(--ease-out), background var(--dur-hover) var(--ease-out);
+}
+
+.posting:hover {
+  border-color: var(--rule-strong);
+  background: var(--surface-2);
+}
+
+.postingMain {
+  min-width: 0;
+  min-height: 56px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text);
+  padding: var(--sp-3);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.postingMain strong {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: var(--lh-title);
+}
+
+.postingMain span {
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+}
+
+.postingMain small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.postingSide {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  font-size: var(--fs-label);
+}
+
+.postingSide a,
+.selectedActions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--action);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.postingSide a:hover,
+.selectedActions a:hover {
+  text-decoration: underline;
+}
+
+.sourceTag {
+  max-width: 18ch;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  padding: 2px var(--sp-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedTarget {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  border: 1px solid var(--action);
+  border-radius: var(--r-md);
+  background: var(--action-subtle);
+  padding: var(--sp-4);
+}
+
+.selectedBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.selectedBody small {
+  color: var(--action);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+.selectedBody strong {
+  color: var(--text);
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  line-height: var(--lh-title);
+}
+
+.selectedBody > span {
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+}
+
+.selectedActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-1);
+  font-size: var(--fs-meta);
+}
+
+.linkButton {
+  border: 0;
+  background: transparent;
+  color: var(--action);
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+}
+
+.optionDetail {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* ─── The plan being written ───────────────────────────────────────────── */
+
+.planPreparing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.planPreparing > strong {
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.planPreparing ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planPreparing li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.planPreparing li[data-state='active'] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.planPreparing li[data-state='done'] {
+  color: var(--text-2);
+}
+
+.planStepMark {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+  background: var(--rule-strong);
+}
+
+.planPreparing li[data-state='active'] .planStepMark {
+  background: var(--action);
+  animation: prepPulse 1.2s var(--ease-out) infinite;
+}
+
+.planPreparing li[data-state='done'] .planStepMark {
+  background: var(--ok);
+}
+
+@keyframes prepPulse {
+  50% { opacity: 0.35; }
+}
+
+/* ─── The prep brief ───────────────────────────────────────────────────── */
+
+.prepBrief {
+  margin-top: var(--sp-4);
+}
+
+.prepBriefBody {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--sp-4);
+  margin-top: var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: var(--sp-5);
+}
+
+.prepBriefBody > .fieldHint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.prepBlock {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.prepBlock h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.prepBlock h4 {
+  margin: var(--sp-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.prepBlock p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-body);
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tagList li {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-label);
+}
+
+.plainList,
+.stageList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-left: var(--sp-4);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-body);
+}
+
+.stageList li {
+  display: flex;
+  flex-direction: column;
+}
+
+.stageList strong {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stageList em {
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  font-style: normal;
+  font-weight: 400;
+}
+
+.sourceLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-label);
+}
+
+.sourceLinks span {
+  color: var(--text-muted);
+}
+
+.sourceLinks a {
+  max-width: 32ch;
+  overflow: hidden;
+  color: var(--action);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .posting {
+    flex-direction: column;
+  }
+
+  .postingSide {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 0;
+  }
+
+  .selectedTarget {
+    flex-direction: column;
+  }
+
+  .prepBriefBody {
+    padding: var(--sp-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .planPreparing li[data-state='active'] .planStepMark {
+    animation: none;
+  }
 }

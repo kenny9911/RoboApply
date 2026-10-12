@@ -43,6 +43,7 @@ import {
   type TextPracticeQuestion,
   type TextPracticeScoreResult,
   type TextPracticeTurn,
+  type PracticePrepSelection,
 } from '../../../lib/api/interviewEngine';
 import { refreshChecklist } from '../../../hooks/growth';
 import { accountKeys } from '../../../hooks/useAccount';
@@ -56,6 +57,10 @@ export interface TextPracticeRoomProps {
   durationMinutes?: number;
   /** The job this practice is for (the server loads it and seeds the interview). */
   jobId?: string | null;
+  /** The interview plan from the setup and the interviewer + focus chosen (the server briefs the questions with it). */
+  prep?: PracticePrepSelection;
+  /** A live session switched to writing: the server reuses that session's plan. */
+  fromSessionId?: string | null;
   /**
    * A start the server refused for a reason the setup page shows (out of
    * credits, the GoApply gate, an unknown job). Return true when handled: the
@@ -87,6 +92,8 @@ export function TextPracticeRoom({
   language,
   durationMinutes,
   jobId,
+  prep,
+  fromSessionId,
   onStartRefused,
   onExit,
 }: TextPracticeRoomProps) {
@@ -117,6 +124,8 @@ export function TextPracticeRoom({
         language,
         durationMinutes,
         jobId: jobId ?? null,
+        ...(prep ? { prep } : {}),
+        ...(fromSessionId ? { fromSessionId } : {}),
       });
       setSessionId(res.sessionId);
       setQuestions(res.questions ?? []);
@@ -130,7 +139,7 @@ export function TextPracticeRoom({
       setFailedStep('start');
       setPhase('error');
     }
-  }, [role, interviewerId, typeId, language, durationMinutes, jobId, onStartRefused]);
+  }, [role, interviewerId, typeId, language, durationMinutes, jobId, prep, fromSessionId, onStartRefused]);
 
   useEffect(() => {
     if (startedRef.current) return;

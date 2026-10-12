@@ -616,7 +616,7 @@ export const RA_MOCK_CN_TYPE: RAMockType = {
   id: 'cn_ai_interview',
   label: 'AI Interview Practice',
   sub: 'Timed one-way format: self-introduction, story questions, situational and structured-thinking questions',
-  minutes: 25,
+  minutes: 20,
   suitedRoleCategories: ['All'],
 };
 

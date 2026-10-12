@@ -84,6 +84,8 @@ import { normalizeCharacteristics } from '../prompt/characteristics.js';
 import { interviewPromptService } from '../prompt/interviewPromptService.js';
 import { classifyPrepareError, describePrepareError, type PrepareFailureCode } from '../prompt/llmFailure.js';
 import { inferRoleFromJd } from '../prompt/InterviewBlueprintAgent.js';
+import { DEFAULT_PRACTICE_MINUTES, readStoredPrep, snapPracticeMinutes, type StoredPrep } from '../prep/contract.js';
+import { buildPrepPromptContext } from '../prep/promptContext.js';
 import { scoreTranscript } from '../scoring/interviewScorer.js';
 import type { InterviewScore } from '../scoring/interviewScorer.js';
 import { runInterviewEvaluation } from '../scoring/interviewEvaluationService.js';
@@ -279,6 +281,15 @@ export interface CreateSessionInput {
    * the tenant's flag as their attestation. Omitted = no recording.
    */
   recording?: { audio?: boolean; video?: boolean };
+  /**
+   * The interview prep chosen at setup (prep/contract.ts storedPrepFromBody):
+   * the generated interviewer and focus, the plan and the company style. It
+   * is kept in `blueprint.prep` (no schema change) and read back by prepare,
+   * connect and the graders. The row keeps a catalog persona id (the one the
+   * generated interviewer maps onto) and a format id, so every older reader
+   * keeps working. Absent = the catalog persona and type, as before.
+   */
+  prep?: StoredPrep | null;
 }
 
 export interface PrepareSessionParams {
@@ -358,21 +369,36 @@ export class InterviewSessionService {
     // When the candidate pasted a JD without picking a role, seed the role from
     // the JD so the session/report/recents never show an empty title.
     const role = (input.role ?? '').trim() || job?.title || (jdText ? inferRoleFromJd(jdText) : '');
-    const persona = (input.personaId && findPersona(input.personaId)) || DEFAULT_PERSONA;
+    const prep = source === 'roboapply' ? input.prep ?? null : null;
+    const persona =
+      (prep && findPersona(prep.interviewer.baseId)) || (input.personaId && findPersona(input.personaId)) || DEFAULT_PERSONA;
     // A market's own formats (GoApply's AI-interview practice) are offered to
     // the first-party flow only; recruiter and external API sessions keep the
     // international list.
     const typeMarket: PracticeMarket = source === 'roboapply' ? (input.market ?? practiceDeps.currentMarket()) : 'intl';
-    let type = (input.interviewType && findType(input.interviewType, typeMarket)) || DEFAULT_TYPE;
+    let type =
+      (prep && findType(prep.focus.format, typeMarket)) ||
+      (input.interviewType && findType(input.interviewType, typeMarket)) ||
+      DEFAULT_TYPE;
     const mode: InterviewMode = input.mode === 'video' ? 'video' : 'voice';
     const language = normalizeLocale(input.language);
-    let durationMinutes = clampDuration(input.durationMinutes) ?? type.minutes;
+    // A first-party practice runs 15, 20 or 30 minutes (a longer request from
+    // an older link is brought to the nearest of them); API callers keep 5–120.
+    let durationMinutes =
+      source === 'roboapply'
+        ? snapPracticeMinutes(clampDuration(input.durationMinutes) ?? DEFAULT_PRACTICE_MINUTES)
+        : clampDuration(input.durationMinutes) ?? type.minutes;
     // WP-66: on GoApply a general practice (screening / behavioral / culture)
     // of 20–30 minutes runs the AI-interview format, and so does the format
     // picked by name. The row says so (`interviewType`), which is what the
     // blueprint directive, the grading lens and the report's `cn` block read.
     // A general practice of another length keeps its own type and length.
-    if (source === 'roboapply' && usesCnFormat({ market: typeMarket, typeId: type.id, minutes: durationMinutes })) {
+    // A planned practice runs the focus it was planned with: the AI-interview
+    // format only when the plan chose it.
+    const runsCnFormat = prep
+      ? type.id === CN_AI_INTERVIEW_FORMAT_ID
+      : usesCnFormat({ market: typeMarket, typeId: type.id, minutes: durationMinutes });
+    if (source === 'roboapply' && runsCnFormat) {
       type = findSessionType(CN_AI_INTERVIEW_FORMAT_ID) ?? type;
       // The format is 20–30 minutes; the credit gate below sees the same length.
       if (type.id === CN_AI_INTERVIEW_FORMAT_ID) durationMinutes = clampCnMinutes(durationMinutes);
@@ -417,14 +443,19 @@ export class InterviewSessionService {
     // connect (InterviewEngineConfigError → 503).
     getInterviewLlmRouting(brand);
 
-    const characteristics = normalizeCharacteristics(input.characteristics, persona.difficulty);
+    // A planned focus brings its must-cover topics unless the caller sent its own.
+    const requested = input.characteristics && typeof input.characteristics === 'object' ? (input.characteristics as Record<string, unknown>) : {};
+    const characteristics = normalizeCharacteristics(
+      prep && !Array.isArray(requested.mustCoverTopics) ? { ...requested, mustCoverTopics: prep.focus.topics } : input.characteristics,
+      prep ? prep.interviewer.difficulty : persona.difficulty,
+    );
     const candidateName = (input.candidateName ?? '').trim() || undefined;
     const resumeContext = (input.resumeContext ?? '').trim() || undefined;
 
     // The shared voice catalog and STT on both brands; GoApply's DashScope
     // speech when its CN pair is set (a foreign model in that pair → 503
     // before anything is persisted).
-    const voice = resolveBrandVoice(brand.id, language, persona.voiceGender);
+    const voice = resolveBrandVoice(brand.id, language, prep ? prep.interviewer.voiceGender : persona.voiceGender);
     if (transport !== 'parley') resolveBrandStt(brand.id, language);
     const roomName = `ie-${randomUUID()}`;
     const expiresAt = new Date(Date.now() + getSessionExpiryMinutes() * 60_000);
@@ -479,6 +510,8 @@ export class InterviewSessionService {
         candidateName: candidateName ?? null,
         resumeContext: resumeContext ?? null,
         jdText: jdText ?? null,
+        // The plan rides in the blueprint JSON from the start; prepare keeps it.
+        ...(prep ? { blueprint: { prep } as unknown as object } : {}),
         roomName,
         status: 'preparing',
         expiresAt,
@@ -505,6 +538,7 @@ export class InterviewSessionService {
       mode,
       language,
       durationMinutes,
+      prep: prep ? { company: Boolean(prep.company), market: prep.market, archetype: prep.interviewer.archetype } : undefined,
       creditExempt: input.creditExempt === true ? true : undefined,
       callbackOrigin: input.callbackBaseUrl ?? undefined,
       apiKeyId: input.apiKeyId ?? undefined,
@@ -577,19 +611,22 @@ export class InterviewSessionService {
       const persona = (session.personaId && findPersona(session.personaId)) || DEFAULT_PERSONA;
       // A stored row may be in a market format (GoApply: cn_ai_interview).
       const type = findSessionType(session.interviewType) || DEFAULT_TYPE;
-      const characteristics = normalizeCharacteristics(session.characteristics, persona.difficulty);
+      // The interview prep planned at setup, when there was one.
+      const prep = readStoredPrep(session.blueprint);
+      const characteristics = normalizeCharacteristics(session.characteristics, prep ? prep.interviewer.difficulty : persona.difficulty);
       const routing = getInterviewLlmRouting(brand);
 
       const gen = await interviewPromptService.generate({
         role: session.role,
-        personaName: persona.name,
-        personaRole: persona.role,
-        personaStyle: persona.style,
-        personaDifficulty: persona.difficulty,
-        archetype: persona.archetype,
-        typeLabel: type.label,
-        typeSub: type.sub,
+        personaName: prep?.interviewer.name ?? persona.name,
+        personaRole: prep?.interviewer.title ?? persona.role,
+        personaStyle: prep?.interviewer.style || persona.style,
+        personaDifficulty: prep?.interviewer.difficulty ?? persona.difficulty,
+        archetype: prep?.interviewer.archetype ?? persona.archetype,
+        typeLabel: prep?.focus.label ?? type.label,
+        typeSub: prep?.focus.description || type.sub,
         typeId: type.id,
+        prep: prep ? buildPrepPromptContext(prep) : null,
         language: session.language,
         durationMinutes: session.plannedDurationMinutes,
         characteristics,
@@ -601,7 +638,7 @@ export class InterviewSessionService {
         strictLlm: params.strictLlm !== false,
       });
 
-      const voice = resolveBrandVoice(brand, session.language, persona.voiceGender);
+      const voice = resolveBrandVoice(brand, session.language, prep?.interviewer.voiceGender ?? persona.voiceGender);
       // Conditional on 'preparing': a concurrent run elsewhere, a delete or an
       // end-by-owner must win over this (late) result.
       const persisted = await prisma.interviewSession.updateMany({
@@ -613,6 +650,7 @@ export class InterviewSessionService {
           blueprint: withLiveLlmSnapshot(
             {
               ...gen.blueprint,
+              ...(prep ? { prep } : {}),
               interviewerBrief: gen.masterBrief,
               openingInstruction: gen.openingInstruction,
               openingLine: gen.openingLine,
@@ -710,7 +748,8 @@ export class InterviewSessionService {
       seam.brand,
       session.voice as unknown as ResolvedVoice | null,
       session.language,
-      session.personaId ? findPersona(session.personaId)?.voiceGender : undefined,
+      readStoredPrep(session.blueprint)?.interviewer.voiceGender ??
+        (session.personaId ? findPersona(session.personaId)?.voiceGender : undefined),
     );
     // Parley pilot: no room, dispatch or worker — the browser joins Parley.
     if (isParleySession(session)) return getParleyConnection(session, voice);
@@ -2168,7 +2207,8 @@ export class InterviewSessionService {
   // scored practice ticks the checklist and the job's "Practiced" step once.
 
   async startTextPractice(input: TextPracticeStartInput): Promise<TextPracticeStartResult> {
-    const durationMinutes = clampTextMinutes(input.durationMinutes);
+    // The written practice offers the same lengths as the live one.
+    const durationMinutes = snapPracticeMinutes(clampTextMinutes(input.durationMinutes));
     if (!input.creditExempt) {
       const afford = await practiceDeps.gatePractice(input.userId, durationMinutes);
       if (!afford.ok) {
@@ -2188,8 +2228,8 @@ export class InterviewSessionService {
       input.userId,
       {
         role,
-        interviewerId: input.interviewerId,
-        typeId: input.typeId,
+        interviewerId: input.prep?.interviewer.baseId ?? input.interviewerId,
+        typeId: input.prep?.focus.format ?? input.typeId,
         format: 'voice',
         language: input.language,
         durationMinutes,
@@ -2197,6 +2237,7 @@ export class InterviewSessionService {
         market: practiceDeps.currentMarket(),
         // SCHEMA-3 column (RAMockSession.jobId), written with the row.
         jobId: job?.id ?? null,
+        prep: input.prep ?? null,
       },
       input.locale,
       input.knownValues,
@@ -2658,6 +2699,8 @@ export interface TextStartCall {
   market?: PracticeMarket;
   /** Written to `RAMockSession.jobId` with the row. */
   jobId?: string | null;
+  /** The interview prep planned at setup; RAMockService.start applies it. */
+  prep?: StoredPrep | null;
 }
 
 /** Per-question timing of the GoApply AI-interview format (from `blueprint.cnFormat`). */
@@ -2738,6 +2781,8 @@ export interface TextPracticeStartInput {
    * carries one is not sent to the web-search vendor.
    */
   knownValues?: ReadonlyArray<string | null | undefined>;
+  /** The interview prep planned at setup (see CreateSessionInput.prep). */
+  prep?: StoredPrep | null;
 }
 
 export interface TextPracticeStartResult {

@@ -1628,7 +1628,83 @@
       "creditCost": "需要 {n, plural, other {# 點}}",
       "creditsRemaining": "剩餘 {n, plural, other {# 點}}",
       "insufficientCredits": "這場面試需要 {required, plural, other {# 點}}，而你有 {balance} 點。請先取得點數再繼續。",
-      "insufficientCreditsNoPurchase": "這場面試需要 {required, plural, other {# 點}}，而你有 {balance} 點。"
+      "insufficientCreditsNoPurchase": "這場面試需要 {required, plural, other {# 點}}，而你有 {balance} 點。",
+      "prep": {
+        "target": {
+          "tabFind": "找職缺",
+          "searchLabel": "職稱",
+          "searchPlaceholder": "職稱，例如：AI 解決方案工程師",
+          "companyLabel": "目標公司（選填）",
+          "companyPlaceholder": "例如：台積電、聯發科、Google",
+          "clearCompany": "清除公司",
+          "companyHint": "填寫公司後，面試會照這家公司常見的面試方式進行。",
+          "industriesLabel": "還沒想好？依產業瀏覽",
+          "moreIndustries": "更多產業",
+          "fewerIndustries": "收合產業",
+          "otherIndustry": "其他產業…",
+          "otherIndustryPlaceholder": "輸入產業，例如：太空科技",
+          "otherIndustryApply": "顯示職務",
+          "industryRolesTitle": "{industry}的常見職務",
+          "industryRolesLoading": "正在找{industry}招募的職務…",
+          "industryRolesError": "暫時無法列出這個產業的職務。",
+          "searching": "正在搜尋職缺…",
+          "searchError": "職缺搜尋沒有回應。",
+          "retry": "重試",
+          "rolesTitle": "符合的職務",
+          "postingsTitle": "開放中的職缺",
+          "postingsTitleIn": "{market}開放中的職缺",
+          "noPostings": "沒有找到「{query}」的開放職缺。你仍可練習這個職務，或直接貼上職缺說明。",
+          "noResults": "沒有符合「{query}」的結果。換個職稱試試，或直接貼上職缺說明。",
+          "practiceFor": "練習{company}的{title}面試",
+          "practiceForRole": "練習{title}面試",
+          "viewPost": "查看職缺",
+          "webNote": "來自網路搜尋：請打開原始貼文，確認職缺仍開放。",
+          "boardsUnavailable": "部分求職平台沒有回應，以下是能找到的職缺。",
+          "selectedTitle": "你要練習的是",
+          "roleOnly": "這個職務的一般面試，不針對特定職缺",
+          "findJobsForRole": "找這個職務的開放職缺",
+          "change": "更換"
+        },
+        "source": {
+          "index": "%BRAND% 職缺",
+          "provider": "求職平台",
+          "web": "網頁 · {host}"
+        },
+        "plan": {
+          "loadingTitle": "正在準備你的面試",
+          "steps": {
+            "reading": "閱讀職缺內容",
+            "company": "研究{company}的面試方式",
+            "panel": "挑選這個職缺的面試官"
+          },
+          "error": "暫時無法準備這場面試。",
+          "hint": "已為這個職缺量身安排，哪一項都能改。",
+          "fallbackHint": "暫用一般的面試官和形式，哪一項都能改。"
+        },
+        "difficulty": {
+          "1": "溫和",
+          "2": "適中",
+          "3": "嚴格"
+        },
+        "launchTitle": "{role} · {company}",
+        "brief": {
+          "title": "你的面試準備簡報",
+          "requirements": "這個職缺考什麼",
+          "mustHave": "必備條件",
+          "focusTopics": "{focus}會涵蓋：{topics}",
+          "company": "{company}怎麼面試",
+          "companySourced": "來自公開資料，由 AI 整理。面試流程可能改變，請查看原文連結。",
+          "companyGeneral": "沒有找到關於{company}面試的可靠公開資料，以下是同類公司通常的面試方式。",
+          "values": "評估的價值觀",
+          "evaluates": "重視什麼",
+          "sources": "來源：",
+          "strategy": "這場練習怎麼進行",
+          "minutes": "{n} 分鐘",
+          "tactics": "面試官會怎麼做",
+          "prepTips": "開始前先準備",
+          "aiNote": "由 AI 根據職缺與公開資料產生。面試官為模擬角色。"
+        }
+      }
     },
     "live": {
       "loading": "正在準備你的面試室…",

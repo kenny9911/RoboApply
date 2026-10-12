@@ -275,6 +275,10 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
   if (session.personaId) {
     practiceAgainParams.set('interviewer', session.personaId);
   }
+  // A planned practice comes back with its company, so the plan is written in that company's style again.
+  if (session.company) {
+    practiceAgainParams.set('company', session.company);
+  }
   const practiceAgainHref = `/practice?${practiceAgainParams.toString()}`;
 
   // Contract C10: a session that ended with no recorded answer is 'failed'

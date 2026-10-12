@@ -32,6 +32,8 @@ export interface RAInterviewQuestionsInput {
   strategy: RAInterviewStrategy;
   tactics: RAInterviewTactics;
   resumeContext?: string;
+  /** The planned prep (interviewer, focus, company style, patterns, market norms); binding when present. */
+  prepBrief?: string;
   count: number;
 }
 
@@ -124,6 +126,9 @@ Return STRICT JSON only (no prose, no code fences):
       `## Strategy phases\n${input.strategy.phases.map((ph) => `${ph.name} (${ph.minutes}m): ${ph.goal}`).join('\n')}`,
     );
     parts.push(`## Probing tactics to weave in\n${input.tactics.probingTactics.join('; ')}`);
+    if (input.prepBrief) {
+      parts.push(`${clip(input.prepBrief, 4000)}\n(Follow the prep above. Never present a question as one a named company actually asks.)`);
+    }
     if (input.resumeContext) {
       parts.push(`## Candidate résumé (probe real claims here)\n${clip(input.resumeContext, 2200)}`);
     }

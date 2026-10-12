@@ -1,46 +1,35 @@
 'use client';
 
-// /practice — SETUP, wired to the real-time Interview Engine.
+// /practice — SETUP, wired to the real-time Interview Engine and its prep agents.
 //
-// This file owns the state and the engine calls; PracticeSetupFlow owns the
-// screen. On launch it creates a real InterviewSession via the Interview
-// Engine (LiveKit voice) and routes to the live room. The engine's persona ids
-// are aligned to this catalog's interviewer ids, so the selection maps 1:1.
+// This file owns the state and the engine calls; PracticeTargetPicker and
+// PracticeSetupFlow own the screen.
 //
-// WP-43 (practice from any job):
-//   - `/practice?job=<id>[&resume=<id>]` (hooks/shared/useLaunchPractice)
-//     prefills the role, company and posting from the server, which also
-//     picks the resume (the job's tailored one, else the primary) and
+// The flow:
+//   1. Which job — typed in the candidate's own words and searched in their job
+//      market (prep/search: roles that match + real openings), browsed by
+//      industry (prep/industries, prep/roles), pasted as a post, or prefilled
+//      from `?job=` (WP-43). A target company is optional.
+//   2. The plan — as soon as the job is known, prep/plan writes it: the job's
+//      requirements, the interviewers a real loop for it would include, the
+//      angles it is tested on, the company's interview style and a strategy.
+//      The recommended interviewer and focus are preselected.
+//   3. Start — the session is created with the plan and the interviewer and
+//      focus chosen from it (`prep`); the server keeps it with the session, so
+//      the questions, the live interviewer and the report all follow it.
+//
+// Kept from before:
+//   - `/practice?job=<id>[&resume=<id>]` (hooks/shared/useLaunchPractice;
+//     `jobId` is read too) prefills the job; the server picks the resume and
 //     market-checks the job (404 → a one-line notice).
-//   - Sessions are created through `practiceApi.create`: the server loads the
-//     job, the PII-redacted resume and the recording consent itself.
 //   - Recording is off unless turned on in the RecordingConsentSheet (H8).
 //   - A 402 opens the shared out-of-credits sheet; when the free first
 //     practice still waits on verification, a notice says how to get it.
 //   - GoApply without voice offers the written practice with a one-line reason.
-//     It runs through the first-party practice routes: the server checks the
-//     GoApply gate, loads the job, meters credits and ticks the checklist.
-//   - The market-requirements preview (web search + LLM) is offered on both
-//     brands (D5). The server refuses it without the AI gate, and its search
-//     query never carries personal information.
-//   - Voice is offered wherever the server says it is available
-//     (`setup.voice`, the `ai.interviewVoice` capability): no brand term here.
-//   - GoApply (WP-66): the catalog lists the AI-interview practice format
-//     first, under its own name (practiceCn.format.*); it runs 20–30 minutes,
-//     so only those lengths are offered and priced. Start asks WeChat once for
-//     the "your report is ready" notice (SubscribeOnTap; inside WeChat only).
-//   - The setup may grant the free first practice; the balance is refetched
-//     when it does, so Start is not left disabled.
-//
-// What the first plan on screen promises (FIX-6):
-//   - The length starts on one the balance covers: the type's own length when
-//     it is affordable, else the longest offered length that is. A new user
-//     with one credit is not shown a 45-minute plan with Start turned off.
-//   - Where the practice runs in writing (or voice is not available at all),
-//     no video or voice format is offered.
-//   - "Get credits" appears only where something is on sale (a practice pack,
-//     or a plan that raises the allowance), and the "verify to get your first
-//     practice free" notice only when the balance covers no length at all.
+//   - Practice lengths are 15, 20 or 30 minutes (default 20); GoApply's
+//     AI-interview format runs 20 or 30. The first length offered is one the
+//     balance covers.
+//   - "Get credits" appears only where something is on sale.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -62,19 +51,25 @@ import {
   setupNotices,
 } from '../../../components/features/practice';
 
-import { isCnFormatType, plannedMinutesForType, useLocalizeType } from '../../../components/features/practice-cn';
+import { plannedMinutesForType, useLocalizeType } from '../../../components/features/practice-cn';
 import { SubscribeOnTap } from '../../../components/features/notify-cn';
 import { useMockCatalog } from '../../../hooks/useMockV3';
 import {
   PracticeSetupFlow,
-  PracticeSetupError,
-  PracticeSetupSkeleton,
+  PracticeTargetPicker,
+  DEFAULT_PRACTICE_MINUTES,
   JD_MIN_CHARS,
   practiceDurationOptions,
+  type LoadState,
+  type PracticeTarget,
   type RoleSourceMode,
 } from '../../../components/v3/mock';
-import { useInterviewPreview } from '../../../hooks/useInterviewPreview';
-import { recommendationsForRole } from '../../../lib/interviewRecommendations';
+import {
+  useIndustryRoles,
+  usePrepIndustries,
+  usePrepPlan,
+  usePrepSearch,
+} from '../../../hooks/practice/usePracticePrep';
 import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
 import { formatRelativeTime } from '../../../lib/relativeTime';
 import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
@@ -95,18 +90,21 @@ import {
   type IESessionSummary,
   type PracticeCreateBody,
   type PracticeFirstState,
+  type PracticePrepSelection,
   type PracticeRecordingRequest,
   type PracticeSetupJob,
+  type PrepPlanBody,
 } from '../../../lib/api/interviewEngine';
 
-const DEFAULT_DURATION_MINUTES = 30;
+/** A typed company or pasted post takes part in the plan once the candidate pauses this long. */
+const COMMIT_DELAY_MS = 900;
 
-/** Read once on mount: `?job=`, `?resume=` (WP-43 route contract). */
+/** Read once on mount: `?job=` (or `?jobId=`, older links), `?resume=` (WP-43 route contract). */
 function readJobParams(): { job: string | null; resume: string | null } {
   if (typeof window === 'undefined') return { job: null, resume: null };
   const params = new URLSearchParams(window.location.search);
   const clip = (v: string | null) => (v && v.trim() ? v.trim().slice(0, 64) : null);
-  return { job: clip(params.get('job')), resume: clip(params.get('resume')) };
+  return { job: clip(params.get('job') ?? params.get('jobId')), resume: clip(params.get('resume')) };
 }
 
 interface TextRun {
@@ -116,11 +114,19 @@ interface TextRun {
   typeId: string;
   language: string;
   durationMinutes: number;
+  prep: PracticePrepSelection | null;
 }
 
-/** Cheap client-side working title from a pasted JD — the first meaningful
- *  line, clipped. The backend blueprint agent infers the canonical title; this
- *  is only what we surface to the user before launch. */
+/** What a restored plan prefers once the new plan arrives (a past session, a "Run it again" link). */
+interface PreferredPick {
+  interviewerName?: string | null;
+  baseId?: string | null;
+  focusLabel?: string | null;
+  format?: string | null;
+}
+
+/** Cheap client-side working title from a pasted post — the first meaningful
+ *  line, clipped. The plan names the role properly; this is only shown until then. */
 function deriveRoleLabelFromJd(jd: string): string {
   const firstLine =
     jd
@@ -130,19 +136,36 @@ function deriveRoleLabelFromJd(jd: string): string {
   return (firstLine || jd.trim()).slice(0, 60).trim();
 }
 
+/** A value that follows `value` after the candidate pauses (or at once, through `commitNow`). */
+function useCommitted(value: string, delayMs: number): [string, (next: string) => void] {
+  const [committed, setCommitted] = useState(value);
+  useEffect(() => {
+    const id = window.setTimeout(() => setCommitted(value), delayMs);
+    return () => window.clearTimeout(id);
+  }, [value, delayMs]);
+  return [committed, setCommitted];
+}
+
+function loadState(query: { isFetching: boolean; isError: boolean; data: unknown }, enabled: boolean): LoadState {
+  if (!enabled) return 'idle';
+  if (query.isError && !query.data) return 'error';
+  if (query.isFetching && !query.data) return 'loading';
+  return query.data ? 'ready' : 'idle';
+}
+
 export default function MockSetupPage() {
   const t = useTranslations('practice');
+  const tTaxonomy = useTranslations('taxonomy');
   const { localizeRole } = useMockRoleLabels();
   const localizeType = useLocalizeType();
   const router = useRouter();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const uiLocale = useLocale();
 
-  const catalogQuery = useMockCatalog();
+  // The catalog only names the interviewers of sessions planned before the prep agents.
+  const catalogQuery = useMockCatalog({ refetchOnWindowFocus: false });
   const catalog = catalogQuery.data?.catalog;
-  const defaultedTargetRef = useRef<string | null>(null);
-  const replayHydratedRef = useRef(false);
-  const replayTargetRef = useRef<string | null>(null);
 
   // WP-43: the job (and the resume the interviewer reads) come from the
   // server. The params are read after mount so the first frame stays stable.
@@ -181,58 +204,53 @@ export default function MockSetupPage() {
   // The server says whether a sellable plan raises the allowance.
   const upgradable = creditSummary.data?.summary.upgradable === true;
 
-  // Recent sessions come from the engine (completed voice interviews), mapped to
-  // the strip's shape using the catalog for display names.
+  // Recent sessions come from the engine (completed voice interviews).
   const [recent, setRecent] = useState<IESessionSummary[]>([]);
   useEffect(() => {
     let cancelled = false;
     interviewEngineApi.recent()
       .then((r) => { if (!cancelled) setRecent(r.sessions); })
-      .catch(() => { /* strip just stays empty */ });
+      .catch(() => { /* the lane just stays empty */ });
     return () => { cancelled = true; };
   }, []);
 
-  // ── Selection state ──
-  const [query, setQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string>('');
-  const [role, setRole] = useState<string | null>(null);
+  // ── The job ──
   const [sourceMode, setSourceMode] = useState<RoleSourceMode>('role');
+  const [query, setQuery] = useState('');
+  const [company, setCompany] = useState('');
+  const [committedCompany, setCommittedCompany] = useCommitted(company.trim(), COMMIT_DELAY_MS);
+  const [industry, setIndustry] = useState<string | null>(null);
+  const [target, setTarget] = useState<PracticeTarget | null>(null);
   const [jdText, setJdText] = useState('');
-  const [interviewerId, setInterviewerId] = useState<string | null>(null);
-  const [typeId, setTypeId] = useState<string | null>(null);
-  // Default to Video — the recommended, most realistic format (eye contact +
-  // body language practice). The candidate can switch to voice-only.
+  const [committedJd] = useCommitted(jdText.trim(), COMMIT_DELAY_MS * 1.4);
+
+  // ── The plan ──
+  const [interviewerKey, setInterviewerKey] = useState<string | null>(null);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const preferredRef = useRef<PreferredPick | null>(null);
+  // Default to Video — the recommended, most realistic format. The candidate can switch to voice-only.
   const [format, setFormat] = useState<RAMockFormat>('video');
 
   // WP-43: prefill once from the job — the posting becomes the brief and the
-  // job title the role. The user can still edit the post or drop the job.
+  // job title the role. The candidate can drop the job.
   useEffect(() => {
     const next = setup?.job ?? null;
     if (!next || prefilledJobRef.current === next.id) return;
     prefilledJobRef.current = next.id;
     setJob(next);
-    setSourceMode('jd');
-    setJdText(next.jdText);
-    setRole(null);
-  }, [setup]);
+    setTarget(null);
+    setCompany(next.companyName ?? '');
+    setCommittedCompany((next.companyName ?? '').trim());
+  }, [setup, setCommittedCompany]);
 
   function clearJob() {
     setJob(null);
-    setJdText('');
     setSourceMode('role');
   }
 
-  // Pre-launch market-requirements preview (mutation = user-triggered only).
-  const previewMut = useInterviewPreview();
-
-  // Default the interview language to the language the user is using the app in
-  // (their selected UI locale), tolerant of region variants: zh-CN → zh,
-  // en-US → en, etc. Falls back to English only if nothing matches.
-  //
-  // Matched against INTERVIEW_LOCALES, not READY_LOCALES: the voice engine
-  // speaks all nine locales, and clamping to the translated-chrome subset
-  // silently seeded a ko / es / fr / pt / de user to an English interviewer.
-  const uiLocale = useLocale();
+  // The interview language defaults to the UI language (region variants
+  // tolerated). Matched against INTERVIEW_LOCALES: the voice engine speaks all
+  // nine locales.
   const [language, setLanguage] = useState<string>(() => {
     const base = uiLocale.split('-')[0];
     const match =
@@ -248,240 +266,198 @@ export default function MockSetupPage() {
   const [insufficientCredits, setInsufficientCredits] = useState<{ balance: number; required: number } | null>(null);
   const creditsQ = useCredits();
 
-  // Restore a whole saved plan (a past session, or a report's "Run it again"
-  // link) onto the brief. Every id is validated against the CURRENT catalog, so
-  // a retired persona or type simply falls back to today's recommendation
-  // instead of launching an interview the engine can't build.
-  //
-  // Shared by the ?role=… URL hydration below and the recent-practice lane, so
-  // both paths restore exactly the same fields.
-  const applyPlan = useCallback((plan: {
+  const jobActive = !!job;
+  const jdTrimmed = jdText.trim();
+
+  // ── Queries ──
+  // The prep calls reach a model: none while the brand's AI gate is closed
+  // (GoApply without a bound phone or the AI consent; the notice says why).
+  // A failed setup read leaves them on: the server enforces the gate anyway.
+  const prepAllowed = setup ? setup.ai.allowed : setupQuery.isError;
+  const browsing = sourceMode === 'role' && !target && !jobActive;
+  const industriesQ = usePrepIndustries(browsing);
+  const rolesQ = useIndustryRoles(browsing && prepAllowed && !query.trim() ? industry : null);
+  const searchQ = usePrepSearch({ query, company: committedCompany, industry, enabled: browsing && prepAllowed });
+
+  const planBody: PrepPlanBody | null = useMemo(() => {
+    if (!prepAllowed) return null;
+    const withCompany = committedCompany ? { company: committedCompany } : {};
+    if (jobActive) return { jobId: job!.id, ...withCompany };
+    if (sourceMode === 'jd') return committedJd.length >= JD_MIN_CHARS ? { jdText: committedJd, ...withCompany } : null;
+    if (!target) return null;
+    const industryText = industry ? (industriesQ.data?.find((item) => item.id === industry)?.label ?? industry) : null;
+    if (target.kind === 'role') {
+      return { role: target.title, ...withCompany, ...(industryText ? { industry: industryText } : {}) };
+    }
+    const posting = target.posting;
+    if (posting.jobId) return { jobId: posting.jobId, ...withCompany };
+    return {
+      role: posting.title,
+      posting: { title: posting.title, company: posting.company, location: posting.location, url: posting.url },
+      ...(posting.description ? { jdText: posting.description } : {}),
+      ...withCompany,
+    };
+  }, [prepAllowed, jobActive, job, sourceMode, committedJd, target, committedCompany, industry, industriesQ.data]);
+
+  const planQ = usePrepPlan(planBody);
+  const plan = planBody ? planQ.data ?? null : null;
+  const planState = loadState(planQ, planBody !== null);
+
+  // A new plan selects its recommendation, or what a restored plan preferred.
+  useEffect(() => {
+    if (!plan) return;
+    const prefer = preferredRef.current;
+    preferredRef.current = null;
+    const interviewer =
+      (prefer?.interviewerName ? plan.interviewers.find((item) => item.name === prefer.interviewerName) : undefined) ??
+      (prefer?.baseId ? plan.interviewers.find((item) => item.baseId === prefer.baseId) : undefined) ??
+      plan.interviewers.find((item) => item.key === plan.recommended.interviewerKey) ??
+      plan.interviewers[0];
+    const focus =
+      (prefer?.focusLabel ? plan.focuses.find((item) => item.label === prefer.focusLabel) : undefined) ??
+      (prefer?.format ? plan.focuses.find((item) => item.format === prefer.format) : undefined) ??
+      plan.focuses.find((item) => item.key === plan.recommended.focusKey) ??
+      plan.focuses[0];
+    setInterviewerKey(interviewer?.key ?? null);
+    setFocusKey(focus?.key ?? null);
+  }, [plan]);
+
+  const interviewer = plan?.interviewers.find((item) => item.key === interviewerKey) ?? null;
+  const focus = plan?.focuses.find((item) => item.key === focusKey) ?? null;
+
+  // ── Restoring a plan (a past session, a report's "Run it again" link) ──
+  const restorePlan = useCallback((saved: {
     role: string;
+    company?: string | null;
     interviewer?: string | null;
+    interviewerName?: string | null;
     type?: string | null;
+    focusLabel?: string | null;
     mode?: string | null;
     language?: string | null;
     duration?: number | null;
   }): boolean => {
-    if (!catalog) return false;
-    const planRole = plan.role.trim();
-    const category = catalog.roleCategories.find((item) => item.roles.includes(planRole));
-    if (!planRole || !category) return false;
-
-    const planInterviewer = catalog.interviewers.find((item) => item.id === plan.interviewer)?.id ?? null;
-    const planType = catalog.types.find((item) => item.id === plan.type)?.id ?? null;
-    const planDuration =
-      typeof plan.duration === 'number' && Number.isInteger(plan.duration) && plan.duration >= 5 && plan.duration <= 120
-        ? plan.duration
-        : null;
-
+    const role = saved.role.trim();
+    if (!role) return false;
+    setJob(null);
     setSourceMode('role');
     setQuery('');
-    setActiveCategory(category.name);
-    setRole(planRole);
-    setInterviewerId(planInterviewer);
-    setTypeId(planType);
-    if (plan.mode === 'video' || plan.mode === 'voice') setFormat(plan.mode);
-    if (INTERVIEW_LOCALES.some((locale) => locale.code === plan.language)) {
-      setLanguage(plan.language as string);
-    }
-    setDurationOverride(planDuration);
+    setIndustry(null);
+    setTarget({ kind: 'role', title: role, titleEn: null });
+    const savedCompany = (saved.company ?? '').trim();
+    setCompany(savedCompany);
+    setCommittedCompany(savedCompany);
+    if (saved.mode === 'video' || saved.mode === 'voice') setFormat(saved.mode);
+    if (INTERVIEW_LOCALES.some((locale) => locale.code === saved.language)) setLanguage(saved.language as string);
+    const duration = typeof saved.duration === 'number' && Number.isInteger(saved.duration) ? saved.duration : null;
+    setDurationOverride(duration !== null && duration >= 5 && duration <= 120 ? duration : null);
+    preferredRef.current = {
+      interviewerName: saved.interviewerName ?? null,
+      baseId: saved.interviewer ?? null,
+      focusLabel: saved.focusLabel ?? null,
+      format: saved.type ?? null,
+    };
     setInsufficientCredits(null);
     setStartError(null);
-
-    // A complete saved plan should survive the role-aware defaulting effect.
-    // Partial or stale plans intentionally fall back to current recommendations.
-    const target = planInterviewer && planType ? `role:${planRole}` : null;
-    replayTargetRef.current = target;
-    defaultedTargetRef.current = target;
     return true;
-  }, [catalog]);
+  }, [setCommittedCompany]);
 
-  // A report's "Run it again" action carries the last interview plan in the
-  // URL. Hydrate it after the catalog is ready, while keeping the
-  // server-rendered first frame stable.
+  // A report's "Run it again" action carries the last interview plan in the URL.
+  const replayHydratedRef = useRef(false);
   useEffect(() => {
-    if (!catalog || replayHydratedRef.current || typeof window === 'undefined') return;
+    if (replayHydratedRef.current || typeof window === 'undefined') return;
     replayHydratedRef.current = true;
-
     const params = new URLSearchParams(window.location.search);
+    if (params.get('job') || params.get('jobId')) return;
     const parsedDuration = Number(params.get('duration'));
-    applyPlan({
+    restorePlan({
       role: params.get('role')?.trim() ?? '',
+      company: params.get('company'),
       interviewer: params.get('interviewer'),
       type: params.get('type'),
       mode: params.get('mode'),
       language: params.get('language'),
       duration: Number.isFinite(parsedDuration) ? parsedDuration : null,
     });
-  }, [catalog, applyPlan]);
+  }, [restorePlan]);
 
-  const effectiveCategory = activeCategory || catalog?.roleCategories[0]?.name || '';
-
-  function changeCategory(nextCategory: string) {
-    setActiveCategory(nextCategory);
-    setQuery('');
-
-    const category = catalog?.roleCategories.find((item) => item.name === nextCategory);
-    if (role && category && !category.roles.includes(role)) {
-      setRole(null);
-      defaultedTargetRef.current = null;
+  // ── Selection handlers ──
+  function selectTarget(next: PracticeTarget) {
+    setTarget(next);
+    setInsufficientCredits(null);
+    setStartError(null);
+    // A posting names its company: the plan uses it at once (no typing pause to wait for).
+    if (next.kind === 'posting' && next.posting.company && !company.trim()) {
+      setCompany(next.posting.company);
+      setCommittedCompany(next.posting.company);
     }
   }
 
-  function selectRole(nextRole: string) {
-    setRole(nextRole);
-    const category = catalog?.roleCategories.find((item) => item.roles.includes(nextRole));
-    if (category) setActiveCategory(category.name);
-
-    if (catalog) {
-      const nextRecommendations = recommendationsForRole(nextRole, catalog.roleCategories);
-      setInterviewerId(
-        nextRecommendations?.personaIds[0] ??
-        catalog.interviewers.find((item) => item.id === 'maya')?.id ??
-        catalog.interviewers[0]?.id ??
-        null,
-      );
-      setTypeId(
-        nextRecommendations?.typeIds[0] ??
-        catalog.types.find((item) => item.id === 'behavioral')?.id ??
-        catalog.types[0]?.id ??
-        null,
-      );
-      setDurationOverride(null);
-      defaultedTargetRef.current = `role:${nextRole}`;
-    }
+  function clearTarget() {
+    setTarget(null);
+    setInterviewerKey(null);
+    setFocusKey(null);
   }
 
-  const interviewer = useMemo(
-    () => catalog?.interviewers.find((i) => i.id === interviewerId) ?? null,
-    [catalog, interviewerId],
-  );
-  const type = useMemo(
-    () => catalog?.types.find((tp) => tp.id === typeId) ?? null,
-    [catalog, typeId],
-  );
+  function changeSourceMode(next: RoleSourceMode) {
+    setSourceMode(next);
+    setStartError(null);
+  }
 
-  // Role-aware recommendations: which formats + interviewers suit the chosen
-  // role (browse mode only — a pasted JD has no catalog category). Pure UI sugar.
-  const recs = useMemo(
-    () => (sourceMode === 'role' ? recommendationsForRole(role, catalog?.roleCategories ?? []) : null),
-    [role, sourceMode, catalog],
-  );
-
+  // ── Lengths and credits ──
   // Mirror the server's runtime credit policy. The optional-field fallback is
   // only for a rolling deployment where the frontend reaches an older API.
   const creditMinutes = normalizeMockCreditMinutes(creditsQ.data?.creditMinutes);
   const creditBalance = creditsQ.data?.balance;
-  const durationOptions = useMemo(() => practiceDurationOptions(type), [type]);
-
-  // GoApply's AI-interview practice runs 20–30 minutes: the length shown, priced
-  // and sent is the one the server will run (it clamps the same way).
-  // Until the user picks a length, the plan starts on one the balance covers
-  // (the type's own length when it does; the longest offered one otherwise).
+  const focusFormat = focus?.format ?? null;
+  const durationOptions = useMemo(() => practiceDurationOptions(focusFormat ? { id: focusFormat } : null), [focusFormat]);
+  // GoApply's AI-interview format runs 20–30 minutes: the length shown, priced
+  // and sent is the one the server will run. Until the candidate picks a
+  // length, the plan starts on 20 minutes when the balance covers it.
   const durationMinutes = plannedMinutesForType(
-    type?.id,
-    durationOverride ?? defaultPracticeMinutes({
-      preferred: plannedMinutesForType(type?.id, type?.minutes ?? DEFAULT_DURATION_MINUTES),
-      options: durationOptions,
-      balance: creditBalance,
-      creditMinutes,
-    }),
+    focusFormat,
+    durationOverride !== null && durationOptions.includes(durationOverride)
+      ? durationOverride
+      : defaultPracticeMinutes({
+          preferred: plannedMinutesForType(focusFormat, DEFAULT_PRACTICE_MINUTES),
+          options: durationOptions,
+          balance: creditBalance,
+          creditMinutes,
+        }),
   );
 
-  // The effective role comes from EITHER the picked chip (browse) or the pasted
-  // JD's working title — a single source of truth for launch + the LaunchBar.
-  const jdTrimmed = jdText.trim();
-  // A job practice keeps the job's title and works even when the stored post
-  // is short: the server loads the job itself.
-  const jobActive = !!job && sourceMode === 'jd';
+  // The role the dock names, from the job, the posting, the role, or the plan of a pasted post.
   const effectiveRole = jobActive
     ? job!.title
-    : sourceMode === 'jd' ? (jdTrimmed ? deriveRoleLabelFromJd(jdTrimmed) : null) : role;
-  const hasRoleSource = jobActive || (sourceMode === 'role' ? !!role : jdTrimmed.length >= JD_MIN_CHARS);
+    : sourceMode === 'jd'
+      ? plan?.role || (jdTrimmed ? deriveRoleLabelFromJd(jdTrimmed) : null)
+      : target?.kind === 'posting'
+        ? target.posting.title
+        : target?.kind === 'role'
+          ? target.title
+          : null;
+  const hasRoleSource = jobActive || (sourceMode === 'jd' ? jdTrimmed.length >= JD_MIN_CHARS : !!target);
   // GoApply gates (server-decided): no AI practice without a phone / consent;
   // without voice, the practice runs in writing.
   const aiBlocked = setup ? !setup.ai.allowed : false;
   const textMode = !!setup && setup.ai.allowed && !setup.voice.available && setup.voice.reason === 'voice_unavailable';
-  const canLaunch = !!(interviewer && type && hasRoleSource) && !aiBlocked;
-  // The preview runs a web search and an LLM on the post, on both brands: only
-  // where AI is allowed (GoApply's consent gate). It never gates launch.
-  const canPreview = !!(interviewer && type && hasRoleSource) && !aiBlocked;
-  const targetKey = hasRoleSource
-    ? jobActive
-      ? `job:${job!.id}`
-      : sourceMode === 'role'
-        ? `role:${role}`
-        : `jd:${deriveRoleLabelFromJd(jdTrimmed)}`
-    : null;
-
-  // Once the target is known, build a sensible plan immediately. Role-aware
-  // recommendations win; pasted descriptions use the catalog's familiar Maya
-  // + behavioral defaults. A new target gets a newly matched plan exactly once,
-  // while manual changes remain untouched for as long as that target stays put.
-  useEffect(() => {
-    if (!catalog || !targetKey) {
-      // The URL prefill effect runs earlier in this same commit, before the
-      // selected role has rendered. Preserve its complete plan for that one
-      // transition instead of immediately clearing it as a missing target.
-      if (replayTargetRef.current) return;
-      defaultedTargetRef.current = null;
-      return;
-    }
-    if (replayTargetRef.current === targetKey) {
-      replayTargetRef.current = null;
-      defaultedTargetRef.current = targetKey;
-      return;
-    }
-    if (defaultedTargetRef.current === targetKey) return;
-    defaultedTargetRef.current = targetKey;
-
-    const nextPersonaId =
-      recs?.personaIds[0] ??
-      catalog.interviewers.find((item) => item.id === 'maya')?.id ??
-      catalog.interviewers[0]?.id ??
-      null;
-    const nextTypeId =
-      recs?.typeIds[0] ??
-      // GoApply: a job post or pasted description starts on the AI-interview
-      // practice format (the catalog lists it only there); a role keeps its recommendation.
-      catalog.types.find((item) => isCnFormatType(item.id))?.id ??
-      catalog.types.find((item) => item.id === 'behavioral')?.id ??
-      catalog.types[0]?.id ??
-      null;
-
-    setInterviewerId(nextPersonaId);
-    setTypeId(nextTypeId);
-    setDurationOverride(null);
-  }, [catalog, recs, targetKey]);
-
-  // A preview is only valid for the exact inputs it was generated from. If any
-  // of them changes, drop the stale result so the panel can't misrepresent what
-  // launch will actually run.
-  useEffect(() => {
-    previewMut.reset();
-    // previewMut.reset is stable (react-query); only the inputs should retrigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, jdText, interviewerId, typeId, language, sourceMode]);
+  const canLaunch = hasRoleSource && planState === 'ready' && !!plan && !!interviewer && !!focus && !aiBlocked;
 
   const recentSummaries: RAMockSessionSummary[] = useMemo(() => {
-    if (!catalog) return [];
     return recent
       .filter((s) => s.status === 'completed')
       .map((s) => ({
         id: s.id,
-        role: localizeRole(s.role),
-        // Persona names are proper nouns (Maya, Dr. Voss) — only the "no such
-        // persona" fallback needs translating. Type labels ride the same
-        // setup.types.<id> keys the TypePicker renders.
+        role: s.company ? `${localizeRole(s.role)} · ${s.company}` : localizeRole(s.role),
+        // A planned session names its own interviewer and focus; older ones
+        // are named from the catalog (persona names are proper nouns).
         interviewerName:
-          catalog.interviewers.find((i) => i.id === s.personaId)?.name ??
+          s.interviewer?.name ??
+          catalog?.interviewers.find((i) => i.id === s.personaId)?.name ??
           t('setup.recent.unknownInterviewer'),
-        typeLabel: localizeType(
-          s.interviewType,
-          'label',
-          catalog.types.find((tp) => tp.id === s.interviewType)?.label ?? s.interviewType,
-        ),
+        typeLabel:
+          s.focusLabel ??
+          localizeType(s.interviewType, 'label', catalog?.types.find((tp) => tp.id === s.interviewType)?.label ?? s.interviewType),
         score: s.overall ?? 0,
         when: formatRelativeTime(s.endedAt ?? s.createdAt, uiLocale),
         note: '',
@@ -493,16 +469,18 @@ export default function MockSetupPage() {
     router.push(`/practice/${sessionId}/report`);
   }
 
-  // "Practice this again" — restore that session's whole plan onto the brief.
-  // It stops short of launching: a new interview spends credits, so the
-  // candidate still presses Start.
+  // "Practice this again" — restore that session's plan onto the brief. It
+  // stops short of launching: a new interview spends credits.
   function repeat(sessionId: string) {
     const past = recent.find((item) => item.id === sessionId);
     if (!past) return;
-    applyPlan({
+    restorePlan({
       role: past.role,
+      company: past.company ?? null,
       interviewer: past.personaId,
+      interviewerName: past.interviewer?.name ?? null,
       type: past.interviewType,
+      focusLabel: past.focusLabel ?? null,
       mode: past.mode,
       language: past.language,
       duration: past.durationMinutes,
@@ -557,43 +535,49 @@ export default function MockSetupPage() {
   }
 
   async function launch() {
-    if (!canLaunch || !canAfford || !interviewer || !type) return;
+    if (!canLaunch || !canAfford || !plan || !interviewer || !focus) return;
     setStartError(null);
     setInsufficientCredits(null);
     setFirstPracticeFrom402(null);
+    const prep: PracticePrepSelection = { plan, interviewerKey: interviewer.key, focusKey: focus.key };
+    const postingJobId = target?.kind === 'posting' ? target.posting.jobId : null;
+    const jobId = jobActive ? job!.id : postingJobId;
     if (textMode) {
       // GoApply without voice: the written practice runs on this page, for
       // the job when there is one (the server loads it and meters the run).
       setTextRun({
-        jobId: jobActive ? job!.id : null,
+        jobId,
         role: effectiveRole ?? '',
-        interviewerId: interviewer.id,
-        typeId: type.id,
+        interviewerId: interviewer.baseId,
+        typeId: focus.format,
         language,
         durationMinutes,
+        prep,
       });
       return;
     }
     setStarting(true);
     try {
+      const postingText = target?.kind === 'posting' && !target.posting.jobId ? target.posting.description ?? undefined : undefined;
       const body: PracticeCreateBody = {
         role: effectiveRole ?? '',
-        jdText: sourceMode === 'jd' ? jdTrimmed : undefined,
-        interviewType: type.id,
-        personaId: interviewer.id,
+        jdText: sourceMode === 'jd' && !jobActive ? jdTrimmed : postingText,
+        interviewType: focus.format,
+        personaId: interviewer.baseId,
         mode: format,
         language,
         durationMinutes,
         candidateName: user?.name ?? undefined,
         // The server loads the job, picks and redacts the resume, and checks
         // the recording consent itself.
-        jobId: jobActive ? job!.id : null,
+        jobId,
         resumeId: jobParams?.resume ?? null,
         recording: { audio: recording.audio, video: recording.audio && recording.video && format === 'video' },
+        prep,
       };
       // The server answers as soon as the session row exists (status
-      // 'preparing'); the interview plan is written while the live page shows
-      // its own progress, so navigate straight away.
+      // 'preparing'); the interview is written while the live page shows its
+      // own progress, so navigate straight away.
       const { session } = await practiceApi.create(body);
       router.push(`/practice/${session.id}`);
     } catch (err) {
@@ -603,8 +587,6 @@ export default function MockSetupPage() {
       } else if (info.network) {
         setStartError('network');
       } else if (info.code === 'llm_unavailable' || info.code === 'worker_unavailable' || info.status === 503) {
-        // An older API still writes the plan inside create and answers 503
-        // when the language service is down.
         setStartError('busy');
       } else {
         setStartError('generic');
@@ -616,32 +598,16 @@ export default function MockSetupPage() {
   const creditCost = mockCreditsForMinutes(durationMinutes, creditMinutes);
   const canAfford = creditBalance === undefined || canAffordMinutes(durationMinutes, creditBalance, creditMinutes);
   // The balance covers none of the offered lengths: only then is the user
-  // "short of credits" in the sense the first-practice notice means. A balance
-  // that covers a shorter length is repaired by "Use N min instead".
+  // "short of credits" in the sense the first-practice notice means.
   const noLengthAffordable =
     creditBalance !== undefined && longestAffordableMinutes(durationOptions, creditBalance, creditMinutes) === null;
 
   // Is there anything to buy? A plan that raises the allowance (the server
-  // says so), or a practice pack on sale right now (the plans API says what is
-  // sellable on this brand). The plans are only read when a shortfall is on screen and
-  // the summary has not already answered.
+  // says so), or a practice pack on sale right now.
   const plansQ = usePlans({ enabled: (!canAfford || insufficientCredits !== null) && !upgradable });
   const canGetCredits =
     upgradable ||
-    visiblePlans(plansQ.data?.plans, { studentEnabled: studentPlans }).some((plan) => plan.kind === 'pack' && plan.sellable);
-
-  // Fetch the market-grounded requirements preview for the current selection.
-  // User-triggered (the panel's Preview button); never auto-fires.
-  function runPreview() {
-    if (!canPreview || !interviewer || !type) return;
-    previewMut.mutate({
-      role: sourceMode === 'role' ? role ?? undefined : undefined,
-      jdText: sourceMode === 'jd' ? jdTrimmed : undefined,
-      interviewType: type.id,
-      personaId: interviewer.id,
-      language,
-    });
-  }
+    visiblePlans(plansQ.data?.plans, { studentEnabled: studentPlans }).some((p) => p.kind === 'pack' && p.sellable);
 
   if (textRun) {
     return (
@@ -657,17 +623,10 @@ export default function MockSetupPage() {
         typeId={textRun.typeId}
         language={textRun.language}
         durationMinutes={textRun.durationMinutes}
+        prep={textRun.prep ?? undefined}
         onExit={() => setTextRun(null)}
       />
     );
-  }
-
-  if (catalogQuery.isError) {
-    return <PracticeSetupError onRetry={() => void catalogQuery.refetch()} />;
-  }
-
-  if (catalogQuery.isLoading || !catalog) {
-    return <PracticeSetupSkeleton />;
   }
 
   const notices = setupNotices({
@@ -681,20 +640,54 @@ export default function MockSetupPage() {
     video: recording.audio && recording.video && format === 'video',
   };
 
+  const searchState: LoadState = loadState(searchQ, searchQ.ready);
+  const rolesState: LoadState = loadState(rolesQ, !!industry);
+
   return (
     <>
     <PracticeSetupFlow
-      topSlot={
-        <>
-          {jobActive && job ? (
-            <PracticeJobBanner job={job} resume={setup?.resume ?? null} onClear={clearJob} />
-          ) : null}
-          <PracticeNotices kinds={notices} />
-        </>
-      }
+      topSlot={<PracticeNotices kinds={notices} />}
       introAside={
         showQuestionsLink ? <Link href="/practice/questions">{t('questionsLink')}</Link> : null
       }
+      targetSection={
+        <PracticeTargetPicker
+          sourceMode={sourceMode}
+          onSourceModeChange={changeSourceMode}
+          query={query}
+          onQueryChange={setQuery}
+          company={company}
+          onCompanyChange={setCompany}
+          industries={industriesQ.data ?? (industriesQ.isError ? [] : null)}
+          industry={industry}
+          onIndustryChange={setIndustry}
+          industryRoles={{ state: rolesState, roles: rolesQ.data ?? [] }}
+          onRetryIndustryRoles={() => void rolesQ.refetch()}
+          search={{ state: searchState, pending: searchQ.pending, result: searchQ.ready ? searchQ.data ?? null : null }}
+          onRetrySearch={() => void searchQ.refetch()}
+          target={target}
+          onSelectTarget={selectTarget}
+          onClearTarget={clearTarget}
+          jdText={jdText}
+          onJdTextChange={setJdText}
+          jobBanner={jobActive && job ? <PracticeJobBanner job={job} resume={setup?.resume ?? null} onClear={clearJob} /> : undefined}
+          localizeTaxonomy={(id, fallback) => (tTaxonomy.has(`roles.${id}`) ? tTaxonomy(`roles.${id}`) : fallback)}
+        />
+      }
+      hasRoleSource={hasRoleSource}
+      effectiveRole={effectiveRole}
+      company={committedCompany || null}
+      planState={planState}
+      planBlocked={!prepAllowed}
+      plan={plan}
+      onRetryPlan={() => void planQ.refetch()}
+      selectedInterviewerKey={interviewerKey}
+      onSelectInterviewer={setInterviewerKey}
+      selectedFocusKey={focusKey}
+      onSelectFocus={(value) => {
+        setFocusKey(value);
+        setInsufficientCredits(null);
+      }}
       dockSlot={
         setup && hasRoleSource && !textMode ? (
           <RecordingRow
@@ -707,31 +700,6 @@ export default function MockSetupPage() {
       startLabel={textMode ? t('gate.startText') : undefined}
       // GoApply inside WeChat: Start also asks, once, to be told when the report is ready.
       wrapStart={(button) => <SubscribeOnTap template="report_ready">{button}</SubscribeOnTap>}
-      categories={catalog.roleCategories}
-      totalRoles={catalog.totalRoles}
-      query={query}
-      onQueryChange={setQuery}
-      activeCategory={effectiveCategory}
-      onCategoryChange={changeCategory}
-      selectedRole={role}
-      effectiveRole={effectiveRole}
-      onSelectRole={selectRole}
-      sourceMode={sourceMode}
-      onSourceModeChange={setSourceMode}
-      jdText={jdText}
-      onJdTextChange={setJdText}
-      hasRoleSource={hasRoleSource}
-      interviewers={catalog.interviewers}
-      selectedInterviewerId={interviewerId}
-      onSelectInterviewer={setInterviewerId}
-      recommendedPersonaIds={recs?.personaIds}
-      types={catalog.types}
-      selectedTypeId={typeId}
-      onSelectType={(value) => {
-        setTypeId(value);
-        setInsufficientCredits(null);
-      }}
-      recommendedTypeIds={recs?.typeIds}
       format={format}
       onFormatChange={setFormat}
       // Video or voice is a choice only where the voice practice can run.
@@ -739,6 +707,7 @@ export default function MockSetupPage() {
       language={language}
       onLanguageChange={setLanguage}
       durationMinutes={durationMinutes}
+      durationOptions={durationOptions}
       onDurationChange={(value) => {
         setDurationOverride(value);
         setInsufficientCredits(null);
@@ -747,14 +716,6 @@ export default function MockSetupPage() {
       onReplay={(session) => replay(session.id)}
       onRepeat={(session) => repeat(session.id)}
       onDelete={(session) => void removeSession(session.id)}
-      previewState={previewMut.isPending ? 'loading' : previewMut.isError ? 'error' : previewMut.data ? 'ready' : 'idle'}
-      requirements={previewMut.data?.requirements ?? null}
-      webSources={previewMut.data?.webSources ?? []}
-      sampleQuestions={previewMut.data?.sampleQuestions ?? []}
-      groundedOn={previewMut.data?.groundedOn}
-      canPreview={canPreview}
-      onPreview={runPreview}
-      onRetryPreview={runPreview}
       creditCost={creditCost}
       creditMinutes={creditMinutes}
       creditsRemaining={creditsQ.data?.balance}

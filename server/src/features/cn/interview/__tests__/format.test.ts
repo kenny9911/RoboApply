@@ -67,9 +67,9 @@ describe('zh question sets (fixture)', () => {
 });
 
 describe('the script', () => {
-  it('clamps to 20–30 minutes (default 25)', () => {
-    expect(clampCnMinutes(undefined)).toBe(25);
-    expect(clampCnMinutes(Number.NaN)).toBe(25);
+  it('clamps to 20–30 minutes (default 20)', () => {
+    expect(clampCnMinutes(undefined)).toBe(20);
+    expect(clampCnMinutes(Number.NaN)).toBe(20);
     expect(clampCnMinutes(5)).toBe(20);
     expect(clampCnMinutes(45)).toBe(30);
     expect(clampCnMinutes(26.4)).toBe(26);

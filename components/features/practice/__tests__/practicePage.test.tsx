@@ -1,12 +1,14 @@
 // components/features/practice/__tests__/practicePage.test.tsx
 //
-// WP-43 — /practice from a job: prefill from `?job=`, the server-side create
-// (jobId, resume, recording), 402 → the shared out-of-credits sheet plus the
-// free-first-practice notice, a market-mismatch 404, the recording consent
-// row and the choice it sends, the balance refetch after the setup grants the
-// free first practice, GoApply's written practice when voice is unavailable
-// (job forwarded, metered, 402 back to the setup), and no market-requirements
-// preview where AI is blocked or on GoApply.
+// WP-43 — /practice from a job: prefill from `?job=`, the interview planned
+// for that job (prep/plan with its id), the server-side create (jobId, resume,
+// recording, and the plan with the interviewer and focus chosen from it),
+// 402 → the shared out-of-credits sheet plus the free-first-practice notice, a
+// market-mismatch 404, the recording consent row and the choice it sends, the
+// balance refetch after the setup grants the free first practice, GoApply's
+// written practice when voice is unavailable (job and plan forwarded, metered,
+// 402 back to the setup), and the prep brief on both brands (the AI label on
+// GoApply only).
 //
 // FIX-6 — what the first plan on screen promises: a length the balance covers
 // ("1 credit left", Start on), no "verify to get your first practice free"
@@ -24,6 +26,14 @@ import { BrandProvider } from '../../../../lib/brand/BrandProvider';
 import { clientBrandFor } from '../../../../lib/brand/client';
 import { renderWithProviders } from '../../../../__tests__/utils/renderWithProviders';
 import { mockAuthState } from '../../../../__tests__/utils/mockAuth';
+import {
+  DANA,
+  PREP_INDUSTRIES,
+  SYSTEM_FOCUS,
+  companyStyle,
+  prepPlan,
+  prepSearchResult,
+} from '../../../../__tests__/utils/prepFixtures';
 
 beforeAll(() => {
   process.env.NEXT_PUBLIC_USE_STUB_API = 'true';
@@ -31,9 +41,12 @@ beforeAll(() => {
 
 const m = vi.hoisted(() => ({
   setup: vi.fn(),
-  preview: vi.fn(),
   create: vi.fn(),
   textStart: vi.fn(),
+  industries: vi.fn(),
+  roles: vi.fn(),
+  search: vi.fn(),
+  plan: vi.fn(),
   push: vi.fn(),
   report: vi.fn(),
   flags: { interviewBank: true } as Record<string, boolean>,
@@ -47,10 +60,14 @@ const m = vi.hoisted(() => ({
 
 const CREDITS = { balance: 5, periodAllotment: 1, tier: 'free', creditMinutes: 20 };
 
+/** The plan prep/plan writes for the job (Acme's own interview style included). */
+const PLAN = prepPlan({ role: 'Backend Engineer', company: 'Acme', jobId: 'j1', companyStyle: companyStyle() });
+
 vi.mock('../../../../lib/api/interviewEngine', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../../lib/api/interviewEngine')>()),
-  interviewEngineApi: { recent: vi.fn(async () => ({ sessions: [] })), remove: vi.fn(), preview: m.preview },
+  interviewEngineApi: { recent: vi.fn(async () => ({ sessions: [] })), remove: vi.fn(), preview: vi.fn() },
   practiceApi: { setup: m.setup, create: m.create, info: vi.fn(), practicedJobs: vi.fn() },
+  prepApi: { industries: m.industries, roles: m.roles, search: m.search, plan: m.plan },
   textPracticeApi: {
     start: m.textStart,
     nextTurn: vi.fn(),
@@ -118,6 +135,22 @@ async function startButton(name = 'Start the interview') {
   return start;
 }
 
+/** A dock chip (its accessible name holds the current value); it shows once the plan is in. */
+const chip = (name: RegExp) => screen.findByRole('button', { name, expanded: false }, { timeout: 3000 });
+
+/** The prep brief section, once the plan is in. */
+async function prepBrief() {
+  const toggle = await screen.findByRole('button', { name: /Your prep brief/ }, { timeout: 3000 });
+  return { toggle, brief: toggle.closest('section') as HTMLElement };
+}
+
+/** Without a job: type a title and pick the role (the search runs once typing pauses). */
+async function pickFrontendRole() {
+  fireEvent.change(await screen.findByRole('searchbox', { name: 'Job title' }), { target: { value: 'frontend' } });
+  const roles = await screen.findByRole('group', { name: 'Roles that match' }, { timeout: 3000 });
+  fireEvent.click(within(roles).getByRole('button', { name: /^Frontend Engineer/ }));
+}
+
 function apiError(status: number, payload: Record<string, unknown>) {
   return new RoboApiError(String(payload.error), { code: String(payload.error), status, payload });
 }
@@ -128,7 +161,7 @@ beforeEach(() => {
   m.upgradable = true;
   m.plans = undefined;
   m.plansEnabled.length = 0;
-  m.credits.mockResolvedValue(CREDITS);
+  m.credits.mockReset().mockResolvedValue(CREDITS);
   m.getConsents.mockResolvedValue({
     items: [
       consentItem('interview_recording', 'Keep the audio and transcript of my practice interviews.'),
@@ -136,13 +169,22 @@ beforeEach(() => {
     ],
   });
   m.recordConsent.mockResolvedValue({});
-  m.setup.mockResolvedValue(setupPayload());
-  m.create.mockResolvedValue({ session: { id: 'sess1' }, practice: { jobId: 'j1', resumeId: 'r1', recording: { audio: false, video: false } } });
+  m.setup.mockReset().mockResolvedValue(setupPayload());
+  m.create.mockReset().mockResolvedValue({ session: { id: 'sess1' }, practice: { jobId: 'j1', resumeId: 'r1', recording: { audio: false, video: false } } });
+  m.textStart.mockReset();
+  m.industries.mockReset().mockResolvedValue({ industries: PREP_INDUSTRIES });
+  m.roles.mockReset().mockResolvedValue({ roles: [] });
+  m.search.mockReset().mockResolvedValue(prepSearchResult({
+    query: 'frontend',
+    roles: [{ title: 'Frontend Engineer', titleEn: null, source: 'ai', context: 'Builds the web app', taxonomyId: null }],
+    postings: [],
+  }));
+  m.plan.mockReset().mockResolvedValue({ plan: PLAN });
   window.history.replaceState({}, '', '/practice?job=j1');
 });
 
 describe('/practice?job=', () => {
-  it('prefills the job and resume, then creates the session server-side with the job and no recording', async () => {
+  it('prefills the job and resume, plans the interview for the job, then creates the session server-side with the plan, the job and no recording', async () => {
     renderWithProviders(<PracticePage />);
     const banner = await screen.findByTestId('practice-job-banner');
     expect(banner).toHaveTextContent('Backend Engineer at Acme');
@@ -151,18 +193,29 @@ describe('/practice?job=', () => {
     expect(screen.getByTestId('practice-recording-row')).toHaveTextContent('Recording: Off');
     expect(screen.getByRole('link', { name: 'Practice questions' })).toHaveAttribute('href', '/practice/questions');
 
-    const start = screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement;
-    await waitFor(() => expect(start.disabled).toBe(false));
-    fireEvent.click(start);
+    // The job is planned by its id (the server reads the post), in its company's style.
+    await waitFor(() => expect(m.plan).toHaveBeenCalledWith({ jobId: 'j1', company: 'Acme' }, expect.anything()));
+    expect(m.plan).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Target company (optional)')).toHaveValue('Acme');
+    expect(await chip(/^Interviewer\s*Dana Okafor/)).toBeTruthy();
+    expect(screen.getByText('Backend Engineer · Acme')).toBeTruthy();
+
+    fireEvent.click(await startButton());
     await waitFor(() => expect(m.create).toHaveBeenCalledTimes(1));
-    expect(m.create.mock.calls[0][0]).toMatchObject({
+    const body = m.create.mock.calls[0][0];
+    expect(body).toMatchObject({
       role: 'Backend Engineer',
-      jdText: 'Build APIs.',
       jobId: 'j1',
       resumeId: null,
       recording: { audio: false, video: false },
+      // The interviewer's catalog persona and the focus's format, with the plan they came from.
+      personaId: DANA.baseId,
+      interviewType: SYSTEM_FOCUS.format,
+      prep: { plan: PLAN, interviewerKey: DANA.key, focusKey: SYSTEM_FOCUS.key },
     });
-    expect(m.create.mock.calls[0][0]).not.toHaveProperty('resumeContext');
+    // The server loads the job's post and picks the resume; the browser sends neither.
+    expect(body.jdText).toBeUndefined();
+    expect(body).not.toHaveProperty('resumeContext');
     await waitFor(() => expect(m.push).toHaveBeenCalledWith('/practice/sess1'));
   });
 
@@ -179,25 +232,30 @@ describe('/practice?job=', () => {
       firstPractice: { method: 'email', verified: false, grant: null },
     }));
     renderWithProviders(<PracticePage />);
-    const start = await screen.findByRole('button', { name: 'Start the interview' });
-    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(start);
+    fireEvent.click(await startButton());
     await waitFor(() => expect(m.report).toHaveBeenCalledWith({ bucket: 'practice', resetsAt: null, upgradable: true }));
     expect(await screen.findByText('Verify your email to get your first practice interview free.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Verify email' })).toHaveAttribute('href', '/settings#account');
   });
 
-  it('a job from the other market shows a notice and leaves the setup usable', async () => {
+  it('a job from the other market shows a notice, plans nothing for it, and leaves the setup usable', async () => {
     m.setup.mockRejectedValue(apiError(404, { error: 'job_not_found' }));
     renderWithProviders(<PracticePage />);
     expect(await screen.findByText("That job isn't available here. Pick a role or paste a job post instead.")).toBeTruthy();
     expect(screen.queryByTestId('practice-job-banner')).toBeNull();
+    expect(screen.getByRole('searchbox', { name: 'Job title' })).toBeTruthy();
+    expect(m.plan).not.toHaveBeenCalled();
   });
 
   it('"Practice without this job" drops the job from the session', async () => {
     renderWithProviders(<PracticePage />);
+    await chip(/^Interviewer/);
     fireEvent.click(await screen.findByRole('button', { name: 'Practice without this job' }));
     expect(screen.queryByTestId('practice-job-banner')).toBeNull();
+    // Back to choosing a job: the plan for the dropped one is gone, and so is Start.
+    expect(screen.getByRole('searchbox', { name: 'Job title' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Interviewer/ })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('sends the recording choice only after the consent sheet confirms it', async () => {
@@ -224,11 +282,12 @@ describe('/practice?job=', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByTestId('practice-recording-row')).toHaveTextContent('Audio, video and transcript');
 
-    fireEvent.click(screen.getByRole('button', { name: /Format\s*Video/ }));
+    fireEvent.click(await chip(/Format\s*Video/));
     fireEvent.click(await screen.findByRole('radio', { name: /Voice only/ }));
     fireEvent.click(await startButton());
     await waitFor(() => expect(m.create).toHaveBeenCalledTimes(1));
     expect(m.create.mock.calls[0][0].recording).toEqual({ audio: true, video: false });
+    expect(m.create.mock.calls[0][0].mode).toBe('voice');
   });
 
   it('refetches the balance after the setup grants the free first practice, so Start turns on', async () => {
@@ -243,31 +302,45 @@ describe('/practice?job=', () => {
     m.credits.mockResolvedValue({ ...CREDITS, balance: 0 });
     renderWithProviders(<PracticePage />);
     await screen.findByTestId('practice-job-banner');
+    // The plan is on screen: Start is off for the balance alone.
+    await chip(/^Interviewer/);
     await waitFor(() => expect(m.credits).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
     expect((screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement).disabled).toBe(true);
     expect(m.credits).toHaveBeenCalledTimes(1);
   });
 
-  it('offers the market-requirements preview on RoboApply', async () => {
+  it('shows the prep brief written for the job, without the AI label on RoboApply', async () => {
     renderWithProviders(<PracticePage />);
-    expect(await screen.findByRole('button', { name: 'Preview what you may be asked' })).toBeTruthy();
+    const { toggle, brief } = await prepBrief();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(within(brief).getByRole('heading', { name: 'What this job tests' })).toBeTruthy();
+    expect(brief).toHaveTextContent('Builds and runs the payment APIs.');
+    expect(within(brief).getByRole('heading', { name: 'How Acme interviews' })).toBeTruthy();
+    expect(within(brief).getByRole('link', { name: 'How Acme hires' })).toHaveAttribute('href', 'https://acme.example/hiring');
+    expect(within(brief).getByRole('heading', { name: 'How this practice will run' })).toBeTruthy();
+    expect(within(brief).getByRole('heading', { name: 'Prepare before you start' })).toBeTruthy();
+    // RoboApply labels AI text in its own words; the GoApply badge is not shown.
+    expect(toggle.querySelector('[data-ai-label]')).toBeNull();
+    // The old market-requirements preview is gone.
+    expect(screen.queryByRole('button', { name: 'Preview what you may be asked' })).toBeNull();
   });
 });
 
 describe('GoApply without voice', () => {
-  it('offers the written practice with a one-line reason and runs it on the page', async () => {
+  it('offers the written practice with a one-line reason and runs it on the page, with the plan', async () => {
     m.setup.mockResolvedValue(setupPayload({
       market: 'cn', job: null, resume: null,
       voice: { available: false, reason: 'voice_unavailable' },
     }));
     m.textStart.mockResolvedValue({ sessionId: 't1', questions: [{ q: 'Tell me about yourself.', hint: '', coachTip: null }], jobId: null });
+    m.plan.mockResolvedValue({ plan: prepPlan({ role: 'Frontend Engineer' }) });
     window.history.replaceState({}, '', '/practice');
     renderWithProviders(goApply(<PracticePage />));
     expect(await screen.findByText("Voice practice isn't available here yet, so this practice is in writing.")).toBeTruthy();
-    fireEvent.click(await screen.findByRole('radio', { name: 'Frontend Engineer' }));
-    const start = await screen.findByRole('button', { name: 'Start the written practice' });
-    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    await pickFrontendRole();
+    await waitFor(() => expect(m.plan).toHaveBeenCalledWith({ role: 'Frontend Engineer' }, expect.anything()));
+    const start = await startButton('Start the written practice');
     // FIX-6: the practice is written, so no video or voice format is offered.
     expect(screen.getByRole('button', { name: /^Length/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Format/ })).toBeNull();
@@ -276,18 +349,30 @@ describe('GoApply without voice', () => {
     fireEvent.click(start);
     expect(await screen.findByRole('heading', { name: 'Written practice' })).toBeTruthy();
     expect(await screen.findByText('Tell me about yourself.')).toBeTruthy();
-    expect(m.textStart).toHaveBeenCalledWith(expect.objectContaining({ role: 'Frontend Engineer', jobId: null }));
+    expect(m.textStart).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'Frontend Engineer',
+      jobId: null,
+      // The plan's interviewer (its catalog persona) and focus (its format), and the plan itself.
+      interviewerId: DANA.baseId,
+      typeId: SYSTEM_FOCUS.format,
+      durationMinutes: 20,
+      prep: { plan: expect.objectContaining({ role: 'Frontend Engineer' }), interviewerKey: DANA.key, focusKey: SYSTEM_FOCUS.key },
+    }));
     expect(m.create).not.toHaveBeenCalled();
   });
 
-  it('practises for the job: the written practice gets the job id', async () => {
+  it('practises for the job: the written practice gets the job id and the plan', async () => {
     m.setup.mockResolvedValue(setupPayload({ market: 'cn', voice: { available: false, reason: 'voice_unavailable' } }));
     m.textStart.mockResolvedValue({ sessionId: 't1', questions: [{ q: 'Why Acme?', hint: '', coachTip: null }], jobId: 'j1' });
     renderWithProviders(goApply(<PracticePage />));
     await screen.findByTestId('practice-job-banner');
     fireEvent.click(await startButton('Start the written practice'));
     expect(await screen.findByText('Why Acme?')).toBeTruthy();
-    expect(m.textStart).toHaveBeenCalledWith(expect.objectContaining({ jobId: 'j1', role: 'Backend Engineer' }));
+    expect(m.textStart).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: 'j1',
+      role: 'Backend Engineer',
+      prep: { plan: PLAN, interviewerKey: DANA.key, focusKey: SYSTEM_FOCUS.key },
+    }));
   });
 
   it('the written practice is metered: Start stays off without credits', async () => {
@@ -295,6 +380,7 @@ describe('GoApply without voice', () => {
     m.setup.mockResolvedValue(setupPayload({ market: 'cn', voice: { available: false, reason: 'voice_unavailable' } }));
     renderWithProviders(goApply(<PracticePage />));
     await screen.findByTestId('practice-job-banner');
+    await chip(/^Interviewer/);
     await waitFor(() => expect(m.credits).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
     expect((screen.getByRole('button', { name: 'Start the written practice' }) as HTMLButtonElement).disabled).toBe(true);
@@ -314,11 +400,13 @@ describe('GoApply without voice', () => {
     expect(screen.queryByRole('heading', { name: 'Written practice' })).toBeNull();
   });
 
-  it('the market-requirements preview is offered here too (it does not depend on voice)', async () => {
+  it('the prep brief is shown here too (it does not depend on voice), with the AI label', async () => {
     m.setup.mockResolvedValue(setupPayload({ market: 'cn', voice: { available: false, reason: 'voice_unavailable' } }));
     renderWithProviders(goApply(<PracticePage />));
     await screen.findByTestId('practice-job-banner');
-    expect(screen.getByRole('button', { name: 'Preview what you may be asked' })).toBeTruthy();
+    const { toggle, brief } = await prepBrief();
+    expect(within(brief).getByRole('heading', { name: 'What this job tests' })).toBeTruthy();
+    expect(toggle.querySelector('[data-ai-label="text"]')).toHaveTextContent('AI-generated');
   });
 
   it('without a bound phone the AI practice cannot start and the notice links to binding', async () => {
@@ -331,10 +419,13 @@ describe('GoApply without voice', () => {
     window.history.replaceState({}, '', '/practice');
     renderWithProviders(goApply(<PracticePage />));
     expect(await screen.findByText('Add a phone number before using AI practice.')).toBeTruthy();
-    fireEvent.click(await screen.findByRole('radio', { name: 'Frontend Engineer' }));
-    const start = screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement;
-    await new Promise((r) => setTimeout(r, 0));
-    expect(start.disabled).toBe(true);
+    // The prep calls reach a model: none is made while the gate is closed.
+    fireEvent.change(await screen.findByRole('searchbox', { name: 'Job title' }), { target: { value: 'frontend' } });
+    await new Promise((r) => setTimeout(r, 900));
+    expect(m.search).not.toHaveBeenCalled();
+    expect(m.plan).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /^Interviewer/ })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getAllByRole('link', { name: 'Add phone number' })).toHaveLength(1);
   });
 });
@@ -347,14 +438,14 @@ const UNVERIFIED = { firstPractice: { method: 'email', verified: false, grant: n
 const PACK = { key: 'practice_pack', kind: 'pack', amountMinor: 900, unsellableReason: null, requiresFlag: null, phase: 'mvp', sellable: true };
 
 describe('a new user with one credit', () => {
-  it('starts on a length the balance covers: "1 credit left", Start on, no shortfall and no verify notice', async () => {
+  it('starts on 20 minutes, which one credit covers: "1 credit left", Start on, no shortfall and no verify notice', async () => {
     m.credits.mockResolvedValue(ONE_CREDIT);
     m.setup.mockResolvedValue(setupPayload(UNVERIFIED));
     renderWithProviders(<PracticePage />);
     await screen.findByTestId('practice-job-banner');
-    // The job practice would default to a 40-minute interview (2 credits); the balance covers 15.
-    expect(await screen.findByRole('button', { name: /^Length\s*15 min/ })).toBeTruthy();
-    expect(await screen.findByText('Costs 0.75 credits · 1 credit left')).toBeTruthy();
+    // A practice runs 20 minutes by default: one credit at the standard rate.
+    expect(await chip(/^Length\s*20 min/)).toBeTruthy();
+    expect(await screen.findByText('Costs 1 credit · 1 credit left')).toBeTruthy();
     expect(screen.queryByText(/1 credits/)).toBeNull();
     await startButton();
     expect(screen.queryByRole('alert')).toBeNull();
@@ -367,21 +458,24 @@ describe('a new user with one credit', () => {
     m.credits.mockResolvedValue(ONE_CREDIT);
     m.setup.mockResolvedValue(setupPayload(UNVERIFIED));
     renderWithProviders(<PracticePage />);
-    fireEvent.click(await screen.findByRole('button', { name: /^Length\s*15 min/ }));
+    fireEvent.click(await chip(/^Length\s*20 min/));
     const tray = await screen.findByRole('group', { name: 'How long should it run?' });
-    expect(within(tray).getByRole('radio', { name: /^45 min/ })).toHaveTextContent('2.25 credits — more than you have');
+    expect(within(tray).getAllByRole('radio').map((r) => r.textContent?.match(/\d+ min/)?.[0])).toEqual(['15 min', '20 min', '30 min']);
+    expect(within(tray).getByRole('radio', { name: /^30 min/ })).toHaveTextContent('1.5 credits — more than you have');
+    expect(within(tray).getByRole('radio', { name: /^20 min/ })).toHaveTextContent('Costs 1 credit');
     expect(within(tray).getByRole('radio', { name: /^15 min/ })).toHaveTextContent('Costs 0.75 credits');
-    fireEvent.click(within(tray).getByRole('radio', { name: /^45 min/ }));
+    fireEvent.click(within(tray).getByRole('radio', { name: /^30 min/ }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('This interview needs 2.25 credits and you have 1. Add credits to continue.');
+    expect(alert).toHaveTextContent('This interview needs 1.5 credits and you have 1. Add credits to continue.');
     // The plan picker itself, like the report's "get more" link.
     expect(within(alert).getByRole('link', { name: 'Get credits' })).toHaveAttribute('href', '/settings/billing#plans');
     expect((screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByText('Verify your email to get your first practice interview free.')).toBeNull();
 
-    fireEvent.click(within(alert).getByRole('button', { name: 'Use 15 min instead' }));
+    fireEvent.click(within(alert).getByRole('button', { name: 'Use 20 min instead' }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(await chip(/^Length\s*20 min/)).toBeTruthy();
     await startButton();
   });
 
@@ -391,7 +485,7 @@ describe('a new user with one credit', () => {
     renderWithProviders(<PracticePage />);
     expect(await screen.findByText('Verify your email to get your first practice interview free.')).toBeTruthy();
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('This interview needs 2 credits and you have 0.');
+    expect(alert).toHaveTextContent('This interview needs 1 credit and you have 0.');
     expect(within(alert).queryByRole('button', { name: /min instead/ })).toBeNull();
   });
 });
@@ -407,7 +501,7 @@ describe('a credit shortfall where nothing is on sale', () => {
     m.plans = { plans: [] };
     renderWithProviders(goApply(<PracticePage />));
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('This interview needs 2 credits and you have 0.');
+    expect(alert).toHaveTextContent('This interview needs 1 credit and you have 0.');
     expect(alert.textContent).not.toMatch(/Add credits/);
     expect(within(alert).queryByRole('link')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Get credits' })).toBeNull();
@@ -433,47 +527,45 @@ describe('GoApply with the same capabilities as RoboApply (D5)', () => {
     await screen.findByTestId('practice-job-banner');
     expect(screen.queryByRole('button', { name: 'Start the written practice' })).toBeNull();
     // Video and voice are both offered, as on RoboApply.
-    fireEvent.click(await screen.findByRole('button', { name: /^Format/ }));
+    fireEvent.click(await chip(/^Format/));
     expect(await screen.findByRole('radio', { name: /Voice only/ })).toBeTruthy();
     expect(screen.getByRole('radio', { name: /Video call/ })).toBeTruthy();
     fireEvent.click(await startButton());
     await waitFor(() => expect(m.create).toHaveBeenCalledTimes(1));
-    expect(m.create.mock.calls[0][0]).toMatchObject({ jobId: 'j1', role: 'Backend Engineer' });
+    expect(m.create.mock.calls[0][0]).toMatchObject({
+      jobId: 'j1',
+      role: 'Backend Engineer',
+      personaId: DANA.baseId,
+      prep: { interviewerKey: DANA.key, focusKey: SYSTEM_FOCUS.key },
+    });
     expect(m.textStart).not.toHaveBeenCalled();
     await waitFor(() => expect(m.push).toHaveBeenCalledWith('/practice/sess1'));
   });
 
-  it('shows the market-requirements preview and runs it on request', async () => {
+  it('plans the job the same way, and the prep brief carries the AI label', async () => {
     m.setup.mockResolvedValue(setupPayload(CN));
-    m.preview.mockResolvedValue({
-      requirements: { roleSummary: 'Builds payment APIs', seniorityBar: 'Mid', mustHaveSkills: ['Go'], coreResponsibilities: [], successSignals: [], domainContext: '' },
-      webSources: [{ title: 'Backend Engineer at Acme', url: 'https://boards.example/1' }],
-      sampleQuestions: ['Tell me about a hard bug.'],
-      groundedOn: 'market',
-      domain: null,
-    });
     renderWithProviders(goApply(<PracticePage />));
     await screen.findByTestId('practice-job-banner');
-    fireEvent.click(screen.getByRole('button', { name: 'Preview what you may be asked' }));
-    const run = (await screen.findByRole('button', { name: 'Show me' })) as HTMLButtonElement;
-    await waitFor(() => expect(run.disabled).toBe(false));
-    fireEvent.click(run);
-    await waitFor(() => expect(m.preview).toHaveBeenCalledTimes(1));
-    // The job post is what the preview is built from.
-    expect(m.preview.mock.calls[0][0]).toMatchObject({ jdText: 'Build APIs.' });
-    expect(await screen.findByText('Builds payment APIs')).toBeTruthy();
-    expect(screen.getByText('Tell me about a hard bug.')).toBeTruthy();
+    await waitFor(() => expect(m.plan).toHaveBeenCalledWith({ jobId: 'j1', company: 'Acme' }, expect.anything()));
+    const { toggle, brief } = await prepBrief();
+    expect(toggle.querySelector('[data-ai-label="text"]')).toHaveTextContent('AI-generated');
+    expect(within(brief).getByRole('heading', { name: 'How Acme interviews' })).toBeTruthy();
+    expect(brief).toHaveTextContent('From public sources, summarized by AI. Processes change, so check the links.');
   });
 
-  it('the preview stays behind GoApply’s AI consent gate: shown, but it cannot be run', async () => {
+  it('behind GoApply’s AI consent gate no plan is written and the AI practice cannot start', async () => {
     m.setup.mockResolvedValue(setupPayload({ ...CN, ai: { allowed: false, reason: 'ai_consent_required' }, voice: { available: false, reason: 'ai_consent_required' } }));
     renderWithProviders(goApply(<PracticePage />));
     await screen.findByTestId('practice-job-banner');
-    fireEvent.click(screen.getByRole('button', { name: 'Preview what you may be asked' }));
-    const run = (await screen.findByRole('button', { name: 'Show me' })) as HTMLButtonElement;
+    expect(await screen.findByText('AI practice needs your consent to AI processing. You can turn it on in Settings.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '/settings#consents');
     await new Promise((r) => setTimeout(r, 0));
-    expect(run.disabled).toBe(true);
-    expect(m.preview).not.toHaveBeenCalled();
+    // No plan request (the server would refuse it), no "preparing" state, no plan chips.
+    expect(m.plan).not.toHaveBeenCalled();
+    expect(screen.queryByText('Preparing your interview')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Interviewer/ })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(m.create).not.toHaveBeenCalled();
   });
 
   it('a video practice can keep video too when the consent catalog offers it', async () => {
@@ -536,12 +628,12 @@ describe('GoApply with the same capabilities as RoboApply (D5)', () => {
 describe('the Format chip', () => {
   it('RoboApply with voice: video and voice are offered', async () => {
     renderWithProviders(<PracticePage />);
-    fireEvent.click(await screen.findByRole('button', { name: /^Format\s*Video/ }));
+    fireEvent.click(await chip(/^Format\s*Video/));
     expect(await screen.findByRole('radio', { name: /Voice only/ })).toBeTruthy();
     expect(screen.getByRole('radio', { name: /Video call/ })).toBeTruthy();
   });
 
-  it('GoApply while AI practice is gated (no voice either way): no video or voice is offered', async () => {
+  it('GoApply while AI practice is gated (no voice either way): no plan, so no format or any other choice is offered', async () => {
     m.setup.mockResolvedValue(setupPayload({
       market: 'cn',
       ai: { allowed: false, reason: 'phone_binding_required' },
@@ -549,7 +641,9 @@ describe('the Format chip', () => {
     }));
     renderWithProviders(goApply(<PracticePage />));
     await screen.findByTestId('practice-job-banner');
-    expect(await screen.findByRole('button', { name: /^Length/ })).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(m.plan).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /^Format/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Length/ })).toBeNull();
   });
 });

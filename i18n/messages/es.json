@@ -1628,7 +1628,83 @@
       "creditCost": "Cuesta {n, plural, one {# crédito} other {# créditos}}",
       "creditsRemaining": "{n, plural, one {# crédito restante} other {# créditos restantes}}",
       "insufficientCredits": "Esta entrevista necesita {required, plural, one {# crédito} other {# créditos}} y tú tienes {balance}. Añade créditos para continuar.",
-      "insufficientCreditsNoPurchase": "Esta entrevista necesita {required, plural, one {# crédito} other {# créditos}} y tú tienes {balance}."
+      "insufficientCreditsNoPurchase": "Esta entrevista necesita {required, plural, one {# crédito} other {# créditos}} y tú tienes {balance}.",
+      "prep": {
+        "target": {
+          "tabFind": "Buscar un empleo",
+          "searchLabel": "Puesto",
+          "searchPlaceholder": "Puesto, p. ej. ingeniero de despliegue de IA",
+          "companyLabel": "Empresa objetivo (opcional)",
+          "companyPlaceholder": "p. ej. Google, BBVA, Mercado Libre",
+          "clearCompany": "Borrar la empresa",
+          "companyHint": "Con una empresa, la entrevista sigue el estilo por el que se la conoce.",
+          "industriesLabel": "¿Aún no lo sabes? Explora por sector",
+          "moreIndustries": "Más sectores",
+          "fewerIndustries": "Menos sectores",
+          "otherIndustry": "Otro sector…",
+          "otherIndustryPlaceholder": "Escribe un sector, p. ej. tecnología espacial",
+          "otherIndustryApply": "Ver puestos",
+          "industryRolesTitle": "Puestos en {industry}",
+          "industryRolesLoading": "Buscando los puestos que contrata {industry}…",
+          "industryRolesError": "No pudimos mostrar los puestos de este sector.",
+          "searching": "Buscando empleos…",
+          "searchError": "La búsqueda de empleos no respondió.",
+          "retry": "Reintentar",
+          "rolesTitle": "Puestos que coinciden",
+          "postingsTitle": "Empleos abiertos",
+          "postingsTitleIn": "Empleos abiertos en {market}",
+          "noPostings": "No encontramos empleos abiertos para «{query}». Puedes practicar el puesto igualmente o pegar un anuncio.",
+          "noResults": "Nada coincide con «{query}». Prueba otro puesto o pega un anuncio.",
+          "practiceFor": "Practicar para {title} en {company}",
+          "practiceForRole": "Practicar para {title}",
+          "viewPost": "Ver anuncio",
+          "webNote": "Encontrado en la web: abre el anuncio para comprobar que sigue abierto.",
+          "boardsUnavailable": "Algunos portales de empleo no respondieron; estos son los empleos que pudimos encontrar.",
+          "selectedTitle": "Vas a practicar para",
+          "roleOnly": "El puesto en general, no un anuncio concreto",
+          "findJobsForRole": "Buscar empleos abiertos para este puesto",
+          "change": "Cambiar"
+        },
+        "source": {
+          "index": "Empleos de %BRAND%",
+          "provider": "Portal de empleo",
+          "web": "Web · {host}"
+        },
+        "plan": {
+          "loadingTitle": "Preparando tu entrevista",
+          "steps": {
+            "reading": "Leyendo el empleo",
+            "company": "Investigando cómo entrevista {company}",
+            "panel": "Eligiendo quién te entrevista en este empleo"
+          },
+          "error": "No pudimos preparar esta entrevista.",
+          "hint": "Preparada para este empleo. Cambia lo que quieras.",
+          "fallbackHint": "Por ahora, personas y formatos generales. Cambia lo que quieras."
+        },
+        "difficulty": {
+          "1": "Amable",
+          "2": "Equilibrado",
+          "3": "Exigente"
+        },
+        "launchTitle": "{role} · {company}",
+        "brief": {
+          "title": "Tu informe de preparación",
+          "requirements": "Qué evalúa este empleo",
+          "mustHave": "Imprescindibles",
+          "focusTopics": "{focus} cubre: {topics}",
+          "company": "Cómo entrevista {company}",
+          "companySourced": "De fuentes públicas, resumido por IA. Los procesos cambian: revisa los enlaces.",
+          "companyGeneral": "No encontramos una descripción pública fiable de las entrevistas de {company}, así que mostramos cómo suelen entrevistar empresas similares.",
+          "values": "Valores que evalúan",
+          "evaluates": "Qué buscan",
+          "sources": "Fuentes:",
+          "strategy": "Cómo será esta práctica",
+          "minutes": "{n} min",
+          "tactics": "Qué hará quien te entrevista",
+          "prepTips": "Prepara antes de empezar",
+          "aiNote": "Redactado por IA a partir del empleo y de fuentes públicas. Las personas que entrevistan son simuladas."
+        }
+      }
     },
     "live": {
       "loading": "Preparando tu sala…",
