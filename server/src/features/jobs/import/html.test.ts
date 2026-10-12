@@ -131,6 +131,8 @@ describe('withoutMarkdownLinks', () => {
     expect(withoutMarkdownLinks('no links [here] (or) there')).toBe('no links [here] (or) there');
   });
 
+  // About 960,000 inputs: compared with a plain `!==` and asserted once at the end. One `expect` per
+  // input took past the 5 s default on the CI runner (PR #4), where the whole suite shares the CPU.
   it('gives what the two patterns gave, on every arrangement of brackets', () => {
     // Every string of length ≤ 7 over the characters that matter, then longer random ones.
     const alphabet = ['[', ']', '(', ')', '!', 'a', '\n'];
@@ -140,16 +142,18 @@ describe('withoutMarkdownLinks', () => {
       const prev = all.slice(Math.max(0, start));
       for (const p of prev) for (const c of alphabet) all.push(p + c);
     }
-    for (const s of all) expect(withoutMarkdownLinks(s), JSON.stringify(s)).toBe(reference(s));
     let seed = 20261011;
     const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
     for (let k = 0; k < 3000; k += 1) {
       let s = '';
       const len = 8 + Math.floor(rnd() * 40);
       for (let j = 0; j < len; j += 1) s += alphabet[Math.floor(rnd() * alphabet.length)];
-      expect(withoutMarkdownLinks(s), JSON.stringify(s)).toBe(reference(s));
+      all.push(s);
     }
-  });
+    const wrong = all.filter((s) => withoutMarkdownLinks(s) !== reference(s));
+    expect(wrong.slice(0, 10).map((s) => JSON.stringify(s))).toEqual([]);
+    expect(all.length).toBeGreaterThan(960_000);
+  }, 30_000);
 });
 
 describe('time: proportional to the size of the document', () => {

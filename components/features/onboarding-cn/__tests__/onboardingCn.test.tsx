@@ -1143,7 +1143,8 @@ describe('CnFirstValueScreen (the tour, wired for the signed-in user)', () => {
     });
     render(<CnFirstValueScreen onFinish={() => undefined} />, api, { 'jobs.campusCalendar': true, 'ai.text': true });
     expect(await screen.findByRole('heading', { name: 'Get application deadline reminders' })).toBeInTheDocument();
-    expect(api.campusPrograms).toHaveBeenCalledWith({ classYear: 2027, cities: ['上海', '杭州'] });
+    // The heading renders before the programme query goes out; on a slower runner (CI, PR #4) the call came later.
+    await waitFor(() => expect(api.campusPrograms).toHaveBeenCalledWith({ classYear: 2027, cities: ['上海', '杭州'] }));
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     for (const card of ['Campus calendar', 'Tailored resume', 'Interview practice']) expect(screen.getByRole('heading', { name: card })).toBeInTheDocument();
   });
