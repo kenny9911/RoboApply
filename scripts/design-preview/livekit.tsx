@@ -12,6 +12,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 export const RoomEvent = {
+  Connected: 'connected',
+  ParticipantConnected: 'participantConnected',
   ConnectionStateChanged: 'connectionStateChanged',
   ConnectionQualityChanged: 'connectionQualityChanged',
   AudioPlaybackStatusChanged: 'audioPlaybackStatusChanged',
@@ -28,10 +30,22 @@ export const ConnectionState = {
 } as const;
 export const ConnectionQuality = { Excellent: 'excellent', Good: 'good', Poor: 'poor' } as const;
 export const DisconnectReason = { CLIENT_INITIATED: 1, ROOM_DELETED: 6 } as const;
+// Same numbers as livekit-client (ParticipantInfo_Kind). The room page tells the interviewer
+// apart from other participants by `kind === ParticipantKind.AGENT`.
+export const ParticipantKind = {
+  STANDARD: 0,
+  INGRESS: 1,
+  EGRESS: 2,
+  SIP: 3,
+  AGENT: 4,
+  CONNECTOR: 7,
+  BRIDGE: 8,
+} as const;
 export const MediaDeviceFailure = { getFailure: () => undefined };
 
 export type TranscriptionSegment = { id: string; text: string };
 export type Participant = { identity: string; isLocal: boolean };
+export type RemoteParticipant = Participant & { kind: number };
 
 const room = {
   state: ConnectionState.Connected,
