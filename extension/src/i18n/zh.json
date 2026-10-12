@@ -92,6 +92,15 @@
         "great": "很合适",
         "possible": "可能合适",
         "unlikely": "不太合适"
+      },
+      "confidence": {
+        "reason": {
+          "few_details": "这个职位的描述太少，无法对比",
+          "no_level_stated": "这个职位没有写明级别",
+          "no_resume": "添加简历后可进行完整对比。这个估算依据你的个人资料和求职偏好。",
+          "no_role_evidence": "你的简历里没有可供对比的工作经历",
+          "no_skills_listed": "这个职位没有列出技能"
+        }
       }
     },
     "item": {

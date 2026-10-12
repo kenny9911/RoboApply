@@ -24,7 +24,8 @@
       "heading": "你的帳號已排定刪除",
       "notYou": "如果這不是你提出的要求，請立刻回覆這封信或聯絡客服。",
       "subject": "你的 %BRAND% 帳號已排定刪除",
-      "when": "我們會在 {days} 天內刪除你的帳號和其中的資料。備份會在那之後的 90 天內清除。"
+      "when": "我們會在 {days} 天內刪除你的帳號和其中的資料。備份會在那之後的 90 天內清除。",
+      "renewalStopped": "你的付費方案不會再續訂，你也不會再為它被收費。"
     },
     "emailVerify": {
       "body": "請確認這是你的電子郵件地址。在你決定之前，仍然可以繼續使用 %BRAND%；確認之後，就能使用你的免費練習面試。",
@@ -124,7 +125,9 @@
       "pro_week_passCn": "Pro 週通行證",
       "pro_weekly": "Pro 週繳",
       "student_monthly": "學生月繳",
-      "student_quarterly": "學生季繳"
+      "student_quarterly": "學生季繳",
+      "student_monthlyCn": "學生 30 天通行證",
+      "student_quarterlyCn": "學生 90 天通行證"
     },
     "renewalReminder": {
       "bodyAuto": "{plan} 會在 {date} 自動續訂，費用是{period} {price}。",
@@ -137,7 +140,16 @@
       "headingAuto": "你的方案即將續訂",
       "headingManual": "你的通行證即將到期",
       "subjectAuto": "你的 %BRAND% 方案將在 {date} 續訂",
-      "subjectManual": "你的 %BRAND% 通行證將在 {date} 到期"
+      "subjectManual": "你的 %BRAND% 通行證將在 {date} 到期",
+      "ctaGoapply": "查看 %OTHER_BRAND% 的價格",
+      "goapplyLine": "你在中國大陸嗎？你可以在 %OTHER_BRAND% 使用 Alipay，以 RMB 付款。"
+    },
+    "paymentActionRequired": {
+      "body": "{plan} 的款項 {price} 正在等你確認。請開啟付款頁面完成付款。在你確認之前，不會收取任何費用。",
+      "bodyNoPlan": "有一筆 {price} 的款項正在等你確認。請開啟付款頁面完成付款。在你確認之前，不會收取任何費用。",
+      "cta": "確認付款",
+      "heading": "你的銀行需要你確認這筆付款",
+      "subject": "確認你的 %BRAND% 付款"
     }
   },
   "coaching": {
@@ -219,7 +231,8 @@
       "tierGood": "還算適合",
       "tierGreat": "很適合",
       "tierPossible": "可能適合",
-      "viewJob": "查看職缺"
+      "viewJob": "查看職缺",
+      "tierEstimate": "{tier} · 快速估算"
     },
     "finishSetup": {
       "body": "你目前填的回答都已儲存。完成設定後，就能看到符合你搜尋的職缺，以及履歷上該修改的地方。",
@@ -407,5 +420,40 @@
       },
       "searchAny": "任何職缺"
     }
+  },
+  "billingRefunds": {
+    "refundIssued": {
+      "accessEndedPack": "這個練習包中尚未使用的練習點數，已從你的帳號中移除。",
+      "accessEndedPlan": "這次購買所含的付費期間，已從你的帳號中移除。如果沒有其他正在生效的付費方案，你的帳號現在是免費版。",
+      "accessUnchanged": "你的方案和點數維持不變。",
+      "bodyFull": "我們已退還 {plan} 的 {amount}。這是你支付的全部金額。",
+      "bodyPartial": "我們已退還你為 {plan} 所付款項中的 {amount}。",
+      "bodyRest": "我們已退還 {plan} 的 {amount}。加上先前的退款，你的付款現在已全額退還。",
+      "cta": "查看你的方案",
+      "heading": "我們已為你退款",
+      "method": "款項會退回到你付款時使用的付款方式。何時會顯示在你的帳單上，由你的銀行或發卡機構決定。",
+      "subject": "你的 %BRAND% 退款：{amount}"
+    },
+    "withdrawalConfirmed": {
+      "body": "你已解除 {plan} 的契約。",
+      "cta": "查看你的方案",
+      "endedPack": "這個練習包中尚未使用的練習點數，已從你的帳號中移除。",
+      "endedPass": "這張通行證已結束。它所含的付費期間已從你的帳號中移除。",
+      "endedSubscription": "訂閱已結束。它不會再續訂，你也不會再為它被收費。",
+      "heading": "解除契約已確認",
+      "received": "我們在 {at} 收到你的解除契約申請。",
+      "refund": "我們正在把 {amount} 退回到你付款時使用的付款方式。何時會顯示在你的帳單上，由你的銀行或發卡機構決定。",
+      "refundNone": "無須退款，因為你已付費的期間已經用完。",
+      "subject": "你的 %BRAND% 解除契約已確認"
+    }
+  },
+  "shell": {
+    "preferences": "電子郵件設定",
+    "reasonAlert": "你會收到這封信，是因為你在 %BRAND% 開啟了職缺通知。",
+    "reasonMarketing": "你會收到這封信，是因為你同意接收 %BRAND% 的產品消息。",
+    "reasonTips": "你會收到這封信，是因為你在 %BRAND% 的設定中開啟了「小提示與提醒」。",
+    "reasonTransactional": "你會收到這封信，是因為它和你的 %BRAND% 帳號有關。",
+    "sentBy": "寄件者：{entity}",
+    "unsubscribe": "取消訂閱"
   }
 }

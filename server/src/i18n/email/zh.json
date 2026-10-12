@@ -131,7 +131,8 @@
       "heading": "你的账号即将被删除",
       "notYou": "如果这不是你本人的操作，请立即回复这封邮件或联系客服。",
       "subject": "你的 %BRAND% 账号即将被删除",
-      "when": "我们会在 {days} 天内删除你的账号及其数据。备份会在此后 90 天内清除。"
+      "when": "我们会在 {days} 天内删除你的账号及其数据。备份会在此后 90 天内清除。",
+      "renewalStopped": "你的付费套餐不会再续费，你也不会再为它被扣款。"
     },
     "emailVerify": {
       "body": "请确认这是你的邮箱地址。在你决定之前，可以继续使用 %BRAND%；完成验证后，你的免费练习面试即可使用。",
@@ -246,7 +247,16 @@
       "headingAuto": "你的套餐即将续费",
       "headingManual": "你的时长卡即将到期",
       "subjectAuto": "你的 %BRAND% 套餐将于 {date} 续费",
-      "subjectManual": "你的 %BRAND% 时长卡将于 {date} 到期"
+      "subjectManual": "你的 %BRAND% 时长卡将于 {date} 到期",
+      "ctaGoapply": "查看 %OTHER_BRAND% 的价格",
+      "goapplyLine": "你在中国大陆吗？可以在 %OTHER_BRAND% 上用支付宝，以人民币付款。"
+    },
+    "paymentActionRequired": {
+      "body": "{plan} 的 {price} 付款正在等你确认。请打开付款页面完成付款。在你确认之前，不会产生任何扣款。",
+      "bodyNoPlan": "有一笔 {price} 的付款正在等你确认。请打开付款页面完成付款。在你确认之前，不会产生任何扣款。",
+      "cta": "确认付款",
+      "heading": "你的银行需要你确认这笔付款",
+      "subject": "确认你的 %BRAND% 付款"
     }
   },
   "coaching": {
@@ -328,7 +338,8 @@
       "tierGood": "较合适",
       "tierGreat": "很合适",
       "tierPossible": "可能合适",
-      "viewJob": "查看职位"
+      "viewJob": "查看职位",
+      "tierEstimate": "{tier} · 快速估算"
     },
     "finishSetup": {
       "body": "你目前填写的内容已保存。完成设置后，就能看到符合你搜索条件的职位，以及简历上需要修改的地方。",
@@ -465,6 +476,32 @@
         "viewJob": "查看职位"
       },
       "searchAny": "任意职位"
+    }
+  },
+  "billingRefunds": {
+    "refundIssued": {
+      "accessEndedPack": "这个练习包里未使用的练习额度，已从你的账号中移除。",
+      "accessEndedPlan": "这次购买所含的付费时长已从你的账号中移除。如果没有其他正在生效的付费套餐，你的账号现在是免费版。",
+      "accessUnchanged": "你的套餐和额度保持不变。",
+      "bodyFull": "我们已退还 {plan} 的 {amount}。这是你支付的全部金额。",
+      "bodyPartial": "我们已退还你为 {plan} 所付款项中的 {amount}。",
+      "bodyRest": "我们已退还 {plan} 的 {amount}。加上之前的退款，你的付款现已全额退还。",
+      "cta": "查看你的套餐",
+      "heading": "我们已为你退款",
+      "method": "款项会退回到你付款时使用的付款方式。何时显示在你的账单上，由你的银行或发卡机构决定。",
+      "subject": "你的 %BRAND% 退款：{amount}"
+    },
+    "withdrawalConfirmed": {
+      "body": "你已撤回 {plan} 的合同。",
+      "cta": "查看你的套餐",
+      "endedPack": "这个练习包里未使用的练习额度，已从你的账号中移除。",
+      "endedPass": "这张时长卡已结束。它所含的付费时长已从你的账号中移除。",
+      "endedSubscription": "订阅已结束。它不会再续费，你也不会再为它被扣款。",
+      "heading": "你的撤回已确认",
+      "received": "我们于 {at} 收到了你的撤回请求。",
+      "refund": "我们正在把 {amount} 退回到你付款时使用的付款方式。何时显示在你的账单上，由你的银行或发卡机构决定。",
+      "refundNone": "没有需要退还的款项，因为你已付费的期间已经用完。",
+      "subject": "你的 %BRAND% 撤回已确认"
     }
   }
 }

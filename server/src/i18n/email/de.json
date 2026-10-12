@@ -24,7 +24,8 @@
       "heading": "Dein Konto ist zur Löschung vorgemerkt",
       "notYou": "Wenn du das nicht angefordert hast, antworte sofort auf diese E-Mail oder wende dich an den Support.",
       "subject": "Dein %BRAND%-Konto ist zur Löschung vorgemerkt",
-      "when": "Wir löschen dein Konto und die zugehörigen Daten innerhalb von {days} Tagen. Backups werden danach innerhalb von 90 Tagen gelöscht."
+      "when": "Wir löschen dein Konto und die zugehörigen Daten innerhalb von {days} Tagen. Backups werden danach innerhalb von 90 Tagen gelöscht.",
+      "renewalStopped": "Dein bezahlter Tarif verlängert sich nicht, und dafür wird dir nichts mehr berechnet."
     },
     "emailVerify": {
       "body": "Bestätige, dass das deine E-Mail-Adresse ist. Du kannst %BRAND% in der Zwischenzeit weiter nutzen; mit der Bestätigung schaltest du dein kostenloses Übungsgespräch frei.",
@@ -124,7 +125,9 @@
       "pro_week_passCn": "Pro-Wochenpass",
       "pro_weekly": "Pro, wöchentliche Abrechnung",
       "student_monthly": "Studierendentarif monatlich",
-      "student_quarterly": "Studierendentarif vierteljährlich"
+      "student_quarterly": "Studierendentarif vierteljährlich",
+      "student_monthlyCn": "30-Tage-Pass für Studierende",
+      "student_quarterlyCn": "90-Tage-Pass für Studierende"
     },
     "renewalReminder": {
       "bodyAuto": "{plan} verlängert sich automatisch am {date} für {price} pro {period}.",
@@ -137,7 +140,16 @@
       "headingAuto": "Dein Tarif verlängert sich bald",
       "headingManual": "Dein Pass endet bald",
       "subjectAuto": "Dein %BRAND%-Tarif verlängert sich am {date}",
-      "subjectManual": "Dein %BRAND%-Pass endet am {date}"
+      "subjectManual": "Dein %BRAND%-Pass endet am {date}",
+      "ctaGoapply": "%OTHER_BRAND%-Preise ansehen",
+      "goapplyLine": "Bist du in Festlandchina? Bei %OTHER_BRAND% kannst du in RMB mit Alipay bezahlen."
+    },
+    "paymentActionRequired": {
+      "body": "Die Zahlung von {price} für {plan} wartet auf deine Bestätigung. Öffne die Zahlungsseite, um sie abzuschließen. Es wird nichts berechnet, bevor du bestätigst.",
+      "bodyNoPlan": "Eine Zahlung von {price} wartet auf deine Bestätigung. Öffne die Zahlungsseite, um sie abzuschließen. Es wird nichts berechnet, bevor du bestätigst.",
+      "cta": "Zahlung bestätigen",
+      "heading": "Deine Bank braucht deine Bestätigung für diese Zahlung",
+      "subject": "Bestätige deine Zahlung für %BRAND%"
     }
   },
   "coaching": {
@@ -219,7 +231,8 @@
       "tierGood": "Passt gut",
       "tierGreat": "Passt sehr gut",
       "tierPossible": "Möglich",
-      "viewJob": "Job ansehen"
+      "viewJob": "Job ansehen",
+      "tierEstimate": "{tier} · Schnelle Einschätzung"
     },
     "finishSetup": {
       "body": "Deine bisherigen Antworten sind gespeichert. Schließ die Einrichtung ab, um Jobs für deine Suche zu sehen und zu erfahren, was du an deinem Lebenslauf verbessern solltest.",
@@ -407,5 +420,40 @@
       },
       "searchAny": "alle Jobs"
     }
+  },
+  "billingRefunds": {
+    "refundIssued": {
+      "accessEndedPack": "Die ungenutzten Übungs-Credits aus diesem Paket sind nicht mehr auf deinem Konto.",
+      "accessEndedPlan": "Der bezahlte Zeitraum aus diesem Kauf gilt für dein Konto nicht mehr. Wenn kein anderer bezahlter Tarif läuft, ist dein Konto jetzt im kostenlosen Tarif.",
+      "accessUnchanged": "Dein Tarif und deine Credits bleiben, wie sie sind.",
+      "bodyFull": "Wir haben dir {amount} für {plan} erstattet. Das ist der gesamte Betrag, den du bezahlt hast.",
+      "bodyPartial": "Wir haben dir {amount} deiner Zahlung für {plan} erstattet.",
+      "bodyRest": "Wir haben dir {amount} für {plan} erstattet. Zusammen mit den früheren Erstattungen hast du deine Zahlung jetzt vollständig zurückbekommen.",
+      "cta": "Deinen Tarif ansehen",
+      "heading": "Wir haben deine Zahlung erstattet",
+      "method": "Das Geld geht zurück auf die Zahlungsmethode, mit der du bezahlt hast. Deine Bank oder dein Kartenanbieter entscheidet, wann es auf deinem Kontoauszug erscheint.",
+      "subject": "Deine %BRAND%-Erstattung über {amount}"
+    },
+    "withdrawalConfirmed": {
+      "body": "Du hast deinen Vertrag für {plan} widerrufen.",
+      "cta": "Deinen Tarif ansehen",
+      "endedPack": "Die ungenutzten Übungs-Credits aus diesem Paket sind nicht mehr auf deinem Konto.",
+      "endedPass": "Der Pass ist beendet. Sein bezahlter Zeitraum gilt für dein Konto nicht mehr.",
+      "endedSubscription": "Das Abo ist beendet. Es gibt keine Verlängerung, und dafür wird dir nichts mehr berechnet.",
+      "heading": "Dein Widerruf ist bestätigt",
+      "received": "Dein Widerruf ist am {at} bei uns eingegangen.",
+      "refund": "Wir erstatten dir {amount} auf die Zahlungsmethode, mit der du bezahlt hast. Deine Bank oder dein Kartenanbieter entscheidet, wann der Betrag auf deinem Kontoauszug erscheint.",
+      "refundNone": "Es gibt nichts zu erstatten, weil der bezahlte Zeitraum bereits genutzt wurde.",
+      "subject": "Dein Widerruf bei %BRAND% ist bestätigt"
+    }
+  },
+  "shell": {
+    "preferences": "E-Mail-Einstellungen",
+    "reasonAlert": "Du hast diese E-Mail bekommen, weil du in %BRAND% Job-Benachrichtigungen eingeschaltet hast.",
+    "reasonMarketing": "Du hast diese E-Mail bekommen, weil du zugestimmt hast, Produktneuigkeiten von %BRAND% zu erhalten.",
+    "reasonTips": "Du hast diese E-Mail bekommen, weil „Tipps und Erinnerungen“ in deinen %BRAND%-Einstellungen eingeschaltet ist.",
+    "reasonTransactional": "Du hast diese E-Mail bekommen, weil es um dein %BRAND%-Konto geht.",
+    "sentBy": "Gesendet von {entity}",
+    "unsubscribe": "Abbestellen"
   }
 }

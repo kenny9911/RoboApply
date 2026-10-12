@@ -164,13 +164,22 @@ describe('billing email templates', () => {
       expect(BILLING_EMAIL_TEMPLATES).toContain('billing.payment_action_required');
     });
 
-    it('falls back to English for a locale that has no translation yet, with the price in that locale\'s format', () => {
+    // English until the translation pass after the market wave; translated since.
+    it('renders in the reader\'s language, with the price in that locale\'s format', () => {
       const brand = getBrand('roboapply');
+      const expected = {
+        de: { subject: 'Bestätige deine Zahlung für RoboApply', heading: 'Deine Bank braucht deine Bestätigung für diese Zahlung' },
+        ja: { subject: 'RoboApplyのお支払いをご確認ください', heading: '銀行がこのお支払いの確認を求めています' },
+        'zh-TW': { subject: '確認你的 RoboApply 付款', heading: '你的銀行需要你確認這筆付款' },
+        fr: { subject: 'Confirme ton paiement RoboApply', heading: 'Ta banque te demande de confirmer ce paiement' },
+      } as const;
       for (const locale of ['de', 'ja', 'zh-TW', 'fr'] as const) {
         const t = createEmailTranslator(brand, locale);
         const mail = getEmailTemplate('billing.payment_action_required')!.render({ brand, t, params, origin: brand.canonicalOrigin });
-        expect(mail.subject, locale).toBe('Confirm your RoboApply payment');
-        expect(mail.bodyText, locale).toContain('Your bank needs you to confirm this payment');
+        expect(mail.subject, locale).toBe(expected[locale].subject);
+        expect(mail.bodyText, locale).toContain(expected[locale].heading);
+        expect(mail.bodyText, locale).not.toContain('Your bank needs you to confirm this payment');
+        expect(mail.bodyText, locale).toContain(formatPrice(params.amountMinor, params.currency, t));
         expect(mail.bodyText, locale).toContain(params.hostedInvoiceUrl);
         expect(`${mail.subject} ${mail.bodyText}`, locale).not.toMatch(/%BRAND%|billing\.|undefined|NaN/);
       }

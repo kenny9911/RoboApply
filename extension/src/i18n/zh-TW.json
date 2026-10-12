@@ -41,6 +41,15 @@
         "great": "很適合",
         "possible": "可能適合",
         "unlikely": "不太適合"
+      },
+      "confidence": {
+        "reason": {
+          "few_details": "這則職缺說明的內容太少，無法比對",
+          "no_level_stated": "這則職缺說明沒有寫明層級",
+          "no_resume": "新增履歷即可進行完整比對。這個估算是根據你的個人檔案和偏好設定算出的。",
+          "no_role_evidence": "你的履歷上沒有可比對的工作經歷",
+          "no_skills_listed": "這則職缺說明沒有列出技能"
+        }
       }
     },
     "item": {

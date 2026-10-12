@@ -24,7 +24,8 @@
       "heading": "Sua conta está agendada para exclusão",
       "notYou": "Se você não pediu isso, responda a este e-mail ou fale com o suporte imediatamente.",
       "subject": "Sua conta do %BRAND% está agendada para exclusão",
-      "when": "Excluímos sua conta e os dados dela em até {days} dias. Os backups são eliminados em até 90 dias depois disso."
+      "when": "Excluímos sua conta e os dados dela em até {days} dias. Os backups são eliminados em até 90 dias depois disso.",
+      "renewalStopped": "Seu plano pago não será renovado e não haverá nova cobrança por ele."
     },
     "emailVerify": {
       "body": "Confirme que este é o seu endereço de e-mail. Você pode continuar usando o %BRAND% enquanto decide; a confirmação libera sua entrevista de treino gratuita.",
@@ -124,7 +125,9 @@
       "pro_week_passCn": "Passe semanal Pro",
       "pro_weekly": "Pro, cobrado por semana",
       "student_monthly": "Estudante mensal",
-      "student_quarterly": "Estudante trimestral"
+      "student_quarterly": "Estudante trimestral",
+      "student_monthlyCn": "Passe de estudante de 30 dias",
+      "student_quarterlyCn": "Passe de estudante de 90 dias"
     },
     "renewalReminder": {
       "bodyAuto": "O {plan} será renovado automaticamente em {date} por {price} a cada {period}.",
@@ -137,7 +140,16 @@
       "headingAuto": "Seu plano será renovado em breve",
       "headingManual": "Seu passe termina em breve",
       "subjectAuto": "Seu plano do %BRAND% será renovado em {date}",
-      "subjectManual": "Seu passe do %BRAND% termina em {date}"
+      "subjectManual": "Seu passe do %BRAND% termina em {date}",
+      "ctaGoapply": "Ver preços do %OTHER_BRAND%",
+      "goapplyLine": "Você está na China continental? É possível pagar em RMB com o Alipay no %OTHER_BRAND%."
+    },
+    "paymentActionRequired": {
+      "body": "O pagamento de {price} pelo {plan} está aguardando a sua confirmação. Abra a página de pagamento para concluí-lo. Nada é cobrado até você confirmar.",
+      "bodyNoPlan": "Um pagamento de {price} está aguardando a sua confirmação. Abra a página de pagamento para concluí-lo. Nada é cobrado até você confirmar.",
+      "cta": "Confirmar pagamento",
+      "heading": "Seu banco precisa que você confirme este pagamento",
+      "subject": "Confirme seu pagamento do %BRAND%"
     }
   },
   "coaching": {
@@ -219,7 +231,8 @@
       "tierGood": "Encaixa bem",
       "tierGreat": "Encaixa muito bem",
       "tierPossible": "Possível",
-      "viewJob": "Ver vaga"
+      "viewJob": "Ver vaga",
+      "tierEstimate": "{tier} · Estimativa rápida"
     },
     "finishSetup": {
       "body": "Suas respostas até aqui estão salvas. Conclua a configuração para ver vagas para a sua busca e o que corrigir no seu currículo.",
@@ -407,5 +420,40 @@
       },
       "searchAny": "qualquer vaga"
     }
+  },
+  "billingRefunds": {
+    "refundIssued": {
+      "accessEndedPack": "Os créditos de treino ainda não usados deste pacote foram removidos da sua conta.",
+      "accessEndedPlan": "O tempo pago desta compra foi removido da sua conta. Se não houver outro plano pago ativo, sua conta agora está no plano Grátis.",
+      "accessUnchanged": "Seu plano e seus créditos continuam como estão.",
+      "bodyFull": "Reembolsamos {amount} pelo {plan}. Esse é o valor total que você pagou.",
+      "bodyPartial": "Reembolsamos {amount} do seu pagamento pelo {plan}.",
+      "bodyRest": "Reembolsamos {amount} pelo {plan}. Com os reembolsos anteriores, seu pagamento agora está totalmente reembolsado.",
+      "cta": "Ver seu plano",
+      "heading": "Reembolsamos seu pagamento",
+      "method": "O dinheiro volta para a forma de pagamento que você usou. Seu banco ou a operadora do cartão decide quando ele aparece no seu extrato ou na sua fatura.",
+      "subject": "Seu reembolso de {amount} do %BRAND%"
+    },
+    "withdrawalConfirmed": {
+      "body": "Você desistiu do contrato do {plan}.",
+      "cta": "Ver seu plano",
+      "endedPack": "Os créditos de treino ainda não usados deste pacote foram removidos da sua conta.",
+      "endedPass": "O passe terminou. O tempo pago desse passe foi removido da sua conta.",
+      "endedSubscription": "A assinatura foi encerrada. Ela não será renovada e não haverá nova cobrança por ela.",
+      "heading": "Sua desistência foi confirmada",
+      "received": "Recebemos sua desistência em {at}.",
+      "refund": "Estamos reembolsando {amount} na forma de pagamento que você usou. Seu banco ou a operadora do cartão decide quando o valor aparece no seu extrato ou na sua fatura.",
+      "refundNone": "Não há reembolso a receber, porque o período que você pagou já foi usado.",
+      "subject": "Sua desistência do %BRAND% foi confirmada"
+    }
+  },
+  "shell": {
+    "preferences": "Configurações de e-mail",
+    "reasonAlert": "Você recebeu este e-mail porque ativou os alertas de vagas no %BRAND%.",
+    "reasonMarketing": "Você recebeu este e-mail porque concordou em receber novidades sobre o produto do %BRAND%.",
+    "reasonTips": "Você recebeu este e-mail porque \"Dicas e lembretes\" está ativado nas suas configurações do %BRAND%.",
+    "reasonTransactional": "Você recebeu este e-mail porque ele trata da sua conta do %BRAND%.",
+    "sentBy": "Enviado por {entity}",
+    "unsubscribe": "Cancelar inscrição"
   }
 }

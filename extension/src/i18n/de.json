@@ -41,6 +41,15 @@
         "great": "Passt sehr gut",
         "possible": "Möglich",
         "unlikely": "Unwahrscheinlich"
+      },
+      "confidence": {
+        "reason": {
+          "few_details": "Diese Stellenanzeige enthält zu wenige Angaben für einen Vergleich",
+          "no_level_stated": "Diese Stellenanzeige nennt keine Erfahrungsstufe",
+          "no_resume": "Füg einen Lebenslauf hinzu, um einen vollständigen Vergleich zu bekommen. Diese Einschätzung nutzt dein Profil und deine Wünsche.",
+          "no_role_evidence": "Dein Lebenslauf zeigt keine Position zum Vergleichen",
+          "no_skills_listed": "Diese Stellenanzeige nennt keine Fähigkeiten"
+        }
       }
     },
     "item": {

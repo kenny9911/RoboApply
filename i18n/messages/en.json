@@ -458,7 +458,6 @@
     "card": {
       "base": "Main resume — not tailored to a job",
       "edited": "Edited {when}",
-      "score_unit": "/100",
       "delete": "Delete resume",
       "versions_used": "{used} of {cap} versions used",
       "tailored_stamp": "Tailored"
@@ -490,17 +489,10 @@
         "ready_v": "Untitled draft"
       },
       "import": {
-        "read": "Read",
         "identity": "You",
-        "identity_v": "Name · email · location",
         "experience": "Experience",
-        "experience_v": "Roles · titles · dates",
         "education": "Education",
-        "education_v": "Degree · school · years",
-        "skills": "Skills",
-        "skills_v": "Skills · tools · keywords",
-        "cleaned": "Cleaned",
-        "cleaned_v": "Wording and spacing"
+        "skills": "Skills"
       },
       "found": {
         "roles": "{count, plural, one {1 role} other {# roles}}",
@@ -528,7 +520,6 @@
       "scratch_hint": "Pick a template. You can switch later — your content moves with you.",
       "drop": {
         "title": "Drop your resume here",
-        "sub": "PDF, DOCX, or Apple Pages",
         "ready": "ready to read",
         "formats": "PDF, Word (DOC or DOCX), plain text or Markdown"
       },
@@ -550,7 +541,6 @@
         "title_scratch": "Draft ready",
         "title_import": "Imported",
         "body_scratch": "Open the editor and start filling it in. Line-by-line help sits in the right margin.",
-        "body_import": "Your resume was read. Two weak bullets are highlighted in the editor.",
         "body_read": "Your resume was read. Open the editor to check what was picked up."
       },
       "cancel": "Cancel",
@@ -580,7 +570,6 @@
       "saved": "All changes saved",
       "saving": "Saving…",
       "save_error": "Not saved yet — trying again",
-      "strength": "Strength",
       "coach": "Line check",
       "hide_coach": "Hide line check",
       "download": "Download",
@@ -860,7 +849,6 @@
       "errors": {
         "storage_unavailable": "File storage isn't available right now. Try again later.",
         "upload_daily_limit": "You have uploaded {limit} resume files today, which is the daily limit. Try again tomorrow.",
-        "image_unreadable": "This image could not be read right now. Upload a PDF or Word file instead.",
         "ai_off": "Reading a resume file uses AI, which is off for your account. Turn on AI processing in Settings, or build your resume step by step instead."
       }
     },
@@ -935,7 +923,6 @@
       }
     },
     "export": {
-      "blocked": "{count, plural, one {One line has a number we couldn't find on your resume. Fix it or remove it before you download.} other {# lines have numbers or details we couldn't find on your resume. Fix or remove them before you download.}}",
       "name_label": "File name",
       "name": {
         "name_company_role": "Your name - Company - Job title",
@@ -2086,7 +2073,6 @@
       "pronouns_other": "Other",
       "pronouns_none": "Prefer not to say",
       "years_exp": "Years of experience",
-      "new_grad": "New graduate",
       "years_suffix": " yrs",
       "group_contact": "Contact",
       "email": "Email",
@@ -2143,7 +2129,6 @@
         "download": "Download",
         "paid": "Paid",
         "pending": "Pending",
-        "failed": "Failed",
         "card": "Card"
       }
     },
@@ -2204,7 +2189,6 @@
       "delete_data_confirm": "This clears your job list, your applications, and your history. Your account and resumes stay.",
       "delete_data_confirm_label": "Confirm",
       "delete_data_confirm_hint": "Type {keyword} to confirm.",
-      "delete_data_confirm_keyword": "DELETE",
       "delete_data_confirm_cta": "Delete job data",
       "delete_data_confirm_error": "Type {keyword} exactly to confirm.",
       "delete_data_cancel": "Cancel",
@@ -2218,13 +2202,10 @@
       "deleteDescription": "Deletes your account, your resumes, your interview recordings, and your subscription. This cannot be undone.",
       "confirmEmailLabel": "Confirm your email",
       "confirmEmailHint": "Type {email} to confirm.",
-      "reasonLabel": "Reason",
-      "reasonPlaceholder": "Tell us why you are leaving (required)",
       "cancel": "Cancel",
       "delete": "Delete my account",
       "error": {
         "mismatch": "That is not the email on this account.",
-        "reasonRequired": "Tell us why you are leaving.",
         "generic": "Your account was not deleted. Try again."
       }
     }
@@ -2547,7 +2528,6 @@
         "sub": "The job list, fit scores, filters and your applications board are free. Pro raises the daily limits on the AI actions.",
         "freeNote": "Daily limits on AI actions",
         "proNote": "Higher daily limits on every AI action",
-        "notSet": "Price not set yet",
         "seeAll": "See every plan and limit",
         "notOpen": "Paid plans can't be bought yet."
       },
@@ -2642,12 +2622,6 @@
         "cta": "Try a practice interview",
         "voice": "You can answer out loud to an AI interviewer, or type your answers."
       },
-      "free": {
-        "title": "The core is free",
-        "body": "Your resume, the applications board and reminders are free. A paid membership only raises the daily limits on AI actions.",
-        "notOpen": "Paid plans are not open yet.",
-        "pricing": "See the fee schedule"
-      },
       "faq": {
         "title": "Questions",
         "q1": {
@@ -2689,7 +2663,6 @@
         "sub": "Your resume, the applications board and reminders are free. A paid pass raises the daily limits on AI actions for a set number of days, and it never renews by itself.",
         "freeNote": "Daily limits on AI actions",
         "proNote": "Higher daily limits on every AI action while the pass lasts",
-        "notSet": "Price not set yet",
         "seeAll": "See every pass, pack and limit",
         "notOpen": "Paid passes can't be bought yet."
       }
@@ -3326,7 +3299,6 @@
       "freePrice": "Free",
       "freeNote": "The job list, fit scores, filters and your applications board, with daily limits on AI actions.",
       "freeNoteNoFeed": "Your resume, your applications board and reminders.",
-      "notSet": "Price not set yet",
       "notOpen": "Not open yet",
       "notOpenNote": "Paid plans can't be bought yet. This is the fee schedule that will apply when they open.",
       "practiceCredits": "{count, plural, one {# practice interview} other {# practice interviews}} {per, select, period {each billing period} month {a month} other {included}}",
@@ -3348,16 +3320,11 @@
       "freeAlwaysBodyNoFeed": "Your resume, your applications board and deadline reminders.",
       "freeAlwaysCampus": "The campus calendar is free too.",
       "refundTitle": "Refunds",
-      "refund1": "Your first subscription payment can be refunded within 7 days (48 hours for weekly billing) if you used fewer than 5 actions that need Pro.",
-      "refund2": "A renewal you didn't mean to keep can be refunded within 3 days.",
-      "refund3": "Unused practice packs can be refunded.",
-      "refund4": "In the EU and UK you can withdraw within 14 days for a full refund, unless you asked to start using paid features at once.",
       "refundLink": "Read the refund policy",
       "renewTitle": "Renewals and cancelling",
       "renew1": "Plans that renew say so on this page and at checkout. You get a reminder email before each monthly or quarterly renewal.",
       "renew2": "Cancel in Settings, or without signing in on the cancel page. You keep access until the end of the period you paid for.",
       "cancelLink": "Cancel a subscription",
-      "cnRefund": "Refund rules will be published before paid plans open.",
       "cnPasses": "Memberships are one-time passes. They never renew automatically.",
       "faqTitle": "Questions",
       "q1": {
@@ -3375,8 +3342,6 @@
       "choosePlan": "Choose this plan",
       "signupToBuy": "Create a free account to buy",
       "confirmSchoolEmail": "Confirm your school email",
-      "passRefund1": "Your first pass can be refunded within 7 days (48 hours for the week pass) if you used fewer than 5 actions that need a paid pass.",
-      "passRefund2": "A practice pack can be refunded while none of its practice interviews has been used.",
       "passRefundHow": "Ask for a refund from the Help page"
     },
     "about": {
@@ -4419,7 +4384,6 @@
           },
           "errors": {
             "duplicate": "This board is already in the list.",
-            "otherSite": "This board is already read for the other site, so it cannot be added here. A board is read for one site at a time.",
             "invalid": "Check the board ID and the company name.",
             "generic": "That did not work. Try again."
           }
@@ -4518,8 +4482,6 @@
     "agent_pending": "Planning your search and checking connected sources…",
     "cancel_search": "Stop search",
     "search_stopped": "Search stopped. You can update your request and search again.",
-    "linkedin_only": "LinkedIn listings only",
-    "linkedin_hint": "Only show roles with LinkedIn provenance. Coverage depends on the selected sources; this search does not cover every LinkedIn listing.",
     "advanced": "Advanced filters and sources",
     "overrides_hint": "These settings override your request. Leave them automatic to use the details you describe.",
     "auto": "From my request",
@@ -4537,7 +4499,6 @@
     "agent_unavailable": "The search agent is temporarily unavailable. Please try again; no search results have been generated.",
     "request_review": "Your search request",
     "agent_results_for": "Roles found for your request",
-    "linkedin_empty": "No LinkedIn listings were returned by the selected sources. Try broader criteria or turn off LinkedIn-only search.",
     "entry_hint": "Describe your next role and search connected job sources."
   },
   "jobSearchApi": {
@@ -6327,10 +6288,8 @@
       "loading": "Loading plans…",
       "loadError": "We couldn't load the plans.",
       "empty": "No plans are on sale right now.",
-      "emptyCn": "Paid plans aren't open yet.",
       "proGroup": "Pro",
       "packGroup": "Practice packs",
-      "manageInPortal": "To change how often Pro renews, use Manage payment.",
       "yourPlan": "Your plan",
       "notAvailable": "Not available yet",
       "autoRenewAck": "I agree this renews automatically every {period, select, week {week} month {month} other {3 months}} at {price} until I cancel.",
@@ -7335,7 +7294,6 @@
       "title": "What we compared",
       "intro": "Five parts make up the score. Each one shows what we found in your resume and in the job post.",
       "weight": "Weight {weight}",
-      "notStated": "Not enough to compare, so it doesn't count toward the score.",
       "partLabel": "{label}: {score} / 100",
       "keys": {
         "title_level": "The job title and level",
@@ -7383,7 +7341,6 @@
     "missing": {
       "title": "What you're missing",
       "skillsHeading": "The post lists these, and your resume and profile don't mention them:",
-      "empty": "Your resume or profile mentions every skill this post lists.",
       "noSkillsListed": "This post doesn't list specific skills to check.",
       "emptyCompared": "Your resume or profile shows every skill we compared for this post.",
       "unchecked": "{count, plural, one {# more skill in the post is not checked yet.} other {# more skills in the post are not checked yet.}}",
@@ -7442,12 +7399,7 @@
       "titleHave": "Your recent title: {have}",
       "yearsNeed": "They ask for {need}+ years",
       "yearsHave": "Your resume shows about {have} years",
-      "count": "{found} of {total} shown by your resume",
-      "mentioned": "Mentioned in your resume",
-      "notMentioned": "Not mentioned in your resume",
       "required": "Required",
-      "shownBy": "your resume shows {term}",
-      "via": "from {term}",
       "countStates": "{shown} shown, {related} related, of {total}",
       "state": {
         "shown": "Your resume shows it",
@@ -7931,7 +7883,6 @@
     },
     "closed": {
       "title": "This job is no longer listed",
-      "lastSeen": "Last seen {date}.",
       "kept": "Anything you saved for it stays in Applications.",
       "similarTitle": "Similar jobs you can still apply to",
       "boardCheck": "We checked the employer's job board when you opened this page. It no longer lists this job.",
@@ -8172,7 +8123,6 @@
     "dates": {
       "updated": "Updated {date}",
       "updatedUnknown": "Update date not listed",
-      "lastChecked": "Last checked {date}",
       "expires": "Open until {date}",
       "expiresUnknown": "Closing date not listed",
       "expired": "Closed on {date}",
@@ -8363,7 +8313,6 @@
           "system": "System",
           "board": "Board id",
           "country": "City hint",
-          "status": "Status",
           "lastChecked": "Last checked",
           "jobs": "Jobs at last check",
           "problem": "Last problem",
@@ -8373,10 +8322,6 @@
           "state": "State"
         },
         "all": "Every country"
-      },
-      "status": {
-        "on": "On",
-        "off": "Off"
       },
       "actions": {
         "checkNow": "Check now",
@@ -8642,7 +8587,6 @@
       "outdated": "This text was updated. Reload to read the current version.",
       "reload": "Reload",
       "closeTitle": "Withdraw and delete your account?",
-      "closeBody": "This service runs outside mainland China during the beta, so it cannot run without this consent. Withdrawing it closes your account now and deletes your data. This cannot be undone.",
       "closeConfirm": "Withdraw and delete my account",
       "closeKeep": "Keep my account",
       "closing": "Your account is closed and your data is being deleted. You will be signed out.",
@@ -8652,8 +8596,6 @@
     },
     "explain": {
       "title": "Why this job",
-      "fromResume": "From your resume",
-      "fromPosting": "From the posting",
       "headline": {
         "personalized": "Why this job: {tier, select, great {Great fit} good {Good fit} possible {Possible} other {Unlikely}}",
         "personalizedNoScore": "Why this job",
@@ -9325,7 +9267,6 @@
       "privacy": "Privacy Policy",
       "aiTitle": "AI processing",
       "aiToggle": "Use AI to read my resume and prepare materials",
-      "aiOffshore": "During this beta, AI processing also happens outside mainland China, with the providers listed above.",
       "aiModels": "Which AI models we use",
       "rankTitle": "Rank jobs using my profile",
       "chooseOne": "Choose one",
@@ -11900,8 +11841,6 @@
     "result": {
       "title": "Your tailored resume",
       "titleFor": "Tailored for {title}",
-      "scoreBefore": "Before",
-      "scoreAfter": "After",
       "scoreNone": "Fit score not available for this version.",
       "scoreHeading": "Fit score",
       "tabs": {
@@ -12363,9 +12302,7 @@
     },
     "privacy": "We don't keep your file. The report and the text we read from it are deleted after {hours} hours, unless you create an account and keep them. Only this browser can open the result.",
     "consent": {
-      "label": "I agree that %BRAND% reads this resume with automated software to make this report. It is deleted after {hours} hours unless I create an account.",
       "readingService": "The file may be sent to {service}, the resume-reading service %BRAND% uses, on servers in mainland China.",
-      "offshore": "During the beta, this is processed outside mainland China, in the United States.",
       "whereUnknown": "Who reads it and where it is processed is set out in the privacy notice.",
       "privacyLink": "Privacy notice",
       "labelAi": "I agree that %BRAND% reads this resume with automated software, including an AI model, to make this report. It is deleted after {hours} hours unless I create an account.",

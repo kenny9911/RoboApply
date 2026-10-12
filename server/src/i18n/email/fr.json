@@ -24,7 +24,8 @@
       "heading": "La suppression de ton compte est programmée",
       "notYou": "Si tu n’as pas fait cette demande, réponds à cet e-mail ou contacte l’assistance tout de suite.",
       "subject": "La suppression de ton compte %BRAND% est programmée",
-      "when": "Nous supprimons ton compte et ses données sous {days} jours. Les sauvegardes sont effacées dans les 90 jours qui suivent."
+      "when": "Nous supprimons ton compte et ses données sous {days} jours. Les sauvegardes sont effacées dans les 90 jours qui suivent.",
+      "renewalStopped": "Ta formule payante ne sera pas renouvelée et ne te sera plus facturée."
     },
     "emailVerify": {
       "body": "Confirme que cette adresse e-mail est bien la tienne. Tu peux continuer à utiliser %BRAND% le temps de te décider ; confirmer débloque ton entretien d’entraînement gratuit.",
@@ -124,7 +125,9 @@
       "pro_week_passCn": "Pass Pro d’une semaine",
       "pro_weekly": "Pro, facturé chaque semaine",
       "student_monthly": "Étudiant mensuel",
-      "student_quarterly": "Étudiant trimestriel"
+      "student_quarterly": "Étudiant trimestriel",
+      "student_monthlyCn": "Pass Étudiant 30 jours",
+      "student_quarterlyCn": "Pass Étudiant 90 jours"
     },
     "renewalReminder": {
       "bodyAuto": "{plan} se renouvelle automatiquement le {date} au prix de {price} par {period}.",
@@ -137,7 +140,16 @@
       "headingAuto": "Ta formule se renouvelle bientôt",
       "headingManual": "Ton pass prend fin bientôt",
       "subjectAuto": "Ta formule %BRAND% se renouvelle le {date}",
-      "subjectManual": "Ton pass %BRAND% prend fin le {date}"
+      "subjectManual": "Ton pass %BRAND% prend fin le {date}",
+      "ctaGoapply": "Voir les tarifs de %OTHER_BRAND%",
+      "goapplyLine": "Tu es en Chine continentale ? Tu peux payer en RMB avec Alipay sur %OTHER_BRAND%."
+    },
+    "paymentActionRequired": {
+      "body": "Le paiement de {price} pour {plan} attend ta confirmation. Ouvre la page de paiement pour le terminer. Rien n’est débité tant que tu n’as pas confirmé.",
+      "bodyNoPlan": "Un paiement de {price} attend ta confirmation. Ouvre la page de paiement pour le terminer. Rien n’est débité tant que tu n’as pas confirmé.",
+      "cta": "Confirmer le paiement",
+      "heading": "Ta banque te demande de confirmer ce paiement",
+      "subject": "Confirme ton paiement %BRAND%"
     }
   },
   "coaching": {
@@ -219,7 +231,8 @@
       "tierGood": "Bien adapté",
       "tierGreat": "Très adapté",
       "tierPossible": "Possible",
-      "viewJob": "Voir l’offre"
+      "viewJob": "Voir l’offre",
+      "tierEstimate": "{tier} · Estimation rapide"
     },
     "finishSetup": {
       "body": "Tes réponses jusqu’ici sont enregistrées. Termine la configuration pour voir les offres qui correspondent à ta recherche et ce qu’il faut corriger dans ton CV.",
@@ -407,5 +420,40 @@
       },
       "searchAny": "tous les postes"
     }
+  },
+  "billingRefunds": {
+    "refundIssued": {
+      "accessEndedPack": "Les crédits d’entraînement non utilisés de ce pack ont été retirés de ton compte.",
+      "accessEndedPlan": "La période payée de cet achat a été retirée de ton compte. Si aucune autre formule payante n’est en cours, ton compte est maintenant sur la formule gratuite.",
+      "accessUnchanged": "Ta formule et tes crédits restent inchangés.",
+      "bodyFull": "Nous avons remboursé {amount} pour {plan}. C’est le montant total que tu as payé.",
+      "bodyPartial": "Nous avons remboursé {amount} sur ton paiement pour {plan}.",
+      "bodyRest": "Nous avons remboursé {amount} pour {plan}. Avec les remboursements précédents, ton paiement est désormais intégralement remboursé.",
+      "cta": "Voir ta formule",
+      "heading": "Nous avons remboursé ton paiement",
+      "method": "L’argent retourne sur le moyen de paiement que tu as utilisé. Ta banque ou l’émetteur de ta carte décide du moment où il apparaît sur ton relevé.",
+      "subject": "Ton remboursement %BRAND% de {amount}"
+    },
+    "withdrawalConfirmed": {
+      "body": "Tu as exercé ton droit de rétractation pour {plan}.",
+      "cta": "Voir ta formule",
+      "endedPack": "Les crédits d’entraînement non utilisés de ce pack ont été retirés de ton compte.",
+      "endedPass": "Le pass a pris fin. Sa période payée a été retirée de ton compte.",
+      "endedSubscription": "L’abonnement a pris fin. Il ne sera pas renouvelé et ne te sera plus facturé.",
+      "heading": "Ta rétractation est confirmée",
+      "received": "Nous avons reçu ta rétractation le {at}.",
+      "refund": "Nous te remboursons {amount} sur le moyen de paiement que tu as utilisé. Ta banque ou l’émetteur de ta carte décide du moment où il apparaît sur ton relevé.",
+      "refundNone": "Aucun remboursement n’est dû, car la période que tu as payée a déjà été utilisée.",
+      "subject": "Ta rétractation auprès de %BRAND% est confirmée"
+    }
+  },
+  "shell": {
+    "preferences": "Réglages e-mail",
+    "reasonAlert": "Tu as reçu cet e-mail parce que tu as activé les alertes emploi dans %BRAND%.",
+    "reasonMarketing": "Tu as reçu cet e-mail parce que tu as accepté de recevoir les actualités produit de %BRAND%.",
+    "reasonTips": "Tu as reçu cet e-mail parce que « Conseils et rappels » est activé dans tes réglages %BRAND%.",
+    "reasonTransactional": "Tu as reçu cet e-mail parce qu’il concerne ton compte %BRAND%.",
+    "sentBy": "Envoyé par {entity}",
+    "unsubscribe": "Se désabonner"
   }
 }

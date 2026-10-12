@@ -233,7 +233,12 @@
       "whatsMissing": "Lo que falta",
       "whyThisJob": "Por qué este empleo",
       "workAi": "Se leyó el anuncio completo y se comparó con tu currículum.",
-      "workPre": "Se compararon el puesto, las habilidades y la ubicación con tu currículum."
+      "workPre": "Se compararon el puesto, las habilidades y la ubicación con tu currículum.",
+      "alsoIn": "También en {count, plural, one {# ubicación más} other {# ubicaciones más}}",
+      "alsoInList": "Otras ubicaciones de {title} en {company}",
+      "alsoInMore": "{count, plural, one {# ubicación más no aparece aquí.} other {# ubicaciones más no aparecen aquí.}}",
+      "firstSeen": "Visto por primera vez el {date}",
+      "leadLabel": "{label}:"
     },
     "explore": {
       "back": "Todos los tipos de trabajo",
@@ -387,7 +392,8 @@
         "forYou": "Para ti"
       },
       "tabsLabel": "Listas de empleos",
-      "title": "Empleos"
+      "title": "Empleos",
+      "introByDate": "Los empleos se ordenan por fecha de publicación, del más reciente al más antiguo. Abre uno para ver los detalles."
     },
     "zero": {
       "gain": "{count, plural, one {+# empleo} other {+# empleos}}",
@@ -397,6 +403,21 @@
       "relaxed": "Filtro quitado.",
       "title": "Ningún empleo coincide con esta búsqueda.",
       "unknown": "Todavía no podemos contar qué filtro descarta más empleos. Intenta hacer uno menos estricto."
+    },
+    "nl": {
+      "chip": "Ordenado por: {terms}",
+      "chipClear": "Quitar",
+      "chipClearLabel": "Dejar de ordenar la lista por estas palabras",
+      "notChecked": "Sin comprobar: {items}.",
+      "rankOnlyApply": "Ordenar mi lista por estas palabras",
+      "rankOnlyTitle": "Tus filtros se quedan como están",
+      "rankedBy": "Ordenado por cercanía a: {terms}. Estas palabras no se comprobaron como requisitos."
+    },
+    "order": {
+      "queryMatch": "Ordenados según qué tan bien el anuncio coincide con tu búsqueda."
+    },
+    "searchApi": {
+      "keySourcesOff": "Ahora mismo ninguna fuente de empleo está abierta a claves de API en este sitio, así que una solicitud hecha con una clave devuelve un error y ningún empleo. El operador del sitio decide qué fuentes pueden leer las claves."
     }
   },
   "resume": {
@@ -437,9 +458,9 @@
     "card": {
       "base": "Currículum principal — sin adaptar a ningún empleo",
       "edited": "Editado {when}",
-      "score_unit": "/100",
       "delete": "Eliminar currículum",
-      "versions_used": "{used} de {cap} versiones usadas"
+      "versions_used": "{used} de {cap} versiones usadas",
+      "tailored_stamp": "Adaptado"
     },
     "tip": {
       "label": "Si estás empezando tu carrera",
@@ -468,17 +489,16 @@
         "ready_v": "Borrador sin título"
       },
       "import": {
-        "read": "Leído",
         "identity": "Tú",
-        "identity_v": "Nombre · correo · ubicación",
         "experience": "Experiencia",
-        "experience_v": "Empleos · puestos · fechas",
         "education": "Formación",
-        "education_v": "Título · centro · años",
-        "skills": "Habilidades",
-        "skills_v": "Habilidades · herramientas · palabras clave",
-        "cleaned": "Limpiado",
-        "cleaned_v": "Redacción y espaciado"
+        "skills": "Habilidades"
+      },
+      "found": {
+        "none": "No se encontró. Añádelo en el editor.",
+        "roles": "{count, plural, one {1 puesto} other {# puestos}}",
+        "schools": "{count, plural, one {1 entrada} other {# entradas}}",
+        "skills": "{count, plural, one {1 habilidad} other {# habilidades}}"
       }
     },
     "import": {
@@ -500,8 +520,8 @@
       "scratch_hint": "Elige una plantilla. Puedes cambiarla después: tu contenido se va contigo.",
       "drop": {
         "title": "Suelta aquí tu currículum",
-        "sub": "PDF, DOCX o Apple Pages",
-        "ready": "listo para leer"
+        "ready": "listo para leer",
+        "formats": "PDF, Word (DOC o DOCX), texto sin formato o Markdown"
       },
       "linkedin": {
         "steps_title": "Guarda tu perfil de LinkedIn como PDF",
@@ -521,7 +541,7 @@
         "title_scratch": "Borrador listo",
         "title_import": "Importado",
         "body_scratch": "Abre el editor y empieza a llenarlo. La ayuda línea a línea está en el margen derecho.",
-        "body_import": "Se leyó tu currículum. Hay dos líneas flojas señaladas en el editor."
+        "body_read": "Se leyó tu currículum. Abre el editor para revisar lo que se detectó."
       },
       "cancel": "Cancelar",
       "create_draft": "Crear borrador",
@@ -541,7 +561,8 @@
         "file_required": "Elige primero un archivo."
       },
       "demo_file_name": "curriculum-2024.pdf",
-      "demo_file_size": "184 KB"
+      "demo_file_size": "184 KB",
+      "reading": "Leyendo {file}…"
     },
     "toolbar": {
       "back": "Todos los currículums",
@@ -549,12 +570,13 @@
       "saved": "Todos los cambios guardados",
       "saving": "Guardando…",
       "save_error": "Todavía sin guardar — reintentando",
-      "strength": "Solidez",
       "coach": "Revisión de líneas",
       "hide_coach": "Ocultar la revisión de líneas",
       "download": "Descargar",
       "tailor": "Adaptar a un empleo",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "quick_score": "Puntuación rápida",
+      "quick_score_hint": "La puntuación rápida del propio editor. Cambia mientras escribes y no es el resultado de tu Revisión del currículum."
     },
     "section": {
       "identity": "Tú",
@@ -610,7 +632,8 @@
     },
     "bullet": {
       "flag": "Esta línea no tiene ningún número y su verbo es vago. Prueba «Mejorar la redacción» o «Añadir números».",
-      "placeholder": "Lo que hiciste: empieza con un verbo y termina con el resultado"
+      "placeholder": "Lo que hiciste: empieza con un verbo y termina con el resultado",
+      "placeholder_flag": "Reemplaza {placeholders} por tu cifra real, o reescribe la línea sin ella. Esta línea no está lista para enviarse."
     },
     "rewrite": {
       "rewriting": "Reescribiendo",
@@ -791,19 +814,22 @@
     },
     "export": {
       "ai_note": "La IA escribió parte de este currículum. Los archivos PDF y Word lo indican en sus propiedades.",
-      "blocked": "{count, plural, one {Una línea tiene un número que no encontramos en tu currículum. Corrígelo o quítalo antes de descargar.} other {# líneas tienen números o datos que no encontramos en tu currículum. Corrígelos o quítalos antes de descargar.}}",
       "name": {
         "company_role_name": "Empresa - Puesto - Tu nombre",
         "name_company_role": "Tu nombre - Empresa - Puesto",
         "name_date": "Tu nombre - Fecha",
         "name_role": "Tu nombre - Puesto"
       },
-      "name_label": "Nombre del archivo"
+      "name_label": "Nombre del archivo",
+      "placeholders": "{count, plural, one {1 línea todavía tiene un espacio en blanco como [X] donde va tu propia cifra. Complétalo o reescribe la línea sin la cifra.} other {# líneas todavía tienen un espacio en blanco como [X] donde va tu propia cifra. Complétalos o reescribe esas líneas sin las cifras.}}",
+      "placeholders_anyway": "Descargar con estos espacios en blanco",
+      "placeholders_show": "Mostrar el primero",
+      "unverified": "{count, plural, one {1 dato de este currículum adaptado todavía no se ha verificado. Verifícalo en Verificar datos antes de descargar.} other {# datos de este currículum adaptado todavía no se han verificado. Verifícalos en Verificar datos antes de descargar.}}",
+      "verify_cta": "Verificar datos"
     },
     "hub": {
       "errors": {
         "ai_off": "Leer un archivo de currículum usa IA, que está desactivada en tu cuenta. Activa el procesamiento con IA en Ajustes o crea tu currículum paso a paso.",
-        "image_unreadable": "Esta imagen no se pudo leer en este momento. Sube un archivo PDF o Word en su lugar.",
         "storage_unavailable": "El almacenamiento de archivos no está disponible en este momento. Inténtalo más tarde.",
         "upload_daily_limit": "Hoy subiste {limit} archivos de currículum, que es el límite diario. Inténtalo mañana."
       },
@@ -910,7 +936,8 @@
         }
       },
       "title": "Plantilla y diseño"
-    }
+    },
+    "ai_edit_cost": "Cada edición con IA de una línea, de tu resumen o de tus habilidades usa 1 crédito."
   },
   "applications": {
     "page_title": "Candidaturas",
@@ -1182,7 +1209,8 @@
         },
         "done": "Listo",
         "useShorter": "Usar {minutes} min",
-        "previewToggle": "Ver qué podrían preguntarte"
+        "previewToggle": "Ver qué podrían preguntarte",
+        "costShort": "{n, plural, one {# crédito} other {# créditos}} — más de los que tienes"
       },
       "loading": "Cargando la práctica…",
       "startError": "Esa entrevista no se pudo empezar. Inténtalo otra vez.",
@@ -1596,7 +1624,11 @@
       "showAll": "Ver los {count}",
       "showFewer": "Ver menos",
       "startErrorNetwork": "No pudimos conectar con el servidor. Revisa tu conexión a internet e inténtalo otra vez.",
-      "startErrorBusy": "El servicio de entrevistas está ocupado ahora mismo. Espera un minuto e inténtalo otra vez."
+      "startErrorBusy": "El servicio de entrevistas está ocupado ahora mismo. Espera un minuto e inténtalo otra vez.",
+      "creditCost": "Cuesta {n, plural, one {# crédito} other {# créditos}}",
+      "creditsRemaining": "{n, plural, one {# crédito restante} other {# créditos restantes}}",
+      "insufficientCredits": "Esta entrevista necesita {required, plural, one {# crédito} other {# créditos}} y tú tienes {balance}. Añade créditos para continuar.",
+      "insufficientCreditsNoPurchase": "Esta entrevista necesita {required, plural, one {# crédito} other {# créditos}} y tú tienes {balance}."
     },
     "live": {
       "loading": "Preparando tu sala…",
@@ -2041,7 +2073,6 @@
       "pronouns_other": "Otros",
       "pronouns_none": "Prefiero no decirlo",
       "years_exp": "Años de experiencia",
-      "new_grad": "Recién graduado",
       "years_suffix": " años",
       "group_contact": "Contacto",
       "email": "Correo electrónico",
@@ -2098,7 +2129,6 @@
         "download": "Descargar",
         "paid": "Pagada",
         "pending": "Pendiente",
-        "failed": "Fallida",
         "card": "Tarjeta"
       }
     },
@@ -2159,7 +2189,6 @@
       "delete_data_confirm": "Esto borra tu lista de empleos, tus candidaturas y tu historial. Tu cuenta y tus currículums se quedan.",
       "delete_data_confirm_label": "Confirmar",
       "delete_data_confirm_hint": "Escribe {keyword} para confirmar.",
-      "delete_data_confirm_keyword": "BORRAR",
       "delete_data_confirm_cta": "Borrar datos de empleo",
       "delete_data_confirm_error": "Escribe {keyword} exactamente para confirmar.",
       "delete_data_cancel": "Cancelar",
@@ -2173,13 +2202,10 @@
       "deleteDescription": "Borra tu cuenta, tus currículums, tus grabaciones de entrevistas y tu suscripción. Esto no se puede deshacer.",
       "confirmEmailLabel": "Confirma tu correo",
       "confirmEmailHint": "Escribe {email} para confirmar.",
-      "reasonLabel": "Motivo",
-      "reasonPlaceholder": "Cuéntanos por qué te vas (obligatorio)",
       "cancel": "Cancelar",
       "delete": "Eliminar mi cuenta",
       "error": {
         "mismatch": "Ese no es el correo de esta cuenta.",
-        "reasonRequired": "Cuéntanos por qué te vas.",
         "generic": "No se eliminó tu cuenta. Inténtalo otra vez."
       }
     }
@@ -2214,7 +2240,8 @@
       "lead": "%BRAND% lee tu currículum, te muestra los empleos que puedes conseguir de verdad, nombra exactamente lo que falta y te prepara para la entrevista.",
       "feature_resume": "Un currículum que los escáneres pueden leer",
       "feature_interview": "Entrevistas de práctica que te responden",
-      "feature_track": "Todas tus candidaturas en un solo sitio"
+      "feature_track": "Todas tus candidaturas en un solo sitio",
+      "feature_interview_written": "Entrevistas de práctica para el empleo que quieres"
     },
     "agreements": {
       "age": "Tengo 16 años o más",
@@ -2281,7 +2308,12 @@
       "google": "Continuar con Google",
       "line": "Continuar con LINE",
       "needAgreements": "Primero marca las casillas obligatorias de abajo.",
-      "useEmail": "Usar correo electrónico"
+      "useEmail": "Usar correo electrónico",
+      "tabs": {
+        "email_password": "Correo",
+        "label": "Formas de iniciar sesión",
+        "phone_otp": "Teléfono"
+      }
     },
     "otherBrand": {
       "body": "Esta cuenta pertenece a %OTHER_BRAND%. Continúa allí.",
@@ -2354,7 +2386,8 @@
       "toSignIn": "Iniciar sesión",
       "verifiedBody": "Tu correo está confirmado. Al confirmarlo se desbloquea tu entrevista de práctica gratis.",
       "verifiedTitle": "Correo confirmado",
-      "working": "Confirmando tu correo…"
+      "working": "Confirmando tu correo…",
+      "requestNew": "Enviar un enlace nuevo desde Ajustes"
     },
     "verifyBanner": {
       "failed": "No se envió el correo. Inténtalo más tarde.",
@@ -2604,6 +2637,166 @@
           },
           "sub": "Crea un currículum en chino y luego una versión para cada empleo. Todos los cambios quedan a la vista y no se añade nada nuevo sin tu confirmación.",
           "title": "Un currículum, una versión para cada empleo"
+        },
+        "coverLetters": {
+          "eyebrow": "Cartas de presentación",
+          "metaDescription": "Escribe una carta de presentación para un empleo a partir del anuncio y de tu propio currículum, y luego edítala.",
+          "metaTitle": "Cartas de presentación a partir del anuncio y de tu currículum",
+          "q1": {
+            "a": "No. Tú decides dónde usarla y si la usas.",
+            "q": "¿Se envía al empleador?"
+          },
+          "q2": {
+            "a": "Sí, hay un límite diario. La página de precios lo indica.",
+            "q": "¿Hay un límite?"
+          },
+          "s1": {
+            "body": "Empieza desde la página del empleo.",
+            "title": "Elige el empleo"
+          },
+          "s2": {
+            "body": "Cada dato sale de tu currículum o del anuncio.",
+            "title": "Lee el borrador"
+          },
+          "s3": {
+            "body": "Cambia lo que quieras y luego cópiala o descárgala.",
+            "title": "Edita y descarga"
+          },
+          "sample": {
+            "line1": "El inicio nombra el puesto y el equipo que aparecen en el anuncio.",
+            "line2": "El párrafo central usa dos resultados de tu currículum.",
+            "line3": "Escrito por IA. Léela antes de enviarla."
+          },
+          "sub": "La carta usa lo que pide el anuncio y lo que muestra tu currículum. Tú la editas antes de usarla.",
+          "title": "Una carta de presentación para este empleo, a partir de tu propio currículum"
+        },
+        "jobMatches": {
+          "eyebrow": "Empleos que encajan",
+          "metaDescription": "%BRAND% ordena los empleos abiertos según qué tan bien encaja tu currículum. Cada empleo empieza por lo que falta e indica de dónde salió el anuncio.",
+          "metaTitle": "Empleos que encajan con tu currículum, cada uno con su fuente",
+          "q1": {
+            "a": "De anuncios públicos en las páginas de contratación de los propios empleadores y de la fuente que se indica en cada empleo. %BRAND% no lista todos los empleos del mercado.",
+            "q": "¿De dónde salen los empleos?"
+          },
+          "q2": {
+            "a": "Por encaje, por lo reciente que es el anuncio, por lo que te ha interesado y por la fuente del anuncio. La página «Cómo se ordenan los empleos» enumera cada factor.",
+            "q": "¿Cómo se ordena la lista?"
+          },
+          "s1": {
+            "body": "Dinos qué puestos, ciudades y sueldo quieres. Tu currículum hace el resto.",
+            "title": "Añade tu currículum y busca"
+          },
+          "s2": {
+            "body": "Cada empleo muestra lo que coincide y lo que falta antes de mostrar un número.",
+            "title": "Lee primero lo que falta"
+          },
+          "s3": {
+            "body": "Abre el anuncio original y envía tú la candidatura allí. Después el empleo pasa a Enviadas en tu tablero.",
+            "title": "Postula en el sitio del empleador"
+          },
+          "sample": {
+            "line1": "Encaja bien · 78 / 100",
+            "line2": "Piden SQL y Tableau. Tu currículum muestra solo SQL.",
+            "line3": "Fuente: la página de contratación del empleador · revisado hace 2 días"
+          },
+          "sub": "Cada empleo recibe un nivel de encaje y empieza por lo que falta: lo que el empleador pide y tu currículum no muestra. Cada empleo indica su fuente y enlaza al anuncio original.",
+          "title": "Empleos ordenados por encaje, con la razón en palabras sencillas"
+        },
+        "readyToApply": {
+          "eyebrow": "Listo para postular",
+          "metaDescription": "Cada semana, %BRAND% prepara materiales para empleos que encajan. Tú los revisas y tú envías cada candidatura.",
+          "metaTitle": "Candidaturas preparadas cada semana; tú las envías",
+          "q1": {
+            "a": "No. Nunca envía una candidatura ni contacta a un empleador.",
+            "q": "¿Envía algo?"
+          },
+          "q2": {
+            "a": "Deshazlo con un toque y el empleo vuelve a donde estaba.",
+            "q": "¿Y si no me postulé después de abrir un empleo?"
+          },
+          "s1": {
+            "body": "Elige 5, 10, 20 o 30 empleos y el encaje más bajo que aceptarías.",
+            "title": "Define cuántos por semana"
+          },
+          "s2": {
+            "body": "Cambia lo que quieras antes de usarlo.",
+            "title": "Revisa cada kit"
+          },
+          "s3": {
+            "body": "Abre la página del empleador y envía la candidatura. El empleo pasa a Enviadas.",
+            "title": "Envíala tú"
+          },
+          "sample": {
+            "line1": "5 empleos esta semana · Encaja bien o mejor",
+            "line2": "Kit listo: currículum adaptado, carta de presentación, 4 respuestas",
+            "line3": "Abrir candidatura → tú la revisas y la envías"
+          },
+          "sub": "Para los empleos que encajan, %BRAND% prepara un currículum adaptado, una carta de presentación y respuestas a preguntas comunes. Tú abres cada candidatura y la envías.",
+          "title": "Cada semana, candidaturas preparadas para que las revises"
+        },
+        "referralCodes": {
+          "eyebrow": "Códigos de referido",
+          "metaDescription": "Mira los códigos de referido que otros usuarios de %BRAND% compartieron para una empresa. Un moderador revisa cada uno antes de que aparezca.",
+          "metaTitle": "Códigos de referido compartidos por otras personas que buscan empleo",
+          "q1": {
+            "a": "No. Se rechazan los códigos que se venden o se intercambian, y también los que incluyen un número de teléfono, un ID de WeChat, un correo o un enlace.",
+            "q": "¿Los códigos cuestan algo?"
+          },
+          "q2": {
+            "a": "No. Ayuda a que tu candidatura llegue a la empresa. No decide el resultado.",
+            "q": "¿Un código me consigue el empleo?"
+          },
+          "s1": {
+            "body": "Los códigos compartidos para esa empresa aparecen en la página del empleo y en Códigos de referido.",
+            "title": "Abre un empleo o una empresa"
+          },
+          "s2": {
+            "body": "Escríbelo en el formulario de candidatura del propio empleador cuando te postules.",
+            "title": "Copia el código"
+          },
+          "s3": {
+            "body": "Añade un código tuyo. Aparece cuando un moderador lo revisa.",
+            "title": "Comparte uno que tengas"
+          },
+          "sample": {
+            "line1": "Empresa de ejemplo · programa de campus 2027",
+            "line2": "Código de referido: EXAMPLE2027 · revisado por un moderador",
+            "line3": "Un código ayuda a que tu candidatura llegue a la empresa. No decide el resultado."
+          },
+          "sub": "Otros usuarios de %BRAND% comparten los códigos de referido que tienen. Un moderador revisa cada uno antes de que aparezca, y no se permiten códigos que cuesten dinero.",
+          "title": "Códigos de referido para la empresa a la que te postulas"
+        },
+        "resumeTailoring": {
+          "eyebrow": "Adaptación del currículum",
+          "metaDescription": "Crea una versión de tu currículum para un empleo, mira cada cambio y confirma todo lo nuevo antes de descargar.",
+          "metaTitle": "Adapta tu currículum a cada empleo",
+          "q1": {
+            "a": "Puede sugerir redacción, pero una afirmación, una cifra o una habilidad que no está en tu currículum no se puede descargar hasta que la confirmes, la edites o la quites.",
+            "q": "¿Puede inventar experiencia?"
+          },
+          "q2": {
+            "a": "No. Cada copia adaptada es independiente y tu currículum principal queda como está.",
+            "q": "¿Cambia mi currículum principal?"
+          },
+          "s1": {
+            "body": "Empieza desde cualquier empleo de tu lista o desde uno que añadiste tú.",
+            "title": "Elige un empleo"
+          },
+          "s2": {
+            "body": "Conserva, edita o quita cada cambio. No se añade nada nuevo sin tu aprobación.",
+            "title": "Revisa los cambios"
+          },
+          "s3": {
+            "body": "Exporta un PDF o un archivo de Word cuando todos los datos nuevos estén confirmados.",
+            "title": "Descarga"
+          },
+          "sample": {
+            "line1": "Cambio: el resumen ahora menciona tus proyectos de análisis de datos.",
+            "line2": "Una línea tiene una cifra que no encontramos en tu currículum. Corrígela o quítala antes de descargar.",
+            "line3": "Encaje después de los cambios: Encaja bien · 84 / 100"
+          },
+          "sub": "Mira cada cambio lado a lado. Todo lo que el borrador añade y no está en tu currículum espera tu confirmación.",
+          "title": "Una versión de tu currículum para cada empleo"
         }
       },
       "roboapply": {
@@ -2955,7 +3148,8 @@
           "q": "¿Qué significa la puntuación de encaje?"
         },
         "q4": {
-          "q": "¿De dónde salen los empleos?"
+          "q": "¿De dónde salen los empleos?",
+          "a": "De anuncios públicos en las páginas de empleo de los propios empleadores, de la lista pública de empleos de datos abiertos de Taiwán y de proveedores de listados de empleos cuando buscas. Cada empleo muestra su fuente y cuándo se revisó por última vez. %BRAND% no lista todos los empleos del mercado."
         },
         "q5": {
           "a": "El plan gratuito incluye la lista de empleos, las puntuaciones de encaje y tu tablero de candidaturas, con límites diarios para las acciones de IA. Pro sube esos límites. Todos los precios y límites están en la página de precios.",
@@ -2988,11 +3182,11 @@
       "pricing": {
         "eyebrow": "Precios",
         "freeNote": "Límites diarios para las acciones de IA",
-        "notSet": "Precio aún sin definir",
         "proNote": "Límites diarios más altos en todas las acciones de IA",
         "seeAll": "Ver todos los planes y límites",
         "sub": "La lista de empleos, las puntuaciones de encaje, los filtros y tu tablero de candidaturas son gratis. Pro sube los límites diarios de las acciones de IA.",
-        "title": "Empieza gratis. Mejora tu plan cuando necesites más."
+        "title": "Empieza gratis. Mejora tu plan cuando necesites más.",
+        "notOpen": "Los planes de pago todavía no se pueden comprar."
       },
       "sample": {
         "company": "Empresa de ejemplo",
@@ -3054,7 +3248,6 @@
       "capsSub": "Pro también tiene límites. Evitan el abuso y están publicados aquí para que los conozcas antes de pagar.",
       "capsTitle": "Límites",
       "cnPasses": "Las membresías son pases de un solo pago. Nunca se renuevan automáticamente.",
-      "cnRefund": "Las reglas de reembolso se publicarán antes de que abran los planes de pago.",
       "count": "{count}",
       "cta": "Empezar gratis",
       "error": "No se pudieron cargar los planes. Actualiza la página para intentarlo de nuevo.",
@@ -3073,7 +3266,6 @@
       "metaTitle": "Precios",
       "notOpen": "Aún no disponible",
       "notOpenNote": "Los planes de pago todavía no se pueden comprar. Esta es la lista de tarifas que se aplicará cuando abran.",
-      "notSet": "Precio aún sin definir",
       "perDay": "{count} al día",
       "plansTitle": "Planes",
       "practiceCredits": "{count, plural, one {# entrevista de práctica} other {# entrevistas de práctica}} {per, select, period {por periodo de facturación} month {al mes} other {{count, plural, one {incluida} other {incluidas}}}}",
@@ -3089,10 +3281,6 @@
         "a": "No. Los límites se reinician cada día o cada semana, como muestra la tabla. Los paquetes de práctica siguen siendo válidos durante los meses indicados.",
         "q": "¿Se acumulan los créditos que no uso?"
       },
-      "refund1": "Tu primer pago de suscripción se puede reembolsar dentro de los 7 días (48 horas en la facturación semanal) si usaste menos de 5 acciones que requieren Pro.",
-      "refund2": "Una renovación que no querías mantener se puede reembolsar dentro de los 3 días.",
-      "refund3": "Los paquetes de práctica sin usar se pueden reembolsar.",
-      "refund4": "En la UE y el Reino Unido puedes desistir dentro de los 14 días y recibir un reembolso completo, salvo que hayas pedido empezar a usar las funciones de pago de inmediato.",
       "refundLink": "Leer la política de reembolsos",
       "refundTitle": "Reembolsos",
       "renew1": "Los planes que se renuevan lo indican en esta página y al pagar. Recibes un correo de recordatorio antes de cada renovación mensual o trimestral.",
@@ -3101,7 +3289,11 @@
       "savedSearches": "Búsquedas guardadas",
       "sub": "Todos los precios, las reglas de renovación y los límites de uso están en esta página.",
       "title": "Precios",
-      "upToPerDay": "Hasta {count} al día"
+      "upToPerDay": "Hasta {count} al día",
+      "choosePlan": "Elegir este plan",
+      "confirmSchoolEmail": "Confirma tu correo institucional",
+      "passRefundHow": "Pide un reembolso desde la página de Ayuda",
+      "signupToBuy": "Crea una cuenta gratis para comprar"
     },
     "ranking": {
       "addsPoints": "+{points} puntos",
@@ -3111,7 +3303,8 @@
       },
       "factorsTitle": "Los cuatro factores",
       "fit": {
-        "title": "Encaje con tu currículum y tu búsqueda"
+        "title": "Encaje con tu currículum y tu búsqueda",
+        "body": "Tu puntuación de encaje con el empleo, sobre 100. Cuando todavía no hay un análisis de encaje completo, se usa una estimación rápida en la misma escala. Un empleo cuya estimación rápida tiene muy pocos datos se deja fuera cuando filtras por «Encaja bien o mejor» o por «Solo encaja muy bien». Mientras seguimos comparando las estimaciones rápidas con los análisis completos, un empleo con análisis completo se ubica a medio camino entre su estimación rápida y su puntuación analizada, así que su lugar en la lista puede diferir del número de su tarjeta."
       },
       "fitParts": {
         "careerPath": "Cómo ha avanzado tu carrera",
@@ -3125,7 +3318,8 @@
         "weight": "{pct}% de la puntuación de encaje"
       },
       "freshness": {
-        "title": "Qué tan reciente es el anuncio"
+        "title": "Qué tan reciente es el anuncio",
+        "body": "Los anuncios más nuevos van primero. El efecto es más fuerte en los primeros dos días y conserva un peso menor durante unas dos semanas. Un anuncio que su fuente ya no lista cuenta como más antiguo."
       },
       "goalIntro": "El objetivo profesional que elegiste al configurar tu cuenta suma puntos a los empleos que coinciden con él.",
       "goalOthers": "Los demás objetivos no cambian el orden.",
@@ -3153,6 +3347,14 @@
         "sponsorshipFirst": {
           "body": "Si dijiste que necesitas patrocinio de visa, los empleos cuyo anuncio menciona el patrocinio van primero, en el orden que elegiste, y los empleos cuyo anuncio dice que no patrocina se ocultan. Esto se aplica con cualquier orden.",
           "title": "Primero el patrocinio de visa"
+        },
+        "seenSkipped": {
+          "body": "Un empleo que estuvo en tu lista en tres o más visitas y que nunca abriste baja de lugar: 5 puntos después de tres visitas, 7.5 después de cuatro y 10 desde la quinta.",
+          "title": "Empleos que sigues pasando por alto"
+        },
+        "wrongTitle": {
+          "body": "Si marcas un empleo como «No me interesa: puesto equivocado», el peso de ese tipo de puesto y el peso de ese título bajan 0.25 cada uno, en una escala que va de -1 a 1. «Lo que te ha interesado» es el promedio de los pesos del tipo de puesto, la empresa y las habilidades de un empleo, y del peso de su título cuando es menor que cero. Así, una marca baja un poco otros empleos con el mismo tipo de puesto o el mismo título, y cada marca adicional los baja más. El efecto se debilita un 2% cada día. Tus filtros no cambian.",
+          "title": "Títulos que marcaste como equivocados"
         }
       },
       "rulesTitle": "{count, plural, one {Una regla más} other {Más reglas}}",
@@ -3164,7 +3366,14 @@
       "spreadTitle": "Variedad",
       "title": "Cómo se ordenan los empleos",
       "upToPoints": "Hasta {points} puntos",
-      "weight": "{pct}% del orden"
+      "weight": "{pct}% del orden",
+      "cnNote": "En %BRAND%, si las recomendaciones personalizadas están desactivadas o todavía no las elegiste, los empleos se ordenan solo por fecha y por tus filtros. Cuando buscas con palabras, se ordenan según qué tanto coincide cada anuncio con esas palabras.",
+      "deadlineSort": "{deadline} ordena los empleos por la fecha en que cierran las candidaturas, de la más próxima a la más lejana.",
+      "otherSorts": "{newest}, {bestFit} y {highestPay} ordenan cada uno solo por ese criterio.",
+      "pointsNote": "Cada empleo recibe una puntuación de orden sobre 100 según los cuatro factores. Las reglas y los objetivos de abajo suman puntos a esa puntuación, restan puntos o mueven empleos dentro de la lista.",
+      "pointsNoteRules": "Cada empleo recibe una puntuación de orden sobre 100 según los cuatro factores. Las reglas de abajo suman o restan puntos a esa puntuación.",
+      "sameRole": "Cuando una empresa publica el mismo puesto en varias ciudades, ves una sola tarjeta que enumera las otras ubicaciones, hasta 10. Las ubicaciones adicionales aparecen en otra tarjeta.",
+      "upToPointsLower": "Hasta {points} puntos menos"
     },
     "search": {
       "anyCountry": "Cualquier país",
@@ -3688,7 +3897,9 @@
         "noCharge": "No se encontró ningún cobro pagado.",
         "notEligible": "No se puede reembolsar",
         "rule": "Regla: {rule}",
-        "title": "Revisión de reembolso"
+        "title": "Revisión de reembolso",
+        "issueElsewhere": "Para reembolsar, abre Créditos y planes y luego Reembolsos. Allí se reembolsa un cargo a tarjeta. Un pedido de China continental se registra allí después de que el dinero se devolvió en la consola del comercio.",
+        "sub": "Lo que dicen las reglas de reembolso publicadas sobre el último cargo de esta persona. Es solo una comprobación."
       },
       "reports": {
         "allMarkets": "Ambos",
@@ -3767,7 +3978,8 @@
         "title": "Seguridad de contenido",
         "usable": "En funcionamiento",
         "verdict": "Resultado",
-        "yes": "Sí"
+        "yes": "Sí",
+        "problemsDegraded": "Problemas de configuración. La revisión usa la lista de palabras integrada hasta que se corrijan"
       },
       "system": {
         "alerts": {
@@ -3815,7 +4027,44 @@
         },
         "providers": {
           "errors": "Errores",
-          "provider": "Proveedor"
+          "provider": "Proveedor",
+          "alert": {
+            "exhausted": "{provider}: se agotó la cuota mensual. Se restablece en {days}.",
+            "exhaustedNoReset": "{provider}: se agotó la cuota mensual. El proveedor no indicó cuándo se restablece.",
+            "low": "{provider}: quedan {value} de la cuota mensual (nivel de alerta {level}).",
+            "not_subscribed": "{provider}: la clave no tiene un plan para este proveedor.",
+            "unauthorized": "{provider}: el proveedor rechazó la clave."
+          },
+          "banner": "No disponible por ahora: {providers}. La lista de empleos funciona sin ellos.",
+          "bannerOne": "No disponible por ahora: {providers}. La lista de empleos funciona sin él.",
+          "calls": "Llamadas de hoy / límite diario",
+          "days": "{count, plural, one {# día} other {# días}}",
+          "empty": "No hay proveedores de empleos configurados.",
+          "jobs": "Empleos restantes / límite",
+          "leftOfLimit": "{left} / {limit}",
+          "market": "Mercado",
+          "markets": {
+            "cn": "China continental",
+            "intl": "Internacional"
+          },
+          "new": "Nuevos",
+          "plan": "Plan",
+          "requests": "Solicitudes restantes / límite",
+          "resetsIn": "Se restablece en",
+          "returned": "Devueltos",
+          "state": "Estado",
+          "states": {
+            "disabled": "Desactivado",
+            "exhausted": "Agotado",
+            "gated": "Necesita un plan más grande",
+            "low": "Queda poco",
+            "not_subscribed": "Sin suscripción",
+            "ok": "Activado",
+            "unauthorized": "Clave rechazada",
+            "unknown": "Todavía no se sabe"
+          },
+          "sub": "Lo que cada proveedor informó por última vez sobre su propio plan y sus llamadas del día UTC {day}. Un guion significa que el proveedor no lo indicó.",
+          "title": "Proveedores de empleos"
         },
         "queue": {
           "dead": "Abandonadas",
@@ -3849,6 +4098,204 @@
           "feedback": "Valoraciones del Asistente",
           "health": "Estado",
           "safety": "Seguridad de contenido"
+        },
+        "payments": {
+          "eventsAll": "El punto de conexión del webhook envía todos los eventos a los que responde el sitio.",
+          "failed": "No se pudieron comprobar los pagos con tarjeta.",
+          "link": "Ver el informe completo de Stripe en Créditos y planes",
+          "loading": "Cargando…",
+          "missingEvents": "{count, plural, one {# evento al que responde el sitio no lo envía el punto de conexión del webhook.} other {# eventos a los que responde el sitio no los envía el punto de conexión del webhook.}}",
+          "noEndpoint": "Ningún punto de conexión de webhook en Stripe apunta a este sitio.",
+          "notChecked": "No se pudo comprobar el punto de conexión del webhook.",
+          "notReady": "Los pagos con tarjeta no están listos.",
+          "ready": "Los pagos con tarjeta están listos.",
+          "reason": {
+            "live_key_outside_production": "Se rechaza una clave de Stripe en vivo fuera de producción.",
+            "missing": "No hay ninguna clave de Stripe definida.",
+            "no_secret": "No hay ningún secreto de firma del webhook definido."
+          },
+          "sub": "Si aquí se pueden aceptar pagos con tarjeta.",
+          "title": "Pagos"
+        }
+      },
+      "sources": {
+        "about": {
+          "activejobs": "Un servicio de búsqueda de empleos. Se usa para las búsquedas que pide la gente.",
+          "activejobs_feed": "Anuncios nuevos de los sitios de empleo de las empresas, leídos cada hora. Se ejecuta solo en cuanto existe un plan de pago.",
+          "ats_public": "Anuncios de los portales de empleo públicos de las propias empresas. Cada uno enlaza a la página de la empresa.",
+          "bank": "Empleos que los reclutadores publican en {sourceName} para un empleador concreto.",
+          "jsearch": "Un servicio de búsqueda de empleos. Se usa para las búsquedas que pide la gente.",
+          "linkedin": "Un servicio de búsqueda de empleos que ya no se usa.",
+          "other": "Una fuente de empleos.",
+          "tw_gov_jobs": "Vacantes de organismos públicos y escuelas a partir de los datos abiertos de Taiwán. Cada una muestra la línea de crédito que pide su licencia. No se guardan datos de contacto de funcionarios.",
+          "tw_open_data": "Vacantes del conjunto de datos abiertos del servicio público de empleo de Taiwán. Cada una muestra la línea de crédito que pide su licencia.",
+          "usajobs": "Vacantes federales de Estados Unidos del sitio de empleo del propio gobierno. Cada una enlaza al anuncio oficial.",
+          "user_import": "Una persona pega un enlace o un anuncio. Solo esa persona lo ve."
+        },
+        "boards": {
+          "actions": {
+            "cancel": "Cancelar",
+            "check": "Revisar ahora",
+            "checkLabel": "Revisar {company} ahora",
+            "checking": "Revisando…",
+            "confirmRemove": "Quitar y ocultar sus empleos",
+            "remove": "Quitar",
+            "removeLabel": "Quitar {company}",
+            "toggleLabel": "Activar o desactivar {company}",
+            "turnOff": "Desactivar",
+            "turnOn": "Activar"
+          },
+          "add": {
+            "adding": "Añadiendo…",
+            "company": "Nombre de la empresa",
+            "companyHint": "Tal como lo escribe la empresa en su propio portal.",
+            "submit": "Añadir portal",
+            "system": "Sistema del portal de empleo",
+            "title": "Añadir el portal de empleo de una empresa",
+            "token": "ID del portal",
+            "tokenHint": "El nombre corto de la empresa en la dirección de su portal de empleo."
+          },
+          "errors": {
+            "duplicate": "Este portal ya está en la lista.",
+            "generic": "Eso no funcionó. Inténtalo otra vez.",
+            "invalid": "Revisa el ID del portal y el nombre de la empresa."
+          },
+          "list": {
+            "columns": {
+              "actions": "Acciones",
+              "board": "ID del portal",
+              "company": "Empresa",
+              "jobs": "Anuncios listados",
+              "lastChecked": "Última revisión",
+              "problem": "Último problema",
+              "status": "Estado",
+              "system": "Sistema"
+            },
+            "empty": "Todavía no hay ningún portal. Añade uno arriba.",
+            "loadError": "No se pudo cargar la lista.",
+            "never": "Todavía sin revisar",
+            "noProblem": "Ninguno",
+            "off": "Desactivado",
+            "on": "Activado",
+            "title": "Portales de este sitio"
+          },
+          "offNote": "Desactivar un portal o quitarlo oculta sus empleos. Volver a activarlo lee el portal otra vez.",
+          "run": {
+            "error": "{company}: {problem}",
+            "queued": "{company}: el portal lista {listed, plural, one {# anuncio} other {# anuncios}} para este sitio. Ya empezó la lectura.",
+            "waiting": "{company}: el portal lista {listed, plural, one {# anuncio} other {# anuncios}} para este sitio. Se leerán en la próxima revisión programada."
+          },
+          "sub": "Portales de empleo públicos de empresas que contratan en China continental. Leemos el listado público de empleos de cada portal y conservamos los anuncios que se ubican allí. Cada empleo enlaza a la página de la propia empresa.",
+          "systems": "Podemos leer portales que usan {names}.",
+          "title": "Portales de empleo de empresas"
+        },
+        "empty": "Este sitio todavía no tiene ninguna fuente de empleos.",
+        "eyebrow": "Admin",
+        "facts": {
+          "boards": "Portales que leemos",
+          "boardsFailing": "{count, plural, one {# portal no se pudo leer la última vez} other {# portales no se pudieron leer la última vez}}",
+          "boardsValue": "{enabled} de {total} activados",
+          "held": "Empleos guardados pero no mostrados",
+          "lastRun": "Última revisión",
+          "never": "Todavía sin revisar",
+          "open": "Empleos que la gente puede ver ahora",
+          "written": "Empleos guardados en la última revisión"
+        },
+        "lastError": "La última revisión falló: {error}",
+        "loading": "Cargando…",
+        "name": {
+          "activejobs": "Active Jobs DB",
+          "activejobs_feed": "Listado de Active Jobs DB",
+          "ats_public": "Portales de empleo de empresas",
+          "bank": "Empleos de reclutadores de {sourceName}",
+          "jsearch": "JSearch",
+          "linkedin": "Búsqueda de empleos de LinkedIn",
+          "other": "{provider}",
+          "tw_gov_jobs": "Vacantes del sector público de Taiwán",
+          "tw_open_data": "Datos abiertos del gobierno de Taiwán",
+          "usajobs": "USAJOBS",
+          "user_import": "Empleos que la gente añade por su cuenta"
+        },
+        "notShown": {
+          "body": "{source} todavía no tiene una página pública para cada empleo, así que una persona no tendría dónde postularse. Mantenemos sus empleos al día y los mostramos cuando esa página exista. Para activarlo, define {variable} con la dirección de esa página.",
+          "count": "{count, plural, one {# empleo publicado está en espera} other {# empleos publicados están en espera}}",
+          "title": "Estos empleos están guardados pero no se muestran"
+        },
+        "pageSet": "Su página pública de empleos está definida. Cada empleo enlaza a esa página.",
+        "panelSub": "Cada fuente se revisa según su propio calendario. Los números son de la última revisión, no en vivo.",
+        "panelTitle": "De dónde vienen los empleos",
+        "panelTitleBrand": "De dónde vienen los empleos: {brand}",
+        "reason": {
+          "cross_tenant_unconfirmed": "No se ha confirmado la lectura de esta fuente para este sitio.",
+          "disabled": "Desactivada, o le falta la clave.",
+          "kill_switch": "Desactivada en los ajustes del servidor.",
+          "no_api_key": "No tiene definida una clave web.",
+          "no_key": "No tiene definida una clave.",
+          "not_configured": "No está configurada en este servidor.",
+          "not_registered": "No está disponible en este servidor.",
+          "other": "Desactivada ({code}).",
+          "plan_too_small": "Desactivada hasta que el plan permita al menos 20,000 anuncios al mes.",
+          "plan_unknown": "Desactivada. Todavía no se conoce el tamaño del plan: define FANTASTIC_MONTHLY_JOBS o espera la primera respuesta del proveedor.",
+          "quota": "En pausa: la cuota de su plan para este periodo se agotó, fue rechazada o se reserva para las búsquedas propias de las personas.",
+          "tls_required": "La conexión a su base de datos no está cifrada, así que no la abrimos.",
+          "tls_required_no_api_key": "La conexión a su base de datos no está cifrada y no hay una clave web definida, así que no podemos leerla.",
+          "transport_off": "Desactivada en los ajustes del servidor.",
+          "url_invalid": "La dirección definida para ella no es una que aceptemos, así que no se lee.",
+          "wrong_market": "No es una fuente para este sitio."
+        },
+        "refresh": "Actualizar",
+        "refreshing": "Actualizando…",
+        "skips": {
+          "bank_closed": "Cerrados por el reclutador: {count}",
+          "bank_no_company": "Sin empleador indicado: {count}",
+          "bank_no_public_page": "Sin página pública de empleo a la que enlazar: {count}",
+          "bank_page_cap": "Revisiones que se detuvieron en el límite de páginas: {count}",
+          "bank_pass_cut_short": "Revisiones que se quedaron sin tiempo: {count}",
+          "bank_reread_started": "Relecturas completas de la fuente iniciadas: {count}",
+          "bank_synced": "Empleos publicados con un empleador indicado: {count}",
+          "bank_test_posting": "Anuncios de prueba: {count}",
+          "bank_time_without_zone": "Horas enviadas sin zona horaria, leídas como hora de China: {count}",
+          "bank_unpublished": "Abiertos pero no publicados por el reclutador: {count}",
+          "bank_validity_ended": "Pasada la fecha de fin que fijó el reclutador: {count}",
+          "board_backlog": "Anuncios que aún faltan por leer: {count}",
+          "board_errors": "Portales que no se pudieron leer: {count}",
+          "boards_read": "Portales revisados: {count}",
+          "countedAt": "Contado en la revisión del {time}.",
+          "country_not_selected": "Ubicados en un país para el que no se lee este portal: {count}",
+          "indeed_only_link": "Omitidos porque el único enlace era a Indeed: {count}",
+          "linkedin_only_link": "Omitidos porque el único enlace era a LinkedIn: {count}",
+          "missing_title_or_company": "Sin título del puesto o sin nombre del empleador: {count}",
+          "no_apply_url": "Sin enlace para postularse: {count}",
+          "no_external_id": "Sin ID de anuncio de la fuente: {count}",
+          "none": "No se omitió nada en la última revisión.",
+          "normalize_failed": "No se pudieron leer: {count}",
+          "private_row": "Ya guardados en privado por una persona, se dejaron como están: {count}",
+          "title": "Lo que contó la última revisión",
+          "tw_absence_unproven": "No devueltos por las dos últimas lecturas diarias pero mantenidos abiertos, porque su condado no se pudo leer completo: {count}",
+          "tw_capped_county_major": "Solicitudes por condado y categoría de empleo que llegaron al límite de filas: {count}",
+          "tw_capped_leaf": "Solicitudes que llegaron al límite de filas y no se pudieron dividir más: {count}",
+          "tw_county_only": "Vacantes a las que la lectura diaria no llegó por distrito: {count}",
+          "tw_county_unreached": "Vacantes a las que no se llegó ni por distrito ni por categoría de empleo: {count}",
+          "tw_request_errors": "Solicitudes que fallaron: {count}",
+          "tw_skipped_position": "Partes de una lectura diaria abandonadas tras fallos repetidos: {count}",
+          "tw_sweep_finished": "Lecturas diarias terminadas: {count}",
+          "tw_sweep_incomplete": "Lecturas diarias que terminaron incompletas: {count}",
+          "wrong_market_cn": "Ubicados fuera de China continental: {count}",
+          "wrong_market_intl": "Ubicados en China continental, por lo que no son para este sitio: {count}"
+        },
+        "state": {
+          "off": "Desactivado",
+          "on": "Activado"
+        },
+        "sub": "De dónde obtiene este sitio sus empleos, qué hizo cada fuente en su última revisión y por qué se omitieron algunos anuncios.",
+        "title": "Fuentes de empleos",
+        "transport": {
+          "api": "Se lee por una conexión web segura",
+          "board_api": "Se lee del listado público de empleos de cada portal",
+          "db": "Se lee de su base de datos",
+          "off": "Sin conexión",
+          "rapidapi": "Servicio de búsqueda",
+          "syndication": "Se lee de su listado de empleos"
         }
       }
     }
@@ -3943,8 +4390,6 @@
     "agent_pending": "Planificando tu búsqueda y consultando las fuentes conectadas…",
     "cancel_search": "Detener búsqueda",
     "search_stopped": "La búsqueda se detuvo. Puedes modificar tu solicitud y volver a buscar.",
-    "linkedin_only": "Solo ofertas de LinkedIn",
-    "linkedin_hint": "Muestra solo puestos con procedencia de LinkedIn. La cobertura depende de las fuentes elegidas; esta búsqueda no abarca todas las ofertas de LinkedIn.",
     "advanced": "Filtros avanzados y fuentes",
     "overrides_hint": "Estos ajustes tienen prioridad sobre tu solicitud. Déjalos en automático para usar los detalles que describas.",
     "auto": "Según mi solicitud",
@@ -3962,8 +4407,8 @@
     "agent_unavailable": "El agente de búsqueda no está disponible temporalmente. Inténtalo otra vez; no se han generado resultados.",
     "request_review": "Tu solicitud de búsqueda",
     "agent_results_for": "Ofertas encontradas según tu solicitud",
-    "linkedin_empty": "Las fuentes elegidas no devolvieron ofertas de LinkedIn. Amplía los criterios o desactiva la búsqueda exclusiva de LinkedIn.",
-    "entry_hint": "Describe tu próximo trabajo y busca en las fuentes de empleo conectadas."
+    "entry_hint": "Describe tu próximo trabajo y busca en las fuentes de empleo conectadas.",
+    "intro": "Describe el trabajo que quieres. Tu solicitud se convierte en búsquedas concretas en las fuentes de empleo conectadas."
   },
   "jobSearchApi": {
     "eyebrow": "%BRAND% para desarrolladores",
@@ -4317,6 +4762,26 @@
       "turnOn": "Activar",
       "useCode": "Usar un código de la aplicación",
       "useRecovery": "Usar un código de recuperación en su lugar"
+    },
+    "prefs": {
+      "danger": {
+        "confirmKeyword": "BORRAR",
+        "signedOutNow": "Tu sesión se cierra en todas partes de inmediato."
+      },
+      "identity": {
+        "linkedin_invalid": "Usa el enlace de tu perfil de LinkedIn (linkedin.com/in/tu-nombre) o déjalo vacío.",
+        "name_ph": "Tu nombre",
+        "name_save_failed": "No se guardó tu nombre. Inténtalo otra vez.",
+        "pronouns_he": "él",
+        "pronouns_she": "ella",
+        "pronouns_they": "elle",
+        "years_unset": "Sin definir"
+      },
+      "security": {
+        "otherNote": "Inicias sesión sin contraseña, así que no hay ninguna contraseña que cambiar.",
+        "phoneNote": "Inicias sesión con un código enviado a tu teléfono, así que no hay ninguna contraseña que cambiar.",
+        "wechatNote": "Inicias sesión con WeChat, así que no hay ninguna contraseña que cambiar."
+      }
     }
   },
   "assistant": {
@@ -4456,7 +4921,9 @@
         "gaps": "Lo que podría reforzarse",
         "highlights": "Vale la pena mencionar",
         "missing": "Lo que pide el anuncio y tu currículum no muestra",
-        "title": "Tu encaje con este empleo"
+        "title": "Tu encaje con este empleo",
+        "openJob": "Ver tu encaje ahora",
+        "snapshot": "Este es tu encaje cuando se escribió esta respuesta. Cambia si cambian tu currículum o tu búsqueda."
       },
       "gaps": {
         "keys": {
@@ -4502,7 +4969,14 @@
         "range": "{min}–{max}",
         "seeAll": "Ver todos tus empleos",
         "title": "Empleos",
-        "upTo": "Hasta {amount}"
+        "upTo": "Hasta {amount}",
+        "addedByYou": "Añadido por ti",
+        "payAsStated": "Sueldo tal como se indica: {text}",
+        "workModel": {
+          "hybrid": "Híbrido",
+          "onsite": "Presencial",
+          "remote": "Remoto"
+        }
       },
       "memory": {
         "allow": "Permitir y recordar",
@@ -4524,7 +4998,8 @@
         "copilot_budget_exhausted": "El Asistente está ocupado en este momento. Inténtalo más tarde. No se cobró nada.",
         "credits_exhausted": "No te quedan mensajes del Asistente por hoy.",
         "proposal_expired": "Esta sugerencia venció. Vuelve a preguntar para recibir una nueva.",
-        "rate_limited": "Demasiados mensajes en poco tiempo. Espera un momento e inténtalo otra vez."
+        "rate_limited": "Demasiados mensajes en poco tiempo. Espera un momento e inténtalo otra vez.",
+        "stopped": "Detenido."
       },
       "proposalClosed": "Esta sugerencia ya no se puede usar. Vuelve a preguntar para recibir una nueva.",
       "proposalExpired": "Esta sugerencia venció. Vuelve a preguntar para recibir una nueva.",
@@ -4549,7 +5024,11 @@
       "tailorReady": {
         "open": "Abrir el currículum adaptado",
         "title": "Tu currículum adaptado está listo"
-      }
+      },
+      "applying": "Trabajando en ello…",
+      "inProgress": "Ya se está trabajando en esto. Si no aparece nada en un minuto, inténtalo otra vez.",
+      "notSaved": "Esta sugerencia no se guardó con su respuesta, así que no se puede usar. Vuelve a preguntar.",
+      "waitForAnswer": "Podrás usar esto cuando la respuesta termine."
     },
     "cheatsheet": {
       "groups": {
@@ -4592,7 +5071,10 @@
         }
       },
       "intro": "Elige una pregunta para ponerla en el cuadro. Cámbiala si quieres y luego presiona Enviar.",
-      "title": "Qué puedes preguntar"
+      "title": "Qué puedes preguntar",
+      "needsJob": "Estas preguntas son sobre un empleo. Abre un empleo y pregunta desde ahí.",
+      "needsJobHere": "Estas preguntas son sobre un empleo. Este chat no trata del empleo de esta página.",
+      "openJobs": "Abrir tus empleos"
     },
     "chipPrompts": {
       "cover_letter": "Escribe una carta de presentación para este empleo.",
@@ -4616,11 +5098,15 @@
       "placeholder": "Pregunta sobre empleos, tu búsqueda, tu currículum o una entrevista",
       "send": "Enviar",
       "stop": "Detener",
-      "tooLong": "Usa menos de {max} caracteres."
+      "tooLong": "Usa menos de {max} caracteres.",
+      "placeholderShort": "Haz una pregunta"
     },
     "context": {
       "job": "Sobre este empleo",
-      "resume": "Sobre este currículum"
+      "resume": "Sobre este currículum",
+      "askPageJob": "Nuevo chat sobre este empleo",
+      "noJob": "Este chat no trata del empleo de esta página.",
+      "otherJob": "Este chat trata de otro empleo."
     },
     "empty": {
       "body": "Las respuestas usan tu perfil, tu búsqueda guardada y los empleos de tu lista. Cualquier cambio se te muestra primero y solo se hace cuando lo confirmas.",
@@ -4753,13 +5239,20 @@
       "propose_filter_change": "Preparando un cambio para tu búsqueda…",
       "salary_context": "Leyendo los sueldos publicados…",
       "search_jobs": "Buscando empleos…",
-      "top_fit_jobs": "Buscando los empleos que mejor encajan contigo…"
+      "top_fit_jobs": "Buscando los empleos que mejor encajan contigo…",
+      "added_jobs": "Revisando los empleos que añadiste…",
+      "show_jobs": "Armando la lista…",
+      "similar_jobs": "Buscando empleos similares…"
     },
     "voice": {
       "blocked": "El acceso al micrófono está bloqueado en este navegador.",
       "listening": "Escuchando…",
       "start": "Dictar tu pregunta",
-      "stop": "Dejar de escuchar"
+      "stop": "Dejar de escuchar",
+      "vendorNotice": "Tu navegador convierte tu voz en texto con su propio servicio de voz. El fabricante del navegador procesa el audio, y eso puede ocurrir fuera de China continental."
+    },
+    "jobList": {
+      "title": "Empleos mencionados en esta respuesta"
     }
   },
   "brand": {
@@ -5116,7 +5609,9 @@
       "resumePrimary": "{name} (principal)",
       "submit": "Escribir la carta",
       "title": "Escribir una carta de presentación",
-      "writing": "Escribiendo y revisando tu carta. Puede tardar hasta un minuto."
+      "writing": "Escribiendo y revisando tu carta. Puede tardar hasta un minuto.",
+      "resumeError": "No se cargaron tus currículums. No se perdió nada.",
+      "resumeRetry": "Reintentar"
     },
     "hub": {
       "backToResumes": "Volver a los currículums",
@@ -5260,6 +5755,205 @@
         "sub": "Ingresos de este año con tarjetas de Taiwán, comparados con el nivel de NT$600,000 a partir del cual el registro del IVA es obligatorio.",
         "title": "Ingresos con tarjetas de Taiwán",
         "warn": "Los ingresos superan el {pct}% del nivel de registro del IVA. Planifica el registro ahora."
+      },
+      "practiceCost": {
+        "average": "Costo promedio por sesión (USD)",
+        "brand": "Marca",
+        "loadError": "No pudimos cargar el costo.",
+        "loading": "Cargando…",
+        "notEnough": "Todavía no hay suficientes sesiones ({n} de {min})",
+        "range": "Primera y última sesión",
+        "rangeValue": "{from} a {to}",
+        "ruleNote": "Los promedios de arriba están en dólares estadounidenses y no se convierten. Un precio nuevo es un valor predeterminado del catálogo por marca.",
+        "ruleTitle": "La regla del propietario",
+        "rules": {
+          "goapply": "Por encima de unos ¥3.5 por sesión, pasa los paquetes a ¥39 y ¥99.",
+          "roboapply": "Por encima de $1.00 por sesión, cambia el precio del paquete de 15 a $27.99."
+        },
+        "sample": "Sesiones contadas",
+        "sampleValue": "{n} (como máximo las últimas {max})",
+        "sub": "Lo que nos cuesta en promedio una entrevista de práctica, según las últimas sesiones de cada marca. La cifra está en dólares estadounidenses, tal como se registra el costo.",
+        "title": "Costo de la práctica"
+      },
+      "refunds": {
+        "cn": {
+          "already": "Ya se registró un reembolso para el pedido {order}. No se registra dos veces.",
+          "amount": "Importe",
+          "cancel": "Cancelar",
+          "channel": "Pagado con",
+          "channels": {
+            "alipay": "Alipay",
+            "wechatpay": "WeChat Pay"
+          },
+          "check": "Revisar el registro",
+          "checkHint": "No se retiró ningún acceso por este reembolso. Si el pase o el paquete sigue ahí, revisa el registro para terminarlo.",
+          "checkLabel": "Revisar el registro del reembolso del pedido {order}",
+          "checking": "Revisando…",
+          "date": "Completado",
+          "empty": "No hay pedidos completados de China continental para esta persona.",
+          "entitlement": {
+            "none": "No se cambió ningún acceso.",
+            "pack_zeroed": "Se quitaron las entrevistas de práctica que quedaban de este paquete.",
+            "pass_ended": "El pase terminó.",
+            "pass_shortened": "El pase se acortó en los días que añadió este pedido."
+          },
+          "errors": {
+            "generic": "No pudimos terminar de registrar el reembolso. Inténtalo otra vez. Un reembolso nunca se registra dos veces.",
+            "invalid_request": "Revisa el motivo y el importe.",
+            "not_found": "No existe ese pedido completado.",
+            "order_not_completed": "Este pedido nunca se completó, así que no hay ningún pago que reembolsar."
+          },
+          "formTitle": "Registrar un reembolso del pedido {order}",
+          "invalidAmount": "Escribe el importe en yuanes, por ejemplo 12 o 12.50, y que no sea mayor que el del pedido.",
+          "loadError": "No pudimos cargar los pedidos.",
+          "loading": "Cargando…",
+          "moneyReturned": "El dinero se devolvió en la consola del comercio",
+          "order": "Pedido",
+          "partialAmount": "Importe devuelto en yuanes, si es menor que el pedido completo (déjalo vacío para el pedido completo)",
+          "plan": "Plan",
+          "reason": "Motivo",
+          "record": "Registrar reembolso",
+          "recordLabel": "Registrar reembolso del pedido {order}",
+          "recorded": "Reembolso registrado para el pedido {order}.",
+          "refund": "Reembolso",
+          "refunded": {
+            "full": "Reembolso registrado",
+            "partial": "Reembolso parcial registrado"
+          },
+          "save": "Registrar reembolso",
+          "saving": "Registrando…",
+          "sub": "Los reembolsos de Alipay y WeChat Pay se hacen en la consola del comercio, no aquí. Primero devuelve el dinero allí y después regístralo. Registrar un reembolso completo termina ese pase o quita lo que queda de ese paquete, una sola vez.",
+          "title": "Pedidos de China continental"
+        },
+        "facts": {
+          "country": "País de facturación",
+          "loadError": "No pudimos cargar la revisión del reembolso.",
+          "no": "No",
+          "notFound": "No hay ningún usuario con este ID.",
+          "packUsed": "Entrevistas de práctica usadas de este paquete",
+          "paidOnlyUsed": "Acciones que requieren Pro, usadas desde el cobro",
+          "paidThrough": "Pagado con",
+          "prorata": "Días usados del periodo pagado",
+          "prorataValue": "{used} de {period}",
+          "source": {
+            "cn": "Alipay o WeChat Pay",
+            "stripe": "Tarjeta"
+          },
+          "title": "Último cobro y reglas de reembolso",
+          "waiver": "Casilla «Empezar ahora» marcada al pagar",
+          "yes": "Sí"
+        },
+        "list": {
+          "access": "Acceso",
+          "amount": "Importe",
+          "amountValue": "{amount} ({share})",
+          "by": "Por",
+          "date": "Fecha",
+          "disputeFlag": "{count, plural, one {# disputa registrada: el banco recuperó el dinero. Revisa esta cuenta.} other {# disputas registradas: el banco recuperó el dinero. Revisa esta cuenta.}}",
+          "empty": "No hay nada registrado para esta persona.",
+          "full": "completo",
+          "kept": "Sin cambios",
+          "kind": "Tipo",
+          "kinds": {
+            "dispute": "Disputa",
+            "manual_cn": "Registrado a mano",
+            "other": "Otro",
+            "refund": "Reembolso",
+            "withdrawal": "Desistimiento"
+          },
+          "loadError": "No pudimos cargar los reembolsos.",
+          "loading": "Cargando…",
+          "more": "Mostrar más",
+          "moreError": "No pudimos cargar más. Inténtalo otra vez.",
+          "partial": "parcial",
+          "reason": "Motivo",
+          "ref": "Referencia",
+          "refresh": "Actualizar",
+          "refreshError": "No pudimos actualizar la lista. Lo que ves puede estar desactualizado.",
+          "refreshLabel": "Actualizar la lista de reembolsos, desistimientos y disputas",
+          "refreshing": "Actualizando…",
+          "reversed": "Retirado",
+          "title": "Reembolsos, desistimientos y disputas"
+        },
+        "pick": "Escribe un ID de usuario para empezar.",
+        "show": "Mostrar",
+        "stripe": {
+          "amount": "Importe (déjalo vacío para reembolsar todo lo que aún se pueda reembolsar)",
+          "amountAsTyped": "{amount} en la moneda del cobro",
+          "amountHelp": "En la moneda del cobro, por ejemplo 10.00.",
+          "back": "Volver",
+          "confirm": "Reembolsar ahora",
+          "confirmAmount": "Importe",
+          "confirmReason": "Motivo",
+          "confirmTarget": "Cobro",
+          "confirmTitle": "¿Reembolsar este cobro?",
+          "confirmUser": "Usuario",
+          "done": "Reembolsado: {amount}. El acceso cambia cuando Stripe confirma el reembolso.",
+          "doneFull": "No queda nada por reembolsar de este cobro.",
+          "doneNoAmount": "Se envió el reembolso. El acceso cambia cuando Stripe confirma el reembolso.",
+          "donePartial": "Una parte de este cobro no se ha reembolsado.",
+          "errors": {
+            "generic": "El reembolso no se realizó. Revisa la lista de abajo antes de intentarlo de nuevo.",
+            "not_found": "No existe ese usuario, factura ni sesión de pago.",
+            "payment_provider_error": "Stripe no confirmó el reembolso. Revisa la lista de abajo antes de intentarlo de nuevo.",
+            "rail_not_configured": "Los pagos con tarjeta no están configurados aquí, así que no se puede enviar ningún reembolso.",
+            "refund_not_available": "Este cobro no se puede reembolsar: pertenece a otra persona, ya se reembolsó por completo o el importe es mayor que lo que queda."
+          },
+          "everything": "Todo lo que aún se pueda reembolsar",
+          "invalid": "Revisa qué reembolsar, el importe y el motivo.",
+          "pending": "Reembolsando…",
+          "reason": "Motivo",
+          "review": "Revisar reembolso",
+          "sub": "El dinero vuelve a la tarjeta con la que se pagó. El acceso no cambia aquí: cambia cuando Stripe confirma el reembolso, normalmente en menos de un minuto. Un reembolso completo retira lo que compró el cobro. Un reembolso parcial no cambia ningún acceso.",
+          "target": "Qué reembolsar",
+          "targetId": "ID de la factura o de la sesión de pago",
+          "targetIdHelp": "Empieza con in_ o cs_.",
+          "targetLatest": "El último cobro: {amount} el {date}",
+          "targetOther": "Otra factura o sesión de pago",
+          "title": "Reembolso con Stripe"
+        },
+        "sub": "Busca a una persona para ver qué dicen las reglas de reembolso sobre su último cobro, reembolsar un cobro con tarjeta, ver sus reembolsos, desistimientos y disputas, y registrar el reembolso de un pedido de China continental.",
+        "title": "Reembolsos",
+        "userId": "ID de usuario"
+      },
+      "stripe": {
+        "endpoint": "Endpoint del webhook",
+        "endpointNone": "Ningún endpoint de webhook de Stripe apunta a este sitio. Añade uno en Stripe.",
+        "events": "Eventos que el endpoint no envía",
+        "eventsMissing": "{count, plural, one {Falta # evento. Añádelo al endpoint en Stripe.} other {Faltan # eventos. Añádelos al endpoint en Stripe.}}",
+        "eventsNeeded": "{count, plural, one {El endpoint necesita este # evento:} other {El endpoint necesita estos # eventos:}}",
+        "eventsNone": "Ninguno. El endpoint envía todos los eventos con los que actúa el sitio.",
+        "key": "Clave",
+        "keyModes": {
+          "live": "Clave de producción",
+          "none": "Sin clave",
+          "test": "Clave de prueba",
+          "unknown": "No indicada"
+        },
+        "loadError": "No pudimos cargar el estado de Stripe.",
+        "loading": "Cargando…",
+        "no": "No",
+        "notChecked": "No se pudo comprobar.",
+        "notCheckedReason": {
+          "error": "Stripe no respondió.",
+          "no_key": "No hay ninguna clave que se pueda usar aquí.",
+          "restricted_key": "Esta clave no tiene permiso para leer los endpoints de webhook."
+        },
+        "pinned": "Planes con precio fijado",
+        "pinnedNone": "Ninguno",
+        "rail": "Pagos con tarjeta",
+        "railNotReady": "No está listo",
+        "railReady": "Listo",
+        "refused": {
+          "live_key_outside_production": "Una clave de producción se rechaza fuera de producción, así que aquí no se puede hacer ningún pago con tarjeta ni ningún reembolso.",
+          "missing": "No hay ninguna clave configurada.",
+          "unknown": "La clave no se puede usar aquí."
+        },
+        "secrets": "Secretos de firma del webhook",
+        "sub": "Si aquí se pueden aceptar pagos con tarjeta y si Stripe envía todos los eventos con los que actúa el sitio. Aquí no se muestra ninguna clave ni ningún secreto.",
+        "title": "Stripe",
+        "usable": "La clave se puede usar aquí",
+        "yes": "Sí"
       }
     },
     "badge": {
@@ -5332,7 +6026,23 @@
       "signedIn": "Tienes la sesión iniciada, así que también puedes cancelar en los ajustes.",
       "sub": "No necesitas iniciar sesión. Escribe el correo de tu cuenta y te enviaremos un enlace que cancela con un solo clic.",
       "title": "Cancelar una suscripción",
-      "tokenInvalid": "Este enlace venció o ya se usó. Pide uno nuevo aquí abajo."
+      "tokenInvalid": "Este enlace venció o ya se usó. Pide uno nuevo aquí abajo.",
+      "cancelChoiceButton": "Cancelar al final del periodo",
+      "cancelChoiceSub": "La renovación se detiene ahora. Conservas Pro hasta el {date}.",
+      "cancelChoiceSubNoDate": "La renovación se detiene ahora. Conservas Pro hasta el final del periodo que pagaste.",
+      "cancelChoiceTitle": "Cancelar al final del periodo",
+      "cancelledInstead": "En su lugar, cancelamos tu suscripción al final del periodo. Conservas Pro hasta el {date}. Te enviamos una confirmación por correo.",
+      "cancelledInsteadNoDate": "En su lugar, cancelamos tu suscripción al final del periodo. Conservas Pro hasta el final del periodo que pagaste. Te enviamos una confirmación por correo.",
+      "checking": "Revisando tu enlace…",
+      "choose": "Este enlace puede hacer una de dos cosas. Elige una.",
+      "withdrawButton": "Desistir del contrato y reembolsar {amount}",
+      "withdrawChoiceSub": "El plan termina de inmediato y te reembolsamos {amount}. Puedes hacerlo hasta el {date}.",
+      "withdrawChoiceTitle": "Desistir del contrato",
+      "withdrawGone": "Ya no se puede desistir de esta compra.",
+      "withdrawProrata": "Pediste empezar de inmediato, así que el reembolso cubre los días que no usaste.",
+      "withdrawing": "Desistiendo…",
+      "withdrawn": "Desististe del contrato. El plan terminó y te estamos reembolsando {amount}. Te llegará un correo de confirmación.",
+      "withdrawnNoAmount": "Desististe del contrato. El plan terminó. Tu reembolso y un correo de confirmación están en camino."
     },
     "cap": {
       "free": "{cap} {window, select, day {al día} week {a la semana} other {al mes}}",
@@ -5388,11 +6098,9 @@
       "continue": "Continuar al pago",
       "continuing": "Abriendo la página de pago…",
       "empty": "Ahora mismo no hay planes a la venta.",
-      "emptyCn": "Los planes de pago todavía no están disponibles.",
       "error": "No pudimos abrir la página de pago. No se cobró nada. Inténtalo otra vez.",
       "loadError": "No pudimos cargar los planes.",
       "loading": "Cargando planes…",
-      "manageInPortal": "Para cambiar cada cuánto se renueva Pro, usa «Administrar pago».",
       "notAvailable": "Todavía no disponible",
       "packGroup": "Paquetes de práctica",
       "proGroup": "Pro",
@@ -5401,7 +6109,21 @@
       "title": "Planes",
       "withdrawalAck": "Empezar ahora: entiendo que pierdo mi derecho de desistimiento en cuanto use las funciones de pago.",
       "withdrawalHelp": "Si dejas esta casilla sin marcar, puedes obtener un reembolso completo en un plazo de 14 días.",
-      "yourPlan": "Tu plan"
+      "yourPlan": "Tu plan",
+      "cnVisitor": "¿Estás en China continental? <link>Puedes pagar en RMB con Alipay en %OTHER_BRAND%.</link>",
+      "notOpen": "Estos son los precios. El pago todavía no está abierto, así que por ahora no se puede comprar nada.",
+      "portalScope": "«Administrar pago» sirve para tu método de pago, tus facturas y tus datos de facturación. Para cambiar de plan, elige otro aquí.",
+      "railGroup": "Pagar con",
+      "railHint": {
+        "alipay": "Pagas en la página de Alipay.",
+        "stripe": "Pagas en la página de pago con tarjeta.",
+        "wechatpay": "Escaneas un código o pagas dentro de WeChat."
+      },
+      "rails": {
+        "alipay": "Alipay",
+        "stripe": "Tarjeta",
+        "wechatpay": "WeChat Pay"
+      }
     },
     "plans": {
       "goapply": {
@@ -5410,7 +6132,9 @@
         "practice_pack_5": "Paquete de práctica (5 entrevistas)",
         "pro_monthly": "Pase de miembro de 30 días",
         "pro_quarterly": "Pase de miembro de 90 días",
-        "pro_week_pass": "Pase de miembro de una semana"
+        "pro_week_pass": "Pase de miembro de una semana",
+        "student_monthly": "Pase de estudiante de 30 días",
+        "student_quarterly": "Pase de estudiante de 90 días"
       },
       "legacy": "Plan de práctica (anterior)",
       "roboapply": {
@@ -5445,7 +6169,9 @@
       "note": "No se cobra nada hasta que confirmes.",
       "renewalPrice": "Después",
       "title": "Cambiar a {plan}",
-      "today": "Se cobra hoy"
+      "today": "Se cobra hoy",
+      "requiresAction": "Tu banco necesita que confirmes este pago. Tu plan todavía no cambió.",
+      "requiresActionCta": "Confirmar el pago"
     },
     "renewsNote": "Se renueva cada {period, select, week {semana} month {mes} other {3 meses}} hasta que canceles.",
     "retry": "Reintentar",
@@ -5476,7 +6202,87 @@
       "resets": "Se restablecen: {when}",
       "sub": "Los créditos no se acumulan; cada línea muestra cuándo se restablece. Solo usas un crédito cuando una acción funciona.",
       "title": "Tus créditos",
-      "used": "{n, plural, one {# usado} other {# usados}}"
+      "used": "{n, plural, one {# usado} other {# usados}}",
+      "usedPractice": "{n, plural, one {# crédito de práctica usado} other {# créditos de práctica usados}}"
+    },
+    "busy": "No pudimos iniciar esto ahora mismo. Inténtalo de nuevo en unos instantes.",
+    "history": {
+      "channel": {
+        "alipay": "Alipay",
+        "wechatpay": "WeChat Pay"
+      },
+      "loadingMore": "Cargando…",
+      "more": "Mostrar más",
+      "moreError": "No pudimos cargar más. Inténtalo otra vez.",
+      "refunded": {
+        "full": "Reembolsado",
+        "partial": "Reembolso parcial"
+      },
+      "status": {
+        "uncollectible": "Sin pagar",
+        "unknown": "Estado desconocido"
+      }
+    },
+    "pricing": {
+      "refund": {
+        "first": "Primera compra: puedes obtener un reembolso dentro de {days, plural, one {# día} other {# días}} (facturación semanal y pase de una semana: dentro de {hours, plural, one {# hora} other {# horas}}) si usaste menos de {limit} acciones que requieren Pro.",
+        "packs": "Paquetes de práctica: puedes obtener un reembolso mientras no se haya usado ninguna entrevista del paquete. Un paquete sigue siendo válido durante {months, plural, one {# mes} other {# meses}}.",
+        "renewal": "Una renovación cobrada por error: puedes obtener un reembolso dentro de {days, plural, one {# día} other {# días}} del cobro.",
+        "withdrawal": "En la UE, el EEE, el Reino Unido y Taiwán puedes desistir dentro de {days, plural, one {# día} other {# días}}. Recibes un reembolso completo si no nos pediste empezar de inmediato. Si lo pediste, una suscripción se reembolsa por los días que no usaste. Desistir termina la suscripción de inmediato."
+      },
+      "samePriceAsWeekly": "Mismo precio que la facturación semanal. El pase no se renueva; la facturación semanal sí.",
+      "studentOffer": {
+        "how": "El precio de estudiante es para quienes confirman un correo de su centro de estudios en Ajustes. Los planes de estudiante aparecen allí una vez confirmado el correo.",
+        "row": "{name}: {price}.",
+        "title": "Precio de estudiante"
+      }
+    },
+    "resume": {
+      "button": "Conservar mi plan",
+      "done": "La renovación está activada de nuevo.",
+      "ended": "Este plan ya terminó. Elige un plan abajo.",
+      "error": "No pudimos volver a activar la renovación. Inténtalo otra vez.",
+      "pending": "Volviendo a activar la renovación…"
+    },
+    "withdraw": {
+      "back": "Conservar esta compra",
+      "checkError": "No pudimos comprobar si todavía puedes desistir de una compra reciente.",
+      "confirmButton": "Desistir y reembolsar {amount}",
+      "confirmRefund": "Te reembolsamos {amount} al método de pago con el que pagaste.",
+      "confirmTitle": "¿Desistir de {plan}?",
+      "done": "Desististe de {plan}. Te estamos reembolsando {amount}. Te llegará un correo de confirmación.",
+      "doneNoAmount": "Desististe de {plan}. Tu reembolso y un correo de confirmación están en camino.",
+      "ended": {
+        "other": "Lo que te dio esta compra terminó.",
+        "pack": "Las entrevistas de práctica que quedaban de este paquete se quitan en cuanto se registre el reembolso.",
+        "pass": "Los días que te dio este pase terminan en cuanto se registre el reembolso.",
+        "subscription": "Tu suscripción terminó, así que Pro está desactivado."
+      },
+      "ends": {
+        "other": "Lo que te da esta compra termina de inmediato.",
+        "pack": "Las entrevistas de práctica que quedan de este paquete se quitan de inmediato.",
+        "pass": "Los días que te da este pase terminan de inmediato.",
+        "subscription": "Tu suscripción termina de inmediato y Pro se detiene al instante."
+      },
+      "entryLabel": "{label}: {plan}",
+      "errors": {
+        "generic": "No se completó el desistimiento. Inténtalo otra vez.",
+        "notConfigured": "Los pagos con tarjeta no están configurados aquí, así que no podemos enviar el reembolso. No cambió nada.",
+        "provider": "El proveedor de pagos no confirmó el desistimiento. Inténtalo otra vez. Nada se reembolsa dos veces.",
+        "rateLimited": "Lo intentaste varias veces seguidas. Espera un rato e inténtalo otra vez.",
+        "unavailable": "Ya no se puede desistir de esta compra."
+      },
+      "intro": "{count, plural, one {Todavía puedes desistir de la compra de abajo.} other {Todavía puedes desistir de las compras de abajo.}} Desistir reembolsa el importe indicado y termina de inmediato lo que dio la compra.",
+      "label": "Desistir del contrato",
+      "lastDay": "Puedes desistir hasta el {date}.",
+      "paid": "Pagado hasta ahora: {amount}. Comprado el {date}.",
+      "paidNoDate": "Pagado hasta ahora: {amount}.",
+      "pending": "Desistiendo…",
+      "prorata": "Pediste empezar de inmediato, así que el reembolso cubre los {unused} de {periodDays} días que no usaste.",
+      "refreshError": "No pudimos comprobar el importe del reembolso en este momento. Inténtalo otra vez.",
+      "refreshing": "Comprobando el importe del reembolso…",
+      "refund": "Reembolso si desistes ahora: {amount}.",
+      "unknownPlan": "Tu compra"
     }
   },
   "extensionWeb": {
@@ -5637,7 +6443,12 @@
       "sponsorshipNeeded": "Necesito patrocinio",
       "yearsMax": "Hasta {max} años",
       "yearsMin": "{min}+ años",
-      "yearsValue": "{min}–{max} años"
+      "yearsValue": "{min}–{max} años",
+      "anywhereIn": "En cualquier lugar de {country}",
+      "cleared": "Se quitaron los filtros.",
+      "shiftValue": "Turno: {shift}",
+      "sponsorshipNotNeeded": "No necesito patrocinio",
+      "undo": "Deshacer"
     },
     "controls": {
       "add": "Añadir",
@@ -5728,7 +6539,10 @@
       "taxonomyIds": "Área de trabajo",
       "titles": "Puestos",
       "workModels": "Modalidad de trabajo",
-      "yearsRange": "Años de experiencia que piden"
+      "yearsRange": "Años de experiencia que piden",
+      "twDistricts": "Distritos",
+      "twDistrictsOf": "Distritos de {county}",
+      "workShifts": "Turno"
     },
     "fit": {
       "hiding": "{count, plural, one {Se oculta # empleo que encaja menos} other {Se ocultan # empleos que encajan menos}}.",
@@ -5751,7 +6565,12 @@
       "skills": "Empleos que piden alguna de estas habilidades.",
       "taxonomyIds": "Elige un área o un puesto concreto. Escribe al menos 2 letras.",
       "titles": "Empleos cuyo puesto coincide con alguno de estos.",
-      "yearsRange": "Los empleos que no indican cuántos años piden siguen en tu lista."
+      "yearsRange": "Los empleos que no indican cuántos años piden siguen en tu lista.",
+      "twDistricts": "Muestra solo los empleos cuyo anuncio indica en qué distrito están. Los empleos que no nombran ningún distrito se dejan fuera.",
+      "twDistrictsFull": "Puedes elegir hasta {max} distritos. Quita uno para añadir otro.",
+      "twDistrictsOnly": "Solo se muestran los distritos que elegiste. Los empleos de tus otros lugares se dejan fuera.",
+      "twPay": "En Taiwán, la mayoría de los anuncios que indican el sueldo vienen de 台灣就業通. Los anuncios que se encuentran con la búsqueda de empleo rara vez lo indican, así que se dejan fuera cuando «Solo empleos que indican el sueldo» está activado. El sueldo mensual se muestra tal como lo indica el anuncio.",
+      "workShifts": "Muestra solo los empleos cuyo anuncio indica el turno. La mayoría vienen de 台灣就業通, así que la lista se acorta."
     },
     "hunt": {
       "moved": "Los filtros de puesto, lugar, sueldo, empresa y sector ahora están en tus búsquedas guardadas, aquí abajo, para que la lista de empleos y las alertas usen los mismos filtros."
@@ -5837,6 +6656,13 @@
         "hybrid": "Híbrido",
         "onsite": "Presencial",
         "remote": "Remoto"
+      },
+      "workShifts": {
+        "day": "Día",
+        "evening": "Tarde",
+        "night": "Noche",
+        "part_time": "Horario parcial",
+        "rotating": "Rotativo"
       }
     },
     "quick": {
@@ -5958,7 +6784,9 @@
         "visa_not_offered": "El anuncio dice que no se ofrece patrocinio: «{text}»",
         "visa_not_offered_plain": "El anuncio dice que no se ofrece patrocinio",
         "visa_offered": "El anuncio dice que se ofrece patrocinio: «{text}»",
-        "visa_offered_plain": "El anuncio dice que se ofrece patrocinio"
+        "visa_offered_plain": "El anuncio dice que se ofrece patrocinio",
+        "logistics_by_your_filters": "Esto ya coincide con los filtros que configuraste, así que no cambia la puntuación: {text}",
+        "skill_related": "Piden {text} y tu currículum muestra una habilidad relacionada"
       },
       "intro": "La puntuación se compone de cinco partes. Cada una muestra lo que encontramos en tu currículum y en el anuncio.",
       "keys": {
@@ -5968,14 +6796,17 @@
         "skills": "Las habilidades que piden",
         "title_level": "El puesto y el nivel"
       },
-      "notStated": "No hay suficiente para comparar, así que no cuenta para la puntuación.",
       "partLabel": "{label}: {score} / 100",
       "source": {
         "posting": "Del anuncio",
         "resume": "De tu currículum"
       },
       "title": "Qué comparamos",
-      "weight": "Peso {weight}"
+      "weight": "Peso {weight}",
+      "byFilters": "No se comparó. Los filtros que configuraste ya cubren esta parte.",
+      "notCompared": "No hay suficiente para comparar.",
+      "notComparedAi": "No hay suficiente para comparar, así que esta parte queda fuera de la puntuación.",
+      "notComparedEstimate": "No hay suficiente para comparar, así que esta parte se cuenta con un valor típico."
     },
     "degree": {
       "associate": "Título técnico superior",
@@ -5989,8 +6820,6 @@
       "error": "No pudimos hacer la revisión de palabras clave. Inténtalo otra vez.",
       "intro": "Requisitos del anuncio, comparados con tu currículum. Son las mismas partes que usa la puntuación de encaje.",
       "loading": "Revisando tu currículum…",
-      "mentioned": "Aparece en tu currículum",
-      "notMentioned": "No aparece en tu currículum",
       "required": "Obligatorio",
       "rows": {
         "education": "Formación",
@@ -6004,20 +6833,38 @@
         "not_met": "No se cumple",
         "not_stated": "No se indica en el anuncio",
         "partly": "Se cumple en parte",
-        "unknown": "No se ve en tu currículum"
+        "unknown": "No se ve en tu currículum",
+        "not_checked": "Todavía sin revisar"
       },
       "title": "Revisión de palabras clave",
       "titleHave": "Tu puesto reciente: {have}",
       "titleNeed": "El anuncio: {need}",
       "yearsHave": "Tu currículum muestra unos {have} años",
-      "yearsNeed": "Piden {need} años o más"
+      "yearsNeed": "Piden {need} años o más",
+      "add": {
+        "action": "Abrir tu currículum para este empleo",
+        "note": "¿Tienes alguna de estas? Añade tú las palabras exactas a tu currículum. No se añade nada por ti.",
+        "resume": "Abrir tu currículum"
+      },
+      "countStates": "{shown} aparecen, {related} relacionadas, de {total}",
+      "quote": "«{text}»",
+      "state": {
+        "not_shown": "No aparece en tu currículum",
+        "related": "Relacionado: tu currículum muestra {term}",
+        "relatedPlain": "Relacionado: tu currículum muestra algo parecido",
+        "shown": "Aparece en tu currículum"
+      },
+      "unchecked": "{count, plural, one {# habilidad más del anuncio todavía no se revisó.} other {# habilidades más del anuncio todavía no se revisaron.}}",
+      "uncheckedAll": "{count, plural, one {La habilidad del anuncio todavía no se revisó.} other {Las # habilidades del anuncio todavía no se revisaron.}}"
     },
     "loading": "Comparando tu currículum con este empleo…",
     "missing": {
-      "empty": "Tu currículum o tu perfil menciona todas las habilidades que indica este anuncio.",
       "noSkillsListed": "Este anuncio no indica habilidades concretas que revisar.",
       "skillsHeading": "El anuncio indica estas habilidades, y tu currículum y tu perfil no las mencionan:",
-      "title": "Lo que te falta"
+      "title": "Lo que te falta",
+      "emptyCompared": "Tu currículum o tu perfil muestra todas las habilidades que comparamos para este anuncio.",
+      "noneChecked": "{count, plural, one {La habilidad de este anuncio todavía no se compara con tu currículum.} other {Las # habilidades de este anuncio todavía no se comparan con tu currículum.}}",
+      "unchecked": "{count, plural, one {# habilidad más del anuncio todavía no se revisó.} other {# habilidades más del anuncio todavía no se revisaron.}}"
     },
     "quickEstimate": "Estimación rápida",
     "quickEstimateWhy": {
@@ -6043,7 +6890,35 @@
       "empty": "Ninguna de las habilidades que indica este anuncio aparece en tu currículum ni en tu perfil.",
       "haveSkills": "El anuncio indica estas habilidades, y tu currículum o tu perfil las menciona:",
       "noSkillsListed": "Este anuncio no indica habilidades concretas que comparar.",
-      "title": "Por qué encajas"
+      "title": "Por qué encajas",
+      "notChecked": "Las habilidades que indica este anuncio todavía no se comparan con tu currículum."
+    },
+    "confidence": {
+      "reason": {
+        "few_details": "Este anuncio dice muy poco para comparar",
+        "no_level_stated": "Este anuncio no indica un nivel",
+        "no_role_evidence": "Tu currículum no muestra ningún puesto para comparar",
+        "no_skills_listed": "Este anuncio no enumera habilidades"
+      }
+    },
+    "otherLanguage": {
+      "failed": "No pudimos reescribirlo. Inténtalo otra vez.",
+      "note": "Las partes escritas de este análisis están en otro idioma. La puntuación es la misma.",
+      "rewrite": "Reescribirlas en este idioma",
+      "rewriting": "Reescribiendo…"
+    },
+    "requirements": {
+      "count": "{met} cumplidos, {partly} en parte, {notShown} no aparecen, de {total}",
+      "intro": "Cada línea está copiada del anuncio y comparada con tu currículum.",
+      "must": "Obligatorio",
+      "note": "La IA comparó cada línea con tu currículum. Revísalo antes de confiar en el resultado.",
+      "preferred": "Deseable",
+      "status": {
+        "met": "Se cumple",
+        "not_shown": "No aparece en tu currículum",
+        "partly": "Se cumple en parte"
+      },
+      "title": "Lo que pide el anuncio"
     }
   },
   "growth": {
@@ -6251,6 +7126,11 @@
       "surveyFailed": "Tu respuesta no se envió. Inténtalo otra vez.",
       "surveyTitle": "¿Por qué te diste de baja? (opcional)",
       "thanks": "Gracias por contarnos."
+    },
+    "alertJobs": {
+      "item": "{title} en {company}",
+      "label": "Empleos de esta alerta",
+      "more": "{count, plural, one {Y # empleo más en la lista.} other {Y # empleos más en la lista.}}"
     }
   },
   "invite": {
@@ -6405,9 +7285,10 @@
     "close": "Cerrar",
     "closed": {
       "kept": "Todo lo que guardaste para este empleo sigue en Candidaturas.",
-      "lastSeen": "Visto por última vez el {date}.",
       "similarTitle": "Empleos similares a los que todavía puedes postularte",
-      "title": "Este empleo ya no está publicado"
+      "title": "Este empleo ya no está publicado",
+      "boardCheck": "Revisamos el portal de empleo del empleador cuando abriste esta página. Ya no lista este empleo.",
+      "lastListed": "Lo vimos publicado por última vez el {date}."
     },
     "company": {
       "fact": {
@@ -6441,7 +7322,8 @@
       "badge": {
         "direct_from_employer": "Directo del empleador",
         "new": "Nuevo",
-        "sponsorship": "Patrocinio de visa"
+        "sponsorship": "Patrocinio de visa",
+        "sponsorship_provider": "{provider} indica patrocinio de visa"
       },
       "employmentType": {
         "contract": "Por contrato",
@@ -6659,7 +7541,8 @@
         "bookmarked": "Guardada",
         "interviewing": "En entrevistas",
         "negotiating": "Oferta",
-        "withdrawn": "Retirada"
+        "withdrawn": "Retirada",
+        "rejected": "Rechazada"
       },
       "typed": "Escrito por ti",
       "warning": "{count, plural, one {# línea por revisar} other {# líneas por revisar}}"
@@ -6713,12 +7596,17 @@
         "title": "Añadir el portal de empleo de una empresa",
         "token": "ID del portal",
         "tokenHint": "El ID de la empresa en la dirección de su portal de empleo.",
-        "willRead": "Lee {url}"
+        "willRead": "Lee {url}",
+        "countries": "Países que se leen (opcional)",
+        "countriesHint": "Códigos de dos letras separados por comas, por ejemplo TW, CN. Déjalo vacío para leer todos los países."
       },
       "errors": {
         "duplicate": "Este portal ya está en la lista.",
         "generic": "Algo salió mal. Inténtalo otra vez.",
-        "invalid": "Revisa los campos e inténtalo otra vez."
+        "invalid": "Revisa los campos e inténtalo otra vez.",
+        "otherCountries": "Este portal ya está en la lista, pero se lee para otros países, así que no aparece aquí.",
+        "otherCountriesAction": "Leerlo también para este sitio",
+        "otherCountriesDone": "{company} ahora también se lee para este sitio. Sus empleos se añadirán en unos minutos."
       },
       "eyebrow": "Admin",
       "list": {
@@ -6729,14 +7617,18 @@
           "jobs": "Empleos en la última revisión",
           "lastChecked": "Última revisión",
           "problem": "Último problema",
-          "status": "Estado",
-          "system": "Sistema"
+          "system": "Sistema",
+          "countries": "Países que se leen",
+          "country": "Pista de ciudad",
+          "origin": "Añadido por",
+          "state": "Estado"
         },
         "empty": "Todavía no hay portales de empleo de empresas.",
         "loadError": "No se pudo cargar la lista. Inténtalo otra vez.",
         "never": "Todavía sin revisar",
         "none": "—",
-        "title": "Portales"
+        "title": "Portales",
+        "all": "Todos los países"
       },
       "loading": "Cargando…",
       "notAuthorized": "Solo los administradores pueden ver esta página.",
@@ -6752,17 +7644,68 @@
         "server_error": "El sistema del portal de empleo tuvo un problema. Se volverá a intentar más tarde.",
         "timeout": "El portal tardó demasiado en responder. Inténtalo más tarde.",
         "unexpected_shape": "Los datos de empleos del portal no tenían el formato esperado.",
-        "unsupported_job_board": "Este sistema de portal de empleo no es compatible."
+        "unsupported_job_board": "Este sistema de portal de empleo no es compatible.",
+        "connector_disabled": "Este sistema de portal de empleo está desactivado aquí, así que el portal no se lee.",
+        "empty_board": "El portal no listaba ningún empleo cuando se revisó.",
+        "name_mismatch": "El portal pertenece a una empresa con otro nombre.",
+        "name_unconfirmed": "El portal no dice a qué empresa pertenece, así que no se pudo confirmar. Actívalo si es el correcto.",
+        "sources_off": "La lectura de portales de empleo está desactivada en este momento.",
+        "tenant_denied": "Este portal está en la lista de portales que no se leen. No se lee y sus empleos se quitaron.",
+        "tenant_floor": "Se consultó este portal hace menos de 30 minutos. Inténtalo más tarde."
       },
       "run": {
-        "error": "{company}: no se pudo leer el portal. {problem}"
-      },
-      "status": {
-        "off": "Desactivado",
-        "on": "Activado"
+        "error": "{company}: no se pudo leer el portal. {problem}",
+        "queued": "{company}: el portal lista {listed} empleos. Se añadirán en unos minutos.",
+        "waiting": "{company}: el portal lista {listed} empleos. Se añadirán en la próxima lectura programada."
       },
       "systems": "Los portales pueden venir de: {names}.",
-      "title": "Portales de empleo de empresas"
+      "title": "Portales de empleo de empresas",
+      "import": {
+        "enable": "Activar los portales nuevos de inmediato",
+        "enableHint": "Si lo dejas desactivado, cada portal nuevo se revisa una vez y solo se activa si lista empleos y el nombre de su empresa coincide.",
+        "errors": {
+          "empty": "Primero pega una lista o elige un archivo.",
+          "file": "No se pudo leer el archivo.",
+          "invalid": "No se pudo leer la lista. Revisa la primera línea e inténtalo otra vez.",
+          "json": "No se pudo leer la lista como JSON. Revísala e inténtalo otra vez.",
+          "tooLarge": "La lista es demasiado grande. Un archivo admite hasta 5000 portales."
+        },
+        "file": "O elige un archivo CSV o JSON",
+        "importing": "Importando…",
+        "intro": "Pega una lista o elige un archivo. Usa un CSV cuya primera línea sea {header} (países separados por |), o una lista JSON con los mismos campos. Hasta 5000 portales.",
+        "invalidMore": "{count, plural, one {Y # fila más.} other {Y # filas más.}}",
+        "invalidRow": "Fila {line}: {reason}",
+        "invalidTitle": "Filas que no se añadieron",
+        "paste": "Lista de portales",
+        "reason": {
+          "company_name_too_long": "el nombre de la empresa es demasiado largo",
+          "connector_disabled": "este sistema de portal de empleo está desactivado aquí",
+          "duplicate_in_file": "el mismo portal aparece antes en el archivo",
+          "invalid_board_id": "el ID del portal tiene caracteres que un ID de portal no puede tener",
+          "invalid_country": "un país no es un código de dos letras",
+          "too_many_countries": "hay demasiados países",
+          "unknown_job_board": "este sistema de portal de empleo no es compatible",
+          "unreadable_row": "no se pudo leer la fila"
+        },
+        "submit": "Importar",
+        "summary": "{total, plural, one {Se leyó # fila} other {Se leyeron # filas}}: {created} añadidos, {merged} ya estaban en la lista, {invalid} no se añadieron.",
+        "title": "Añadir muchos portales"
+      },
+      "offNote": "Desactivar o quitar un portal saca sus empleos abiertos de la lista de empleos. Volver a activarlo lee el portal otra vez. Un portal quitado no se vuelve a tomar del enlace de un anuncio. Añádelo de nuevo para recuperarlo.",
+      "origin": {
+        "admin": "Un administrador",
+        "discovered": "Encontrado en el enlace de un anuncio",
+        "import": "Importación",
+        "seed": "Lista inicial"
+      },
+      "state": {
+        "notConfirmed": "Sin confirmar",
+        "off": "Desactivado",
+        "offAfterFailures": "Desactivado tras 3 lecturas fallidas",
+        "on": "Activado",
+        "waiting": "Esperando su primera revisión"
+      },
+      "subtitle": "Portales de empleo públicos de empresas, leídos hacia la lista de empleos. Un portal que cambió hace poco se lee cada 2 horas; uno sin cambios, una o dos veces al día. Cada anuncio conserva el nombre de su empresa y un enlace al original, y llega al sitio del país en el que está."
     },
     "meta": {
       "payAsPosted": "Sueldo tal como se publicó: {text}",
@@ -6774,13 +7717,18 @@
       "quoteLabel": "Del anuncio",
       "regionLabel": "Sueldo y permisos de trabajo",
       "source": "Fuente: {name}",
-      "viewPosting": "Abrir el anuncio original"
+      "viewPosting": "Abrir el anuncio original",
+      "foundThroughGoogle": "{publisher} · encontrado con la búsqueda de empleo de Google",
+      "foundThroughGoogleOnly": "Encontrado con la búsqueda de empleo de Google"
     },
     "negotiable": {
       "filterHint": "Los empleos que dicen 面議 no indican el sueldo. Activa «Solo empleos que indican el sueldo» para ocultarlos.",
       "lawLink": "Leer el artículo 5 en la base de datos nacional de leyes",
       "notAFigure": "Esa regla es para los empleadores. No es el sueldo de este empleo, y aquí nunca se estima un sueldo que el anuncio no indica.",
-      "summary": "¿Por qué no se indica el sueldo?"
+      "summary": "¿Por qué no se indica el sueldo?",
+      "body": "El anuncio no indica un importe (por ejemplo, dice 面議 o 依公司規定). El artículo 5 de la Ley de Servicios de Empleo de Taiwán permite que un empleador deje sin indicar el sueldo solo cuando el sueldo mensual regular es de {amount} o más. Ese es el importe que fija la ley al {asOf}.",
+      "bodyNoAmount": "El anuncio no indica un importe (por ejemplo, dice 面議 o 依公司規定). El artículo 5 de la Ley de Servicios de Empleo de Taiwán permite que un empleador deje sin indicar el sueldo solo cuando el sueldo mensual regular es igual o superior a un importe que fija la ley.",
+      "sourceLink": "Leer la regla en su fuente"
     }
   },
   "legal": {
@@ -6805,7 +7753,6 @@
     },
     "consents": {
       "changed": "Cambiado el {date}",
-      "closeBody": "Durante la beta, este servicio funciona fuera de China continental, así que no puede funcionar sin este consentimiento. Si lo retiras, tu cuenta se cierra ahora y se eliminan tus datos. Esto no se puede deshacer.",
       "closeConfirm": "Retirarlo y eliminar mi cuenta",
       "closeKeep": "Conservar mi cuenta",
       "closeTitle": "¿Retirar el consentimiento y eliminar tu cuenta?",
@@ -6825,7 +7772,10 @@
       "retry": "Reintentar",
       "title": "Consentimientos",
       "turnOff": "Desactivar",
-      "turnOn": "Activar"
+      "turnOn": "Activar",
+      "agreeCurrent": "Aceptar este texto",
+      "closeBodyCrossBorder": "Este servicio depende de proveedores fuera de China continental, así que no puede funcionar sin este consentimiento. Si lo retiras, tu cuenta se cierra ahora y se eliminan tus datos. Esto no se puede deshacer.",
+      "textChanged": "Este texto cambió desde que respondiste. Tu respuesta se dio a la versión anterior."
     },
     "disclosures": {
       "colCountry": "País",
@@ -6859,8 +7809,6 @@
       "tw-pdpa-notice": "Aviso de datos para Taiwán"
     },
     "explain": {
-      "fromPosting": "Del anuncio",
-      "fromResume": "De tu currículum",
       "gap": {
         "career_path": "Este puesto supone un cambio mayor respecto a tu experiencia.",
         "industry": "Tienes menos experiencia en este sector.",
@@ -6897,7 +7845,14 @@
         "skillsAligned": "Habilidades que tienes y que este puesto pide: {skills}",
         "title_level": "Tu cargo y tu nivel coinciden con los de este puesto."
       },
-      "title": "Por qué este empleo"
+      "title": "Por qué este empleo",
+      "notCompared": {
+        "industry": "No hay suficiente para comparar el sector.",
+        "logistics": "No hay suficiente para comparar la ubicación, el sueldo o la modalidad de trabajo.",
+        "title_level": "No hay suficiente para comparar el puesto y el nivel."
+      },
+      "quoteFromPosting": "Del anuncio: «{evidence}»",
+      "quoteFromResume": "De tu currículum: «{evidence}»"
     },
     "footer": {
       "aiModels": "Modelos de IA: {models}",
@@ -6929,7 +7884,8 @@
       "colProvider": "Proveedor",
       "excluded": "Cuando una solicitud pasa por una pasarela, estos proveedores de destino quedan excluidos:",
       "hosts": "{rule, select, mainland_only {Direcciones de IA permitidas (y sus subdominios):} other {Direcciones de IA que nunca se usan (y sus subdominios):}}",
-      "rule": "{rule, select, mainland_only {Solo se usan servicios de IA en China continental. Estos son los proveedores que podemos usar y la dirección que usa cada uno, salvo que configuremos otra:} other {Una solicitud que lleva tus datos nunca se envía a un servicio de IA en China continental. Estos son los proveedores que podemos usar y la dirección que usa cada uno, salvo que configuremos otra:}}"
+      "rule": "{rule, select, mainland_only {Solo se usan servicios de IA en China continental. Estos son los proveedores que podemos usar y la dirección que usa cada uno, salvo que configuremos otra:} other {Una solicitud que lleva tus datos nunca se envía a un servicio de IA en China continental. Estos son los proveedores que podemos usar y la dirección que usa cada uno, salvo que configuremos otra:}}",
+      "open": "Las solicitudes de IA van a los servicios de modelos que se enumeran en Modelos de IA. Algunos pueden estar fuera de China continental. Estos son los proveedores que podemos usar y la dirección que usa cada uno, salvo que configuremos otra:"
     },
     "page": {
       "draftBody": "Este documento todavía está en revisión y no es definitivo. Las secciones entre corchetes aún no están escritas.",
@@ -7013,7 +7969,8 @@
       "payments": "Pagos",
       "speech": "Reconocimiento del habla y voz",
       "storage": "Almacenamiento de archivos",
-      "voice": "Práctica por voz"
+      "voice": "Práctica por voz",
+      "push": "Notificaciones push"
     },
     "retention": {
       "colData": "Datos",
@@ -7045,9 +8002,14 @@
         "known_devices": "Dispositivos desde los que iniciaste sesión, a partir del último inicio de sesión en ese dispositivo",
         "product_events": "Eventos de uso del producto",
         "soft_deleted_rows": "Currículums, cartas de presentación, empleos en seguimiento y recuerdos del Asistente que eliminas",
-        "tool_results": "Resultados de las herramientas gratuitas (el informe y el texto leído de tu archivo)"
+        "tool_results": "Resultados de las herramientas gratuitas (el informe y el texto leído de tu archivo)",
+        "billing_consent_archive": "Constancia de esos registros después de que eliminas tu cuenta: el ID de tu cuenta, un hash de tu dirección de correo, el ID de cliente del pago, lo que aceptaste y cuándo. Sin dirección IP ni datos del navegador. Se conserva 3 años desde que aceptaste, o hasta 1 año después de que terminó tu plan si esa fecha es posterior"
       },
       "title": "Cuánto tiempo conservamos los datos"
+    },
+    "crossBorder": {
+      "applies": "Servicios fuera de China continental procesan o almacenan tu información personal. Las listas de esta página los nombran. Esto ocurre solo después de que lo aceptas por separado. Si retiras ese consentimiento, se cierra tu cuenta y se eliminan tus datos.",
+      "none": "Tu información personal se procesa y se almacena en China continental."
     }
   },
   "offers": {
@@ -7292,7 +8254,13 @@
       "titleCapped": "Encontramos {count}+ empleos que encajan contigo. Revisa estos datos.",
       "titleNone": "Todavía no encontramos empleos que encajen bien. Ajusta tu búsqueda abajo.",
       "titlePending": "Todavía estamos revisando empleos para ti. Revisa estos datos.",
-      "tooManyExtra": "Añade hasta 3 puestos."
+      "tooManyExtra": "Añade hasta 3 puestos.",
+      "countNoteCompared": "Cuenta los empleos con «Encaja bien» o superior, de los {compared, plural, one {# empleo} other {# empleos}} que comparamos con tu currículum.",
+      "searchNote": "Estos son empleos abiertos que coinciden con tu búsqueda. No se comparó ningún currículum, así que no es un conteo de encaje.",
+      "titleSearch": "{count, plural, one {Encontramos # empleo para tu búsqueda. Revisa estos datos.} other {Encontramos # empleos para tu búsqueda. Revisa estos datos.}}",
+      "titleSearchCapped": "Encontramos {count, number}+ empleos para tu búsqueda. Revisa estos datos.",
+      "titleSearchNone": "Todavía no encontramos empleos para tu búsqueda. Ajusta tu búsqueda abajo.",
+      "titleUncounted": "Tu búsqueda está guardada. Revisa estos datos."
     },
     "countries": {
       "AU": "Australia",
@@ -7468,7 +8436,8 @@
         "pdfNeedsConsent": "Este PDF no se puede leer sin la opción de lectura que desactivaste. Sube un archivo de Word o de texto, o pega el texto.",
         "tooLarge": "Este archivo pesa más de 15 MB.",
         "unreadable": "No pudimos leer este archivo. Prueba con un PDF o pega el texto.",
-        "wrongType": "Usa un archivo PDF, de Word o de texto."
+        "wrongType": "Usa un archivo PDF, de Word o de texto.",
+        "consentUnanswered": "Primero responde la pregunta de arriba. Luego elige tu PDF otra vez."
       },
       "linkedin": {
         "body": "En tu perfil de LinkedIn, abre «Más», elige «Guardar en PDF» y luego sube ese archivo aquí.",
@@ -8499,7 +9468,8 @@
       "point_list": "Una lista semanal de empleos que encajan con tu búsqueda. También puedes añadir cualquier empleo por tu cuenta.",
       "point_review": "Revisas cada kit antes de usarlo. Todo lo nuevo en tu currículum lo tienes que confirmar tú.",
       "start": "Configurar Listo para postular",
-      "title": "Deja lista cada candidatura y luego envíala tú"
+      "title": "Deja lista cada candidatura y luego envíala tú",
+      "point_open": "Abres la página de la candidatura y la envías tú."
     },
     "list": {
       "empty": {
@@ -8678,7 +9648,9 @@
         "seeApplication": "Verlo en Candidaturas",
         "title": "Postular",
         "undo": "Deshacer · No me postulé",
-        "undone": "Se movió de vuelta. Esta candidatura no está marcada como enviada."
+        "undone": "Se movió de vuelta. Esta candidatura no está marcada como enviada.",
+        "host": "La página está en {host}.",
+        "leadNeutral": "Abre la página de la candidatura en una pestaña nueva y pasa este empleo a Enviadas."
       },
       "practice": {
         "button": "Practicar para este empleo",
@@ -8697,7 +9669,8 @@
         "openAsIs": "Abrir currículum",
         "title": "Currículum",
         "use": "Usar en este kit",
-        "verifyBlock": "Revisa {count, plural, one {# dato} other {# datos}} arriba antes de usar este currículum."
+        "verifyBlock": "Revisa {count, plural, one {# dato} other {# datos}} arriba antes de usar este currículum.",
+        "fitNote": "«Antes» y «Después» muestran tu encaje cuando se adaptó este currículum. El encaje junto al título del empleo es el de hoy, así que los dos pueden diferir."
       },
       "revise": "Pedir cambios",
       "reviseLabel": {
@@ -8789,7 +9762,10 @@
         "sendDown": "Guardar",
         "up": "Parece adecuado",
         "verdictLabel": "¿{title} es adecuado para ti?",
-        "why": "¿Cuál es el problema?"
+        "why": "¿Cuál es el problema?",
+        "later": "Calificar empleos más tarde",
+        "laterNote": "Puedes seguir con la configuración y calificar empleos más tarde.",
+        "noFeed": "Todavía no hay empleos para calificar aquí."
       },
       "errors": {
         "calibration": "Califica 3 empleos para terminar este paso.",
@@ -9220,7 +10196,8 @@
       "previous": "La última vez: {label}, {score} de 100",
       "row": "{before} → {after}",
       "same": "Todavía no hay cambios en el número de problemas.",
-      "title": "Desde tu última revisión"
+      "title": "Desde tu última revisión",
+      "notChecked": "No se revisó esta vez"
     },
     "detail": {
       "evidence": "En tu currículum",
@@ -9431,6 +10408,11 @@
         "how": "Empieza con lo que hiciste: creé, dirigí, reduje, lancé.",
         "title": "Comienzo flojo: «{opener}»",
         "why": "Comienzos como «responsable de» describen una obligación, no lo que hiciste."
+      },
+      "placeholder_unfilled": {
+        "how": "Escribe la cifra real o reescribe la línea sin ella. Nunca adivines una cifra.",
+        "title": "Espacio en blanco sin completar: {placeholder}",
+        "why": "Esta línea todavía tiene un espacio en blanco donde va tu propia cifra. Quien lea el currículum vería los corchetes."
       }
     },
     "keywords": {
@@ -9537,8 +10519,10 @@
       "summary_too_long": "Resumen largo",
       "summary_too_short": "Resumen corto",
       "summary_vague": "Resumen genérico",
-      "weak_verb": "Comienzos flojos"
-    }
+      "weak_verb": "Comienzos flojos",
+      "placeholder_unfilled": "Espacios en blanco sin completar"
+    },
+    "carried": "De tu última revisión. No se revisó de nuevo esta vez."
   },
   "seo": {
     "breadcrumb": {
@@ -9653,7 +10637,9 @@
       "seeFit": "Mira cómo encaja con tu currículum",
       "source": "Fuente",
       "viewOriginal": "Ver el anuncio original",
-      "workModel": "Modalidad de trabajo"
+      "workModel": "Modalidad de trabajo",
+      "lastChecked": "Última revisión: {date}",
+      "licence": "{holder}, licencia de servicios de HR {number}"
     },
     "pay": {
       "period": {
@@ -9730,9 +10716,7 @@
       "noChanges": "No hacía falta cambiar nada en las secciones que elegiste.",
       "open": "Abrir este currículum",
       "pendingBlock": "{count, plural, one {Revisa 1 dato antes de usar este currículum.} other {Revisa # datos antes de usar este currículum.}}",
-      "scoreAfter": "Después",
       "scoreAfterPending": "Lo verás después de revisar cada dato y usar este currículum.",
-      "scoreBefore": "Antes",
       "scoreHeading": "Puntuación de encaje",
       "scoreNone": "La puntuación de encaje no está disponible para esta versión.",
       "scoreValue": "{score} / 100",
@@ -9826,6 +10810,11 @@
       "terms": "Nuevo aquí: {terms}",
       "title": "Verificar datos",
       "was": "Tu currículum decía: {text}"
+    },
+    "fit": {
+      "note": "Tu encaje en la página del empleo sigue siendo el de tu currículum principal hasta que conviertas esta versión en tu currículum principal.",
+      "withVersion": "Con esta versión",
+      "yours": "Tu encaje"
     }
   },
   "taxonomy": {
@@ -9909,6 +10898,238 @@
       "video_production": "Video, foto y creadores de contenido",
       "visual_design": "Diseño visual, marca y arte para videojuegos",
       "writing_editorial": "Redacción, edición y traducción"
+    },
+    "roles": {
+      "academic_advisor": "Orientador académico o profesional",
+      "account_executive": "Ejecutivo de cuentas",
+      "account_manager": "Gerente de cuentas",
+      "accountant": "Contador",
+      "actuary": "Actuario",
+      "administrative_assistant": "Asistente administrativo",
+      "aerospace_engineer": "Ingeniero aeroespacial",
+      "ai_product_manager": "Gerente de producto de IA",
+      "ai_research_scientist": "Científico investigador de IA",
+      "analytics_engineer": "Ingeniero de analítica",
+      "android_engineer": "Ingeniero Android",
+      "architect": "Arquitecto",
+      "auditor": "Auditor",
+      "automotive_engineer": "Ingeniero automotriz",
+      "autonomous_driving_engineer": "Ingeniero de conducción autónoma",
+      "backend_engineer": "Ingeniero backend",
+      "bank_teller": "Cajero bancario",
+      "bd_manager": "Gerente de desarrollo de negocio",
+      "bi_analyst": "Analista de inteligencia de negocio",
+      "bioinformatics_scientist": "Científico de bioinformática",
+      "biomedical_engineer": "Ingeniero biomédico",
+      "biomedical_scientist": "Científico investigador biomédico",
+      "blockchain_engineer": "Ingeniero de blockchain",
+      "bookkeeper": "Auxiliar contable y especialista en cuentas por pagar y por cobrar",
+      "brand_manager": "Gerente de marca",
+      "business_analyst": "Analista de negocio",
+      "buyer": "Comprador y especialista en abastecimiento",
+      "chef": "Chef o cocinero",
+      "chemical_engineer": "Ingeniero químico",
+      "chemist": "Químico",
+      "chip_design_engineer": "Ingeniero de diseño de chips",
+      "chip_verification_engineer": "Ingeniero de verificación de chips",
+      "civil_engineer": "Ingeniero civil",
+      "civil_servant": "Servidor público",
+      "clinical_research_associate": "Asociado de investigación clínica",
+      "cloud_engineer": "Ingeniero de nube",
+      "cnc_machinist": "Operador de máquinas CNC",
+      "compensation_benefits": "Especialista en compensaciones y beneficios",
+      "compliance_officer": "Oficial de cumplimiento",
+      "construction_manager": "Gerente de construcción",
+      "content_creator": "Creador de contenido",
+      "content_marketer": "Gerente de marketing de contenidos",
+      "content_moderator": "Moderador de contenido",
+      "content_operations": "Especialista en operaciones de contenido",
+      "controls_engineer": "Ingeniero de control y automatización",
+      "copywriter": "Redactor publicitario",
+      "cost_estimator": "Estimador de costos / presupuestista",
+      "customer_service_manager": "Gerente de servicio al cliente",
+      "customer_service_rep": "Representante de servicio al cliente",
+      "customer_success_manager": "Gerente de éxito del cliente",
+      "cv_engineer": "Ingeniero de visión por computadora",
+      "data_analyst": "Analista de datos",
+      "data_annotator": "Especialista en anotación de datos",
+      "data_architect": "Arquitecto de datos",
+      "data_engineer": "Ingeniero de datos",
+      "data_entry_clerk": "Auxiliar de captura de datos y de oficina",
+      "data_scientist": "Científico de datos",
+      "database_administrator": "Administrador de bases de datos",
+      "dentist": "Dentista",
+      "design_manager": "Gerente de diseño",
+      "devops_engineer": "Ingeniero DevOps",
+      "digital_marketing_manager": "Gerente de marketing digital",
+      "driver": "Conductor y mensajero",
+      "early_childhood_teacher": "Docente de educación inicial",
+      "ecommerce_manager": "Gerente de comercio electrónico",
+      "economist": "Economista o investigador de políticas públicas",
+      "editor": "Editor",
+      "education_administrator": "Administrador educativo",
+      "electrical_engineer": "Ingeniero eléctrico",
+      "electrician": "Electricista",
+      "electronics_engineer": "Ingeniero electrónico",
+      "embedded_software_engineer": "Ingeniero de software embebido",
+      "employee_relations": "Especialista en relaciones laborales",
+      "energy_engineer": "Ingeniero de energía",
+      "engineering_director": "Director de ingeniería / CTO",
+      "engineering_manager": "Gerente de ingeniería",
+      "environmental_engineer": "Ingeniero ambiental y de seguridad e higiene",
+      "erp_consultant": "Consultor de ERP",
+      "event_planner": "Organizador de eventos",
+      "executive_assistant": "Asistente ejecutivo",
+      "facilities_manager": "Gerente de instalaciones",
+      "finance_leader": "Gerente de finanzas / contralor",
+      "financial_advisor": "Asesor financiero",
+      "financial_analyst": "Analista financiero",
+      "flight_attendant": "Auxiliar de vuelo",
+      "frontend_engineer": "Ingeniero frontend",
+      "fullstack_engineer": "Ingeniero full-stack",
+      "game_artist": "Artista de videojuegos",
+      "game_designer": "Diseñador de videojuegos",
+      "game_developer": "Desarrollador de videojuegos",
+      "graphic_designer": "Diseñador gráfico",
+      "growth_marketer": "Especialista en marketing de crecimiento",
+      "hardware_engineer": "Ingeniero de hardware",
+      "healthcare_administrator": "Administrador de servicios de salud",
+      "hotel_manager": "Gerente de hotel",
+      "hr_generalist": "Generalista de HR",
+      "hr_manager": "Gerente de HR",
+      "hrbp": "Socio estratégico de HR",
+      "illustrator": "Ilustrador",
+      "import_export": "Especialista en importación y exportación",
+      "in_house_counsel": "Abogado interno",
+      "industrial_designer": "Diseñador industrial",
+      "industrial_engineer": "Ingeniero industrial",
+      "infrastructure_engineer": "Ingeniero de infraestructura",
+      "instructional_designer": "Diseñador instruccional",
+      "insurance_agent": "Agente de seguros",
+      "interior_designer": "Diseñador de interiores",
+      "investment_analyst": "Analista de inversiones",
+      "investment_banker": "Analista de banca de inversión",
+      "ios_engineer": "Ingeniero iOS",
+      "ip_specialist": "Especialista en propiedad intelectual",
+      "it_manager": "Gerente de TI",
+      "it_project_manager": "Gerente de proyectos de TI",
+      "it_support": "Especialista en soporte de TI",
+      "journalist": "Periodista",
+      "language_teacher": "Profesor de idiomas",
+      "lawyer": "Abogado",
+      "learning_development": "Especialista en capacitación y desarrollo",
+      "live_commerce_operations": "Especialista en operaciones de comercio en vivo",
+      "loan_officer": "Oficial de crédito",
+      "logistics_coordinator": "Coordinador de logística",
+      "machine_operator": "Operador de máquinas",
+      "maintenance_technician": "Técnico de mantenimiento",
+      "management_consultant": "Consultor de gestión",
+      "manufacturing_engineer": "Ingeniero de manufactura",
+      "market_research_analyst": "Analista de investigación de mercado",
+      "marketing_manager": "Gerente de marketing",
+      "marketing_specialist": "Especialista en marketing",
+      "materials_engineer": "Ingeniero de materiales",
+      "mechanical_engineer": "Ingeniero mecánico",
+      "medical_coder": "Codificador y facturador médico",
+      "medical_sales_rep": "Representante de ventas médicas",
+      "medical_technologist": "Técnico de laboratorio clínico y de diagnóstico por imagen",
+      "mep_engineer": "Ingeniero de instalaciones MEP",
+      "ml_engineer": "Ingeniero de aprendizaje automático",
+      "mlops_engineer": "Ingeniero de MLOps",
+      "mobile_engineer": "Ingeniero de aplicaciones móviles",
+      "motion_designer": "Diseñador de gráficos en movimiento y animador",
+      "network_engineer": "Ingeniero de redes",
+      "nlp_engineer": "Ingeniero de NLP y LLM",
+      "nonprofit_program_manager": "Gerente de programas de una organización sin fines de lucro",
+      "nurse_practitioner": "Enfermero de práctica avanzada",
+      "office_manager": "Gerente de oficina",
+      "onboarding_specialist": "Especialista en incorporación de clientes",
+      "operations_analyst": "Analista de operaciones",
+      "operations_manager": "Gerente de operaciones",
+      "paralegal": "Asistente jurídico",
+      "partnerships_manager": "Gerente de alianzas y canales",
+      "penetration_tester": "Especialista en pruebas de penetración",
+      "pharmacist": "Farmacéutico",
+      "photographer": "Fotógrafo o videógrafo",
+      "physical_therapist": "Fisioterapeuta o terapeuta ocupacional",
+      "physician": "Médico",
+      "platform_engineer": "Ingeniero de plataforma",
+      "policy_analyst": "Políticas y asuntos públicos",
+      "postdoc": "Investigador posdoctoral",
+      "pr_specialist": "Especialista en comunicación y relaciones públicas",
+      "privacy_specialist": "Especialista en privacidad",
+      "producer": "Productor",
+      "product_analyst": "Analista de producto",
+      "product_designer": "Diseñador de producto",
+      "product_director": "Director de producto",
+      "product_manager": "Gerente de producto",
+      "product_marketing_manager": "Gerente de marketing de producto",
+      "product_operations": "Especialista en operaciones de producto",
+      "production_supervisor": "Supervisor de producción",
+      "professor": "Profesor universitario o docente",
+      "program_manager": "Gerente de programas",
+      "project_manager": "Gerente de proyectos",
+      "psychologist": "Psicólogo o terapeuta",
+      "qa_engineer": "Ingeniero de QA",
+      "quality_engineer": "Ingeniero de calidad",
+      "quality_inspector": "Inspector de calidad",
+      "quant_analyst": "Analista cuantitativo",
+      "real_estate_agent": "Agente inmobiliario",
+      "receptionist": "Recepcionista",
+      "recruiter": "Reclutador",
+      "recsys_engineer": "Ingeniero de búsqueda y recomendación",
+      "registered_nurse": "Enfermero titulado",
+      "regulatory_affairs": "Especialista en asuntos regulatorios",
+      "research_assistant": "Asistente de investigación",
+      "restaurant_manager": "Gerente de restaurante",
+      "retail_sales": "Asociado de ventas en tienda",
+      "risk_analyst": "Analista de riesgo y crédito",
+      "robotics_engineer": "Ingeniero de robótica",
+      "sales_engineer": "Ingeniero de ventas",
+      "sales_manager": "Gerente de ventas",
+      "school_teacher": "Docente de escuela",
+      "scrum_master": "Scrum master",
+      "sdet": "Ingeniero de automatización de pruebas",
+      "sdr": "Representante de desarrollo de ventas",
+      "security_analyst": "Analista de seguridad",
+      "security_architect": "Arquitecto de seguridad",
+      "security_compliance": "Analista de cumplimiento de seguridad",
+      "security_engineer": "Ingeniero de seguridad",
+      "security_leader": "Responsable de seguridad / CISO",
+      "semiconductor_process_engineer": "Ingeniero de procesos de semiconductores",
+      "seo_specialist": "Especialista en SEO",
+      "server": "Mesero, barista o bartender",
+      "social_media_manager": "Gerente de redes sociales",
+      "social_worker": "Trabajador social",
+      "software_architect": "Arquitecto de software",
+      "software_engineer": "Ingeniero de software",
+      "special_education_teacher": "Docente de educación especial",
+      "sre": "Ingeniero de confiabilidad de sitios",
+      "statistician": "Estadístico",
+      "store_manager": "Gerente de tienda",
+      "strategy_manager": "Gerente de estrategia",
+      "supply_chain_manager": "Gerente de cadena de suministro",
+      "sysadmin": "Administrador de sistemas",
+      "systems_analyst": "Analista de sistemas",
+      "systems_software_engineer": "Ingeniero de software de sistemas",
+      "talent_acquisition_manager": "Gerente de atracción de talento",
+      "tax_specialist": "Especialista en impuestos",
+      "tech_lead": "Líder técnico",
+      "technical_product_manager": "Gerente técnico de producto",
+      "technical_support_engineer": "Ingeniero de soporte técnico",
+      "technical_writer": "Redactor técnico",
+      "trader": "Trader",
+      "translator": "Traductor o intérprete",
+      "travel_consultant": "Asesor de viajes",
+      "tutor": "Tutor",
+      "ui_designer": "Diseñador de UI",
+      "user_operations": "Especialista en operaciones de usuarios",
+      "ux_designer": "Diseñador de UX",
+      "ux_researcher": "Investigador de UX",
+      "video_editor": "Editor de video",
+      "warehouse_manager": "Gerente de almacén",
+      "web_developer": "Desarrollador web",
+      "welder": "Soldador"
     }
   },
   "tools": {
@@ -9938,11 +11159,11 @@
       "title": "Conserva este currículum en tu cuenta"
     },
     "consent": {
-      "label": "Acepto que %BRAND% lea este currículum con software automatizado para elaborar este informe. Se elimina después de {hours} horas, salvo que cree una cuenta.",
-      "offshore": "Durante la beta, esto se procesa fuera de China continental, en Estados Unidos.",
       "privacyLink": "Aviso de privacidad",
       "readingService": "El archivo puede enviarse a {service}, el servicio de lectura de currículums que usa %BRAND%, en servidores de China continental.",
-      "whereUnknown": "Quién lo lee y dónde se procesa se explica en el aviso de privacidad."
+      "whereUnknown": "Quién lo lee y dónde se procesa se explica en el aviso de privacidad.",
+      "labelAi": "Acepto que %BRAND% lea este currículum con software automatizado, incluido un modelo de IA, para elaborar este informe. Se elimina después de {hours} horas, salvo que cree una cuenta.",
+      "outsideMainland": "Los proveedores de servicios que se nombran en el aviso de privacidad lo procesan fuera de China continental."
     },
     "errors": {
       "consent_required": "Marca la casilla para permitir que %BRAND% lea este currículum.",
@@ -10140,7 +11361,8 @@
       "errors": {
         "generic": "Algo salió mal. Inténtalo otra vez.",
         "rateLimited": "Ese es el límite de preguntas sin cuenta. Crea una cuenta gratis para seguir preguntando.",
-        "unavailable": "El asistente no está disponible en este momento."
+        "unavailable": "El asistente no está disponible en este momento.",
+        "consent": "Marca primero la casilla de arriba. %BRAND% responde con IA solo después de que aceptes."
       },
       "inputLabel": "Tu pregunta",
       "intro": "Pregunta por los empleos de esta página, por el sueldo tal como lo indican los anuncios o por cómo funciona %BRAND%. Las respuestas no usan ningún currículum y nunca dicen qué tan bien encajas en un empleo.",
@@ -10152,7 +11374,12 @@
       "signupCta": "Crear una cuenta gratis",
       "title": "Pregunta sobre esta página",
       "writing": "Escribiendo una respuesta…",
-      "you": "Tú"
+      "you": "Tú",
+      "consent": {
+        "detail": "El servicio de IA que responde puede procesar tu pregunta fuera de China continental. Nada de lo que escribas aquí se guarda.",
+        "label": "Acepto que %BRAND% envíe mis preguntas a un modelo de IA para responderlas.",
+        "privacyLink": "Aviso de privacidad"
+      }
     },
     "card": {
       "badge": {
@@ -10230,6 +11457,30 @@
       "login": "Iniciar sesión",
       "openJobs": "Abrir tus empleos",
       "title": "Mira todos los empleos de tu búsqueda y qué tan bien encaja cada uno contigo"
+    }
+  },
+  "companyFacts": {
+    "sponsorship": {
+      "dated": {
+        "imported": "archivo importado el {date}",
+        "published": "al {date}"
+      },
+      "disclaimer": "Son registros públicos sobre el empleador, no sobre este empleo. Solicitudes anteriores o una licencia de patrocinador no significan que este empleador vaya a patrocinar este puesto.",
+      "earlier": "{count, plural, one {# registro de un año fiscal anterior} other {# registros de años fiscales anteriores}}",
+      "fact": {
+        "dolLca": "{count, plural, one {# solicitud de condiciones laborales H-1B certificada} other {# solicitudes de condiciones laborales H-1B certificadas}} en el año fiscal {year}",
+        "uk": "Patrocinador con licencia en el registro del Reino Unido",
+        "ukRating": "Tipo y calificación: {rating}",
+        "ukRoutes": "{count, plural, one {Vía} other {Vías}}: {routes}",
+        "ukTown": "Localidad: {town}",
+        "uscis": "En el año fiscal {year}: {approvals, plural, one {# petición H-1B aprobada} other {# peticiones H-1B aprobadas}}; denegadas: {denials, number}"
+      },
+      "file": "Archivo: {file}",
+      "intro": "Registros públicos sobre este empleador. Cada línea indica su fuente y su fecha.",
+      "listedAs": "Aparece como {name}",
+      "source": "Fuente: <link>{name}</link>",
+      "title": "Registros de patrocinio de visa de {company}",
+      "usNote": "Una solicitud certificada no es una aprobación de visa ni una contratación. Los recuentos de peticiones son primeras decisiones e incluyen empleo nuevo y continuado."
     }
   }
 }

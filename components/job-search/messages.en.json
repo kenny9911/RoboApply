@@ -90,8 +90,6 @@
     "agent_pending": "Planning your search and checking connected sources…",
     "cancel_search": "Stop search",
     "search_stopped": "Search stopped. You can update your request and search again.",
-    "linkedin_only": "LinkedIn listings only",
-    "linkedin_hint": "Only show roles with LinkedIn provenance. Coverage depends on the selected sources; this search does not cover every LinkedIn listing.",
     "advanced": "Advanced filters and sources",
     "overrides_hint": "These settings override your request. Leave them automatic to use the details you describe.",
     "auto": "From my request",
@@ -109,7 +107,6 @@
     "agent_unavailable": "The search agent is temporarily unavailable. Please try again; no search results have been generated.",
     "request_review": "Your search request",
     "agent_results_for": "Roles found for your request",
-    "linkedin_empty": "No LinkedIn listings were returned by the selected sources. Try broader criteria or turn off LinkedIn-only search.",
     "entry_hint": "Describe your next role and search connected job sources."
   },
   "jobSearchApi": {

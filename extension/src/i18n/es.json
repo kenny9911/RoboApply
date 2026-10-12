@@ -41,6 +41,15 @@
         "great": "Encaja muy bien",
         "possible": "Posible",
         "unlikely": "Poco probable"
+      },
+      "confidence": {
+        "reason": {
+          "few_details": "Este anuncio dice muy poco para comparar",
+          "no_level_stated": "Este anuncio no indica un nivel",
+          "no_resume": "Añade un currículum para obtener una comparación completa. Esta estimación usa tu perfil y tus preferencias.",
+          "no_role_evidence": "Tu currículum no muestra ningún puesto para comparar",
+          "no_skills_listed": "Este anuncio no enumera habilidades"
+        }
       }
     },
     "item": {

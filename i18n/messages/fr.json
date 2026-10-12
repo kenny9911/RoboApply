@@ -233,7 +233,12 @@
       "whatsMissing": "Ce qui manque",
       "whyThisJob": "Pourquoi cette offre",
       "workAi": "L’annonce complète a été lue et comparée à ton CV.",
-      "workPre": "L’intitulé, les compétences et le lieu ont été comparés à ton CV."
+      "workPre": "L’intitulé, les compétences et le lieu ont été comparés à ton CV.",
+      "alsoIn": "Aussi dans {count, plural, one {# autre lieu} other {# autres lieux}}",
+      "alsoInList": "Autres lieux pour {title} chez {company}",
+      "alsoInMore": "{count, plural, one {# autre lieu n’est pas listé ici.} other {# autres lieux ne sont pas listés ici.}}",
+      "firstSeen": "Vue pour la première fois le {date}",
+      "leadLabel": "{label} :"
     },
     "explore": {
       "back": "Tous les types de métier",
@@ -387,7 +392,8 @@
         "forYou": "Pour toi"
       },
       "tabsLabel": "Listes d’offres",
-      "title": "Offres"
+      "title": "Offres",
+      "introByDate": "Les offres sont classées par date de publication, des plus récentes aux plus anciennes. Ouvres-en une pour voir les détails."
     },
     "zero": {
       "gain": "{count, plural, one {+# offre} other {+# offres}}",
@@ -397,6 +403,21 @@
       "relaxed": "Filtre retiré.",
       "title": "Aucune offre ne correspond à cette recherche.",
       "unknown": "Nous ne pouvons pas encore compter quel filtre écarte le plus d’offres. Essaie d’en assouplir un."
+    },
+    "nl": {
+      "chip": "Classement selon : {terms}",
+      "chipClear": "Effacer",
+      "chipClearLabel": "Ne plus classer la liste selon ces mots",
+      "notChecked": "Non vérifié : {items}.",
+      "rankOnlyApply": "Classer ma liste selon ces mots",
+      "rankOnlyTitle": "Tes filtres restent tels quels",
+      "rankedBy": "Classement selon la proximité avec : {terms}. Ces termes n’ont pas été vérifiés comme des exigences."
+    },
+    "order": {
+      "queryMatch": "Classement selon la proximité de chaque annonce avec ta recherche."
+    },
+    "searchApi": {
+      "keySourcesOff": "Aucune source d’offres n’est ouverte aux clés API sur ce site pour le moment : une requête faite avec une clé renvoie donc une erreur et aucune offre. L’exploitant du site décide quelles sources les clés peuvent lire."
     }
   },
   "resume": {
@@ -437,9 +458,9 @@
     "card": {
       "base": "CV principal — non adapté à une offre",
       "edited": "Modifié le {when}",
-      "score_unit": "/100",
       "delete": "Supprimer le CV",
-      "versions_used": "{used} versions sur {cap} utilisées"
+      "versions_used": "{used} versions sur {cap} utilisées",
+      "tailored_stamp": "Adapté"
     },
     "tip": {
       "label": "Si tu débutes ta carrière",
@@ -468,17 +489,16 @@
         "ready_v": "Brouillon sans titre"
       },
       "import": {
-        "read": "Lu",
         "identity": "Toi",
-        "identity_v": "Nom · e-mail · lieu",
         "experience": "Expérience",
-        "experience_v": "Postes · intitulés · dates",
         "education": "Formation",
-        "education_v": "Diplôme · école · années",
-        "skills": "Compétences",
-        "skills_v": "Compétences · outils · mots-clés",
-        "cleaned": "Nettoyé",
-        "cleaned_v": "Formulation et espacements"
+        "skills": "Compétences"
+      },
+      "found": {
+        "none": "Introuvable. Ajoute-le dans l’éditeur.",
+        "roles": "{count, plural, one {# poste} other {# postes}}",
+        "schools": "{count, plural, one {# entrée} other {# entrées}}",
+        "skills": "{count, plural, one {# compétence} other {# compétences}}"
       }
     },
     "import": {
@@ -500,8 +520,8 @@
       "scratch_hint": "Choisis un modèle. Tu pourras en changer plus tard : ton contenu te suit.",
       "drop": {
         "title": "Dépose ton CV ici",
-        "sub": "PDF, DOCX ou Apple Pages",
-        "ready": "prêt à être lu"
+        "ready": "prêt à être lu",
+        "formats": "PDF, Word (DOC ou DOCX), texte brut ou Markdown"
       },
       "linkedin": {
         "steps_title": "Enregistre ton profil LinkedIn en PDF",
@@ -521,7 +541,7 @@
         "title_scratch": "Brouillon prêt",
         "title_import": "Importé",
         "body_scratch": "Ouvre l’éditeur et remplis-le. L’aide ligne par ligne se trouve dans la marge de droite.",
-        "body_import": "Ton CV a été lu. Deux lignes faibles sont mises en avant dans l’éditeur."
+        "body_read": "Ton CV a été lu. Ouvre l’éditeur pour vérifier ce qui a été repéré."
       },
       "cancel": "Annuler",
       "create_draft": "Créer le brouillon",
@@ -541,7 +561,8 @@
         "file_required": "Choisis d’abord un fichier."
       },
       "demo_file_name": "cv-2024.pdf",
-      "demo_file_size": "184 Ko"
+      "demo_file_size": "184 Ko",
+      "reading": "Lecture de {file}…"
     },
     "toolbar": {
       "back": "Tous les CV",
@@ -549,12 +570,13 @@
       "saved": "Toutes les modifications sont enregistrées",
       "saving": "Enregistrement…",
       "save_error": "Pas encore enregistré — nouvel essai",
-      "strength": "Solidité",
       "coach": "Contrôle des lignes",
       "hide_coach": "Masquer le contrôle des lignes",
       "download": "Télécharger",
       "tailor": "Adapter à une offre",
-      "delete": "Supprimer"
+      "delete": "Supprimer",
+      "quick_score": "Note rapide",
+      "quick_score_hint": "La note rapide propre à l’éditeur. Elle change pendant que tu écris et n’est pas le résultat de ta vérification du CV."
     },
     "section": {
       "identity": "Toi",
@@ -610,7 +632,8 @@
     },
     "bullet": {
       "flag": "Cette ligne n’a aucun chiffre et un verbe vague. Essaie « Améliorer la formulation » ou « Ajouter des chiffres ».",
-      "placeholder": "Ce que tu as fait — commence par un verbe, termine par le résultat"
+      "placeholder": "Ce que tu as fait — commence par un verbe, termine par le résultat",
+      "placeholder_flag": "Remplace {placeholders} par ton vrai chiffre, ou réécris la ligne sans ce chiffre. Cette ligne n’est pas prête à être envoyée."
     },
     "rewrite": {
       "rewriting": "Réécriture",
@@ -791,19 +814,22 @@
     },
     "export": {
       "ai_note": "Une partie de ce CV a été rédigée par l’IA. Les fichiers PDF et Word l’indiquent dans leurs propriétés.",
-      "blocked": "{count, plural, one {Une ligne contient un chiffre introuvable dans ton CV. Corrige-le ou retire-le avant de télécharger.} other {# lignes contiennent des chiffres ou des détails introuvables dans ton CV. Corrige-les ou retire-les avant de télécharger.}}",
       "name": {
         "company_role_name": "Entreprise - Intitulé du poste - Ton nom",
         "name_company_role": "Ton nom - Entreprise - Intitulé du poste",
         "name_date": "Ton nom - Date",
         "name_role": "Ton nom - Intitulé du poste"
       },
-      "name_label": "Nom du fichier"
+      "name_label": "Nom du fichier",
+      "placeholders": "{count, plural, one {# ligne contient encore un emplacement vide, comme [X], à l’endroit de ton propre chiffre. Remplis-le, ou réécris la ligne sans le chiffre.} other {# lignes contiennent encore un emplacement vide, comme [X], à l’endroit de ton propre chiffre. Remplis-les, ou réécris ces lignes sans les chiffres.}}",
+      "placeholders_anyway": "Télécharger avec ces emplacements vides",
+      "placeholders_show": "Afficher la première",
+      "unverified": "{count, plural, one {# détail de ce CV adapté n’a pas encore été vérifié. Vérifie-le dans « Vérifier les détails » avant de télécharger.} other {# détails de ce CV adapté n’ont pas encore été vérifiés. Vérifie-les dans « Vérifier les détails » avant de télécharger.}}",
+      "verify_cta": "Vérifier les détails"
     },
     "hub": {
       "errors": {
         "ai_off": "La lecture d’un fichier de CV utilise l’IA, qui est désactivée pour ton compte. Active le traitement par IA dans les Réglages, ou crée plutôt ton CV étape par étape.",
-        "image_unreadable": "Cette image n’a pas pu être lue pour l’instant. Envoie plutôt un fichier PDF ou Word.",
         "storage_unavailable": "Le stockage de fichiers n’est pas disponible pour l’instant. Réessaie plus tard.",
         "upload_daily_limit": "Tu as envoyé {limit} fichiers de CV aujourd’hui, ce qui est la limite quotidienne. Réessaie demain."
       },
@@ -910,7 +936,8 @@
         }
       },
       "title": "Modèle et mise en page"
-    }
+    },
+    "ai_edit_cost": "Chaque modification par IA d’une ligne, de ton résumé ou de tes compétences utilise 1 crédit."
   },
   "applications": {
     "page_title": "Candidatures",
@@ -1182,7 +1209,8 @@
         },
         "done": "Terminé",
         "useShorter": "Passer à {minutes} min",
-        "previewToggle": "Voir les questions possibles"
+        "previewToggle": "Voir les questions possibles",
+        "costShort": "{n, plural, one {# crédit} other {# crédits}} — plus que tu n’en as"
       },
       "loading": "Chargement de l’entraînement…",
       "startError": "Cet entretien n’a pas pu démarrer. Réessaie.",
@@ -1596,7 +1624,11 @@
       "showAll": "Afficher les {count}",
       "showFewer": "Afficher moins",
       "startErrorNetwork": "Impossible de joindre le serveur. Vérifie ta connexion internet, puis réessaie.",
-      "startErrorBusy": "Le service d’entretien est très sollicité en ce moment. Attends une minute, puis réessaie."
+      "startErrorBusy": "Le service d’entretien est très sollicité en ce moment. Attends une minute, puis réessaie.",
+      "creditCost": "Coûte {n, plural, one {# crédit} other {# crédits}}",
+      "creditsRemaining": "{n, plural, one {# crédit restant} other {# crédits restants}}",
+      "insufficientCredits": "Cet entretien demande {required, plural, one {# crédit} other {# crédits}} et tu en as {balance}. Ajoute des crédits pour continuer.",
+      "insufficientCreditsNoPurchase": "Cet entretien demande {required, plural, one {# crédit} other {# crédits}} et tu en as {balance}."
     },
     "live": {
       "loading": "Préparation de ta salle…",
@@ -2041,7 +2073,6 @@
       "pronouns_other": "Autres",
       "pronouns_none": "Je préfère ne pas le dire",
       "years_exp": "Années d’expérience",
-      "new_grad": "Jeune diplômé",
       "years_suffix": " ans",
       "group_contact": "Contact",
       "email": "E-mail",
@@ -2098,7 +2129,6 @@
         "download": "Télécharger",
         "paid": "Payée",
         "pending": "En attente",
-        "failed": "Échouée",
         "card": "Carte"
       }
     },
@@ -2159,7 +2189,6 @@
       "delete_data_confirm": "Cela efface ta liste d’offres, tes candidatures et ton historique. Ton compte et tes CV restent.",
       "delete_data_confirm_label": "Confirmer",
       "delete_data_confirm_hint": "Écris {keyword} pour confirmer.",
-      "delete_data_confirm_keyword": "SUPPRIMER",
       "delete_data_confirm_cta": "Supprimer les données d’offres",
       "delete_data_confirm_error": "Écris exactement {keyword} pour confirmer.",
       "delete_data_cancel": "Annuler",
@@ -2173,13 +2202,10 @@
       "deleteDescription": "Supprime ton compte, tes CV, tes enregistrements d’entretien et ton abonnement. C’est irréversible.",
       "confirmEmailLabel": "Confirme ton e-mail",
       "confirmEmailHint": "Écris {email} pour confirmer.",
-      "reasonLabel": "Raison",
-      "reasonPlaceholder": "Dis-nous pourquoi tu pars (obligatoire)",
       "cancel": "Annuler",
       "delete": "Supprimer mon compte",
       "error": {
         "mismatch": "Ce n’est pas l’e-mail de ce compte.",
-        "reasonRequired": "Dis-nous pourquoi tu pars.",
         "generic": "Ton compte n’a pas été supprimé. Réessaie."
       }
     }
@@ -2214,7 +2240,8 @@
       "lead": "%BRAND% lit ton CV, te montre les offres que tu peux vraiment décrocher, nomme exactement ce qui manque et te prépare à l’entretien.",
       "feature_resume": "Un CV que les logiciels savent lire",
       "feature_interview": "Des entretiens d’entraînement qui te répondent",
-      "feature_track": "Toutes tes candidatures au même endroit"
+      "feature_track": "Toutes tes candidatures au même endroit",
+      "feature_interview_written": "Des entretiens d’entraînement pour le poste que tu veux"
     },
     "agreements": {
       "age": "J’ai 16 ans ou plus",
@@ -2281,7 +2308,12 @@
       "google": "Continuer avec Google",
       "line": "Continuer avec LINE",
       "needAgreements": "Coche d’abord les cases obligatoires ci-dessous.",
-      "useEmail": "Utiliser plutôt l’e-mail"
+      "useEmail": "Utiliser plutôt l’e-mail",
+      "tabs": {
+        "email_password": "E-mail",
+        "label": "Moyens de connexion",
+        "phone_otp": "Téléphone"
+      }
     },
     "otherBrand": {
       "body": "Ce compte appartient à %OTHER_BRAND%. Continue là-bas.",
@@ -2354,7 +2386,8 @@
       "toSignIn": "Se connecter",
       "verifiedBody": "Ton e-mail est confirmé. Cette confirmation débloque ton entretien d’entraînement gratuit.",
       "verifiedTitle": "E-mail confirmé",
-      "working": "Confirmation de ton e-mail…"
+      "working": "Confirmation de ton e-mail…",
+      "requestNew": "Envoyer un nouveau lien depuis les Réglages"
     },
     "verifyBanner": {
       "failed": "L’e-mail n’a pas été envoyé. Réessaie plus tard.",
@@ -2604,6 +2637,166 @@
           },
           "sub": "Crée un CV en chinois, puis fais une version pour chaque offre. Chaque changement est affiché, et rien de nouveau n’est ajouté sans ta confirmation.",
           "title": "Un seul CV, une version pour chaque offre"
+        },
+        "coverLetters": {
+          "eyebrow": "Lettres de motivation",
+          "metaDescription": "Rédige une lettre de motivation pour une offre à partir de l’annonce et de ton propre CV, puis modifie-la.",
+          "metaTitle": "Des lettres de motivation à partir de l’annonce et de ton CV",
+          "q1": {
+            "a": "Non. C’est toi qui décides si tu l’utilises, et où.",
+            "q": "Est-elle envoyée à l’employeur ?"
+          },
+          "q2": {
+            "a": "Oui, une limite quotidienne. Elle est indiquée sur la page des tarifs.",
+            "q": "Y a-t-il une limite ?"
+          },
+          "s1": {
+            "body": "Pars de la page de l’offre.",
+            "title": "Choisis l’offre"
+          },
+          "s2": {
+            "body": "Chaque fait vient de ton CV ou de l’annonce.",
+            "title": "Lis le brouillon"
+          },
+          "s3": {
+            "body": "Change ce que tu veux, puis copie-la ou télécharge-la.",
+            "title": "Modifie et télécharge"
+          },
+          "sample": {
+            "line1": "L’ouverture nomme le poste et l’équipe indiqués dans l’annonce.",
+            "line2": "Le paragraphe central reprend deux résultats de ton CV.",
+            "line3": "Rédigée par l’IA. Lis-la avant de l’envoyer."
+          },
+          "sub": "La lettre reprend ce que l’annonce demande et ce que ton CV montre. Tu la modifies avant de l’utiliser.",
+          "title": "Une lettre de motivation pour cette offre, à partir de ton propre CV"
+        },
+        "jobMatches": {
+          "eyebrow": "Offres adaptées",
+          "metaDescription": "%BRAND% classe les offres à pourvoir selon leur adéquation avec ton CV. Chaque offre commence par ce qui manque et indique d’où vient l’annonce.",
+          "metaTitle": "Des offres adaptées à ton CV, chacune avec sa source",
+          "q1": {
+            "a": "Elles viennent d’annonces publiques sur les pages de recrutement des employeurs eux-mêmes et de la source indiquée sur chaque offre. %BRAND% ne liste pas toutes les offres du marché.",
+            "q": "D’où viennent les offres ?"
+          },
+          "q2": {
+            "a": "Selon l’adéquation, la fraîcheur, ce qui t’a intéressé et la source de l’annonce. La page « Comment fonctionne le classement » liste chaque facteur.",
+            "q": "Comment la liste est-elle classée ?"
+          },
+          "s1": {
+            "body": "Dis-nous les postes, les villes et le salaire que tu veux. Ton CV fait le reste.",
+            "title": "Ajoute ton CV et ta recherche"
+          },
+          "s2": {
+            "body": "Chaque offre montre ce qui correspond et ce qui manque avant d’afficher un chiffre.",
+            "title": "Lis d’abord ce qui manque"
+          },
+          "s3": {
+            "body": "Ouvre l’annonce d’origine et postule-y toi-même. L’offre passe ensuite dans « Envoyées » sur ton tableau.",
+            "title": "Postule sur le site de l’employeur"
+          },
+          "sample": {
+            "line1": "Bien adapté · 78 / 100",
+            "line2": "Ils demandent SQL et Tableau. Ton CV ne montre que SQL.",
+            "line3": "Source : la page de recrutement de l’employeur · vérifiée il y a 2 jours"
+          },
+          "sub": "Chaque offre reçoit un niveau d’adéquation et commence par ce qui manque : ce que l’employeur demande et que ton CV ne montre pas. Chaque offre indique sa source et renvoie vers l’annonce d’origine.",
+          "title": "Des offres classées par adéquation, avec la raison en mots simples"
+        },
+        "readyToApply": {
+          "eyebrow": "Prêt à postuler",
+          "metaDescription": "Chaque semaine, %BRAND% prépare des documents pour les offres adaptées. Tu les relis et tu envoies chaque candidature toi-même.",
+          "metaTitle": "Des candidatures préparées chaque semaine ; c’est toi qui les envoies",
+          "q1": {
+            "a": "Non. Il n’envoie jamais de candidature et ne contacte jamais d’employeur.",
+            "q": "Est-ce qu’il envoie quoi que ce soit ?"
+          },
+          "q2": {
+            "a": "Annule en un geste et l’offre revient là où elle était.",
+            "q": "Et si je n’ai pas postulé après avoir ouvert une offre ?"
+          },
+          "s1": {
+            "body": "Choisis 5, 10, 20 ou 30 offres et le niveau d’adéquation le plus bas que tu acceptes.",
+            "title": "Fixe le nombre par semaine"
+          },
+          "s2": {
+            "body": "Change ce que tu veux avant de l’utiliser.",
+            "title": "Relis chaque kit"
+          },
+          "s3": {
+            "body": "Ouvre la page de l’employeur et envoie ta candidature. L’offre passe dans « Envoyées ».",
+            "title": "Envoie-la toi-même"
+          },
+          "sample": {
+            "line1": "5 offres cette semaine · Bien adapté ou mieux",
+            "line2": "Kit prêt : CV adapté, lettre de motivation, 4 réponses",
+            "line3": "Ouvrir la candidature → tu la vérifies et tu l’envoies"
+          },
+          "sub": "Pour les offres adaptées, %BRAND% prépare un CV adapté, une lettre de motivation et des réponses aux questions courantes. Tu ouvres chaque candidature et tu l’envoies toi-même.",
+          "title": "Chaque semaine, des candidatures préparées que tu relis toi-même"
+        },
+        "referralCodes": {
+          "eyebrow": "Codes de cooptation",
+          "metaDescription": "Consulte les codes de cooptation que d’autres utilisateurs de %BRAND% ont partagés pour une entreprise. Un modérateur vérifie chaque code avant qu’il apparaisse.",
+          "metaTitle": "Codes de cooptation partagés par d’autres candidats",
+          "q1": {
+            "a": "Non. Les codes vendus ou échangés sont refusés, tout comme les codes qui contiennent un numéro de téléphone, un identifiant WeChat, un e-mail ou un lien.",
+            "q": "Les codes sont-ils payants ?"
+          },
+          "q2": {
+            "a": "Non. Il aide ta candidature à parvenir à l’entreprise. Il ne décide pas du résultat.",
+            "q": "Un code me permet-il d’obtenir le poste ?"
+          },
+          "s1": {
+            "body": "Les codes partagés pour cette entreprise s’affichent sur la page de l’offre et sous « Codes de cooptation ».",
+            "title": "Ouvre une offre ou une entreprise"
+          },
+          "s2": {
+            "body": "Saisis-le dans le formulaire de candidature propre à l’employeur quand tu postules.",
+            "title": "Copie le code"
+          },
+          "s3": {
+            "body": "Ajoute ton propre code. Il apparaît après vérification par un modérateur.",
+            "title": "Partage un code que tu as"
+          },
+          "sample": {
+            "line1": "Entreprise Exemple · programme campus 2027",
+            "line2": "Code de cooptation : EXAMPLE2027 · vérifié par un modérateur",
+            "line3": "Un code aide ta candidature à parvenir à l’entreprise. Il ne décide pas du résultat."
+          },
+          "sub": "D’autres utilisateurs de %BRAND% partagent les codes de cooptation qu’ils ont. Un modérateur vérifie chaque code avant qu’il apparaisse, et les codes payants ne sont pas autorisés.",
+          "title": "Des codes de cooptation pour l’entreprise à laquelle tu postules"
+        },
+        "resumeTailoring": {
+          "eyebrow": "Adaptation du CV",
+          "metaDescription": "Crée une version de ton CV pour une offre, vois chaque changement et confirme tout élément nouveau avant de télécharger.",
+          "metaTitle": "Adapter ton CV à chaque offre",
+          "q1": {
+            "a": "Il peut proposer des formulations, mais une affirmation, un chiffre ou une compétence qui ne figure pas dans ton CV ne peut pas être téléchargé tant que tu ne l’as pas confirmé, modifié ou retiré.",
+            "q": "Peut-il inventer de l’expérience ?"
+          },
+          "q2": {
+            "a": "Non. Chaque copie adaptée est séparée, et ton CV principal reste tel quel.",
+            "q": "Est-ce que ça modifie mon CV principal ?"
+          },
+          "s1": {
+            "body": "Pars de n’importe quelle offre de ta liste ou d’une offre que tu as ajoutée toi-même.",
+            "title": "Choisis une offre"
+          },
+          "s2": {
+            "body": "Garde, modifie ou retire chaque changement. Rien de nouveau n’est ajouté sans ton accord.",
+            "title": "Relis les changements"
+          },
+          "s3": {
+            "body": "Exporte un fichier PDF ou Word une fois que chaque nouvel élément est confirmé.",
+            "title": "Télécharge"
+          },
+          "sample": {
+            "line1": "Modifié : le résumé nomme maintenant tes projets d’analyse de données.",
+            "line2": "Une ligne contient un chiffre introuvable dans ton CV. Corrige-le ou retire-le avant de télécharger.",
+            "line3": "Adéquation après les changements : Bien adapté · 84 / 100"
+          },
+          "sub": "Vois chaque changement côte à côte. Tout ce que le brouillon ajoute et qui ne figure pas dans ton CV attend ta confirmation.",
+          "title": "Une version de ton CV pour chaque offre"
         }
       },
       "roboapply": {
@@ -2955,7 +3148,8 @@
           "q": "Que signifie la note d’adéquation ?"
         },
         "q4": {
-          "q": "D’où viennent les offres ?"
+          "q": "D’où viennent les offres ?",
+          "a": "Elles viennent d’annonces publiques sur les pages carrières des employeurs eux-mêmes, de la liste publique d’offres d’emploi en données ouvertes de Taïwan, et de fournisseurs d’offres quand tu fais une recherche. Chaque offre indique sa source et la date de sa dernière vérification. %BRAND% ne liste pas toutes les offres du marché."
         },
         "q5": {
           "a": "La formule gratuite comprend la liste d’offres, les notes d’adéquation et ton tableau de candidatures, avec des limites quotidiennes sur les actions d’IA. Pro relève ces limites. Chaque prix et chaque limite figurent sur la page des tarifs.",
@@ -2988,11 +3182,11 @@
       "pricing": {
         "eyebrow": "Tarifs",
         "freeNote": "Limites quotidiennes sur les actions d’IA",
-        "notSet": "Prix pas encore fixé",
         "proNote": "Limites quotidiennes plus élevées sur chaque action d’IA",
         "seeAll": "Voir toutes les formules et limites",
         "sub": "La liste d’offres, les notes d’adéquation, les filtres et ton tableau de candidatures sont gratuits. Pro relève les limites quotidiennes sur les actions d’IA.",
-        "title": "Commence gratuitement. Passe à la formule supérieure quand il t’en faut plus."
+        "title": "Commence gratuitement. Passe à la formule supérieure quand il t’en faut plus.",
+        "notOpen": "Les formules payantes ne peuvent pas encore être achetées."
       },
       "sample": {
         "company": "Entreprise Exemple",
@@ -3054,7 +3248,6 @@
       "capsSub": "Pro a aussi des limites. Elles empêchent les abus et sont affichées ici pour que tu les connaisses avant de payer.",
       "capsTitle": "Limites",
       "cnPasses": "Les adhésions sont des pass à paiement unique. Elles ne se renouvellent jamais automatiquement.",
-      "cnRefund": "Les règles de remboursement seront publiées avant l’ouverture des formules payantes.",
       "count": "{count}",
       "cta": "Commencer gratuitement",
       "error": "Les formules n’ont pas pu être chargées. Actualise la page pour réessayer.",
@@ -3073,7 +3266,6 @@
       "metaTitle": "Tarifs",
       "notOpen": "Pas encore ouvert",
       "notOpenNote": "Les formules payantes ne peuvent pas encore être achetées. Voici la grille tarifaire qui s’appliquera à leur ouverture.",
-      "notSet": "Prix pas encore fixé",
       "perDay": "{count} par jour",
       "plansTitle": "Formules",
       "practiceCredits": "{count, plural, one {# entretien d’entraînement} other {# entretiens d’entraînement}} {per, select, period {par période de facturation} month {par mois} other {inclus}}",
@@ -3089,10 +3281,6 @@
         "a": "Non. Les limites sont remises à zéro chaque jour ou chaque semaine, comme indiqué dans le tableau. Les packs d’entraînement restent valables pendant le nombre de mois indiqué.",
         "q": "Les crédits non utilisés sont-ils reportés ?"
       },
-      "refund1": "Ton premier paiement d’abonnement peut être remboursé dans les 7 jours (48 heures pour une facturation hebdomadaire) si tu as utilisé moins de 5 actions qui nécessitent Pro.",
-      "refund2": "Un renouvellement que tu ne voulais pas garder peut être remboursé dans les 3 jours.",
-      "refund3": "Les packs d’entraînement non utilisés peuvent être remboursés.",
-      "refund4": "Dans l’UE et au Royaume-Uni, tu peux te rétracter dans les 14 jours et obtenir un remboursement intégral, sauf si tu as demandé à utiliser tout de suite les fonctionnalités payantes.",
       "refundLink": "Lire la politique de remboursement",
       "refundTitle": "Remboursements",
       "renew1": "Les formules qui se renouvellent l’indiquent sur cette page et au moment du paiement. Tu reçois un e-mail de rappel avant chaque renouvellement mensuel ou trimestriel.",
@@ -3101,7 +3289,11 @@
       "savedSearches": "Recherches enregistrées",
       "sub": "Chaque prix, chaque règle de renouvellement et chaque limite d’utilisation figurent sur cette page.",
       "title": "Tarifs",
-      "upToPerDay": "Jusqu’à {count} par jour"
+      "upToPerDay": "Jusqu’à {count} par jour",
+      "choosePlan": "Choisir cette formule",
+      "confirmSchoolEmail": "Confirmer ton e-mail scolaire",
+      "passRefundHow": "Demander un remboursement depuis la page Aide",
+      "signupToBuy": "Créer un compte gratuit pour acheter"
     },
     "ranking": {
       "addsPoints": "+{points} points",
@@ -3111,7 +3303,8 @@
       },
       "factorsTitle": "Les quatre facteurs",
       "fit": {
-        "title": "Adéquation avec ton CV et ta recherche"
+        "title": "Adéquation avec ton CV et ta recherche",
+        "body": "Ta note d’adéquation pour l’offre, sur 100. Quand l’analyse d’adéquation complète n’est pas encore disponible, une estimation rapide sur la même échelle est utilisée. Une offre dont l’estimation rapide repose sur trop peu d’éléments est écartée quand tu filtres sur « Bien adaptées ou mieux » ou « Très adaptées uniquement ». Tant que nous comparons encore les estimations rapides aux analyses complètes, une offre qui a une analyse complète est placée à mi-chemin entre son estimation rapide et sa note issue de l’analyse, si bien que sa place dans la liste peut différer du chiffre affiché sur sa carte."
       },
       "fitParts": {
         "careerPath": "L’évolution de ton parcours",
@@ -3125,7 +3318,8 @@
         "weight": "{pct} % de la note d’adéquation"
       },
       "freshness": {
-        "title": "Fraîcheur"
+        "title": "Fraîcheur",
+        "body": "Les annonces les plus récentes passent en premier. L’effet est le plus fort pendant les deux premiers jours, puis garde un poids plus faible pendant environ deux semaines. Une annonce que sa source ne publie plus compte comme plus ancienne."
       },
       "goalIntro": "L’objectif de carrière que tu as choisi en créant ton compte ajoute des points aux offres qui y correspondent.",
       "goalOthers": "Les autres objectifs ne changent pas le classement.",
@@ -3153,6 +3347,14 @@
         "sponsorshipFirst": {
           "body": "Si tu as indiqué avoir besoin d’un parrainage de visa, les offres dont l’annonce mentionne le parrainage passent en premier, dans l’ordre que tu as choisi, et celles dont l’annonce dit ne pas parrainer sont masquées. Cela s’applique à tous les tris.",
           "title": "Le parrainage de visa d’abord"
+        },
+        "seenSkipped": {
+          "body": "Une offre qui figurait dans ta liste lors d’au moins trois visites et que tu n’as jamais ouverte est moins bien classée : 5 points de moins après trois visites, 7,5 après quatre, et 10 à partir de cinq.",
+          "title": "Offres que tu continues d’ignorer"
+        },
+        "wrongTitle": {
+          "body": "Si tu marques une offre « Ça ne m’intéresse pas : pas le bon intitulé de poste », le poids de ce type de poste et le poids de cet intitulé baissent chacun de 0,25, sur une échelle qui va de -1 à 1. « Ce qui t’a intéressé » est la moyenne des poids du type de poste, de l’entreprise et des compétences d’une offre, ainsi que de son poids d’intitulé lorsqu’il est inférieur à zéro. Marquer une seule offre fait donc baisser un peu les autres offres qui ont le même type de poste ou le même intitulé, et chaque offre marquée en plus les fait baisser davantage. L’effet diminue de 2 % par jour. Tes filtres ne changent pas.",
+          "title": "Intitulés que tu as marqués comme incorrects"
         }
       },
       "rulesTitle": "{count, plural, one {Une règle de plus} other {Autres règles}}",
@@ -3164,7 +3366,14 @@
       "spreadTitle": "Variété",
       "title": "Comment fonctionne le classement",
       "upToPoints": "Jusqu’à {points} points",
-      "weight": "{pct} % du classement"
+      "weight": "{pct} % du classement",
+      "cnNote": "Sur %BRAND%, si les recommandations personnalisées sont désactivées ou pas encore choisies, les offres sont classées uniquement selon leur date et tes filtres. Quand tu fais une recherche avec des mots, elles sont classées selon la façon dont chaque annonce correspond à ces mots.",
+      "deadlineSort": "Le tri « {deadline} » classe les offres selon la date de clôture des candidatures, la plus proche en premier.",
+      "otherSorts": "Les tris « {newest} », « {bestFit} » et « {highestPay} » classent chacun les offres uniquement selon ce critère.",
+      "pointsNote": "Chaque offre reçoit une note de classement sur 100 à partir des quatre facteurs. Les règles et les objectifs ci-dessous ajoutent des points à cette note, en retirent, ou déplacent des offres dans la liste.",
+      "pointsNoteRules": "Chaque offre reçoit une note de classement sur 100 à partir des quatre facteurs. Les règles ci-dessous ajoutent des points à cette note ou en retirent.",
+      "sameRole": "Quand une entreprise publie le même poste dans plusieurs villes, tu vois une seule carte qui liste les autres lieux, jusqu’à 10. Les lieux supplémentaires apparaissent sur une autre carte.",
+      "upToPointsLower": "Jusqu’à {points} points de moins"
     },
     "search": {
       "anyCountry": "Tous les pays",
@@ -3688,7 +3897,9 @@
         "noCharge": "Aucun paiement réglé trouvé.",
         "notEligible": "Non remboursable",
         "rule": "Règle : {rule}",
-        "title": "Vérification de remboursement"
+        "title": "Vérification de remboursement",
+        "issueElsewhere": "Pour rembourser, ouvre Crédits et formules, puis Remboursements. Un paiement par carte y est remboursé. Une commande en Chine continentale y est enregistrée une fois l’argent rendu dans la console du marchand.",
+        "sub": "Ce que disent les règles de remboursement publiées sur le dernier paiement de cette personne. C’est une simple vérification."
       },
       "reports": {
         "allMarkets": "Les deux",
@@ -3767,7 +3978,8 @@
         "title": "Sécurité des contenus",
         "usable": "En service",
         "verdict": "Résultat",
-        "yes": "Oui"
+        "yes": "Oui",
+        "problemsDegraded": "Problèmes de configuration. Le contrôle utilise la liste de mots intégrée tant qu’ils ne sont pas corrigés"
       },
       "system": {
         "alerts": {
@@ -3815,7 +4027,44 @@
         },
         "providers": {
           "errors": "Erreurs",
-          "provider": "Fournisseur"
+          "provider": "Fournisseur",
+          "alert": {
+            "exhausted": "{provider} : le quota mensuel est épuisé. Il se réinitialise dans {days}.",
+            "exhaustedNoReset": "{provider} : le quota mensuel est épuisé. Le fournisseur n’a pas indiqué quand il se réinitialise.",
+            "low": "{provider} : il reste {value} du quota mensuel (niveau d’alerte {level}).",
+            "not_subscribed": "{provider} : la clé n’a pas de formule pour ce fournisseur.",
+            "unauthorized": "{provider} : le fournisseur a rejeté la clé."
+          },
+          "banner": "Indisponible pour le moment : {providers}. Le flux d’offres fonctionne sans eux.",
+          "bannerOne": "Indisponible pour le moment : {providers}. Le flux d’offres fonctionne sans lui.",
+          "calls": "Appels aujourd’hui / limite quotidienne",
+          "days": "{count, plural, one {# jour} other {# jours}}",
+          "empty": "Aucun fournisseur d’offres n’est configuré.",
+          "jobs": "Offres restantes / limite",
+          "leftOfLimit": "{left} / {limit}",
+          "market": "Marché",
+          "markets": {
+            "cn": "Chine continentale",
+            "intl": "International"
+          },
+          "new": "Nouvelles",
+          "plan": "Formule",
+          "requests": "Requêtes restantes / limite",
+          "resetsIn": "Réinitialisation dans",
+          "returned": "Renvoyées",
+          "state": "État",
+          "states": {
+            "disabled": "Désactivé",
+            "exhausted": "Épuisé",
+            "gated": "Nécessite une formule plus grande",
+            "low": "Presque épuisé",
+            "not_subscribed": "Non abonné",
+            "ok": "Activé",
+            "unauthorized": "Clé rejetée",
+            "unknown": "Pas encore connu"
+          },
+          "sub": "Ce que chaque fournisseur a signalé en dernier sur sa propre formule, et ses appels pour le jour UTC {day}. Un tiret signifie que le fournisseur ne l’a pas indiqué.",
+          "title": "Fournisseurs d’offres"
         },
         "queue": {
           "dead": "Abandonnées",
@@ -3849,6 +4098,204 @@
           "feedback": "Retours sur l’Assistant",
           "health": "État du système",
           "safety": "Sécurité des contenus"
+        },
+        "payments": {
+          "eventsAll": "Le point de terminaison du webhook envoie tous les événements sur lesquels le site agit.",
+          "failed": "Les paiements par carte n’ont pas pu être vérifiés.",
+          "link": "Voir le détail complet de Stripe dans Crédits et formules",
+          "loading": "Chargement…",
+          "missingEvents": "{count, plural, one {# événement sur lequel le site agit n’est pas envoyé par le point de terminaison du webhook.} other {# événements sur lesquels le site agit ne sont pas envoyés par le point de terminaison du webhook.}}",
+          "noEndpoint": "Aucun point de terminaison de webhook dans Stripe ne pointe vers ce site.",
+          "notChecked": "Le point de terminaison du webhook n’a pas pu être vérifié.",
+          "notReady": "Les paiements par carte ne sont pas prêts.",
+          "ready": "Les paiements par carte sont prêts.",
+          "reason": {
+            "live_key_outside_production": "Une clé Stripe live est refusée en dehors de la production.",
+            "missing": "Aucune clé Stripe n’est définie.",
+            "no_secret": "Aucun secret de signature du webhook n’est défini."
+          },
+          "sub": "Indique si les paiements par carte peuvent être acceptés ici.",
+          "title": "Paiements"
+        }
+      },
+      "sources": {
+        "about": {
+          "activejobs": "Un service de recherche d’offres. Utilisé pour les recherches que les gens demandent.",
+          "activejobs_feed": "Nouvelles annonces tirées des sites carrières des employeurs, lues toutes les heures. Fonctionne tout seul dès qu’une formule payante est en place.",
+          "ats_public": "Annonces tirées des sites carrières publics des entreprises elles-mêmes. Chacune renvoie vers la page de l’entreprise.",
+          "bank": "Offres que des recruteurs publient sur {sourceName} pour un employeur nommé.",
+          "jsearch": "Un service de recherche d’offres. Utilisé pour les recherches que les gens demandent.",
+          "linkedin": "Un service de recherche d’offres qui n’est plus utilisé.",
+          "other": "Une source d’offres.",
+          "tw_gov_jobs": "Postes vacants d’administrations et d’écoles, issus des données ouvertes de Taïwan. Chacun affiche la mention de crédit que sa licence demande. Aucune coordonnée de fonctionnaire n’est conservée.",
+          "tw_open_data": "Postes vacants issus du jeu de données ouvertes du service public de l’emploi de Taïwan. Chacun affiche la mention de crédit que sa licence demande.",
+          "usajobs": "Postes vacants de l’administration fédérale des États-Unis, tirés du site d’emploi du gouvernement. Chacun renvoie vers l’annonce officielle.",
+          "user_import": "Une personne colle un lien ou une annonce. Elle seule la voit."
+        },
+        "boards": {
+          "actions": {
+            "cancel": "Annuler",
+            "check": "Vérifier maintenant",
+            "checkLabel": "Vérifier {company} maintenant",
+            "checking": "Vérification…",
+            "confirmRemove": "Retirer et masquer ses offres",
+            "remove": "Retirer",
+            "removeLabel": "Retirer {company}",
+            "toggleLabel": "Activer ou désactiver {company}",
+            "turnOff": "Désactiver",
+            "turnOn": "Activer"
+          },
+          "add": {
+            "adding": "Ajout…",
+            "company": "Nom de l’entreprise",
+            "companyHint": "Tel que l’entreprise l’écrit sur son propre site carrières.",
+            "submit": "Ajouter le site carrières",
+            "system": "Système du site carrières",
+            "title": "Ajouter le site carrières d’une entreprise",
+            "token": "Identifiant du site carrières",
+            "tokenHint": "Le nom court de l’entreprise dans l’adresse de son site carrières."
+          },
+          "errors": {
+            "duplicate": "Ce site carrières figure déjà dans la liste.",
+            "generic": "Ça n’a pas fonctionné. Réessaie.",
+            "invalid": "Vérifie l’identifiant du site carrières et le nom de l’entreprise."
+          },
+          "list": {
+            "columns": {
+              "actions": "Actions",
+              "board": "Identifiant du site",
+              "company": "Entreprise",
+              "jobs": "Annonces listées",
+              "lastChecked": "Dernière vérification",
+              "problem": "Dernier problème",
+              "status": "Statut",
+              "system": "Système"
+            },
+            "empty": "Aucun site carrières pour l’instant. Ajoutes-en un ci-dessus.",
+            "loadError": "La liste n’a pas pu être chargée.",
+            "never": "Pas encore vérifié",
+            "noProblem": "Aucun",
+            "off": "Désactivé",
+            "on": "Activé",
+            "title": "Sites carrières pour ce site"
+          },
+          "offNote": "Désactiver un site carrières ou le retirer masque ses offres. Le réactiver relance sa lecture.",
+          "run": {
+            "error": "{company} : {problem}",
+            "queued": "{company} : le site carrières liste {listed, plural, one {# annonce} other {# annonces}} pour ce site. La lecture a commencé.",
+            "waiting": "{company} : le site carrières liste {listed, plural, one {# annonce} other {# annonces}} pour ce site. La lecture aura lieu à la prochaine vérification planifiée."
+          },
+          "sub": "Les sites carrières publics des entreprises qui recrutent en Chine continentale. Nous lisons le flux public d’offres de chaque site carrières et gardons les annonces situées en Chine continentale. Chaque offre renvoie vers la page de l’entreprise.",
+          "systems": "Nous pouvons lire les sites carrières hébergés sur {names}.",
+          "title": "Sites carrières d’entreprises"
+        },
+        "empty": "Ce site n’a pas encore de source d’offres.",
+        "eyebrow": "Admin",
+        "facts": {
+          "boards": "Sites carrières lus",
+          "boardsFailing": "{count, plural, one {# site carrières n’a pas pu être lu la dernière fois} other {# sites carrières n’ont pas pu être lus la dernière fois}}",
+          "boardsValue": "{enabled} sur {total} activés",
+          "held": "Offres enregistrées mais non affichées",
+          "lastRun": "Dernière vérification",
+          "never": "Pas encore vérifié",
+          "open": "Offres visibles par les gens maintenant",
+          "written": "Offres enregistrées lors de la dernière vérification"
+        },
+        "lastError": "La dernière vérification a échoué : {error}",
+        "loading": "Chargement…",
+        "name": {
+          "activejobs": "Active Jobs DB",
+          "activejobs_feed": "Flux Active Jobs DB",
+          "ats_public": "Sites carrières d’entreprises",
+          "bank": "Offres de recruteurs {sourceName}",
+          "jsearch": "JSearch",
+          "linkedin": "Recherche d’offres LinkedIn",
+          "other": "{provider}",
+          "tw_gov_jobs": "Postes vacants du secteur public taïwanais",
+          "tw_open_data": "Données ouvertes du gouvernement taïwanais",
+          "usajobs": "USAJOBS",
+          "user_import": "Offres ajoutées par les gens eux-mêmes"
+        },
+        "notShown": {
+          "body": "{source} n’a pas encore de page publique pour une offre isolée, donc une personne n’aurait nulle part où postuler. Nous gardons ses offres à jour et les affichons dès que cette page existe. Pour l’activer, renseigne {variable} avec l’adresse de cette page.",
+          "count": "{count, plural, one {# offre publiée est en attente} other {# offres publiées sont en attente}}",
+          "title": "Ces offres sont enregistrées mais non affichées"
+        },
+        "pageSet": "Sa page publique d’offres est définie. Chaque offre renvoie vers cette page.",
+        "panelSub": "Chaque source est vérifiée selon son propre calendrier. Les chiffres viennent de la dernière vérification, pas du direct.",
+        "panelTitle": "D’où viennent les offres",
+        "panelTitleBrand": "D’où viennent les offres : {brand}",
+        "reason": {
+          "cross_tenant_unconfirmed": "La lecture de cette source n’a pas été confirmée pour ce site.",
+          "disabled": "Désactivée, ou sa clé est manquante.",
+          "kill_switch": "Désactivée dans les réglages du serveur.",
+          "no_api_key": "Aucune clé web n’est définie pour elle.",
+          "no_key": "Aucune clé n’est définie pour elle.",
+          "not_configured": "Non configurée sur ce serveur.",
+          "not_registered": "Non disponible sur ce serveur.",
+          "other": "Désactivée ({code}).",
+          "plan_too_small": "Désactivée tant que la formule n’autorise pas au moins 20 000 annonces par mois.",
+          "plan_unknown": "Désactivée. La taille de la formule n’est pas encore connue : définis FANTASTIC_MONTHLY_JOBS, ou attends la première réponse du fournisseur.",
+          "quota": "En pause : le quota de sa formule pour cette période est épuisé, a été refusé, ou est réservé aux recherches des gens eux-mêmes.",
+          "tls_required": "Sa connexion à la base de données n’est pas chiffrée, nous ne l’ouvrons donc pas.",
+          "tls_required_no_api_key": "Sa connexion à la base de données n’est pas chiffrée et aucune clé web n’est définie, nous ne pouvons donc pas la lire.",
+          "transport_off": "Désactivée dans les réglages du serveur.",
+          "url_invalid": "L’adresse définie pour elle n’est pas acceptée, elle n’est donc pas lue.",
+          "wrong_market": "Pas une source pour ce site."
+        },
+        "refresh": "Actualiser",
+        "refreshing": "Actualisation…",
+        "skips": {
+          "bank_closed": "Fermées par le recruteur : {count}",
+          "bank_no_company": "Aucun employeur nommé : {count}",
+          "bank_no_public_page": "Aucune page publique d’offre vers laquelle renvoyer : {count}",
+          "bank_page_cap": "Vérifications arrêtées à la limite de pages : {count}",
+          "bank_pass_cut_short": "Vérifications interrompues faute de temps : {count}",
+          "bank_reread_started": "Relectures complètes de la source lancées : {count}",
+          "bank_synced": "Offres publiées avec un employeur nommé : {count}",
+          "bank_test_posting": "Annonces de test : {count}",
+          "bank_time_without_zone": "Heures envoyées sans fuseau horaire, lues comme heure de Chine : {count}",
+          "bank_unpublished": "Ouvertes mais non publiées par le recruteur : {count}",
+          "bank_validity_ended": "Au-delà de la date de fin fixée par le recruteur : {count}",
+          "board_backlog": "Annonces restant à lire : {count}",
+          "board_errors": "Sites carrières qui n’ont pas pu être lus : {count}",
+          "boards_read": "Sites carrières vérifiés : {count}",
+          "countedAt": "Compté lors de la vérification du {time}.",
+          "country_not_selected": "Situées dans un pays pour lequel ce site carrières n’est pas lu : {count}",
+          "indeed_only_link": "Écartées car le seul lien menait à Indeed : {count}",
+          "linkedin_only_link": "Écartées car le seul lien menait à LinkedIn : {count}",
+          "missing_title_or_company": "Sans intitulé de poste ou sans nom d’employeur : {count}",
+          "no_apply_url": "Sans lien pour postuler : {count}",
+          "no_external_id": "Sans identifiant d’annonce côté source : {count}",
+          "none": "Rien n’a été écarté lors de la dernière vérification.",
+          "normalize_failed": "N’ont pas pu être lues : {count}",
+          "private_row": "Déjà enregistrées en privé par une personne, laissées telles quelles : {count}",
+          "title": "Ce que la dernière vérification a compté",
+          "tw_absence_unproven": "Non renvoyées par les deux dernières lectures quotidiennes mais gardées ouvertes, car leur comté n’a pas pu être lu en entier : {count}",
+          "tw_capped_county_major": "Requêtes par comté et par catégorie d’emploi qui ont atteint la limite de lignes : {count}",
+          "tw_capped_leaf": "Requêtes qui ont atteint la limite de lignes et n’ont pas pu être divisées davantage : {count}",
+          "tw_county_only": "Postes vacants que la lecture quotidienne n’a pas atteints par district : {count}",
+          "tw_county_unreached": "Postes vacants non atteints par district ni par catégorie d’emploi : {count}",
+          "tw_request_errors": "Requêtes en échec : {count}",
+          "tw_skipped_position": "Parties d’une lecture quotidienne abandonnées après des échecs répétés : {count}",
+          "tw_sweep_finished": "Lectures quotidiennes terminées : {count}",
+          "tw_sweep_incomplete": "Lectures quotidiennes terminées de façon incomplète : {count}",
+          "wrong_market_cn": "Situées hors de Chine continentale : {count}",
+          "wrong_market_intl": "Situées en Chine continentale, donc pas pour ce site : {count}"
+        },
+        "state": {
+          "off": "Désactivé",
+          "on": "Activé"
+        },
+        "sub": "D’où ce site tire ses offres, ce que chaque source a fait lors de sa dernière vérification, et pourquoi certaines annonces ont été écartées.",
+        "title": "Sources d’offres",
+        "transport": {
+          "api": "Lue via une connexion web sécurisée",
+          "board_api": "Lue depuis le flux public d’offres de chaque site carrières",
+          "db": "Lue depuis sa base de données",
+          "off": "Non connectée",
+          "rapidapi": "Service de recherche",
+          "syndication": "Lue depuis son flux d’offres"
         }
       }
     }
@@ -3943,8 +4390,6 @@
     "agent_pending": "Préparation de ta recherche et consultation des sources connectées…",
     "cancel_search": "Arrêter la recherche",
     "search_stopped": "La recherche a été arrêtée. Tu peux modifier ta demande et relancer une recherche.",
-    "linkedin_only": "Offres LinkedIn uniquement",
-    "linkedin_hint": "Affiche uniquement les postes dont la provenance LinkedIn est établie. La couverture dépend des sources choisies ; cette recherche ne couvre pas toutes les offres LinkedIn.",
     "advanced": "Filtres avancés et sources",
     "overrides_hint": "Ces réglages sont prioritaires sur ta demande. Laisse-les en automatique pour utiliser les détails que tu décris.",
     "auto": "Selon ma demande",
@@ -3962,8 +4407,8 @@
     "agent_unavailable": "L’agent de recherche est temporairement indisponible. Réessaie ; aucun résultat de recherche n’a été généré.",
     "request_review": "Ta demande de recherche",
     "agent_results_for": "Offres trouvées selon ta demande",
-    "linkedin_empty": "Les sources choisies n’ont renvoyé aucune offre LinkedIn. Élargis les critères ou désactive la recherche limitée à LinkedIn.",
-    "entry_hint": "Décris ton prochain poste et lance une recherche dans les sources d’emploi connectées."
+    "entry_hint": "Décris ton prochain poste et lance une recherche dans les sources d’emploi connectées.",
+    "intro": "Décris le travail que tu veux, puis transforme ta demande en recherches ciblées dans les sources d’emploi connectées."
   },
   "jobSearchApi": {
     "eyebrow": "%BRAND% pour les développeurs",
@@ -4317,6 +4762,26 @@
       "turnOn": "Activer",
       "useCode": "Utiliser un code de l’appli",
       "useRecovery": "Utiliser plutôt un code de secours"
+    },
+    "prefs": {
+      "danger": {
+        "confirmKeyword": "SUPPRIMER",
+        "signedOutNow": "Ta session est fermée partout, tout de suite."
+      },
+      "identity": {
+        "linkedin_invalid": "Utilise le lien de ton profil LinkedIn (linkedin.com/in/ton-nom), ou laisse le champ vide.",
+        "name_ph": "Ton nom",
+        "name_save_failed": "Ton nom n’a pas été enregistré. Réessaie.",
+        "pronouns_he": "il/lui",
+        "pronouns_she": "elle/elle",
+        "pronouns_they": "iel/iel",
+        "years_unset": "Non défini"
+      },
+      "security": {
+        "otherNote": "Tu te connectes sans mot de passe, il n’y a donc aucun mot de passe à changer.",
+        "phoneNote": "Tu te connectes avec un code envoyé sur ton téléphone, il n’y a donc aucun mot de passe à changer.",
+        "wechatNote": "Tu te connectes avec WeChat, il n’y a donc aucun mot de passe à changer."
+      }
     }
   },
   "assistant": {
@@ -4456,7 +4921,9 @@
         "gaps": "Ce qui pourrait être plus solide",
         "highlights": "À mentionner",
         "missing": "Ce que l’annonce demande et que ton CV ne montre pas",
-        "title": "Ton adéquation avec cette offre"
+        "title": "Ton adéquation avec cette offre",
+        "openJob": "Voir ton adéquation actuelle",
+        "snapshot": "Voici ton adéquation au moment où cette réponse a été écrite. Elle change quand ton CV ou ta recherche change."
       },
       "gaps": {
         "keys": {
@@ -4502,7 +4969,14 @@
         "range": "{min}–{max}",
         "seeAll": "Voir toutes tes offres",
         "title": "Offres",
-        "upTo": "Jusqu’à {amount}"
+        "upTo": "Jusqu’à {amount}",
+        "addedByYou": "Ajoutée par toi",
+        "payAsStated": "Salaire tel qu’indiqué : {text}",
+        "workModel": {
+          "hybrid": "Hybride",
+          "onsite": "Sur site",
+          "remote": "Télétravail"
+        }
       },
       "memory": {
         "allow": "Autoriser et mémoriser",
@@ -4524,7 +4998,8 @@
         "copilot_budget_exhausted": "L’Assistant est très sollicité pour le moment. Réessaie plus tard. Rien n’a été débité.",
         "credits_exhausted": "Tu n’as plus de messages pour l’Assistant aujourd’hui.",
         "proposal_expired": "Cette suggestion a expiré. Redemande pour en obtenir une nouvelle.",
-        "rate_limited": "Trop de messages en peu de temps. Attends un instant, puis réessaie."
+        "rate_limited": "Trop de messages en peu de temps. Attends un instant, puis réessaie.",
+        "stopped": "Arrêté."
       },
       "proposalClosed": "Cette suggestion ne peut plus être utilisée. Redemande pour en obtenir une nouvelle.",
       "proposalExpired": "Cette suggestion a expiré. Redemande pour en obtenir une nouvelle.",
@@ -4549,7 +5024,11 @@
       "tailorReady": {
         "open": "Ouvrir le CV adapté",
         "title": "Ton CV adapté est prêt"
-      }
+      },
+      "applying": "En cours…",
+      "inProgress": "C’est déjà en cours. Si rien n’apparaît dans une minute, réessaie.",
+      "notSaved": "Cette suggestion n’a pas été enregistrée avec sa réponse, elle ne peut donc pas être utilisée. Redemande.",
+      "waitForAnswer": "Tu pourras l’utiliser quand la réponse sera terminée."
     },
     "cheatsheet": {
       "groups": {
@@ -4592,7 +5071,10 @@
         }
       },
       "intro": "Choisis une question pour la placer dans le champ. Modifie-la si tu veux, puis appuie sur Envoyer.",
-      "title": "Ce que tu peux demander"
+      "title": "Ce que tu peux demander",
+      "needsJob": "Ces questions portent sur une seule offre. Ouvre une offre, puis pose ta question depuis là.",
+      "needsJobHere": "Ces questions portent sur une seule offre. Cette discussion ne concerne pas l’offre de cette page.",
+      "openJobs": "Ouvrir tes offres"
     },
     "chipPrompts": {
       "cover_letter": "Rédige une lettre de motivation pour cette offre.",
@@ -4616,11 +5098,15 @@
       "placeholder": "Pose une question sur les offres, ta recherche, ton CV ou un entretien",
       "send": "Envoyer",
       "stop": "Arrêter",
-      "tooLong": "Reste en dessous de {max} caractères."
+      "tooLong": "Reste en dessous de {max} caractères.",
+      "placeholderShort": "Pose une question"
     },
     "context": {
       "job": "À propos de cette offre",
-      "resume": "À propos de ce CV"
+      "resume": "À propos de ce CV",
+      "askPageJob": "Nouvelle discussion sur cette offre",
+      "noJob": "Cette discussion ne concerne pas l’offre de cette page.",
+      "otherJob": "Cette discussion concerne une autre offre."
     },
     "empty": {
       "body": "Les réponses s’appuient sur ton profil, ta recherche enregistrée et les offres de ta liste. Tout changement t’est d’abord montré et n’a lieu que si tu le confirmes.",
@@ -4753,13 +5239,20 @@
       "propose_filter_change": "Préparation d’un changement pour ta recherche…",
       "salary_context": "Lecture des salaires indiqués…",
       "search_jobs": "Recherche d’offres…",
-      "top_fit_jobs": "Recherche des offres qui te correspondent le mieux…"
+      "top_fit_jobs": "Recherche des offres qui te correspondent le mieux…",
+      "added_jobs": "Consultation des offres que tu as ajoutées…",
+      "show_jobs": "Préparation de la liste…",
+      "similar_jobs": "Recherche d’offres similaires…"
     },
     "voice": {
       "blocked": "L’accès au micro est bloqué dans ce navigateur.",
       "listening": "Écoute en cours…",
       "start": "Dicter ta question",
-      "stop": "Arrêter l’écoute"
+      "stop": "Arrêter l’écoute",
+      "vendorNotice": "Ton navigateur transforme ta voix en texte avec son propre service de reconnaissance vocale. L’éditeur du navigateur traite l’audio, ce qui peut se faire en dehors de la Chine continentale."
+    },
+    "jobList": {
+      "title": "Offres mentionnées dans cette réponse"
     }
   },
   "brand": {
@@ -5116,7 +5609,9 @@
       "resumePrimary": "{name} (principal)",
       "submit": "Écrire la lettre",
       "title": "Écrire une lettre de motivation",
-      "writing": "Écriture et vérification de ta lettre. Cela peut prendre jusqu’à une minute."
+      "writing": "Écriture et vérification de ta lettre. Cela peut prendre jusqu’à une minute.",
+      "resumeError": "Tes CV ne se sont pas chargés. Rien n’est perdu.",
+      "resumeRetry": "Réessayer"
     },
     "hub": {
       "backToResumes": "Retour aux CV",
@@ -5260,6 +5755,205 @@
         "sub": "Revenus de l’année sur les cartes taïwanaises, comparés au seuil de 600 000 NT$ à partir duquel l’immatriculation à la TVA est obligatoire.",
         "title": "Revenus des cartes taïwanaises",
         "warn": "Les revenus dépassent {pct} % du seuil d’immatriculation à la TVA. Prévois l’immatriculation dès maintenant."
+      },
+      "practiceCost": {
+        "average": "Coût moyen par session (USD)",
+        "brand": "Marque",
+        "loadError": "Le coût n’a pas pu être chargé.",
+        "loading": "Chargement…",
+        "notEnough": "Pas encore assez de sessions ({n} sur {min})",
+        "range": "Première et dernière session",
+        "rangeValue": "Du {from} au {to}",
+        "ruleNote": "Les moyennes ci-dessus sont en dollars américains, sans conversion. Un nouveau prix correspond à une seule valeur par défaut du catalogue, par marque.",
+        "ruleTitle": "La règle du propriétaire",
+        "rules": {
+          "goapply": "Au-delà d’environ 3,5 ¥ par session, passe les packs à 39 ¥ et 99 ¥.",
+          "roboapply": "Au-delà de 1,00 $ par session, fixe le prix du pack de 15 à 27,99 $."
+        },
+        "sample": "Sessions comptées",
+        "sampleValue": "{n} (les {max} dernières au maximum)",
+        "sub": "Ce que nous coûte en moyenne un entretien d’entraînement, sur les dernières sessions de chaque marque. Le chiffre est en dollars américains, tel que le coût est enregistré.",
+        "title": "Coût de l’entraînement"
+      },
+      "refunds": {
+        "cn": {
+          "already": "Un remboursement est déjà enregistré pour la commande {order}. Il n’est pas enregistré deux fois.",
+          "amount": "Montant",
+          "cancel": "Annuler",
+          "channel": "Payé avec",
+          "channels": {
+            "alipay": "Alipay",
+            "wechatpay": "WeChat Pay"
+          },
+          "check": "Vérifier l’enregistrement",
+          "checkHint": "Aucun accès n’a été retiré pour ce remboursement. Si le pass ou le pack est toujours en place, vérifie l’enregistrement pour terminer l’opération.",
+          "checkLabel": "Vérifier l’enregistrement du remboursement de la commande {order}",
+          "checking": "Vérification…",
+          "date": "Finalisée le",
+          "empty": "Aucune commande finalisée en Chine continentale pour cette personne.",
+          "entitlement": {
+            "none": "Aucun accès n’a été modifié.",
+            "pack_zeroed": "Les entretiens d’entraînement restants de ce pack ont été retirés.",
+            "pass_ended": "Le pass a pris fin.",
+            "pass_shortened": "Le pass a été raccourci du nombre de jours que cette commande avait ajoutés."
+          },
+          "errors": {
+            "generic": "Nous n’avons pas pu terminer l’enregistrement du remboursement. Réessaie. Un remboursement n’est jamais enregistré deux fois.",
+            "invalid_request": "Vérifie le motif et le montant.",
+            "not_found": "Commande finalisée introuvable.",
+            "order_not_completed": "Cette commande n’a jamais été finalisée : il n’y a donc aucun paiement à rembourser."
+          },
+          "formTitle": "Enregistrer un remboursement pour la commande {order}",
+          "invalidAmount": "Saisis le montant en yuans, par exemple 12 ou 12.50 (décimales avec un point), sans dépasser le montant de la commande.",
+          "loadError": "Les commandes n’ont pas pu être chargées.",
+          "loading": "Chargement…",
+          "moneyReturned": "L’argent a été rendu dans la console du marchand",
+          "order": "Commande",
+          "partialAmount": "Montant rendu en yuans, s’il est inférieur au total de la commande (laisse vide pour la commande entière)",
+          "plan": "Formule",
+          "reason": "Motif",
+          "record": "Enregistrer le remboursement",
+          "recordLabel": "Enregistrer le remboursement de la commande {order}",
+          "recorded": "Remboursement enregistré pour la commande {order}.",
+          "refund": "Remboursement",
+          "refunded": {
+            "full": "Remboursement enregistré",
+            "partial": "Remboursement partiel enregistré"
+          },
+          "save": "Enregistrer le remboursement",
+          "saving": "Enregistrement…",
+          "sub": "Les remboursements Alipay et WeChat Pay se font dans la console du marchand, pas ici. Rends d’abord l’argent là-bas, puis enregistre-le. Enregistrer un remboursement intégral met fin à ce pass ou retire ce qui reste de ce pack, une seule fois.",
+          "title": "Commandes en Chine continentale"
+        },
+        "facts": {
+          "country": "Pays de facturation",
+          "loadError": "La vérification du remboursement n’a pas pu être chargée.",
+          "no": "Non",
+          "notFound": "Aucun utilisateur avec cet ID.",
+          "packUsed": "Entretiens d’entraînement utilisés sur ce pack",
+          "paidOnlyUsed": "Actions qui nécessitent Pro, utilisées depuis le paiement",
+          "paidThrough": "Payé via",
+          "prorata": "Jours utilisés de la période payée",
+          "prorataValue": "{used} sur {period}",
+          "source": {
+            "cn": "Alipay ou WeChat Pay",
+            "stripe": "Carte"
+          },
+          "title": "Dernier paiement et règles de remboursement",
+          "waiver": "Case « Commencer maintenant » cochée au paiement",
+          "yes": "Oui"
+        },
+        "list": {
+          "access": "Accès",
+          "amount": "Montant",
+          "amountValue": "{amount} ({share})",
+          "by": "Par",
+          "date": "Date",
+          "disputeFlag": "{count, plural, one {# litige enregistré : la banque a repris l’argent. Vérifie ce compte.} other {# litiges enregistrés : la banque a repris l’argent. Vérifie ce compte.}}",
+          "empty": "Rien d’enregistré pour cette personne.",
+          "full": "intégral",
+          "kept": "Inchangé",
+          "kind": "Type",
+          "kinds": {
+            "dispute": "Litige",
+            "manual_cn": "Enregistré manuellement",
+            "other": "Autre",
+            "refund": "Remboursement",
+            "withdrawal": "Rétractation"
+          },
+          "loadError": "Les remboursements n’ont pas pu être chargés.",
+          "loading": "Chargement…",
+          "more": "Afficher plus",
+          "moreError": "La suite n’a pas pu être chargée. Réessaie.",
+          "partial": "partiel",
+          "reason": "Motif",
+          "ref": "Référence",
+          "refresh": "Actualiser",
+          "refreshError": "La liste n’a pas pu être actualisée. Ce que tu vois n’est peut-être plus à jour.",
+          "refreshLabel": "Actualiser la liste des remboursements, rétractations et litiges",
+          "refreshing": "Actualisation…",
+          "reversed": "Retiré",
+          "title": "Remboursements, rétractations et litiges"
+        },
+        "pick": "Saisis un ID utilisateur pour commencer.",
+        "show": "Afficher",
+        "stripe": {
+          "amount": "Montant (laisse vide pour rembourser tout ce qui peut encore l’être)",
+          "amountAsTyped": "{amount} dans la devise du paiement",
+          "amountHelp": "Dans la devise du paiement, avec un point pour les décimales, par exemple 10.00.",
+          "back": "Retour",
+          "confirm": "Rembourser maintenant",
+          "confirmAmount": "Montant",
+          "confirmReason": "Motif",
+          "confirmTarget": "Paiement",
+          "confirmTitle": "Rembourser ce paiement ?",
+          "confirmUser": "Utilisateur",
+          "done": "Remboursement de {amount} effectué. L’accès change quand Stripe confirme le remboursement.",
+          "doneFull": "Il ne reste rien à rembourser sur ce paiement.",
+          "doneNoAmount": "Le remboursement a été envoyé. L’accès change quand Stripe confirme le remboursement.",
+          "donePartial": "Une partie de ce paiement n’a pas été remboursée.",
+          "errors": {
+            "generic": "Le remboursement n’est pas passé. Vérifie la liste ci-dessous avant de réessayer.",
+            "not_found": "Utilisateur, facture ou session de paiement introuvable.",
+            "payment_provider_error": "Stripe n’a pas confirmé le remboursement. Vérifie la liste ci-dessous avant de réessayer.",
+            "rail_not_configured": "Les paiements par carte ne sont pas configurés ici : aucun remboursement ne peut donc être envoyé.",
+            "refund_not_available": "Ce paiement ne peut pas être remboursé : il appartient à quelqu’un d’autre, il a déjà été remboursé en totalité, ou le montant dépasse ce qui reste."
+          },
+          "everything": "Tout ce qui peut encore être remboursé",
+          "invalid": "Vérifie ce qu’il faut rembourser, le montant et le motif.",
+          "pending": "Remboursement en cours…",
+          "reason": "Motif",
+          "review": "Vérifier le remboursement",
+          "sub": "L’argent retourne sur la carte qui a payé. L’accès ne change pas ici : il change quand Stripe confirme le remboursement, en général en moins d’une minute. Un remboursement intégral retire ce que le paiement avait acheté. Un remboursement partiel ne change aucun accès.",
+          "target": "Ce qu’il faut rembourser",
+          "targetId": "ID de la facture ou de la session de paiement",
+          "targetIdHelp": "Il commence par in_ ou cs_.",
+          "targetLatest": "Le dernier paiement : {amount} le {date}",
+          "targetOther": "Une autre facture ou session de paiement",
+          "title": "Remboursement via Stripe"
+        },
+        "sub": "Cherche une personne pour voir ce que disent les règles de remboursement sur son dernier paiement, rembourser un paiement par carte, consulter ses remboursements, rétractations et litiges, et enregistrer le remboursement d’une commande en Chine continentale.",
+        "title": "Remboursements",
+        "userId": "ID utilisateur"
+      },
+      "stripe": {
+        "endpoint": "Point de terminaison du webhook",
+        "endpointNone": "Aucun point de terminaison de webhook dans Stripe ne pointe vers ce site. Ajoute-en un dans Stripe.",
+        "events": "Événements que le point de terminaison n’envoie pas",
+        "eventsMissing": "{count, plural, one {# événement manque. Ajoute-le au point de terminaison dans Stripe.} other {# événements manquent. Ajoute-les au point de terminaison dans Stripe.}}",
+        "eventsNeeded": "{count, plural, one {Le point de terminaison a besoin de cet événement :} other {Le point de terminaison a besoin de ces # événements :}}",
+        "eventsNone": "Aucun. Le point de terminaison envoie tous les événements sur lesquels le site agit.",
+        "key": "Clé",
+        "keyModes": {
+          "live": "Clé live",
+          "none": "Aucune clé",
+          "test": "Clé de test",
+          "unknown": "Non précisé"
+        },
+        "loadError": "L’état de Stripe n’a pas pu être chargé.",
+        "loading": "Chargement…",
+        "no": "Non",
+        "notChecked": "Vérification impossible.",
+        "notCheckedReason": {
+          "error": "Stripe n’a pas répondu.",
+          "no_key": "Aucune clé n’est utilisable ici.",
+          "restricted_key": "Cette clé n’a pas le droit de lire les points de terminaison de webhook."
+        },
+        "pinned": "Formules avec un prix figé",
+        "pinnedNone": "Aucune",
+        "rail": "Paiements par carte",
+        "railNotReady": "Pas prêts",
+        "railReady": "Prêts",
+        "refused": {
+          "live_key_outside_production": "Une clé live est refusée en dehors de la production : aucun paiement par carte ni remboursement ne peut donc avoir lieu ici.",
+          "missing": "Aucune clé n’est définie.",
+          "unknown": "La clé n’est pas utilisable ici."
+        },
+        "secrets": "Secrets de signature du webhook",
+        "sub": "Indique si les paiements par carte peuvent être acceptés ici, et si Stripe envoie tous les événements sur lesquels le site agit. Aucune clé ni aucun secret n’est affiché ici.",
+        "title": "Stripe",
+        "usable": "Clé utilisable ici",
+        "yes": "Oui"
       }
     },
     "badge": {
@@ -5332,7 +6026,23 @@
       "signedIn": "Ta session est ouverte : tu peux aussi résilier depuis les réglages.",
       "sub": "Pas besoin de te connecter. Saisis l’e-mail de ton compte et nous t’enverrons un lien qui résilie en un clic.",
       "title": "Résilier un abonnement",
-      "tokenInvalid": "Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau ci-dessous."
+      "tokenInvalid": "Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau ci-dessous.",
+      "cancelChoiceButton": "Résilier à la fin de la période",
+      "cancelChoiceSub": "Le renouvellement s’arrête dès maintenant. Tu gardes Pro jusqu’au {date}.",
+      "cancelChoiceSubNoDate": "Le renouvellement s’arrête dès maintenant. Tu gardes Pro jusqu’à la fin de la période déjà payée.",
+      "cancelChoiceTitle": "Résilier à la fin de la période",
+      "cancelledInstead": "À la place, nous avons résilié ton abonnement à la fin de la période. Tu gardes Pro jusqu’au {date}. Nous t’avons envoyé une confirmation par e-mail.",
+      "cancelledInsteadNoDate": "À la place, nous avons résilié ton abonnement à la fin de la période. Tu gardes Pro jusqu’à la fin de la période déjà payée. Nous t’avons envoyé une confirmation par e-mail.",
+      "checking": "Vérification de ton lien…",
+      "choose": "Ce lien offre deux possibilités. Choisis-en une.",
+      "withdrawButton": "Se rétracter du contrat et obtenir un remboursement de {amount}",
+      "withdrawChoiceSub": "La formule prend fin immédiatement et nous te remboursons {amount}. Tu peux le faire jusqu’au {date}.",
+      "withdrawChoiceTitle": "Se rétracter du contrat",
+      "withdrawGone": "Il n’est plus possible de se rétracter de cet achat.",
+      "withdrawProrata": "Tu as demandé à commencer tout de suite : le remboursement couvre donc les jours que tu n’as pas utilisés.",
+      "withdrawing": "Rétractation…",
+      "withdrawn": "Ta rétractation du contrat est enregistrée. La formule est terminée et nous te remboursons {amount}. Un e-mail de confirmation est en route.",
+      "withdrawnNoAmount": "Ta rétractation du contrat est enregistrée. La formule est terminée. Ton remboursement et un e-mail de confirmation sont en route."
     },
     "cap": {
       "free": "{cap} {window, select, day {par jour} week {par semaine} other {par mois}}",
@@ -5388,11 +6098,9 @@
       "continue": "Continuer vers le paiement",
       "continuing": "Ouverture de la page de paiement…",
       "empty": "Aucune formule n’est en vente pour le moment.",
-      "emptyCn": "Les formules payantes ne sont pas encore ouvertes.",
       "error": "La page de paiement n’a pas pu s’ouvrir. Rien n’a été débité. Réessaie.",
       "loadError": "Les formules n’ont pas pu être chargées.",
       "loading": "Chargement des formules…",
-      "manageInPortal": "Pour changer la fréquence de renouvellement de Pro, utilise « Gérer le paiement ».",
       "notAvailable": "Pas encore disponible",
       "packGroup": "Packs d’entraînement",
       "proGroup": "Pro",
@@ -5401,7 +6109,21 @@
       "title": "Formules",
       "withdrawalAck": "Commencer maintenant : je comprends que je perds mon droit de rétractation dès que j’utilise des fonctionnalités payantes.",
       "withdrawalHelp": "Laisse cette case décochée et tu pourras obtenir un remboursement intégral dans les 14 jours.",
-      "yourPlan": "Ta formule"
+      "yourPlan": "Ta formule",
+      "cnVisitor": "Tu es en Chine continentale ? <link>Tu peux payer en RMB avec Alipay sur %OTHER_BRAND%.</link>",
+      "notOpen": "Voici les prix. Le paiement n’est pas encore ouvert : rien ne peut donc être acheté pour le moment.",
+      "portalScope": "« Gérer le paiement » concerne ton moyen de paiement, tes factures et tes informations de facturation. Pour changer de formule, choisis-en une autre ici.",
+      "railGroup": "Payer avec",
+      "railHint": {
+        "alipay": "Tu paies sur la page d’Alipay.",
+        "stripe": "Tu paies sur la page de paiement par carte.",
+        "wechatpay": "Tu scannes un code, ou tu paies directement dans WeChat."
+      },
+      "rails": {
+        "alipay": "Alipay",
+        "stripe": "Carte",
+        "wechatpay": "WeChat Pay"
+      }
     },
     "plans": {
       "goapply": {
@@ -5410,7 +6132,9 @@
         "practice_pack_5": "Pack d’entraînement (5 entretiens)",
         "pro_monthly": "Pass Membre 30 jours",
         "pro_quarterly": "Pass Membre 90 jours",
-        "pro_week_pass": "Pass Membre d’une semaine"
+        "pro_week_pass": "Pass Membre d’une semaine",
+        "student_monthly": "Pass Étudiant 30 jours",
+        "student_quarterly": "Pass Étudiant 90 jours"
       },
       "legacy": "Formule Entraînement (ancienne)",
       "roboapply": {
@@ -5445,7 +6169,9 @@
       "note": "Rien n’est débité tant que tu n’as pas confirmé.",
       "renewalPrice": "Ensuite",
       "title": "Passer à {plan}",
-      "today": "Débité aujourd’hui"
+      "today": "Débité aujourd’hui",
+      "requiresAction": "Ta banque te demande de confirmer ce paiement. Ta formule n’a pas encore changé.",
+      "requiresActionCta": "Confirmer le paiement"
     },
     "renewsNote": "Se renouvelle {period, select, week {chaque semaine} month {chaque mois} other {tous les 3 mois}} jusqu’à ce que tu résilies.",
     "retry": "Réessayer",
@@ -5476,7 +6202,87 @@
       "resets": "Recharge : {when}",
       "sub": "Les crédits ne se reportent pas ; chaque ligne indique quand elle se recharge. Tu n’utilises un crédit que lorsqu’une action aboutit.",
       "title": "Tes crédits",
-      "used": "{n, plural, one {# utilisé} other {# utilisés}}"
+      "used": "{n, plural, one {# utilisé} other {# utilisés}}",
+      "usedPractice": "{n, plural, one {# crédit d’entraînement utilisé} other {# crédits d’entraînement utilisés}}"
+    },
+    "busy": "Nous n’avons pas pu lancer cette action pour le moment. Réessaie dans un instant.",
+    "history": {
+      "channel": {
+        "alipay": "Alipay",
+        "wechatpay": "WeChat Pay"
+      },
+      "loadingMore": "Chargement…",
+      "more": "Afficher plus",
+      "moreError": "La suite n’a pas pu être chargée. Réessaie.",
+      "refunded": {
+        "full": "Remboursée",
+        "partial": "Partiellement remboursée"
+      },
+      "status": {
+        "uncollectible": "Non payée",
+        "unknown": "Statut inconnu"
+      }
+    },
+    "pricing": {
+      "refund": {
+        "first": "Premier achat : un remboursement est possible dans un délai de {days, plural, one {# jour} other {# jours}} (facturation hebdomadaire et pass d’une semaine : dans un délai de {hours, plural, one {# heure} other {# heures}}) si tu as utilisé moins de {limit} actions qui nécessitent Pro.",
+        "packs": "Packs d’entraînement : un remboursement est possible tant qu’aucun entretien du pack n’a été utilisé. Un pack reste valable {months, plural, one {# mois} other {# mois}}.",
+        "renewal": "Renouvellement débité par erreur : un remboursement est possible dans un délai de {days, plural, one {# jour} other {# jours}} après le débit.",
+        "withdrawal": "Dans l’UE, l’EEE, au Royaume-Uni et à Taïwan, tu peux te rétracter dans un délai de {days, plural, one {# jour} other {# jours}}. Tu obtiens un remboursement intégral si tu ne nous as pas demandé de commencer tout de suite. Si tu l’as fait, un abonnement est remboursé pour les jours que tu n’as pas utilisés. La rétractation met fin à l’abonnement immédiatement."
+      },
+      "samePriceAsWeekly": "Même prix que la facturation hebdomadaire. Le pass ne se renouvelle pas ; la facturation hebdomadaire, si.",
+      "studentOffer": {
+        "how": "Le tarif étudiant s’adresse aux étudiants qui confirment un e-mail d’école dans les Réglages. Les formules étudiantes y sont listées une fois l’e-mail confirmé.",
+        "row": "{name} : {price}.",
+        "title": "Tarif étudiant"
+      }
+    },
+    "resume": {
+      "button": "Garder ma formule",
+      "done": "Le renouvellement est de nouveau activé.",
+      "ended": "Cette formule est déjà terminée. Choisis une formule ci-dessous.",
+      "error": "Le renouvellement n’a pas pu être réactivé. Réessaie.",
+      "pending": "Réactivation du renouvellement…"
+    },
+    "withdraw": {
+      "back": "Garder cet achat",
+      "checkError": "Nous n’avons pas pu vérifier si tu peux encore te rétracter d’un achat récent.",
+      "confirmButton": "Se rétracter et obtenir un remboursement de {amount}",
+      "confirmRefund": "Nous remboursons {amount} sur le moyen de paiement que tu as utilisé.",
+      "confirmTitle": "Se rétracter de {plan} ?",
+      "done": "Ta rétractation de {plan} est enregistrée. Nous te remboursons {amount}. Un e-mail de confirmation est en route.",
+      "doneNoAmount": "Ta rétractation de {plan} est enregistrée. Ton remboursement et un e-mail de confirmation sont en route.",
+      "ended": {
+        "other": "Ce que cet achat t’avait donné a pris fin.",
+        "pack": "Les entretiens d’entraînement restants de ce pack sont retirés dès que le remboursement est enregistré.",
+        "pass": "Les jours que ce pass t’a donnés se terminent dès que le remboursement est enregistré.",
+        "subscription": "Ton abonnement est terminé, donc Pro est désactivé."
+      },
+      "ends": {
+        "other": "Ce que cet achat t’a donné prend fin immédiatement.",
+        "pack": "Les entretiens d’entraînement restants de ce pack sont retirés immédiatement.",
+        "pass": "Les jours que ce pass t’a donnés prennent fin immédiatement.",
+        "subscription": "Ton abonnement prend fin immédiatement et Pro s’arrête aussitôt."
+      },
+      "entryLabel": "{label} : {plan}",
+      "errors": {
+        "generic": "La rétractation n’a pas abouti. Réessaie.",
+        "notConfigured": "Les paiements par carte ne sont pas configurés ici : nous ne pouvons donc pas envoyer le remboursement. Rien n’a changé.",
+        "provider": "Le prestataire de paiement n’a pas confirmé la rétractation. Réessaie. Rien n’est remboursé deux fois.",
+        "rateLimited": "Tu as essayé plusieurs fois de suite. Attends un moment, puis réessaie.",
+        "unavailable": "Il n’est plus possible de se rétracter de cet achat."
+      },
+      "intro": "{count, plural, one {Tu peux encore te rétracter de l’achat ci-dessous.} other {Tu peux encore te rétracter des achats ci-dessous.}} La rétractation rembourse le montant indiqué et met fin immédiatement à ce que l’achat t’a donné.",
+      "label": "Se rétracter du contrat",
+      "lastDay": "Tu peux te rétracter jusqu’au {date}.",
+      "paid": "Déjà payé : {amount}. Acheté le {date}.",
+      "paidNoDate": "Déjà payé : {amount}.",
+      "pending": "Rétractation…",
+      "prorata": "Tu as demandé à commencer tout de suite : le remboursement couvre donc les jours que tu n’as pas utilisés ({unused} sur {periodDays}).",
+      "refreshError": "Nous n’avons pas pu vérifier le montant du remboursement à l’instant. Réessaie.",
+      "refreshing": "Vérification du montant du remboursement…",
+      "refund": "Remboursement si tu te rétractes maintenant : {amount}.",
+      "unknownPlan": "Ton achat"
     }
   },
   "extensionWeb": {
@@ -5637,7 +6443,12 @@
       "sponsorshipNeeded": "Besoin d’un parrainage de visa",
       "yearsMax": "Jusqu’à {max} ans",
       "yearsMin": "{min} ans ou plus",
-      "yearsValue": "{min}–{max} ans"
+      "yearsValue": "{min}–{max} ans",
+      "anywhereIn": "Partout ({country})",
+      "cleared": "Filtres effacés.",
+      "shiftValue": "Horaires : {shift}",
+      "sponsorshipNotNeeded": "Pas de parrainage de visa nécessaire",
+      "undo": "Annuler"
     },
     "controls": {
       "add": "Ajouter",
@@ -5728,7 +6539,10 @@
       "taxonomyIds": "Fonction",
       "titles": "Intitulés de poste",
       "workModels": "Mode de travail",
-      "yearsRange": "Années d’expérience demandées"
+      "yearsRange": "Années d’expérience demandées",
+      "twDistricts": "Districts",
+      "twDistrictsOf": "Districts ({county})",
+      "workShifts": "Horaires"
     },
     "fit": {
       "hiding": "{count, plural, one {# offre moins adaptée est masquée} other {# offres moins adaptées sont masquées}}.",
@@ -5751,7 +6565,12 @@
       "skills": "Offres qui demandent au moins une de ces compétences.",
       "taxonomyIds": "Choisis une fonction ou un métier précis. Écris au moins 2 lettres.",
       "titles": "Offres dont l’intitulé correspond à l’un de ceux-ci.",
-      "yearsRange": "Les offres qui n’indiquent pas le nombre d’années demandé restent dans ta liste."
+      "yearsRange": "Les offres qui n’indiquent pas le nombre d’années demandé restent dans ta liste.",
+      "twDistricts": "N’affiche que les offres dont l’annonce indique le district. Les offres qui n’en citent aucun sont écartées.",
+      "twDistrictsFull": "Tu peux choisir jusqu’à {max} districts. Retires-en un pour en ajouter un autre.",
+      "twDistrictsOnly": "Seuls les districts que tu as choisis sont affichés. Les offres de tes autres lieux sont écartées.",
+      "twPay": "À Taïwan, la plupart des annonces qui indiquent le salaire viennent de 台灣就業通. Les annonces trouvées par la recherche d’offres l’indiquent rarement : elles sont donc écartées quand « Uniquement les offres qui indiquent le salaire » est activé. Le salaire mensuel est affiché tel que l’annonce l’indique.",
+      "workShifts": "N’affiche que les offres dont l’annonce indique les horaires. La plupart viennent de 台灣就業通 : la liste devient donc plus courte."
     },
     "hunt": {
       "moved": "Les filtres d’intitulé de poste, de lieu, de salaire, d’entreprise et de secteur se trouvent maintenant dans tes recherches enregistrées ci-dessous. La liste d’offres et les alertes utilisent ainsi les mêmes filtres."
@@ -5837,6 +6656,13 @@
         "hybrid": "Hybride",
         "onsite": "Sur site",
         "remote": "Télétravail"
+      },
+      "workShifts": {
+        "day": "De jour",
+        "evening": "En soirée",
+        "night": "De nuit",
+        "part_time": "À temps partiel",
+        "rotating": "Tournants"
       }
     },
     "quick": {
@@ -5958,7 +6784,9 @@
         "visa_not_offered": "L’annonce dit que le parrainage de visa n’est pas proposé : « {text} »",
         "visa_not_offered_plain": "L’annonce dit que le parrainage de visa n’est pas proposé",
         "visa_offered": "L’annonce dit que le parrainage de visa est proposé : « {text} »",
-        "visa_offered_plain": "L’annonce dit que le parrainage de visa est proposé"
+        "visa_offered_plain": "L’annonce dit que le parrainage de visa est proposé",
+        "logistics_by_your_filters": "Ces éléments correspondent déjà aux filtres que tu as définis, ils ne changent donc pas la note : {text}",
+        "skill_related": "L’annonce demande {text}, et ton CV montre une compétence proche"
       },
       "intro": "La note se compose de cinq parties. Chacune montre ce que nous avons trouvé dans ton CV et dans l’annonce.",
       "keys": {
@@ -5968,14 +6796,17 @@
         "skills": "Les compétences demandées",
         "title_level": "L’intitulé du poste et le niveau"
       },
-      "notStated": "Pas assez d’éléments pour comparer : cette partie ne compte pas dans la note.",
       "partLabel": "{label} : {score} / 100",
       "source": {
         "posting": "De l’annonce",
         "resume": "De ton CV"
       },
       "title": "Ce que nous avons comparé",
-      "weight": "Poids : {weight}"
+      "weight": "Poids : {weight}",
+      "byFilters": "Non comparée. Les filtres que tu as définis couvrent déjà cette partie.",
+      "notCompared": "Pas assez d’éléments pour comparer.",
+      "notComparedAi": "Pas assez d’éléments pour comparer : cette partie est exclue de la note.",
+      "notComparedEstimate": "Pas assez d’éléments pour comparer : cette partie est comptée avec une valeur habituelle."
     },
     "degree": {
       "associate": "Bac+2",
@@ -5989,8 +6820,6 @@
       "error": "La vérification des mots-clés n’a pas pu être lancée. Réessaie.",
       "intro": "Les exigences de l’annonce, comparées à ton CV. Ce sont les mêmes parties que celles de la note d’adéquation.",
       "loading": "Vérification de ton CV…",
-      "mentioned": "Mentionné dans ton CV",
-      "notMentioned": "Non mentionné dans ton CV",
       "required": "Requis",
       "rows": {
         "education": "Formation",
@@ -6004,20 +6833,38 @@
         "not_met": "Non rempli",
         "not_stated": "Non indiqué dans l’annonce",
         "partly": "Partiellement rempli",
-        "unknown": "N’apparaît pas dans ton CV"
+        "unknown": "N’apparaît pas dans ton CV",
+        "not_checked": "Pas encore vérifié"
       },
       "title": "Vérification des mots-clés",
       "titleHave": "Ton intitulé récent : {have}",
       "titleNeed": "L’annonce : {need}",
       "yearsHave": "Ton CV montre environ {have} ans",
-      "yearsNeed": "Demandé : {need} ans ou plus"
+      "yearsNeed": "Demandé : {need} ans ou plus",
+      "add": {
+        "action": "Ouvrir ton CV pour cette offre",
+        "note": "Tu en as un ? Ajoute toi-même les mots exacts à ton CV. Rien n’est ajouté à ta place.",
+        "resume": "Ouvrir ton CV"
+      },
+      "countStates": "{shown} présents, {related} proches, sur {total}",
+      "quote": "« {text} »",
+      "state": {
+        "not_shown": "Absent de ton CV",
+        "related": "Proche : ton CV montre {term}",
+        "relatedPlain": "Proche : ton CV montre quelque chose de similaire",
+        "shown": "Ton CV le montre"
+      },
+      "unchecked": "{count, plural, one {# autre compétence de l’annonce n’est pas encore vérifiée.} other {# autres compétences de l’annonce ne sont pas encore vérifiées.}}",
+      "uncheckedAll": "{count, plural, one {La compétence de l’annonce n’est pas encore vérifiée.} other {Les # compétences de l’annonce ne sont pas encore vérifiées.}}"
     },
     "loading": "Comparaison de ton CV avec cette offre…",
     "missing": {
-      "empty": "Ton CV ou ton profil mentionne toutes les compétences listées dans cette annonce.",
       "noSkillsListed": "Cette annonce ne liste pas de compétences précises à vérifier.",
       "skillsHeading": "L’annonce liste ces compétences, et ni ton CV ni ton profil ne les mentionnent :",
-      "title": "Ce qui te manque"
+      "title": "Ce qui te manque",
+      "emptyCompared": "Ton CV ou ton profil montre toutes les compétences que nous avons comparées pour cette annonce.",
+      "noneChecked": "{count, plural, one {La compétence de cette annonce n’est pas encore comparée à ton CV.} other {Les # compétences de cette annonce ne sont pas encore comparées à ton CV.}}",
+      "unchecked": "{count, plural, one {# autre compétence de l’annonce n’est pas encore vérifiée.} other {# autres compétences de l’annonce ne sont pas encore vérifiées.}}"
     },
     "quickEstimate": "Estimation rapide",
     "quickEstimateWhy": {
@@ -6043,7 +6890,35 @@
       "empty": "Aucune des compétences listées dans cette annonce n’apparaît dans ton CV ou ton profil.",
       "haveSkills": "L’annonce liste ces compétences, et ton CV ou ton profil les mentionne :",
       "noSkillsListed": "Cette annonce ne liste pas de compétences précises à comparer.",
-      "title": "Pourquoi tu corresponds"
+      "title": "Pourquoi tu corresponds",
+      "notChecked": "Les compétences listées dans cette annonce ne sont pas encore comparées à ton CV."
+    },
+    "confidence": {
+      "reason": {
+        "few_details": "Cette annonce en dit trop peu pour comparer",
+        "no_level_stated": "Cette annonce n’indique aucun niveau",
+        "no_role_evidence": "Ton CV ne montre aucun poste à comparer",
+        "no_skills_listed": "Cette annonce ne liste aucune compétence"
+      }
+    },
+    "otherLanguage": {
+      "failed": "Nous n’avons pas pu le réécrire. Réessaie.",
+      "note": "Les parties rédigées de cette analyse sont dans une autre langue. La note est la même.",
+      "rewrite": "Les réécrire dans cette langue",
+      "rewriting": "Réécriture…"
+    },
+    "requirements": {
+      "count": "{met} remplies, {partly} en partie, {notShown} absentes, sur {total}",
+      "intro": "Chaque ligne est recopiée de l’annonce et comparée à ton CV.",
+      "must": "Indispensable",
+      "note": "L’IA a comparé chaque ligne avec ton CV. Vérifie le résultat avant de t’y fier.",
+      "preferred": "Souhaité",
+      "status": {
+        "met": "Rempli",
+        "not_shown": "N’apparaît pas dans ton CV",
+        "partly": "En partie"
+      },
+      "title": "Ce que l’annonce demande"
     }
   },
   "growth": {
@@ -6251,6 +7126,11 @@
       "surveyFailed": "Ta réponse n’a pas été envoyée. Réessaie.",
       "surveyTitle": "Pourquoi ce désabonnement ? (facultatif)",
       "thanks": "Merci de nous l’avoir dit."
+    },
+    "alertJobs": {
+      "item": "{title} chez {company}",
+      "label": "Offres de cette alerte",
+      "more": "{count, plural, one {Et # autre offre dans la liste.} other {Et # autres offres dans la liste.}}"
     }
   },
   "invite": {
@@ -6405,9 +7285,10 @@
     "close": "Fermer",
     "closed": {
       "kept": "Tout ce que tu as enregistré pour cette offre reste dans Candidatures.",
-      "lastSeen": "Vue pour la dernière fois le {date}.",
       "similarTitle": "Offres similaires auxquelles tu peux encore postuler",
-      "title": "Cette offre n’est plus publiée"
+      "title": "Cette offre n’est plus publiée",
+      "boardCheck": "À l’ouverture de cette page, nous avons consulté le site carrières de l’employeur. Il ne liste plus cette offre.",
+      "lastListed": "Nous l’avons vue publiée pour la dernière fois le {date}."
     },
     "company": {
       "fact": {
@@ -6441,7 +7322,8 @@
       "badge": {
         "direct_from_employer": "Publiée par l’employeur",
         "new": "Nouvelle",
-        "sponsorship": "Parrainage de visa"
+        "sponsorship": "Parrainage de visa",
+        "sponsorship_provider": "Parrainage de visa selon {provider}"
       },
       "employmentType": {
         "contract": "Contrat temporaire",
@@ -6659,7 +7541,8 @@
         "bookmarked": "Gardée",
         "interviewing": "Entretiens en cours",
         "negotiating": "Proposition",
-        "withdrawn": "Candidature retirée"
+        "withdrawn": "Candidature retirée",
+        "rejected": "Refusée"
       },
       "typed": "Saisie par toi",
       "warning": "{count, plural, one {# ligne à vérifier} other {# lignes à vérifier}}"
@@ -6713,12 +7596,17 @@
         "title": "Ajouter le site carrières d’une entreprise",
         "token": "Identifiant du site carrières",
         "tokenHint": "L’identifiant de l’entreprise dans l’adresse de son site carrières.",
-        "willRead": "Lit {url}"
+        "willRead": "Lit {url}",
+        "countries": "Pays à lire (facultatif)",
+        "countriesHint": "Codes à deux lettres séparés par des virgules, par exemple TW, CN. Laisse vide pour lire tous les pays."
       },
       "errors": {
         "duplicate": "Ce site carrières est déjà dans la liste.",
         "generic": "Un problème est survenu. Réessaie.",
-        "invalid": "Vérifie les champs et réessaie."
+        "invalid": "Vérifie les champs et réessaie.",
+        "otherCountries": "Ce site carrières figure déjà dans la liste, mais il est lu pour d’autres pays : il n’apparaît donc pas ici.",
+        "otherCountriesAction": "Le lire aussi pour ce site",
+        "otherCountriesDone": "Le site carrières de {company} est maintenant lu aussi pour ce site. Ses offres seront ajoutées d’ici quelques minutes."
       },
       "eyebrow": "Admin",
       "list": {
@@ -6729,14 +7617,18 @@
           "jobs": "Offres à la dernière vérification",
           "lastChecked": "Dernière vérification",
           "problem": "Dernier problème",
-          "status": "Statut",
-          "system": "Système"
+          "system": "Système",
+          "countries": "Pays lus",
+          "country": "Indice de ville",
+          "origin": "Ajouté par",
+          "state": "État"
         },
         "empty": "Aucun site carrières d’entreprise pour l’instant.",
         "loadError": "La liste n’a pas pu être chargée. Réessaie.",
         "never": "Pas encore vérifié",
         "none": "—",
-        "title": "Sites carrières"
+        "title": "Sites carrières",
+        "all": "Tous les pays"
       },
       "loading": "Chargement…",
       "notAuthorized": "Seuls les administrateurs peuvent voir cette page.",
@@ -6752,17 +7644,68 @@
         "server_error": "Le système du site carrières a rencontré un problème. Un nouvel essai aura lieu plus tard.",
         "timeout": "Le site carrières a mis trop de temps à répondre. Réessaie plus tard.",
         "unexpected_shape": "Les données d’offres du site carrières n’étaient pas au format attendu.",
-        "unsupported_job_board": "Ce système de site carrières n’est pas pris en charge."
+        "unsupported_job_board": "Ce système de site carrières n’est pas pris en charge.",
+        "connector_disabled": "Ce système de site carrières est désactivé ici : le site n’est donc pas lu.",
+        "empty_board": "Le site carrières ne listait aucune offre lors de la vérification.",
+        "name_mismatch": "Ce site carrières appartient à une entreprise portant un autre nom.",
+        "name_unconfirmed": "Le site carrières n’indique pas à quelle entreprise il appartient : il n’a donc pas pu être confirmé. Active-le s’il s’agit du bon.",
+        "sources_off": "La lecture des sites carrières est désactivée pour le moment.",
+        "tenant_denied": "Ce site carrières figure sur la liste des sites à ne pas lire. Il n’est pas lu et ses offres ont été retirées.",
+        "tenant_floor": "Ce site carrières a été interrogé il y a moins de 30 minutes. Réessaie plus tard."
       },
       "run": {
-        "error": "{company} : le site carrières n’a pas pu être lu. {problem}"
-      },
-      "status": {
-        "off": "Désactivé",
-        "on": "Activé"
+        "error": "{company} : le site carrières n’a pas pu être lu. {problem}",
+        "queued": "{company} : le site carrières liste {listed, plural, one {# offre} other {# offres}}. L’ajout aura lieu d’ici quelques minutes.",
+        "waiting": "{company} : le site carrières liste {listed, plural, one {# offre} other {# offres}}. L’ajout aura lieu à la prochaine lecture planifiée."
       },
       "systems": "Les sites carrières peuvent provenir de : {names}.",
-      "title": "Sites carrières d’entreprises"
+      "title": "Sites carrières d’entreprises",
+      "import": {
+        "enable": "Activer tout de suite les nouveaux sites carrières",
+        "enableHint": "Si l’option reste désactivée, chaque nouveau site carrières est d’abord vérifié une fois, puis activé seulement s’il liste des offres et si le nom de son entreprise correspond.",
+        "errors": {
+          "empty": "Colle d’abord une liste ou choisis un fichier.",
+          "file": "Le fichier n’a pas pu être lu.",
+          "invalid": "La liste n’a pas pu être lue. Vérifie la première ligne et réessaie.",
+          "json": "La liste n’a pas pu être lue comme du JSON. Vérifie-la et réessaie.",
+          "tooLarge": "La liste est trop volumineuse. Un fichier peut contenir jusqu’à 5 000 sites carrières."
+        },
+        "file": "Ou choisis un fichier CSV ou JSON",
+        "importing": "Importation…",
+        "intro": "Colle une liste ou choisis un fichier. Utilise un CSV dont la première ligne est {header} (pays séparés par |), ou une liste JSON avec les mêmes champs. Jusqu’à 5 000 sites carrières.",
+        "invalidMore": "{count, plural, one {Et # autre ligne.} other {Et # autres lignes.}}",
+        "invalidRow": "Ligne {line} : {reason}",
+        "invalidTitle": "Lignes non ajoutées",
+        "paste": "Liste de sites carrières",
+        "reason": {
+          "company_name_too_long": "le nom de l’entreprise est trop long",
+          "connector_disabled": "ce système de site carrières est désactivé ici",
+          "duplicate_in_file": "le même site carrières figure plus haut dans le fichier",
+          "invalid_board_id": "l’identifiant du site carrières contient des caractères non autorisés",
+          "invalid_country": "un pays n’est pas un code à deux lettres",
+          "too_many_countries": "trop de pays",
+          "unknown_job_board": "ce système de site carrières n’est pas pris en charge",
+          "unreadable_row": "la ligne n’a pas pu être lue"
+        },
+        "submit": "Importer",
+        "summary": "{total, plural, one {# ligne lue} other {# lignes lues}} : {created, plural, one {# ajouté} other {# ajoutés}}, {merged, plural, one {# déjà dans la liste} other {# déjà dans la liste}}, {invalid, plural, one {# non ajouté} other {# non ajoutés}}.",
+        "title": "Ajouter plusieurs sites carrières"
+      },
+      "offNote": "Désactiver un site carrières ou le retirer enlève ses offres ouvertes de la liste d’offres. Le réactiver relance sa lecture. Un site carrières retiré n’est pas redécouvert à partir du lien d’une annonce. Ajoute-le de nouveau pour le récupérer.",
+      "origin": {
+        "admin": "Un administrateur",
+        "discovered": "Trouvé dans le lien d’une annonce",
+        "import": "Importation",
+        "seed": "Liste de départ"
+      },
+      "state": {
+        "notConfirmed": "Non confirmé",
+        "off": "Désactivé",
+        "offAfterFailures": "Désactivé après 3 lectures échouées",
+        "on": "Activé",
+        "waiting": "En attente de sa première vérification"
+      },
+      "subtitle": "Sites carrières publics d’entreprises, lus pour alimenter la liste d’offres. Un site qui a changé récemment est lu toutes les 2 heures, un site peu actif une ou deux fois par jour. Chaque annonce garde le nom de son entreprise et un lien vers l’original, et est publiée sur le site du pays où elle se trouve."
     },
     "meta": {
       "payAsPosted": "Salaire tel que publié : {text}",
@@ -6774,13 +7717,18 @@
       "quoteLabel": "Tiré de l’annonce",
       "regionLabel": "Salaire et permis de travail",
       "source": "Source : {name}",
-      "viewPosting": "Ouvrir l’annonce d’origine"
+      "viewPosting": "Ouvrir l’annonce d’origine",
+      "foundThroughGoogle": "{publisher} · trouvée via la recherche d’emploi Google",
+      "foundThroughGoogleOnly": "Trouvée via la recherche d’emploi Google"
     },
     "negotiable": {
       "filterHint": "Les offres qui indiquent 面議 n’ont pas de salaire affiché. Active « Uniquement les offres qui indiquent le salaire » pour les masquer.",
       "lawLink": "Lire l’article 5 dans la base nationale des lois",
       "notAFigure": "Cette règle s’adresse aux employeurs. Ce n’est pas le salaire de cette offre, et un salaire qu’une annonce n’indique pas n’est jamais estimé ici.",
-      "summary": "Pourquoi le salaire n’est-il pas indiqué ?"
+      "summary": "Pourquoi le salaire n’est-il pas indiqué ?",
+      "body": "L’annonce n’indique aucun montant (par exemple, elle dit 面議 ou 依公司規定). L’article 5 de la loi taïwanaise sur les services de l’emploi n’autorise un employeur à ne pas indiquer le salaire que lorsque le salaire mensuel régulier est de {amount} ou plus. C’est le montant fixé par la loi au {asOf}.",
+      "bodyNoAmount": "L’annonce n’indique aucun montant (par exemple, elle dit 面議 ou 依公司規定). L’article 5 de la loi taïwanaise sur les services de l’emploi n’autorise un employeur à ne pas indiquer le salaire que lorsque le salaire mensuel régulier atteint ou dépasse un montant fixé par la loi.",
+      "sourceLink": "Lire la règle à sa source"
     }
   },
   "legal": {
@@ -6805,7 +7753,6 @@
     },
     "consents": {
       "changed": "Modifié le {date}",
-      "closeBody": "Pendant la bêta, ce service fonctionne hors de Chine continentale : il ne peut donc pas fonctionner sans ce consentement. Le retirer ferme ton compte tout de suite et supprime tes données. C’est irréversible.",
       "closeConfirm": "Retirer le consentement et supprimer mon compte",
       "closeKeep": "Garder mon compte",
       "closeTitle": "Retirer ce consentement et supprimer ton compte ?",
@@ -6825,7 +7772,10 @@
       "retry": "Réessayer",
       "title": "Consentements",
       "turnOff": "Désactiver",
-      "turnOn": "Activer"
+      "turnOn": "Activer",
+      "agreeCurrent": "Accepter ce texte",
+      "closeBodyCrossBorder": "Ce service s’appuie sur des fournisseurs situés hors de Chine continentale : il ne peut donc pas fonctionner sans ce consentement. Le retirer ferme ton compte tout de suite et supprime tes données. C’est irréversible.",
+      "textChanged": "Ce texte a changé depuis ta réponse. Ta réponse a été donnée pour la version précédente."
     },
     "disclosures": {
       "colCountry": "Pays",
@@ -6859,8 +7809,6 @@
       "tw-pdpa-notice": "Avis sur les données pour Taïwan"
     },
     "explain": {
-      "fromPosting": "Dans l’annonce",
-      "fromResume": "Dans ton CV",
       "gap": {
         "career_path": "Ce poste est un changement plus marqué par rapport à ton expérience.",
         "industry": "Tu as moins d’expérience dans ce secteur.",
@@ -6897,7 +7845,14 @@
         "skillsAligned": "Compétences que tu as et que ce poste demande : {skills}",
         "title_level": "Ton intitulé et ton niveau correspondent à ce poste."
       },
-      "title": "Pourquoi cette offre"
+      "title": "Pourquoi cette offre",
+      "notCompared": {
+        "industry": "Pas assez de détails pour comparer le secteur.",
+        "logistics": "Pas assez de détails pour comparer le lieu, le salaire ou le mode de travail.",
+        "title_level": "Pas assez de détails pour comparer le poste et le niveau."
+      },
+      "quoteFromPosting": "Dans l’annonce : « {evidence} »",
+      "quoteFromResume": "Dans ton CV : « {evidence} »"
     },
     "footer": {
       "aiModels": "Modèles d’IA : {models}",
@@ -6929,7 +7884,8 @@
       "colProvider": "Fournisseur",
       "excluded": "Quand une requête passe par une passerelle, ces fournisseurs en amont sont exclus :",
       "hosts": "{rule, select, mainland_only {Adresses d’IA autorisées (et leurs sous-domaines) :} other {Adresses d’IA jamais utilisées (et leurs sous-domaines) :}}",
-      "rule": "{rule, select, mainland_only {Seuls des services d’IA situés en Chine continentale sont utilisés. Voici les fournisseurs que nous pouvons utiliser, et l’adresse de chacun, sauf si nous en définissons une autre :} other {Une requête qui contient tes données n’est jamais envoyée à un service d’IA situé en Chine continentale. Voici les fournisseurs que nous pouvons utiliser, et l’adresse de chacun, sauf si nous en définissons une autre :}}"
+      "rule": "{rule, select, mainland_only {Seuls des services d’IA situés en Chine continentale sont utilisés. Voici les fournisseurs que nous pouvons utiliser, et l’adresse de chacun, sauf si nous en définissons une autre :} other {Une requête qui contient tes données n’est jamais envoyée à un service d’IA situé en Chine continentale. Voici les fournisseurs que nous pouvons utiliser, et l’adresse de chacun, sauf si nous en définissons une autre :}}",
+      "open": "Les requêtes d’IA sont envoyées aux services de modèles listés sous « Modèles d’IA ». Certains peuvent se trouver hors de Chine continentale. Voici les fournisseurs que nous pouvons utiliser, et l’adresse de chacun, sauf si nous en définissons une autre :"
     },
     "page": {
       "draftBody": "Ce document est encore en cours de relecture et n’est pas définitif. Les passages entre crochets ne sont pas encore rédigés.",
@@ -7013,7 +7969,8 @@
       "payments": "Paiements",
       "speech": "Reconnaissance vocale et voix",
       "storage": "Stockage de fichiers",
-      "voice": "Entraînement vocal"
+      "voice": "Entraînement vocal",
+      "push": "Notifications push"
     },
     "retention": {
       "colData": "Données",
@@ -7045,9 +8002,14 @@
         "known_devices": "Appareils utilisés pour te connecter, après la dernière connexion depuis cet appareil",
         "product_events": "Événements d’utilisation du produit",
         "soft_deleted_rows": "CV, lettres de motivation, offres suivies et éléments mémorisés par l’Assistant que tu supprimes",
-        "tool_results": "Résultats des outils gratuits (le rapport et le texte lu dans ton fichier)"
+        "tool_results": "Résultats des outils gratuits (le rapport et le texte lu dans ton fichier)",
+        "billing_consent_archive": "Preuve de ces traces après la suppression de ton compte : ton identifiant de compte, une version hachée de ton adresse e-mail, l’identifiant client de paiement, ce que tu as accepté et à quel moment. Aucune adresse IP ni aucune information sur ton navigateur. Conservée pendant 3 ans après ton accord, ou jusqu’à 1 an après la fin de ta formule si cette date est plus tardive"
       },
       "title": "Combien de temps nous conservons les données"
+    },
+    "crossBorder": {
+      "applies": "Tes données personnelles sont traitées ou stockées par des services situés hors de Chine continentale. Les listes de cette page les nomment. Cela n’arrive qu’après ton accord, donné séparément. Retirer ce consentement ferme ton compte et supprime tes données.",
+      "none": "Tes données personnelles sont traitées et stockées en Chine continentale."
     }
   },
   "offers": {
@@ -7292,7 +8254,13 @@
       "titleCapped": "Nous avons trouvé au moins {count} offres qui te correspondent. Vérifie ces informations.",
       "titleNone": "Nous n’avons pas encore trouvé d’offres bien adaptées. Ajuste ta recherche ci-dessous.",
       "titlePending": "Nous examinons encore des offres pour toi. Vérifie ces informations.",
-      "tooManyExtra": "Ajoute 3 intitulés au maximum."
+      "tooManyExtra": "Ajoute 3 intitulés au maximum.",
+      "countNoteCompared": "Compte les offres de niveau « Bien adapté » ou mieux, sur {compared, plural, one {# offre comparée} other {# offres comparées}} avec ton CV.",
+      "searchNote": "Ce sont des offres actives qui correspondent à ta recherche. Aucun CV n’a été comparé : ce n’est donc pas un décompte d’offres adaptées.",
+      "titleSearch": "{count, plural, one {Nous avons trouvé # offre pour ta recherche. Vérifie ces informations.} other {Nous avons trouvé # offres pour ta recherche. Vérifie ces informations.}}",
+      "titleSearchCapped": "Nous avons trouvé au moins {count, number} offres pour ta recherche. Vérifie ces informations.",
+      "titleSearchNone": "Nous n’avons pas encore trouvé d’offres pour ta recherche. Ajuste ta recherche ci-dessous.",
+      "titleUncounted": "Ta recherche est enregistrée. Vérifie ces informations."
     },
     "countries": {
       "AU": "Australie",
@@ -7468,7 +8436,8 @@
         "pdfNeedsConsent": "Ce PDF ne peut pas être lu sans l’option de lecture que tu as désactivée. Envoie un fichier Word ou texte, ou colle le texte.",
         "tooLarge": "Ce fichier dépasse 15 Mo.",
         "unreadable": "Nous n’avons pas pu lire ce fichier. Essaie un PDF, ou colle le texte.",
-        "wrongType": "Utilise un fichier PDF, Word ou texte."
+        "wrongType": "Utilise un fichier PDF, Word ou texte.",
+        "consentUnanswered": "Réponds d’abord à la question ci-dessus. Puis choisis à nouveau ton PDF."
       },
       "linkedin": {
         "body": "Sur ton profil LinkedIn, ouvre « Plus », choisis « Enregistrer au format PDF », puis envoie ce fichier ici.",
@@ -8499,7 +9468,8 @@
       "point_list": "Une liste hebdomadaire d’offres qui correspondent à ta recherche. Tu peux ajouter toi-même n’importe quelle offre.",
       "point_review": "Tu vérifies chaque kit avant de l’utiliser. Tout ce qui est nouveau dans ton CV doit être confirmé par toi.",
       "start": "Configurer « Prêt à postuler »",
-      "title": "Prépare chaque candidature, puis envoie-la toi-même"
+      "title": "Prépare chaque candidature, puis envoie-la toi-même",
+      "point_open": "Tu ouvres la page de candidature et tu envoies la candidature toi-même."
     },
     "list": {
       "empty": {
@@ -8678,7 +9648,9 @@
         "seeApplication": "La voir dans Candidatures",
         "title": "Postuler",
         "undo": "Annuler · Je n’ai pas postulé",
-        "undone": "Remise en place. Cette candidature n’est pas marquée comme envoyée."
+        "undone": "Remise en place. Cette candidature n’est pas marquée comme envoyée.",
+        "host": "La page se trouve sur {host}.",
+        "leadNeutral": "Ouvre la page de candidature dans un nouvel onglet et déplace cette offre dans « Envoyées »."
       },
       "practice": {
         "button": "S’entraîner pour cette offre",
@@ -8697,7 +9669,8 @@
         "openAsIs": "Ouvrir le CV",
         "title": "CV",
         "use": "Utiliser dans ce kit",
-        "verifyBlock": "Vérifie {count, plural, one {# détail} other {# détails}} ci-dessus avant d’utiliser ce CV."
+        "verifyBlock": "Vérifie {count, plural, one {# détail} other {# détails}} ci-dessus avant d’utiliser ce CV.",
+        "fitNote": "« Avant » et « Après » montrent ton adéquation au moment où ce CV a été adapté. L’adéquation affichée à côté de l’intitulé de l’offre est celle d’aujourd’hui, donc les deux peuvent différer."
       },
       "revise": "Demander des modifications",
       "reviseLabel": {
@@ -8789,7 +9762,10 @@
         "sendDown": "Enregistrer",
         "up": "Ça me convient",
         "verdictLabel": "L’offre {title} te convient-elle ?",
-        "why": "Qu’est-ce qui ne va pas ?"
+        "why": "Qu’est-ce qui ne va pas ?",
+        "later": "Évaluer les offres plus tard",
+        "laterNote": "Tu peux poursuivre la configuration et évaluer des offres plus tard.",
+        "noFeed": "Il n’y a pas encore d’offres à évaluer ici."
       },
       "errors": {
         "calibration": "Évalue 3 offres pour terminer cette étape.",
@@ -9220,7 +10196,8 @@
       "previous": "La dernière fois : {label}, {score} sur 100",
       "row": "{before} → {after}",
       "same": "Le nombre de points n’a pas encore changé.",
-      "title": "Depuis ta dernière vérification"
+      "title": "Depuis ta dernière vérification",
+      "notChecked": "Non vérifié cette fois"
     },
     "detail": {
       "evidence": "Dans ton CV",
@@ -9431,6 +10408,11 @@
         "how": "Commence par ce que tu as fait : construit, dirigé, réduit, livré.",
         "title": "Début de ligne faible : « {opener} »",
         "why": "Des débuts comme « responsable de » décrivent une mission, pas ce que tu as fait."
+      },
+      "placeholder_unfilled": {
+        "how": "Mets le vrai chiffre, ou réécris la ligne sans ce chiffre. Ne devine jamais un chiffre.",
+        "title": "Emplacement non rempli : {placeholder}",
+        "why": "Cette ligne contient encore un emplacement vide à l’endroit de ton propre chiffre. Un lecteur verrait les crochets."
       }
     },
     "keywords": {
@@ -9537,8 +10519,10 @@
       "summary_too_long": "Résumé long",
       "summary_too_short": "Résumé court",
       "summary_vague": "Résumé général",
-      "weak_verb": "Débuts de ligne faibles"
-    }
+      "weak_verb": "Débuts de ligne faibles",
+      "placeholder_unfilled": "Emplacements non remplis"
+    },
+    "carried": "Repris de ta dernière vérification. Non revérifié cette fois."
   },
   "seo": {
     "breadcrumb": {
@@ -9653,7 +10637,9 @@
       "seeFit": "Voir à quel point elle correspond à ton CV",
       "source": "Source",
       "viewOriginal": "Voir l’annonce d’origine",
-      "workModel": "Mode de travail"
+      "workModel": "Mode de travail",
+      "lastChecked": "Dernière vérification le {date}",
+      "licence": "{holder}, licence de services RH n° {number}"
     },
     "pay": {
       "period": {
@@ -9730,9 +10716,7 @@
       "noChanges": "Rien n’était à changer dans les sections que tu as choisies.",
       "open": "Ouvrir ce CV",
       "pendingBlock": "{count, plural, one {Vérifie 1 détail avant d’utiliser ce CV.} other {Vérifie # détails avant d’utiliser ce CV.}}",
-      "scoreAfter": "Après",
       "scoreAfterPending": "Tu le verras après avoir vérifié chaque détail et utilisé ce CV.",
-      "scoreBefore": "Avant",
       "scoreHeading": "Note d’adéquation",
       "scoreNone": "Note d’adéquation non disponible pour cette version.",
       "scoreValue": "{score} / 100",
@@ -9826,6 +10810,11 @@
       "terms": "Nouveau ici : {terms}",
       "title": "Vérifier les détails",
       "was": "Ton CV disait : {text}"
+    },
+    "fit": {
+      "note": "Sur la page de l’offre, ton adéquation reste celle de ton CV principal tant que tu ne fais pas de cette version ton CV principal.",
+      "withVersion": "Avec cette version",
+      "yours": "Ton adéquation"
     }
   },
   "taxonomy": {
@@ -9909,6 +10898,238 @@
       "video_production": "Vidéo, photo et créateurs de contenu",
       "visual_design": "Design visuel, identité de marque et art pour le jeu vidéo",
       "writing_editorial": "Rédaction, édition et traduction"
+    },
+    "roles": {
+      "academic_advisor": "Conseiller académique ou d’orientation professionnelle",
+      "account_executive": "Account executive",
+      "account_manager": "Responsable de comptes",
+      "accountant": "Comptable",
+      "actuary": "Actuaire",
+      "administrative_assistant": "Assistant administratif",
+      "aerospace_engineer": "Ingénieur aérospatial",
+      "ai_product_manager": "Product manager IA",
+      "ai_research_scientist": "Chercheur en IA",
+      "analytics_engineer": "Analytics engineer",
+      "android_engineer": "Ingénieur Android",
+      "architect": "Architecte",
+      "auditor": "Auditeur",
+      "automotive_engineer": "Ingénieur automobile",
+      "autonomous_driving_engineer": "Ingénieur en conduite autonome",
+      "backend_engineer": "Ingénieur backend",
+      "bank_teller": "Guichetier bancaire",
+      "bd_manager": "Responsable du développement commercial",
+      "bi_analyst": "Analyste business intelligence",
+      "bioinformatics_scientist": "Bio-informaticien",
+      "biomedical_engineer": "Ingénieur biomédical",
+      "biomedical_scientist": "Chercheur biomédical",
+      "blockchain_engineer": "Ingénieur blockchain",
+      "bookkeeper": "Aide-comptable, comptable fournisseurs et clients",
+      "brand_manager": "Responsable de marque",
+      "business_analyst": "Business analyst",
+      "buyer": "Acheteur et spécialiste des achats",
+      "chef": "Chef de cuisine ou cuisinier",
+      "chemical_engineer": "Ingénieur en génie chimique",
+      "chemist": "Chimiste",
+      "chip_design_engineer": "Ingénieur en conception de puces",
+      "chip_verification_engineer": "Ingénieur en vérification de puces",
+      "civil_engineer": "Ingénieur en génie civil",
+      "civil_servant": "Fonctionnaire",
+      "clinical_research_associate": "Attaché de recherche clinique",
+      "cloud_engineer": "Ingénieur cloud",
+      "cnc_machinist": "Usineur CNC",
+      "compensation_benefits": "Spécialiste de la rémunération et des avantages sociaux",
+      "compliance_officer": "Responsable conformité",
+      "construction_manager": "Conducteur de travaux",
+      "content_creator": "Créateur de contenu",
+      "content_marketer": "Responsable marketing de contenu",
+      "content_moderator": "Modérateur de contenu",
+      "content_operations": "Spécialiste des opérations de contenu",
+      "controls_engineer": "Ingénieur en automatismes et contrôle-commande",
+      "copywriter": "Concepteur-rédacteur",
+      "cost_estimator": "Chiffreur / économiste de la construction",
+      "customer_service_manager": "Responsable du service client",
+      "customer_service_rep": "Conseiller clientèle",
+      "customer_success_manager": "Customer success manager",
+      "cv_engineer": "Ingénieur en vision par ordinateur",
+      "data_analyst": "Analyste de données",
+      "data_annotator": "Spécialiste de l’annotation de données",
+      "data_architect": "Architecte de données",
+      "data_engineer": "Ingénieur data",
+      "data_entry_clerk": "Opérateur de saisie et employé de bureau",
+      "data_scientist": "Data scientist",
+      "database_administrator": "Administrateur de bases de données",
+      "dentist": "Dentiste",
+      "design_manager": "Responsable design",
+      "devops_engineer": "Ingénieur DevOps",
+      "digital_marketing_manager": "Responsable marketing digital",
+      "driver": "Chauffeur et coursier",
+      "early_childhood_teacher": "Enseignant de la petite enfance",
+      "ecommerce_manager": "Responsable e-commerce",
+      "economist": "Économiste ou chercheur en politiques publiques",
+      "editor": "Éditeur",
+      "education_administrator": "Administrateur de l’enseignement",
+      "electrical_engineer": "Ingénieur électricien",
+      "electrician": "Électricien",
+      "electronics_engineer": "Ingénieur électronicien",
+      "embedded_software_engineer": "Ingénieur logiciel embarqué",
+      "employee_relations": "Spécialiste des relations sociales",
+      "energy_engineer": "Ingénieur énergie",
+      "engineering_director": "Directeur de l’ingénierie / CTO",
+      "engineering_manager": "Responsable d’ingénierie",
+      "environmental_engineer": "Ingénieur environnement et HSE",
+      "erp_consultant": "Consultant ERP",
+      "event_planner": "Organisateur d’événements",
+      "executive_assistant": "Assistant de direction",
+      "facilities_manager": "Responsable des services généraux",
+      "finance_leader": "Responsable financier / contrôleur de gestion",
+      "financial_advisor": "Conseiller financier",
+      "financial_analyst": "Analyste financier",
+      "flight_attendant": "Personnel navigant commercial",
+      "frontend_engineer": "Ingénieur frontend",
+      "fullstack_engineer": "Ingénieur full-stack",
+      "game_artist": "Artiste de jeux vidéo",
+      "game_designer": "Concepteur de jeux vidéo",
+      "game_developer": "Développeur de jeux vidéo",
+      "graphic_designer": "Graphiste",
+      "growth_marketer": "Growth marketer",
+      "hardware_engineer": "Ingénieur matériel",
+      "healthcare_administrator": "Administrateur de la santé",
+      "hotel_manager": "Directeur d’hôtel",
+      "hr_generalist": "Généraliste RH",
+      "hr_manager": "Responsable RH",
+      "hrbp": "HR business partner",
+      "illustrator": "Illustrateur",
+      "import_export": "Spécialiste import-export",
+      "in_house_counsel": "Juriste d’entreprise",
+      "industrial_designer": "Designer industriel",
+      "industrial_engineer": "Ingénieur industriel",
+      "infrastructure_engineer": "Ingénieur infrastructure",
+      "instructional_designer": "Concepteur pédagogique",
+      "insurance_agent": "Agent d’assurance",
+      "interior_designer": "Designer d’intérieur",
+      "investment_analyst": "Analyste en investissement",
+      "investment_banker": "Analyste en banque d’investissement",
+      "ios_engineer": "Ingénieur iOS",
+      "ip_specialist": "Spécialiste de la propriété intellectuelle",
+      "it_manager": "Responsable informatique",
+      "it_project_manager": "Chef de projet informatique",
+      "it_support": "Technicien de support informatique",
+      "journalist": "Journaliste",
+      "language_teacher": "Professeur de langues",
+      "lawyer": "Avocat",
+      "learning_development": "Spécialiste de la formation et du développement",
+      "live_commerce_operations": "Spécialiste des opérations de live commerce",
+      "loan_officer": "Chargé de prêts",
+      "logistics_coordinator": "Coordinateur logistique",
+      "machine_operator": "Opérateur sur machine",
+      "maintenance_technician": "Technicien de maintenance",
+      "management_consultant": "Consultant en management",
+      "manufacturing_engineer": "Ingénieur de fabrication",
+      "market_research_analyst": "Analyste en études de marché",
+      "marketing_manager": "Responsable marketing",
+      "marketing_specialist": "Spécialiste marketing",
+      "materials_engineer": "Ingénieur matériaux",
+      "mechanical_engineer": "Ingénieur mécanique",
+      "medical_coder": "Codeur médical et agent de facturation",
+      "medical_sales_rep": "Représentant commercial en produits médicaux",
+      "medical_technologist": "Technicien de laboratoire et d’imagerie médicale",
+      "mep_engineer": "Ingénieur MEP",
+      "ml_engineer": "Ingénieur machine learning",
+      "mlops_engineer": "Ingénieur MLOps",
+      "mobile_engineer": "Ingénieur mobile",
+      "motion_designer": "Motion designer et animateur",
+      "network_engineer": "Ingénieur réseau",
+      "nlp_engineer": "Ingénieur NLP et LLM",
+      "nonprofit_program_manager": "Responsable de programme associatif",
+      "nurse_practitioner": "Infirmier en pratique avancée",
+      "office_manager": "Office manager",
+      "onboarding_specialist": "Spécialiste de l’onboarding client",
+      "operations_analyst": "Analyste des opérations",
+      "operations_manager": "Responsable des opérations",
+      "paralegal": "Assistant juridique",
+      "partnerships_manager": "Responsable des partenariats et des canaux de distribution",
+      "penetration_tester": "Testeur d’intrusion",
+      "pharmacist": "Pharmacien",
+      "photographer": "Photographe ou vidéaste",
+      "physical_therapist": "Kinésithérapeute ou ergothérapeute",
+      "physician": "Médecin",
+      "platform_engineer": "Ingénieur plateforme",
+      "policy_analyst": "Politiques publiques et affaires publiques",
+      "postdoc": "Chercheur postdoctoral",
+      "pr_specialist": "Spécialiste de la communication et des relations publiques",
+      "privacy_specialist": "Spécialiste de la protection des données",
+      "producer": "Producteur",
+      "product_analyst": "Analyste produit",
+      "product_designer": "Designer produit",
+      "product_director": "Directeur produit",
+      "product_manager": "Product manager",
+      "product_marketing_manager": "Responsable marketing produit",
+      "product_operations": "Spécialiste des opérations produit",
+      "production_supervisor": "Superviseur de production",
+      "professor": "Professeur ou chargé de cours",
+      "program_manager": "Responsable de programme",
+      "project_manager": "Chef de projet",
+      "psychologist": "Psychologue ou thérapeute",
+      "qa_engineer": "Ingénieur QA",
+      "quality_engineer": "Ingénieur qualité",
+      "quality_inspector": "Contrôleur qualité",
+      "quant_analyst": "Analyste quantitatif",
+      "real_estate_agent": "Agent immobilier",
+      "receptionist": "Réceptionniste",
+      "recruiter": "Recruteur",
+      "recsys_engineer": "Ingénieur recherche et recommandation",
+      "registered_nurse": "Infirmier diplômé",
+      "regulatory_affairs": "Spécialiste des affaires réglementaires",
+      "research_assistant": "Assistant de recherche",
+      "restaurant_manager": "Responsable de restaurant",
+      "retail_sales": "Vendeur en magasin",
+      "risk_analyst": "Analyste risques et crédit",
+      "robotics_engineer": "Ingénieur en robotique",
+      "sales_engineer": "Ingénieur commercial",
+      "sales_manager": "Responsable commercial",
+      "school_teacher": "Enseignant",
+      "scrum_master": "Scrum master",
+      "sdet": "Ingénieur en automatisation des tests",
+      "sdr": "Chargé de prospection commerciale (SDR)",
+      "security_analyst": "Analyste sécurité",
+      "security_architect": "Architecte sécurité",
+      "security_compliance": "Analyste conformité sécurité",
+      "security_engineer": "Ingénieur sécurité",
+      "security_leader": "Responsable de la sécurité / RSSI",
+      "semiconductor_process_engineer": "Ingénieur procédés semi-conducteurs",
+      "seo_specialist": "Spécialiste SEO",
+      "server": "Serveur, barista ou barman",
+      "social_media_manager": "Responsable des réseaux sociaux",
+      "social_worker": "Travailleur social",
+      "software_architect": "Architecte logiciel",
+      "software_engineer": "Ingénieur logiciel",
+      "special_education_teacher": "Enseignant spécialisé",
+      "sre": "Ingénieur fiabilité des systèmes (SRE)",
+      "statistician": "Statisticien",
+      "store_manager": "Responsable de magasin",
+      "strategy_manager": "Responsable de la stratégie",
+      "supply_chain_manager": "Responsable supply chain",
+      "sysadmin": "Administrateur systèmes",
+      "systems_analyst": "Analyste systèmes",
+      "systems_software_engineer": "Ingénieur logiciel système",
+      "talent_acquisition_manager": "Responsable de l’acquisition de talents",
+      "tax_specialist": "Fiscaliste",
+      "tech_lead": "Tech lead",
+      "technical_product_manager": "Product manager technique",
+      "technical_support_engineer": "Ingénieur support technique",
+      "technical_writer": "Rédacteur technique",
+      "trader": "Trader",
+      "translator": "Traducteur ou interprète",
+      "travel_consultant": "Conseiller voyages",
+      "tutor": "Professeur particulier",
+      "ui_designer": "Designer UI",
+      "user_operations": "Spécialiste des opérations utilisateurs",
+      "ux_designer": "Designer UX",
+      "ux_researcher": "Chercheur UX",
+      "video_editor": "Monteur vidéo",
+      "warehouse_manager": "Responsable d’entrepôt",
+      "web_developer": "Développeur web",
+      "welder": "Soudeur"
     }
   },
   "tools": {
@@ -9938,11 +11159,11 @@
       "title": "Garde ce CV dans ton compte"
     },
     "consent": {
-      "label": "J’accepte que %BRAND% lise ce CV avec un logiciel automatisé pour produire ce rapport. Il est supprimé après {hours} heures, sauf si je crée un compte.",
-      "offshore": "Pendant la bêta, le traitement se fait hors de Chine continentale, aux États-Unis.",
       "privacyLink": "Politique de confidentialité",
       "readingService": "Le fichier peut être envoyé à {service}, le service de lecture de CV utilisé par %BRAND%, sur des serveurs en Chine continentale.",
-      "whereUnknown": "La politique de confidentialité précise qui le lit et où il est traité."
+      "whereUnknown": "La politique de confidentialité précise qui le lit et où il est traité.",
+      "labelAi": "J’accepte que %BRAND% lise ce CV avec un logiciel automatisé, y compris un modèle d’IA, pour produire ce rapport. Il est supprimé après {hours} heures, sauf si je crée un compte.",
+      "outsideMainland": "Il est traité hors de Chine continentale par les fournisseurs de services nommés dans la politique de confidentialité."
     },
     "errors": {
       "consent_required": "Coche la case pour autoriser %BRAND% à lire ce CV.",
@@ -10140,7 +11361,8 @@
       "errors": {
         "generic": "Un problème est survenu. Réessaie.",
         "rateLimited": "C’est la limite de questions sans compte. Crée un compte gratuit pour continuer à poser des questions.",
-        "unavailable": "L’assistant n’est pas disponible pour le moment."
+        "unavailable": "L’assistant n’est pas disponible pour le moment.",
+        "consent": "Coche d’abord la case ci-dessus. %BRAND% ne répond avec l’IA qu’après ton accord."
       },
       "inputLabel": "Ta question",
       "intro": "Pose une question sur les offres de cette page, sur le salaire tel que les annonces l’indiquent, ou sur le fonctionnement de %BRAND%. Les réponses n’utilisent pas de CV et ne disent jamais à quel point tu corresponds à une offre.",
@@ -10152,7 +11374,12 @@
       "signupCta": "Créer un compte gratuit",
       "title": "Poser une question sur cette page",
       "writing": "Rédaction d’une réponse…",
-      "you": "Toi"
+      "you": "Toi",
+      "consent": {
+        "detail": "Le service d’IA qui répond peut traiter ta question hors de Chine continentale. Rien de ce que tu écris ici n’est enregistré.",
+        "label": "J’accepte que %BRAND% envoie mes questions à un modèle d’IA pour y répondre.",
+        "privacyLink": "Politique de confidentialité"
+      }
     },
     "card": {
       "badge": {
@@ -10230,6 +11457,30 @@
       "login": "Se connecter",
       "openJobs": "Ouvrir tes offres",
       "title": "Vois toutes les offres pour ta recherche, et à quel point chacune te correspond"
+    }
+  },
+  "companyFacts": {
+    "sponsorship": {
+      "dated": {
+        "imported": "fichier importé le {date}",
+        "published": "à la date du {date}"
+      },
+      "disclaimer": "Ce sont des dossiers publics sur l’employeur, pas sur cette offre. Des dépôts passés ou une licence de sponsor ne signifient pas que cet employeur proposera un parrainage de visa pour ce poste.",
+      "earlier": "{count, plural, one {# enregistrement d’un exercice fiscal antérieur} other {# enregistrements d’exercices fiscaux antérieurs}}",
+      "fact": {
+        "dolLca": "{count, plural, one {# demande de conditions de travail H-1B certifiée} other {# demandes de conditions de travail H-1B certifiées}} pour l’exercice fiscal {year}",
+        "uk": "Sponsor sous licence inscrit au registre du Royaume-Uni",
+        "ukRating": "Type et note : {rating}",
+        "ukRoutes": "{count, plural, one {Voie} other {Voies}} : {routes}",
+        "ukTown": "Ville : {town}",
+        "uscis": "{approvals, plural, one {# pétition H-1B approuvée} other {# pétitions H-1B approuvées}} et {denials, number} refus pour l’exercice fiscal {year}"
+      },
+      "file": "Fichier : {file}",
+      "intro": "Dossiers publics sur cet employeur. Chaque ligne indique sa source et sa date.",
+      "listedAs": "Inscrit sous le nom de {name}",
+      "source": "Source : <link>{name}</link>",
+      "title": "Dossiers de parrainage de visa pour {company}",
+      "usNote": "Une demande certifiée n’est ni une approbation de visa ni une embauche. Les nombres de pétitions correspondent aux premières décisions et couvrent les nouveaux emplois et leur prolongation."
     }
   }
 }

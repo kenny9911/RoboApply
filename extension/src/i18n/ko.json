@@ -41,6 +41,15 @@
         "great": "아주 잘 맞음",
         "possible": "가능성 있음",
         "unlikely": "맞기 어려움"
+      },
+      "confidence": {
+        "reason": {
+          "few_details": "이 공고에 비교할 정보가 너무 적어요",
+          "no_level_stated": "이 공고에는 직급이 나와 있지 않아요",
+          "no_resume": "전체 비교를 하려면 이력서를 추가해 주세요. 이 추정은 내 프로필과 희망 조건을 바탕으로 했어요.",
+          "no_role_evidence": "이력서에 비교할 직무가 나와 있지 않아요",
+          "no_skills_listed": "이 공고에는 기술이 나와 있지 않아요"
+        }
       }
     },
     "item": {

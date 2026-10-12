@@ -233,7 +233,12 @@
       "whatsMissing": "缺少的地方",
       "whyThisJob": "為什麼是這個職缺",
       "workAi": "已讀完整則職缺說明，並和你的履歷比對。",
-      "workPre": "已將職稱、技能和地點與你的履歷比對。"
+      "workPre": "已將職稱、技能和地點與你的履歷比對。",
+      "alsoIn": "另外還有 {count, plural, other {# 個地點}}",
+      "alsoInList": "{company} 的 {title}：其他地點",
+      "alsoInMore": "{count, plural, other {還有 # 個地點沒有列在這裡。}}",
+      "firstSeen": "首次出現於 {date}",
+      "leadLabel": "{label}："
     },
     "explore": {
       "back": "所有工作類別",
@@ -387,7 +392,8 @@
         "forYou": "為你推薦"
       },
       "tabsLabel": "職缺清單",
-      "title": "職缺"
+      "title": "職缺",
+      "introByDate": "職缺依刊登日期排列，最新的在最前面。開啟任何一個就能看到詳細資訊。"
     },
     "zero": {
       "gain": "{count, plural, one {+# 個職缺} other {+# 個職缺}}",
@@ -397,6 +403,21 @@
       "relaxed": "已移除篩選條件。",
       "title": "沒有符合這個搜尋的職缺。",
       "unknown": "我們還無法統計哪個篩選條件排除了最多職缺。請試著放寬其中一個。"
+    },
+    "nl": {
+      "chip": "排序依據：{terms}",
+      "chipClear": "清除",
+      "chipClearLabel": "不再依這些詞語排序清單",
+      "notChecked": "未檢查：{items}。",
+      "rankOnlyApply": "依這些詞語排序我的清單",
+      "rankOnlyTitle": "你的篩選條件維持不變",
+      "rankedBy": "依與下列詞語的接近程度排序：{terms}。這些詞語沒有被當成條件來檢查。"
+    },
+    "order": {
+      "queryMatch": "依職缺說明與你的搜尋的相符程度排序。"
+    },
+    "searchApi": {
+      "keySourcesOff": "目前這個網站沒有任何職缺來源開放給 API 金鑰使用，所以帶金鑰的請求會傳回錯誤，而不會有職缺。哪些來源可以用金鑰讀取，由網站營運者決定。"
     }
   },
   "resume": {
@@ -437,9 +458,9 @@
     "card": {
       "base": "主履歷 —— 沒有針對某個職缺調整",
       "edited": "修改於 {when}",
-      "score_unit": "/100",
       "delete": "刪除履歷",
-      "versions_used": "已用 {used} / {cap} 個版本"
+      "versions_used": "已用 {used} / {cap} 個版本",
+      "tailored_stamp": "已調整"
     },
     "tip": {
       "label": "如果你剛開始工作",
@@ -468,17 +489,16 @@
         "ready_v": "未命名草稿"
       },
       "import": {
-        "read": "已讀取",
         "identity": "你",
-        "identity_v": "姓名 · 電子郵件 · 所在地",
         "experience": "工作經歷",
-        "experience_v": "任職 · 職稱 · 時間",
         "education": "學歷",
-        "education_v": "學位 · 學校 · 年份",
-        "skills": "技能",
-        "skills_v": "技能 · 工具 · 關鍵字",
-        "cleaned": "已整理",
-        "cleaned_v": "用字與排版"
+        "skills": "技能"
+      },
+      "found": {
+        "none": "沒有找到。請在編輯器中新增。",
+        "roles": "{count, plural, other {# 個職務}}",
+        "schools": "{count, plural, other {# 筆}}",
+        "skills": "{count, plural, other {# 項技能}}"
       }
     },
     "import": {
@@ -500,8 +520,8 @@
       "scratch_hint": "先選一個範本。之後可以換 —— 內容會跟著走。",
       "drop": {
         "title": "把履歷拖到這裡",
-        "sub": "PDF、DOCX 或 Apple Pages",
-        "ready": "可以讀取了"
+        "ready": "可以讀取了",
+        "formats": "PDF、Word（DOC 或 DOCX）、純文字或 Markdown"
       },
       "linkedin": {
         "steps_title": "把 LinkedIn 個人檔案存成 PDF",
@@ -521,7 +541,7 @@
         "title_scratch": "草稿已就緒",
         "title_import": "已匯入",
         "body_scratch": "開啟編輯器開始填寫。逐行提示在右邊。",
-        "body_import": "你的履歷已讀取。編輯器裡標出了兩條寫得弱的重點。"
+        "body_read": "你的履歷已讀取完成。開啟編輯器，確認我們讀到了哪些內容。"
       },
       "cancel": "取消",
       "create_draft": "建立草稿",
@@ -541,7 +561,8 @@
         "file_required": "請先選擇一個檔案。"
       },
       "demo_file_name": "resume-2024.pdf",
-      "demo_file_size": "184 KB"
+      "demo_file_size": "184 KB",
+      "reading": "正在讀取 {file}…"
     },
     "toolbar": {
       "back": "全部履歷",
@@ -549,12 +570,13 @@
       "saved": "所有變更已儲存",
       "saving": "儲存中…",
       "save_error": "還沒儲存成功 —— 正在重試",
-      "strength": "強度",
       "coach": "逐行檢查",
       "hide_coach": "隱藏逐行檢查",
       "download": "下載",
       "tailor": "為某個職缺調整",
-      "delete": "刪除"
+      "delete": "刪除",
+      "quick_score": "快速分數",
+      "quick_score_hint": "編輯器自己算出的快速分數。它會隨著你輸入而改變，不是「履歷檢查」的結果。"
     },
     "section": {
       "identity": "你",
@@ -610,7 +632,8 @@
     },
     "bullet": {
       "flag": "這條重點沒有數字，動詞也很含糊。試試「潤飾文字」或「加上數字」。",
-      "placeholder": "你做了什麼 —— 用動詞開頭，用結果結尾"
+      "placeholder": "你做了什麼 —— 用動詞開頭，用結果結尾",
+      "placeholder_flag": "請把 {placeholders} 換成你真實的數字，或改寫這一行、拿掉它。這一行還沒準備好，不能送出。"
     },
     "rewrite": {
       "rewriting": "改寫中",
@@ -791,19 +814,22 @@
     },
     "export": {
       "ai_note": "這份履歷有一部分由 AI 撰寫。PDF 和 Word 檔會在檔案屬性中註明。",
-      "blocked": "{count, plural, one {有一行含有我們在你的履歷上找不到的數字。下載前請修正或移除。} other {有 # 行含有我們在你的履歷上找不到的數字或細節。下載前請修正或移除。}}",
       "name": {
         "company_role_name": "公司 - 職稱 - 你的姓名",
         "name_company_role": "你的姓名 - 公司 - 職稱",
         "name_date": "你的姓名 - 日期",
         "name_role": "你的姓名 - 職稱"
       },
-      "name_label": "檔名"
+      "name_label": "檔名",
+      "placeholders": "{count, plural, other {還有 # 行留著像 [X] 這樣的空格，要填入你自己的數字。請填入數字，或改寫這些行、拿掉數字。}}",
+      "placeholders_anyway": "保留這些空格並下載",
+      "placeholders_show": "顯示第一個",
+      "unverified": "{count, plural, other {這份調整過的履歷中，有 # 項細節還沒核對。下載前請先到「核對細節」核對。}}",
+      "verify_cta": "核對細節"
     },
     "hub": {
       "errors": {
         "ai_off": "讀取履歷檔案需要用到 AI，而你的帳號目前關閉了 AI 處理。請到「設定」開啟 AI 處理，或改用逐步填寫的方式建立履歷。",
-        "image_unreadable": "這張圖片目前讀不出來。請改上傳 PDF 或 Word 檔。",
         "storage_unavailable": "檔案儲存空間目前無法使用。請稍後再試。",
         "upload_daily_limit": "你今天已上傳 {limit} 個履歷檔案，已達每日上限。請明天再試。"
       },
@@ -910,7 +936,8 @@
         }
       },
       "title": "範本與版面"
-    }
+    },
+    "ai_edit_cost": "每次用 AI 修改一條重點、你的個人簡介或技能，會使用 1 點。"
   },
   "applications": {
     "page_title": "應徵紀錄",
@@ -1182,7 +1209,8 @@
         },
         "done": "完成",
         "useShorter": "改成 {minutes} 分鐘",
-        "previewToggle": "預覽面試可能會問的問題"
+        "previewToggle": "預覽面試可能會問的問題",
+        "costShort": "{n, plural, other {# 點}} —— 比你現有的點數多"
       },
       "loading": "正在載入面試準備…",
       "startError": "這場面試沒有開始成功。請重試。",
@@ -1596,7 +1624,11 @@
       "showAll": "顯示全部 {count} 個",
       "showFewer": "收合",
       "startErrorNetwork": "連不上伺服器。請檢查網路連線，然後重試。",
-      "startErrorBusy": "面試服務現在比較忙。請等一分鐘再試。"
+      "startErrorBusy": "面試服務現在比較忙。請等一分鐘再試。",
+      "creditCost": "需要 {n, plural, other {# 點}}",
+      "creditsRemaining": "剩餘 {n, plural, other {# 點}}",
+      "insufficientCredits": "這場面試需要 {required, plural, other {# 點}}，而你有 {balance} 點。請先取得點數再繼續。",
+      "insufficientCreditsNoPurchase": "這場面試需要 {required, plural, other {# 點}}，而你有 {balance} 點。"
     },
     "live": {
       "loading": "正在準備你的面試室…",
@@ -2041,7 +2073,6 @@
       "pronouns_other": "其他",
       "pronouns_none": "不想說",
       "years_exp": "年資",
-      "new_grad": "應屆畢業生",
       "years_suffix": " 年",
       "group_contact": "聯絡方式",
       "email": "電子郵件",
@@ -2098,7 +2129,6 @@
         "download": "下載",
         "paid": "已付款",
         "pending": "處理中",
-        "failed": "失敗",
         "card": "信用卡"
       }
     },
@@ -2159,7 +2189,6 @@
       "delete_data_confirm": "這會清空你的職缺清單、應徵紀錄和歷史紀錄。你的帳號和履歷會保留。",
       "delete_data_confirm_label": "確認",
       "delete_data_confirm_hint": "輸入 {keyword} 以確認。",
-      "delete_data_confirm_keyword": "DELETE",
       "delete_data_confirm_cta": "刪除求職資料",
       "delete_data_confirm_error": "請一字不差地輸入 {keyword} 以確認。",
       "delete_data_cancel": "取消",
@@ -2173,13 +2202,10 @@
       "deleteDescription": "會刪掉你的帳號、履歷、面試錄音和訂閱。無法復原。",
       "confirmEmailLabel": "確認你的電子郵件",
       "confirmEmailHint": "輸入 {email} 以確認。",
-      "reasonLabel": "原因",
-      "reasonPlaceholder": "告訴我們你為什麼要離開（必填）",
       "cancel": "取消",
       "delete": "刪除我的帳號",
       "error": {
         "mismatch": "這不是這個帳號的電子郵件。",
-        "reasonRequired": "請告訴我們你為什麼要離開。",
         "generic": "帳號沒有刪除成功。請重試。"
       }
     }
@@ -2214,7 +2240,8 @@
       "lead": "%BRAND% 讀你的履歷，告訴你哪些職缺你真的拿得到，指出到底缺了什麼，並幫你把面試準備好。",
       "feature_resume": "掃描軟體讀得懂的履歷",
       "feature_interview": "會跟你對話的練習面試",
-      "feature_track": "所有應徵都在同一處"
+      "feature_track": "所有應徵都在同一處",
+      "feature_interview_written": "為你想要的職缺練習面試"
     },
     "agreements": {
       "age": "我已滿 16 歲",
@@ -2281,7 +2308,12 @@
       "google": "使用 Google 繼續",
       "line": "使用 LINE 繼續",
       "needAgreements": "請先勾選下方的必要選項。",
-      "useEmail": "改用電子郵件"
+      "useEmail": "改用電子郵件",
+      "tabs": {
+        "email_password": "電子郵件",
+        "label": "登入方式",
+        "phone_otp": "手機"
+      }
     },
     "otherBrand": {
       "body": "這個帳號屬於 %OTHER_BRAND%。請到那裡繼續。",
@@ -2354,7 +2386,8 @@
       "toSignIn": "登入",
       "verifiedBody": "你的電子郵件已確認。確認之後，就能使用你的免費練習面試。",
       "verifiedTitle": "電子郵件已確認",
-      "working": "正在確認你的電子郵件…"
+      "working": "正在確認你的電子郵件…",
+      "requestNew": "到「設定」寄送新的連結"
     },
     "verifyBanner": {
       "failed": "這封電子郵件沒有寄出成功。請稍後再試。",
@@ -2604,6 +2637,166 @@
           },
           "sub": "製作一份中文履歷，再為每個職缺做一個版本。每一處變更都會顯示，沒有你的確認，不會加入任何新內容。",
           "title": "一份履歷，每個職缺一個版本"
+        },
+        "coverLetters": {
+          "eyebrow": "求職信",
+          "metaDescription": "根據職缺說明和你自己的履歷，為一個職缺寫一封求職信，再由你編輯。",
+          "metaTitle": "根據職缺說明和你的履歷寫求職信",
+          "q1": {
+            "a": "不會。要不要用、用在哪裡，都由你決定。",
+            "q": "它會被寄給雇主嗎？"
+          },
+          "q2": {
+            "a": "有，每天有上限。價格頁面上有列出。",
+            "q": "有上限嗎？"
+          },
+          "s1": {
+            "body": "從職缺頁面開始。",
+            "title": "選擇職缺"
+          },
+          "s2": {
+            "body": "每一項事實都來自你的履歷或職缺說明。",
+            "title": "閱讀草稿"
+          },
+          "s3": {
+            "body": "想改哪裡都可以，改完再複製或下載。",
+            "title": "編輯並下載"
+          },
+          "sample": {
+            "line1": "開頭點出職缺說明裡的職務和團隊。",
+            "line2": "中間段落用了你履歷裡的兩項成果。",
+            "line3": "由 AI 撰寫。寄出前請先讀過。"
+          },
+          "sub": "求職信會用到職缺說明的要求和你履歷上的內容。使用前由你自己編輯。",
+          "title": "針對這個職缺、根據你自己履歷寫的求職信"
+        },
+        "jobMatches": {
+          "eyebrow": "適合的職缺",
+          "metaDescription": "%BRAND% 依你的履歷有多適合，為招募中的職缺排序。每個職缺都先告訴你缺了什麼，並標明職缺的來源。",
+          "metaTitle": "適合你履歷的職缺，每個都附上來源",
+          "q1": {
+            "a": "來自雇主自己徵才頁面上的公開職缺，以及每個職缺上標明的來源。%BRAND% 並沒有列出市場上的每一個職缺。",
+            "q": "職缺是從哪裡來的？"
+          },
+          "q2": {
+            "a": "依適合度、新鮮度、你表現出興趣的內容，以及職缺來源排序。「排序方式說明」頁面列出了每一項因素。",
+            "q": "清單是怎麼排序的？"
+          },
+          "s1": {
+            "body": "告訴我們你想要的職務、城市和薪資。其餘的交給你的履歷。",
+            "title": "加入你的履歷和搜尋條件"
+          },
+          "s2": {
+            "body": "每個職缺都先顯示哪些符合、缺了什麼，然後才顯示數字。",
+            "title": "先讀落差"
+          },
+          "s3": {
+            "body": "開啟原始的職缺頁面，在那裡自己應徵。之後這個職缺會在你的看板上移到「已應徵」。",
+            "title": "到雇主的網站應徵"
+          },
+          "sample": {
+            "line1": "還算適合 · 78 / 100",
+            "line2": "他們要求 SQL 和 Tableau。你的履歷只呈現了 SQL。",
+            "line3": "來源：雇主的徵才頁面 · 2 天前核對"
+          },
+          "sub": "每個職缺都有一個適合度等級，並先告訴你落差在哪裡：雇主要求了、而你的履歷沒有呈現的內容。每個職缺都標明來源，並連到原始的職缺頁面。",
+          "title": "依適合度排序的職缺，並用白話說明原因"
+        },
+        "readyToApply": {
+          "eyebrow": "準備應徵",
+          "metaDescription": "%BRAND% 每週為適合的職缺準備好應徵資料。由你檢查，每一份應徵都由你自己送出。",
+          "metaTitle": "每週備妥應徵資料；由你自己送出",
+          "q1": {
+            "a": "不會。它絕不會送出應徵，也不會聯絡雇主。",
+            "q": "它會送出任何東西嗎？"
+          },
+          "q2": {
+            "a": "點一下就能復原，職缺會回到原來的位置。",
+            "q": "如果我開啟職缺後沒有應徵，怎麼辦？"
+          },
+          "s1": {
+            "body": "選擇 5、10、20 或 30 個職缺，以及你能接受的最低適合度。",
+            "title": "設定每週幾個"
+          },
+          "s2": {
+            "body": "使用前，想改哪裡都可以。",
+            "title": "檢查每一份應徵準備包"
+          },
+          "s3": {
+            "body": "開啟雇主的頁面並送出。職缺會移到「已應徵」。",
+            "title": "由你自己送出"
+          },
+          "sample": {
+            "line1": "本週 5 個職缺 · 還算適合以上",
+            "line2": "應徵準備包已備妥：針對職缺調整的履歷、求職信、4 則回答",
+            "line3": "開啟應徵頁面 → 由你檢查並送出"
+          },
+          "sub": "針對適合的職缺，%BRAND% 會準備一份調整過的履歷、一封求職信，以及常見問題的回答。每一份應徵都由你自己開啟並送出。",
+          "title": "每週備妥應徵資料，等你檢查"
+        },
+        "referralCodes": {
+          "eyebrow": "內部推薦碼",
+          "metaDescription": "查看其他 %BRAND% 使用者為某家公司分享的內部推薦碼。每一組都經過審核人員檢查後才會顯示。",
+          "metaTitle": "其他求職者分享的內部推薦碼",
+          "q1": {
+            "a": "不用付費。販售或交換的推薦碼一律拒收，附有電話號碼、WeChat ID、電子郵件或連結的推薦碼也一樣。",
+            "q": "這些推薦碼要付費嗎？"
+          },
+          "q2": {
+            "a": "不會。它能幫助你的應徵送達公司，但不會決定結果。",
+            "q": "有了推薦碼就能拿到工作嗎？"
+          },
+          "s1": {
+            "body": "為那家公司分享的推薦碼，會顯示在職缺頁面，以及「內部推薦碼」底下。",
+            "title": "開啟職缺或公司"
+          },
+          "s2": {
+            "body": "應徵時，把它填進雇主自己的應徵表單。",
+            "title": "複製推薦碼"
+          },
+          "s3": {
+            "body": "新增你自己的推薦碼。審核人員檢查後才會顯示。",
+            "title": "分享你有的推薦碼"
+          },
+          "sample": {
+            "line1": "範例公司 · 2027 年校園徵才計畫",
+            "line2": "內部推薦碼：EXAMPLE2027 · 已由審核人員檢查",
+            "line3": "推薦碼能幫助你的應徵送達公司，但不會決定結果。"
+          },
+          "sub": "其他 %BRAND% 使用者會分享他們手上的內部推薦碼。每一組都經審核人員檢查後才會顯示，需要花錢取得的推薦碼不被允許。",
+          "title": "你要應徵的公司的內部推薦碼"
+        },
+        "resumeTailoring": {
+          "eyebrow": "依職缺調整履歷",
+          "metaDescription": "為一個職缺做一個履歷版本，看到每一處變更，下載前確認所有新增的內容。",
+          "metaTitle": "針對每個職缺調整履歷",
+          "q1": {
+            "a": "它可以建議措辭，但履歷上原本沒有的說法、數字或技能，要等你確認、編輯或移除後才能下載。",
+            "q": "它會編造經歷嗎？"
+          },
+          "q2": {
+            "a": "不會。每一份調整後的版本都是獨立的，你的主履歷維持原樣。",
+            "q": "它會改動我的主履歷嗎？"
+          },
+          "s1": {
+            "body": "從你清單裡的任何職缺開始，或從你自己加入的職缺開始。",
+            "title": "選一個職缺"
+          },
+          "s2": {
+            "body": "每一處變更都可以保留、編輯或移除。沒有你的同意，不會加入任何新內容。",
+            "title": "檢查變更"
+          },
+          "s3": {
+            "body": "每一項新增內容都確認後，就可以匯出 PDF 或 Word 檔。",
+            "title": "下載"
+          },
+          "sample": {
+            "line1": "變更：個人簡介現在提到你的資料分析專案。",
+            "line2": "有一行的數字，我們在你的履歷上找不到。下載前請修正或移除。",
+            "line3": "變更後的適合度：還算適合 · 84 / 100"
+          },
+          "sub": "並排查看每一處變更。草稿新增、而你履歷上原本沒有的內容，都會等你確認。",
+          "title": "每個職缺一個履歷版本"
         }
       },
       "roboapply": {
@@ -2955,7 +3148,8 @@
           "q": "適合度分數代表什麼？"
         },
         "q4": {
-          "q": "職缺是從哪裡來的？"
+          "q": "職缺是從哪裡來的？",
+          "a": "來自雇主自己徵才頁面上的公開職缺、台灣的政府公開資料職缺清單，以及你搜尋時的職缺刊登服務供應商。每個職缺都會顯示它的來源和上次核對的時間。%BRAND% 並沒有列出市場上的每一個職缺。"
         },
         "q5": {
           "a": "免費版包含職缺清單、適合度分數和你的應徵紀錄看板，AI 功能有每日上限。Pro 會提高這些上限。所有價格和上限都列在價格頁面上。",
@@ -2988,11 +3182,11 @@
       "pricing": {
         "eyebrow": "價格",
         "freeNote": "AI 功能有每日上限",
-        "notSet": "價格尚未設定",
         "proNote": "每一項 AI 功能的每日上限都更高",
         "seeAll": "查看所有方案和上限",
         "sub": "職缺清單、適合度分數、篩選條件和你的應徵紀錄看板都免費。Pro 會提高 AI 功能的每日上限。",
-        "title": "免費開始。需要更多時再升級。"
+        "title": "免費開始。需要更多時再升級。",
+        "notOpen": "付費方案目前還不能購買。"
       },
       "sample": {
         "company": "範例公司",
@@ -3054,7 +3248,6 @@
       "capsSub": "Pro 也有上限。這些上限是為了防止濫用，我們把它列在這裡，讓你付費前就知道。",
       "capsTitle": "上限",
       "cnPasses": "會員方案是一次性通行證，絕不會自動續訂。",
-      "cnRefund": "付費方案開放前，會先公布退款規則。",
       "count": "{count}",
       "cta": "免費開始",
       "error": "方案沒有載入成功。請重新整理後再試。",
@@ -3073,7 +3266,6 @@
       "metaTitle": "價格",
       "notOpen": "尚未開放",
       "notOpenNote": "付費方案目前還不能購買。這是開放後會適用的收費表。",
-      "notSet": "價格尚未設定",
       "perDay": "每天 {count} 次",
       "plansTitle": "方案",
       "practiceCredits": "{per, select, period {每個計費週期} month {每月} other {內含}} {count, plural, other {# 場練習面試}}",
@@ -3089,10 +3281,6 @@
         "a": "不會。上限每天或每週重設，如表格所示。練習包在列出的月數內有效。",
         "q": "沒用完的點數會累積到下一期嗎？"
       },
-      "refund1": "如果你使用需要 Pro 的功能少於 5 次，第一筆訂閱付款可以在 7 天內退款（週繳為 48 小時內）。",
-      "refund2": "不是你想保留的續訂，可以在 3 天內退款。",
-      "refund3": "沒有使用過的練習包可以退款。",
-      "refund4": "在歐盟和英國，你可以在 14 天內撤回購買並取得全額退款，除非你要求立即開始使用付費功能。",
       "refundLink": "閱讀退款政策",
       "refundTitle": "退款",
       "renew1": "會續訂的方案，會在這個頁面和結帳時說明。每次月繳或季繳續訂前，你都會收到提醒電子郵件。",
@@ -3101,7 +3289,11 @@
       "savedSearches": "已儲存的搜尋",
       "sub": "所有價格、續訂規則和使用上限都在這個頁面上。",
       "title": "價格",
-      "upToPerDay": "每天最多 {count} 次"
+      "upToPerDay": "每天最多 {count} 次",
+      "choosePlan": "選擇這個方案",
+      "confirmSchoolEmail": "確認你的學校電子郵件",
+      "passRefundHow": "到「使用說明」頁面申請退款",
+      "signupToBuy": "建立免費帳號後才能購買"
     },
     "ranking": {
       "addsPoints": "+{points} 分",
@@ -3111,7 +3303,8 @@
       },
       "factorsTitle": "四項因素",
       "fit": {
-        "title": "和你的履歷、搜尋條件的適合度"
+        "title": "和你的履歷、搜尋條件的適合度",
+        "body": "你對這個職缺的適合度分數，滿分 100。如果還沒有完整的適合度分析，就會使用同一個分數尺度的快速估計。快速估計依據太少的職缺，在你篩選「還算適合以上」或「只看很適合」時會被排除。我們還在比較快速估計和完整分析，所以已有完整分析的職缺，會排在快速估計和分析後分數的中間位置，因此它在清單中的位置，可能和卡片上的數字不同。"
       },
       "fitParts": {
         "careerPath": "你的職涯發展歷程",
@@ -3125,7 +3318,8 @@
         "weight": "占適合度分數的 {pct}%"
       },
       "freshness": {
-        "title": "新鮮度"
+        "title": "新鮮度",
+        "body": "越新的職缺越前面。這項影響在前兩天最強，之後約兩週內仍保有較小的權重。來源已不再刊登的職缺，會被視為較舊的職缺。"
       },
       "goalIntro": "你設定帳號時選擇的職涯目標，會為符合這個目標的職缺加分。",
       "goalOthers": "其他目標不會改變排序。",
@@ -3153,6 +3347,14 @@
         "sponsorshipFirst": {
           "body": "如果你表示需要簽證贊助，職缺說明中提到贊助的職缺會排在前面，並維持你選擇的排序方式；職缺說明寫明不提供贊助的職缺會被隱藏。這條規則適用於每一種排序方式。",
           "title": "簽證贊助優先"
+        },
+        "seenSkipped": {
+          "body": "你造訪時，清單中出現過三次以上、而你一次都沒有開啟過的職缺，排序會比較後面：三次扣 5 分，四次扣 7.5 分，五次以上扣 10 分。",
+          "title": "你一直略過的職缺"
+        },
+        "wrongTitle": {
+          "body": "如果你把一個職缺標記為「沒有興趣：職稱不符」，該職務的權重和該職稱的權重都會各降低 0.25，權重的範圍是 -1 到 1。「你表現出興趣的內容」是這個職缺的職務、公司和技能權重的平均值；如果職稱權重低於零，也會一併計入。所以標記一次，會讓其他相同職務或職稱的職缺稍微往後，每多標記一次，就往後更多。這個影響每天減弱 2%。你的篩選條件維持不變。",
+          "title": "你標記為不符的職稱"
         }
       },
       "rulesTitle": "{count, plural, =1 {另一條規則} other {其他規則}}",
@@ -3164,7 +3366,14 @@
       "spreadTitle": "多樣性",
       "title": "排序方式說明",
       "upToPoints": "最多 {points} 分",
-      "weight": "占排序的 {pct}%"
+      "weight": "占排序的 {pct}%",
+      "cnNote": "在 %BRAND%，如果個人化推薦已關閉或尚未選擇，職缺只會依刊登日期和你的篩選條件排序。當你用文字搜尋時，則依每則職缺說明和這些文字的吻合程度排序。",
+      "deadlineSort": "「{deadline}」依職缺截止應徵的日期排序，最快截止的排在最前面。",
+      "otherSorts": "「{newest}」、「{bestFit}」和「{highestPay}」各自只依那一項條件排序。",
+      "pointsNote": "每個職缺會依四項因素得到一個滿分 100 的排序分數。下方的規則和目標會為這個分數加分、扣分，或在清單中調整職缺的位置。",
+      "pointsNoteRules": "每個職缺會依四項因素得到一個滿分 100 的排序分數。下方的規則會為這個分數加分或扣分。",
+      "sameRole": "當一家公司在多個城市刊登同一個職務時，你會看到一張卡片，列出其他地點，最多 10 個。超過的地點會另外以一張卡片顯示。",
+      "upToPointsLower": "最多降低 {points} 分"
     },
     "search": {
       "anyCountry": "不限國家",
@@ -3688,7 +3897,9 @@
         "noCharge": "找不到已付款的扣款。",
         "notEligible": "無法退款",
         "rule": "規則：{rule}",
-        "title": "退款檢查"
+        "title": "退款檢查",
+        "issueElsewhere": "要退款，請開啟「點數與方案」，再前往「退款」。信用卡扣款在那裡退款。中國大陸的訂單，則在商家後台把款項退回之後，在那裡記錄。",
+        "sub": "已公布的退款規則對這位使用者最近一筆扣款的規定。這只是檢查。"
       },
       "reports": {
         "allMarkets": "兩個市場",
@@ -3767,7 +3978,8 @@
         "title": "內容安全",
         "usable": "執行中",
         "verdict": "結果",
-        "yes": "是"
+        "yes": "是",
+        "problemsDegraded": "設定有問題。問題修正之前，檢查會使用內建的字詞清單"
       },
       "system": {
         "alerts": {
@@ -3815,7 +4027,44 @@
         },
         "providers": {
           "errors": "錯誤",
-          "provider": "服務商"
+          "provider": "服務商",
+          "alert": {
+            "exhausted": "{provider}：每月額度已用完。將於 {days}後重設。",
+            "exhaustedNoReset": "{provider}：每月額度已用完。服務商沒有說明何時重設。",
+            "low": "{provider}：每月額度剩下 {value}（警示值 {level}）。",
+            "not_subscribed": "{provider}：這組金鑰沒有這個服務商的方案。",
+            "unauthorized": "{provider}：服務商拒絕了這組金鑰。"
+          },
+          "banner": "目前無法使用：{providers}。職缺動態在沒有它們的情況下持續運作。",
+          "bannerOne": "目前無法使用：{providers}。職缺動態在沒有它的情況下持續運作。",
+          "calls": "今天的呼叫次數 / 每日上限",
+          "days": "{count, plural, other {# 天}}",
+          "empty": "尚未設定任何職缺服務商。",
+          "jobs": "剩餘職缺數 / 上限",
+          "leftOfLimit": "{left} / {limit}",
+          "market": "市場",
+          "markets": {
+            "cn": "中國大陸",
+            "intl": "國際"
+          },
+          "new": "新增",
+          "plan": "方案",
+          "requests": "剩餘請求數 / 上限",
+          "resetsIn": "多久後重設",
+          "returned": "回傳",
+          "state": "狀態",
+          "states": {
+            "disabled": "關閉",
+            "exhausted": "已用完",
+            "gated": "需要更大的方案",
+            "low": "快用完了",
+            "not_subscribed": "未訂閱",
+            "ok": "開啟",
+            "unauthorized": "金鑰遭拒",
+            "unknown": "尚未得知"
+          },
+          "sub": "各服務商最近回報的自家方案內容，以及 UTC 日期 {day} 的呼叫次數。破折號表示服務商沒有說明。",
+          "title": "職缺服務商"
         },
         "queue": {
           "dead": "已放棄",
@@ -3849,6 +4098,204 @@
           "feedback": "助理回饋",
           "health": "健康狀況",
           "safety": "內容安全"
+        },
+        "payments": {
+          "eventsAll": "Webhook 端點會傳送網站會處理的每一種事件。",
+          "failed": "無法檢查刷卡付款。",
+          "link": "到「點數與方案」查看完整的 Stripe 檢查結果",
+          "loading": "載入中…",
+          "missingEvents": "{count, plural, other {# 種網站會處理的事件，沒有由 Webhook 端點傳送。}}",
+          "noEndpoint": "Stripe 中沒有指向這個網站的 Webhook 端點。",
+          "notChecked": "無法檢查 Webhook 端點。",
+          "notReady": "刷卡付款尚未準備好。",
+          "ready": "刷卡付款已準備好。",
+          "reason": {
+            "live_key_outside_production": "在正式環境以外，不接受正式的 Stripe 金鑰。",
+            "missing": "沒有設定 Stripe 金鑰。",
+            "no_secret": "沒有設定 Webhook 簽署密鑰。"
+          },
+          "sub": "這裡是否可以收取刷卡付款。",
+          "title": "付款"
+        }
+      },
+      "sources": {
+        "about": {
+          "activejobs": "職缺搜尋服務。用於使用者發起的搜尋。",
+          "activejobs_feed": "每小時讀取雇主徵才網站上的新職缺。有付費方案後會自動執行。",
+          "ats_public": "來自各公司自己公開徵才頁面的職缺。每一筆都連到該公司自己的頁面。",
+          "bank": "招募人員在 {sourceName} 上為指名的雇主發布的職缺。",
+          "jsearch": "職缺搜尋服務。用於使用者發起的搜尋。",
+          "linkedin": "已不再使用的職缺搜尋服務。",
+          "other": "一個職缺來源。",
+          "tw_gov_jobs": "取自台灣開放資料的政府機關與學校職缺。每一筆都會顯示其授權條款要求的出處標示。不會保留公務人員的聯絡方式。",
+          "tw_open_data": "取自台灣公共就業服務開放資料集的職缺。每一筆都會顯示其授權條款要求的出處標示。",
+          "usajobs": "取自美國政府官方求職網站的聯邦職缺。每一筆都連到官方公告。",
+          "user_import": "使用者貼上的連結或職缺。只有那位使用者看得到。"
+        },
+        "boards": {
+          "actions": {
+            "cancel": "取消",
+            "check": "立即檢查",
+            "checkLabel": "立即檢查 {company}",
+            "checking": "檢查中…",
+            "confirmRemove": "移除並隱藏其職缺",
+            "remove": "移除",
+            "removeLabel": "移除 {company}",
+            "toggleLabel": "開啟或關閉 {company}",
+            "turnOff": "關閉",
+            "turnOn": "開啟"
+          },
+          "add": {
+            "adding": "新增中…",
+            "company": "公司名稱",
+            "companyHint": "依該公司在自己的徵才頁面上的寫法。",
+            "submit": "新增徵才頁面",
+            "system": "徵才頁面系統",
+            "title": "新增公司的徵才頁面",
+            "token": "徵才頁面 ID",
+            "tokenHint": "公司徵才頁面網址中的簡稱。"
+          },
+          "errors": {
+            "duplicate": "這個徵才頁面已經在清單中。",
+            "generic": "沒有成功。請重試。",
+            "invalid": "請檢查徵才頁面 ID 和公司名稱。"
+          },
+          "list": {
+            "columns": {
+              "actions": "操作",
+              "board": "徵才頁面 ID",
+              "company": "公司",
+              "jobs": "列出的職缺數",
+              "lastChecked": "上次檢查",
+              "problem": "最近的問題",
+              "status": "狀態",
+              "system": "系統"
+            },
+            "empty": "還沒有徵才頁面。請在上方新增。",
+            "loadError": "清單沒有載入成功。",
+            "never": "尚未檢查",
+            "noProblem": "無",
+            "off": "關閉",
+            "on": "開啟",
+            "title": "這個網站上的徵才頁面"
+          },
+          "offNote": "關閉或移除徵才頁面，會隱藏其中的職缺。重新開啟後，會再次讀取該徵才頁面。",
+          "run": {
+            "error": "{company}：{problem}",
+            "queued": "{company}：這個徵才頁面為此網站列出 {listed, plural, other {# 筆職缺}}。已開始讀取。",
+            "waiting": "{company}：這個徵才頁面為此網站列出 {listed, plural, other {# 筆職缺}}。會在下一次排定的檢查時讀取。"
+          },
+          "sub": "在中國大陸徵才的公司所公開的徵才頁面。我們讀取各徵才頁面自己的公開職缺發布來源，並保留工作地點在中國大陸的職缺。每個職缺都連到該公司自己的頁面。",
+          "systems": "我們可以讀取使用 {names} 的徵才頁面。",
+          "title": "公司徵才頁面"
+        },
+        "empty": "這個網站還沒有職缺來源。",
+        "eyebrow": "管理台",
+        "facts": {
+          "boards": "我們讀取的徵才頁面",
+          "boardsFailing": "{count, plural, other {# 個徵才頁面上次無法讀取}}",
+          "boardsValue": "{enabled} / {total} 已開啟",
+          "held": "已儲存但未顯示的職缺",
+          "lastRun": "上次檢查",
+          "never": "尚未檢查",
+          "open": "使用者目前看得到的職缺",
+          "written": "上次檢查儲存的職缺"
+        },
+        "lastError": "上次檢查失敗：{error}",
+        "loading": "載入中…",
+        "name": {
+          "activejobs": "Active Jobs DB",
+          "activejobs_feed": "Active Jobs DB 職缺發布來源",
+          "ats_public": "公司徵才頁面",
+          "bank": "{sourceName} 招募人員職缺",
+          "jsearch": "JSearch",
+          "linkedin": "LinkedIn 職缺搜尋",
+          "other": "{provider}",
+          "tw_gov_jobs": "台灣公部門職缺",
+          "tw_open_data": "台灣政府開放資料",
+          "usajobs": "USAJOBS",
+          "user_import": "使用者自行新增的職缺"
+        },
+        "notShown": {
+          "body": "{source} 目前還沒有單一職缺的公開頁面，所以使用者沒有地方可以應徵。我們會持續更新它的職缺，等那個頁面出現後再顯示。要開啟這項功能，請把 {variable} 設為該頁面的網址。",
+          "count": "{count, plural, other {有 # 個已發布的職缺在等待中}}",
+          "title": "這些職缺已儲存但未顯示"
+        },
+        "pageSet": "已設定它的公開職缺頁面。每個職缺都連到該頁面。",
+        "panelSub": "每個來源都依自己的排程檢查。數字來自上次檢查，不是即時的。",
+        "panelTitle": "職缺的來源",
+        "panelTitleBrand": "職缺的來源：{brand}",
+        "reason": {
+          "cross_tenant_unconfirmed": "尚未確認這個網站可以讀取此來源。",
+          "disabled": "已關閉，或缺少金鑰。",
+          "kill_switch": "已在伺服器設定中關閉。",
+          "no_api_key": "尚未為它設定網路金鑰。",
+          "no_key": "尚未為它設定金鑰。",
+          "not_configured": "尚未在這台伺服器上設定。",
+          "not_registered": "這台伺服器上無法使用。",
+          "other": "已關閉（{code}）。",
+          "plan_too_small": "在方案允許每月至少 20,000 筆職缺之前，保持關閉。",
+          "plan_unknown": "已關閉。目前還不知道方案的額度：請設定 FANTASTIC_MONTHLY_JOBS，或等服務商第一次回應。",
+          "quota": "已暫停：它的方案在這個期間的額度已用完、被拒絕，或保留給使用者自己的搜尋。",
+          "tls_required": "它的資料庫連線沒有加密，所以我們不會開啟。",
+          "tls_required_no_api_key": "它的資料庫連線沒有加密，也沒有設定網路金鑰，所以我們無法讀取。",
+          "transport_off": "已在伺服器設定中關閉。",
+          "url_invalid": "為它設定的網址不是我們接受的網址，所以不會讀取。",
+          "wrong_market": "不是這個網站的來源。"
+        },
+        "refresh": "重新整理",
+        "refreshing": "重新整理中…",
+        "skips": {
+          "bank_closed": "招募人員已關閉：{count}",
+          "bank_no_company": "沒有指名雇主：{count}",
+          "bank_no_public_page": "沒有可連結的公開職缺頁面：{count}",
+          "bank_page_cap": "因達到頁數上限而停止的檢查：{count}",
+          "bank_pass_cut_short": "時間用完而中斷的檢查：{count}",
+          "bank_reread_started": "已開始的來源完整重新讀取：{count}",
+          "bank_synced": "已發布且有指名雇主的職缺：{count}",
+          "bank_test_posting": "測試職缺：{count}",
+          "bank_time_without_zone": "傳來時沒有時區、以中國時間讀取的時間：{count}",
+          "bank_unpublished": "仍開放但招募人員未發布：{count}",
+          "bank_validity_ended": "已超過招募人員設定的結束日期：{count}",
+          "board_backlog": "還沒讀取的職缺：{count}",
+          "board_errors": "無法讀取的徵才頁面：{count}",
+          "boards_read": "已檢查的徵才頁面：{count}",
+          "countedAt": "統計自 {time} 的檢查。",
+          "country_not_selected": "工作地點在這個徵才頁面不讀取的國家：{count}",
+          "indeed_only_link": "因為唯一的連結指向 Indeed 而排除：{count}",
+          "linkedin_only_link": "因為唯一的連結指向 LinkedIn 而排除：{count}",
+          "missing_title_or_company": "沒有職稱或雇主名稱：{count}",
+          "no_apply_url": "沒有應徵連結：{count}",
+          "no_external_id": "來源沒有提供職缺 ID：{count}",
+          "none": "上次檢查沒有排除任何職缺。",
+          "normalize_failed": "無法讀取：{count}",
+          "private_row": "已由使用者私下儲存，維持原樣：{count}",
+          "title": "上次檢查的統計",
+          "tw_absence_unproven": "最近兩次每日讀取都沒有回傳、但因其縣市無法完整讀取而保持開放：{count}",
+          "tw_capped_county_major": "依縣市和職務類別發出、達到筆數上限的請求：{count}",
+          "tw_capped_leaf": "達到筆數上限、無法再細分的請求：{count}",
+          "tw_county_only": "每日讀取未能細到行政區的職缺：{count}",
+          "tw_county_unreached": "依行政區和職務類別都讀取不到的職缺：{count}",
+          "tw_request_errors": "失敗的請求：{count}",
+          "tw_skipped_position": "重複失敗後放棄的每日讀取部分：{count}",
+          "tw_sweep_finished": "已完成的每日讀取：{count}",
+          "tw_sweep_incomplete": "未完整結束的每日讀取：{count}",
+          "wrong_market_cn": "工作地點在中國大陸以外：{count}",
+          "wrong_market_intl": "工作地點在中國大陸，所以不屬於這個網站：{count}"
+        },
+        "state": {
+          "off": "關閉",
+          "on": "開啟"
+        },
+        "sub": "這個網站的職缺從哪裡來、各來源上次檢查時的情況，以及有些職缺為什麼被排除。",
+        "title": "職缺來源",
+        "transport": {
+          "api": "透過安全的網路連線讀取",
+          "board_api": "從各徵才頁面的公開職缺來源讀取",
+          "db": "從它的資料庫讀取",
+          "off": "未連線",
+          "rapidapi": "搜尋服務",
+          "syndication": "從它的職缺發布來源讀取"
         }
       }
     }
@@ -3943,8 +4390,6 @@
     "agent_pending": "正在規劃搜尋並查詢已串接的來源…",
     "cancel_search": "停止搜尋",
     "search_stopped": "搜尋已停止。你可以修改需求後重新搜尋。",
-    "linkedin_only": "僅顯示 LinkedIn 職缺",
-    "linkedin_hint": "僅顯示有 LinkedIn 來源紀錄的職缺。涵蓋範圍取決於所選來源，無法涵蓋 LinkedIn 上的所有職缺。",
     "advanced": "進階篩選與來源",
     "overrides_hint": "這些設定會優先於你描述的需求。保留自動設定，即可採用需求中的資訊。",
     "auto": "依照我的需求",
@@ -3962,8 +4407,8 @@
     "agent_unavailable": "求職助理暫時無法使用。請再試一次；目前尚未產生搜尋結果。",
     "request_review": "你的搜尋需求",
     "agent_results_for": "依照你的需求找到的職缺",
-    "linkedin_empty": "所選來源未回傳 LinkedIn 職缺。請放寬條件，或關閉僅搜尋 LinkedIn 的選項。",
-    "entry_hint": "描述你想找的工作，搜尋已串接的徵才來源。"
+    "entry_hint": "描述你想找的工作，搜尋已串接的徵才來源。",
+    "intro": "描述你想找的工作。把你的需求轉成涵蓋各個已連結職缺來源的精準搜尋。"
   },
   "jobSearchApi": {
     "eyebrow": "%BRAND% 開發者服務",
@@ -4317,6 +4762,26 @@
       "turnOn": "開啟",
       "useCode": "使用 App 上的驗證碼",
       "useRecovery": "改用復原碼"
+    },
+    "prefs": {
+      "danger": {
+        "confirmKeyword": "刪除",
+        "signedOutNow": "你已立即在所有裝置上登出。"
+      },
+      "identity": {
+        "linkedin_invalid": "請填寫你的 LinkedIn 個人檔案連結（linkedin.com/in/your-name），或留空。",
+        "name_ph": "你的姓名",
+        "name_save_failed": "你的姓名沒有儲存成功。請重試。",
+        "pronouns_he": "他",
+        "pronouns_she": "她",
+        "pronouns_they": "TA",
+        "years_unset": "未設定"
+      },
+      "security": {
+        "otherNote": "你不用密碼登入，所以沒有密碼可以變更。",
+        "phoneNote": "你用傳到手機的驗證碼登入，所以沒有密碼可以變更。",
+        "wechatNote": "你用 WeChat 登入，所以沒有密碼可以變更。"
+      }
     }
   },
   "assistant": {
@@ -4456,7 +4921,9 @@
         "gaps": "可以再加強的地方",
         "highlights": "值得一提",
         "missing": "職缺有要求、但你的履歷沒有呈現的項目",
-        "title": "你和這個職缺的適合度"
+        "title": "你和這個職缺的適合度",
+        "openJob": "查看你目前的適合度",
+        "snapshot": "這是寫下這個回答時你的適合度。你的履歷或搜尋條件改變時，適合度也會跟著改變。"
       },
       "gaps": {
         "keys": {
@@ -4502,7 +4969,14 @@
         "range": "{min}–{max}",
         "seeAll": "查看你的所有職缺",
         "title": "職缺",
-        "upTo": "最高 {amount}"
+        "upTo": "最高 {amount}",
+        "addedByYou": "你新增的",
+        "payAsStated": "刊登的薪資：{text}",
+        "workModel": {
+          "hybrid": "混合辦公",
+          "onsite": "現場辦公",
+          "remote": "遠端"
+        }
       },
       "memory": {
         "allow": "同意並記住",
@@ -4524,7 +4998,8 @@
         "copilot_budget_exhausted": "助理現在很忙。請稍後再試。沒有扣點。",
         "credits_exhausted": "今天的助理訊息已經用完。",
         "proposal_expired": "這個建議已過期。請再問一次，取得新的建議。",
-        "rate_limited": "短時間內訊息太多。請稍等一下再試。"
+        "rate_limited": "短時間內訊息太多。請稍等一下再試。",
+        "stopped": "已停止。"
       },
       "proposalClosed": "這個建議已經不能使用。請再問一次，取得新的建議。",
       "proposalExpired": "這個建議已過期。請再問一次，取得新的建議。",
@@ -4549,7 +5024,11 @@
       "tailorReady": {
         "open": "開啟調整後的履歷",
         "title": "你調整後的履歷準備好了"
-      }
+      },
+      "applying": "處理中…",
+      "inProgress": "這件事已經在處理了。如果一分鐘後還沒有結果，請重試。",
+      "notSaved": "這個建議沒有和回答一起儲存，所以無法使用。請再問一次。",
+      "waitForAnswer": "回答完成後才能使用。"
     },
     "cheatsheet": {
       "groups": {
@@ -4592,7 +5071,10 @@
         }
       },
       "intro": "選一個問題，它會放進輸入框。想改就改，然後按「送出」。",
-      "title": "你可以問什麼"
+      "title": "你可以問什麼",
+      "needsJob": "這些問題是針對某一個職缺。請先開啟一個職缺，再從那裡提問。",
+      "needsJobHere": "這些問題是針對某一個職缺。這段對話不是關於這個頁面上的職缺。",
+      "openJobs": "開啟你的職缺"
     },
     "chipPrompts": {
       "cover_letter": "為這個職缺寫一封求職信。",
@@ -4616,11 +5098,15 @@
       "placeholder": "問問職缺、你的搜尋條件、你的履歷或面試",
       "send": "送出",
       "stop": "停止",
-      "tooLong": "請控制在 {max} 個字元以內。"
+      "tooLong": "請控制在 {max} 個字元以內。",
+      "placeholderShort": "問個問題"
     },
     "context": {
       "job": "關於這個職缺",
-      "resume": "關於這份履歷"
+      "resume": "關於這份履歷",
+      "askPageJob": "針對這個職缺開新對話",
+      "noJob": "這段對話不是關於這個頁面上的職缺。",
+      "otherJob": "這段對話是關於另一個職缺。"
     },
     "empty": {
       "body": "回答會用到你的個人檔案、你儲存的搜尋，以及你清單裡的職缺。任何變更都會先給你看，只有在你確認後才會執行。",
@@ -4753,13 +5239,20 @@
       "propose_filter_change": "正在準備搜尋條件的變更…",
       "salary_context": "正在讀取刊登的薪資…",
       "search_jobs": "正在搜尋職缺…",
-      "top_fit_jobs": "正在找出最適合你的職缺…"
+      "top_fit_jobs": "正在找出最適合你的職缺…",
+      "added_jobs": "正在查看你新增的職缺…",
+      "show_jobs": "正在整理清單…",
+      "similar_jobs": "正在尋找類似的職缺…"
     },
     "voice": {
       "blocked": "這個瀏覽器封鎖了麥克風的使用權限。",
       "listening": "正在聆聽…",
       "start": "說出你的問題",
-      "stop": "停止聆聽"
+      "stop": "停止聆聽",
+      "vendorNotice": "你的瀏覽器會用它自己的語音服務，把你說的話轉成文字。音訊由瀏覽器開發商處理，處理地點可能在中國大陸以外。"
+    },
+    "jobList": {
+      "title": "這個回答提到的職缺"
     }
   },
   "brand": {
@@ -5116,7 +5609,9 @@
       "resumePrimary": "{name}（主履歷）",
       "submit": "撰寫求職信",
       "title": "寫一封求職信",
-      "writing": "正在撰寫並檢查你的求職信。最多可能需要一分鐘。"
+      "writing": "正在撰寫並檢查你的求職信。最多可能需要一分鐘。",
+      "resumeError": "你的履歷沒有載入成功。沒有任何內容遺失。",
+      "resumeRetry": "重試"
     },
     "hub": {
       "backToResumes": "返回履歷",
@@ -5260,6 +5755,205 @@
         "sub": "今年來自台灣卡片的營收，與必須辦理營業稅稅籍登記的 NT$600,000 門檻相比。",
         "title": "台灣刷卡營收",
         "warn": "營收已超過營業稅稅籍登記門檻的 {pct}%。請現在就規劃辦理登記。"
+      },
+      "practiceCost": {
+        "average": "每場平均成本（USD）",
+        "brand": "品牌",
+        "loadError": "成本沒有載入成功。",
+        "loading": "載入中…",
+        "notEnough": "場次還不夠（{n} / {min}）",
+        "range": "第一場和最後一場",
+        "rangeValue": "{from} 至 {to}",
+        "ruleNote": "上方的平均值以美元計，沒有換算。新價格是每個品牌各一個價目表預設值。",
+        "ruleTitle": "負責人的規則",
+        "rules": {
+          "goapply": "每場成本超過約 ¥3.5 時，把練習包調整為 ¥39 和 ¥99。",
+          "roboapply": "每場成本超過 $1.00 時，把 15 場練習包重新定價為 $27.99。"
+        },
+        "sample": "納入計算的場次",
+        "sampleValue": "{n}（最多取最近 {max} 場）",
+        "sub": "依各品牌最近幾場的紀錄，算出一場練習面試平均花費的成本。金額以美元顯示，與成本的記錄幣別相同。",
+        "title": "練習成本"
+      },
+      "refunds": {
+        "cn": {
+          "already": "訂單 {order} 已經記錄過退款，不會重複記錄。",
+          "amount": "金額",
+          "cancel": "取消",
+          "channel": "付款方式",
+          "channels": {
+            "alipay": "支付寶",
+            "wechatpay": "WeChat Pay"
+          },
+          "check": "查看紀錄",
+          "checkHint": "這筆退款沒有收回任何使用權限。如果通行證或練習包還在，請查看紀錄，把這筆退款處理完成。",
+          "checkLabel": "查看訂單 {order} 的退款紀錄",
+          "checking": "查看中…",
+          "date": "完成日期",
+          "empty": "這位使用者沒有已完成的中國大陸訂單。",
+          "entitlement": {
+            "none": "沒有變更任何使用權限。",
+            "pack_zeroed": "這個練習包剩下的練習面試場數已移除。",
+            "pass_ended": "通行證已結束。",
+            "pass_shortened": "通行證已減去這筆訂單增加的天數。"
+          },
+          "errors": {
+            "generic": "退款沒有記錄完成。請重試。同一筆退款不會被記錄兩次。",
+            "invalid_request": "請檢查原因和金額。",
+            "not_found": "找不到這筆已完成的訂單。",
+            "order_not_completed": "這筆訂單從未完成，所以沒有可退款的付款。"
+          },
+          "formTitle": "記錄訂單 {order} 的退款",
+          "invalidAmount": "請輸入以人民幣元為單位的金額，例如 12 或 12.50，且不能超過訂單金額。",
+          "loadError": "訂單沒有載入成功。",
+          "loading": "載入中…",
+          "moneyReturned": "款項已在商家後台退回",
+          "order": "訂單",
+          "partialAmount": "退回的人民幣元金額（若少於整筆訂單；整筆退款請留空）",
+          "plan": "方案",
+          "reason": "原因",
+          "record": "記錄退款",
+          "recordLabel": "記錄訂單 {order} 的退款",
+          "recorded": "已記錄訂單 {order} 的退款。",
+          "refund": "退款",
+          "refunded": {
+            "full": "已記錄退款",
+            "partial": "已記錄部分退款"
+          },
+          "save": "記錄退款",
+          "saving": "記錄中…",
+          "sub": "支付寶和 WeChat Pay 的退款要在商家後台操作，不是在這裡。請先在後台退回款項，再到這裡記錄。記錄全額退款時，會結束該通行證，或移除該練習包剩餘的場數，而且只會執行一次。",
+          "title": "中國大陸訂單"
+        },
+        "facts": {
+          "country": "帳單國家",
+          "loadError": "退款檢查沒有載入成功。",
+          "no": "否",
+          "notFound": "找不到這個 ID 的使用者。",
+          "packUsed": "這個練習包已使用的練習面試場數",
+          "paidOnlyUsed": "扣款後使用需要 Pro 的功能次數",
+          "paidThrough": "付款方式",
+          "prorata": "已付費期間中已使用的天數",
+          "prorataValue": "{used} / {period}",
+          "source": {
+            "cn": "支付寶或 WeChat Pay",
+            "stripe": "卡片"
+          },
+          "title": "最近一次扣款與退款規則",
+          "waiver": "結帳時已勾選「立即開始」",
+          "yes": "是"
+        },
+        "list": {
+          "access": "使用權限",
+          "amount": "金額",
+          "amountValue": "{amount}（{share}）",
+          "by": "操作者",
+          "date": "日期",
+          "disputeFlag": "{count, plural, other {紀錄中有 # 筆爭議：銀行已把款項收回。請檢查這個帳號。}}",
+          "empty": "這位使用者沒有任何紀錄。",
+          "full": "全額",
+          "kept": "未變更",
+          "kind": "類型",
+          "kinds": {
+            "dispute": "爭議",
+            "manual_cn": "手動記錄",
+            "other": "其他",
+            "refund": "退款",
+            "withdrawal": "解除契約"
+          },
+          "loadError": "退款沒有載入成功。",
+          "loading": "載入中…",
+          "more": "顯示更多",
+          "moreError": "沒有載入更多內容。請重試。",
+          "partial": "部分",
+          "reason": "原因",
+          "ref": "參考編號",
+          "refresh": "重新整理",
+          "refreshError": "清單沒有重新整理成功。你看到的內容可能已經過時。",
+          "refreshLabel": "重新整理退款、解除契約和爭議的清單",
+          "refreshing": "重新整理中…",
+          "reversed": "已收回",
+          "title": "退款、解除契約與爭議"
+        },
+        "pick": "請輸入使用者 ID 開始。",
+        "show": "顯示",
+        "stripe": {
+          "amount": "金額（留空則退回所有還能退款的金額）",
+          "amountAsTyped": "{amount}（該筆扣款的幣別）",
+          "amountHelp": "以該筆扣款的幣別輸入，例如 10.00。",
+          "back": "返回",
+          "confirm": "立即退款",
+          "confirmAmount": "金額",
+          "confirmReason": "原因",
+          "confirmTarget": "扣款",
+          "confirmTitle": "要退回這筆扣款嗎？",
+          "confirmUser": "使用者",
+          "done": "已退款 {amount}。Stripe 確認退款後，使用權限才會變更。",
+          "doneFull": "這筆扣款已沒有可退款的金額。",
+          "doneNoAmount": "退款已送出。Stripe 確認退款後，使用權限才會變更。",
+          "donePartial": "這筆扣款還有一部分沒有退款。",
+          "errors": {
+            "generic": "退款沒有成功。重試之前，請先查看下方的清單。",
+            "not_found": "找不到這個使用者、帳單或結帳工作階段。",
+            "payment_provider_error": "Stripe 沒有確認這筆退款。重試之前，請先查看下方的清單。",
+            "rail_not_configured": "這裡尚未設定刷卡付款，所以無法送出退款。",
+            "refund_not_available": "這筆扣款無法退款：它屬於其他人、已經全額退款，或金額超過剩餘可退的金額。"
+          },
+          "everything": "所有還能退款的金額",
+          "invalid": "請檢查要退款的項目、金額和原因。",
+          "pending": "退款中…",
+          "reason": "原因",
+          "review": "檢查退款",
+          "sub": "款項會退回原本付款的卡片。使用權限不會在這裡變更：等 Stripe 確認退款後才會變更，通常在一分鐘內。全額退款會收回這筆扣款購買的內容。部分退款不會變更任何使用權限。",
+          "target": "要退款的項目",
+          "targetId": "帳單或結帳工作階段 ID",
+          "targetIdHelp": "開頭是 in_ 或 cs_。",
+          "targetLatest": "最近一次扣款：{date} 的 {amount}",
+          "targetOther": "另一筆帳單或結帳工作階段",
+          "title": "透過 Stripe 退款"
+        },
+        "sub": "查詢一位使用者後，可以查看退款規則對其最近一次扣款的說明、退回卡片扣款、查看其退款、解除契約與爭議紀錄，以及記錄中國大陸訂單的退款。",
+        "title": "退款",
+        "userId": "使用者 ID"
+      },
+      "stripe": {
+        "endpoint": "Webhook 端點",
+        "endpointNone": "Stripe 中沒有任何 Webhook 端點指向這個網站。請到 Stripe 新增一個。",
+        "events": "端點沒有傳送的事件",
+        "eventsMissing": "{count, plural, other {缺少 # 個事件。請到 Stripe 把它們加入端點。}}",
+        "eventsNeeded": "{count, plural, other {端點需要這 # 個事件：}}",
+        "eventsNone": "沒有。端點會傳送網站需要處理的每一個事件。",
+        "key": "金鑰",
+        "keyModes": {
+          "live": "正式金鑰",
+          "none": "沒有金鑰",
+          "test": "測試金鑰",
+          "unknown": "未標示"
+        },
+        "loadError": "Stripe 狀態沒有載入成功。",
+        "loading": "載入中…",
+        "no": "否",
+        "notChecked": "無法檢查。",
+        "notCheckedReason": {
+          "error": "Stripe 沒有回應。",
+          "no_key": "這裡沒有可以使用的金鑰。",
+          "restricted_key": "這個金鑰沒有權限讀取 Webhook 端點。"
+        },
+        "pinned": "已固定價格的方案",
+        "pinnedNone": "無",
+        "rail": "刷卡付款",
+        "railNotReady": "尚未就緒",
+        "railReady": "已就緒",
+        "refused": {
+          "live_key_outside_production": "非正式環境不接受正式金鑰，所以這裡無法進行刷卡付款或退款。",
+          "missing": "尚未設定金鑰。",
+          "unknown": "這裡無法使用這個金鑰。"
+        },
+        "secrets": "Webhook 簽署密鑰",
+        "sub": "這裡是否可以收取刷卡付款，以及 Stripe 是否傳送了網站需要處理的每一個事件。這裡不會顯示任何金鑰或密鑰。",
+        "title": "Stripe",
+        "usable": "金鑰可在這裡使用",
+        "yes": "是"
       }
     },
     "badge": {
@@ -5332,7 +6026,23 @@
       "signedIn": "你已登入，所以也可以在設定裡取消。",
       "sub": "不需要登入。輸入你帳號使用的電子郵件，我們會寄一個點一下就能取消的連結給你。",
       "title": "取消訂閱",
-      "tokenInvalid": "這個連結已過期或已使用過。請在下方重新索取。"
+      "tokenInvalid": "這個連結已過期或已使用過。請在下方重新索取。",
+      "cancelChoiceButton": "在期間結束時取消",
+      "cancelChoiceSub": "續訂會立即停止。你可以繼續使用 Pro 到 {date}。",
+      "cancelChoiceSubNoDate": "續訂會立即停止。你可以繼續使用 Pro，直到已付費的期間結束。",
+      "cancelChoiceTitle": "在期間結束時取消",
+      "cancelledInstead": "我們改為在期間結束時取消你的訂閱。你可以繼續使用 Pro 到 {date}。我們已寄出確認信到你的電子郵件。",
+      "cancelledInsteadNoDate": "我們改為在期間結束時取消你的訂閱。你可以繼續使用 Pro，直到已付費的期間結束。我們已寄出確認信到你的電子郵件。",
+      "checking": "正在確認你的連結…",
+      "choose": "這個連結可以做兩件事中的一件。請選擇一項。",
+      "withdrawButton": "解除契約並退款 {amount}",
+      "withdrawChoiceSub": "方案會立即結束，我們會退款 {amount}。你可以在 {date} 前辦理。",
+      "withdrawChoiceTitle": "解除契約",
+      "withdrawGone": "這筆購買已無法解除契約。",
+      "withdrawProrata": "你要求我們立即開始，所以退款只涵蓋你還沒使用的天數。",
+      "withdrawing": "解除契約中…",
+      "withdrawn": "你已解除契約。方案已結束，我們正在退款 {amount}。確認信正在寄出。",
+      "withdrawnNoAmount": "你已解除契約。方案已結束。退款和確認信都在處理中。"
     },
     "cap": {
       "free": "{window, select, day {每天} week {每週} other {每月}} {cap} 次",
@@ -5388,11 +6098,9 @@
       "continue": "前往付款",
       "continuing": "正在開啟付款頁面…",
       "empty": "目前沒有販售中的方案。",
-      "emptyCn": "付費方案還沒有開放。",
       "error": "付款頁面沒有開啟成功。沒有扣款。請重試。",
       "loadError": "方案沒有載入成功。",
       "loading": "正在載入方案…",
-      "manageInPortal": "要變更 Pro 的續訂週期，請使用「管理付款」。",
       "notAvailable": "尚未開放",
       "packGroup": "練習包",
       "proGroup": "Pro",
@@ -5401,7 +6109,21 @@
       "title": "方案",
       "withdrawalAck": "立即開始：我了解一旦使用付費功能，就會失去解除契約的權利。",
       "withdrawalHelp": "不勾選這一項，你可以在 14 天內取得全額退款。",
-      "yourPlan": "你的方案"
+      "yourPlan": "你的方案",
+      "cnVisitor": "在中國大陸嗎？<link>你可以在 %OTHER_BRAND% 用支付寶以人民幣付款。</link>",
+      "notOpen": "以下是價格。付款功能尚未開放，所以現在還不能購買。",
+      "portalScope": "「管理付款」用於管理你的付款方式、帳單紀錄和帳單資料。要變更方案，請在這裡選擇其他方案。",
+      "railGroup": "付款方式",
+      "railHint": {
+        "alipay": "你會在支付寶頁面付款。",
+        "stripe": "你會在刷卡付款頁面付款。",
+        "wechatpay": "你可以掃描 QR 碼，或在 WeChat 內付款。"
+      },
+      "rails": {
+        "alipay": "支付寶",
+        "stripe": "卡片",
+        "wechatpay": "WeChat Pay"
+      }
     },
     "plans": {
       "goapply": {
@@ -5410,7 +6132,9 @@
         "practice_pack_5": "練習包（5 場面試）",
         "pro_monthly": "會員 30 天通行證",
         "pro_quarterly": "會員 90 天通行證",
-        "pro_week_pass": "會員週通行證"
+        "pro_week_pass": "會員週通行證",
+        "student_monthly": "學生 30 天通行證",
+        "student_quarterly": "學生 90 天通行證"
       },
       "legacy": "練習方案（舊版）",
       "roboapply": {
@@ -5445,7 +6169,9 @@
       "note": "在你確認之前不會扣款。",
       "renewalPrice": "之後",
       "title": "改用 {plan}",
-      "today": "今天扣款"
+      "today": "今天扣款",
+      "requiresAction": "你的銀行需要你確認這筆付款。你的方案還沒有變更。",
+      "requiresActionCta": "確認付款"
     },
     "renewsNote": "{period, select, week {每週} month {每月} other {每 3 個月}}續訂一次，直到你取消為止。",
     "retry": "重試",
@@ -5476,7 +6202,87 @@
       "resets": "補回時間：{when}",
       "sub": "點數不會累積到下一期；每一列都會顯示何時補回。只有操作成功時才會扣點。",
       "title": "你的點數",
-      "used": "{n, plural, one {已用 #} other {已用 #}}"
+      "used": "{n, plural, one {已用 #} other {已用 #}}",
+      "usedPractice": "{n, plural, other {已使用 # 點練習點數}}"
+    },
+    "busy": "現在無法開始這項操作。請稍後再試。",
+    "history": {
+      "channel": {
+        "alipay": "支付寶",
+        "wechatpay": "WeChat Pay"
+      },
+      "loadingMore": "載入中…",
+      "more": "顯示更多",
+      "moreError": "沒有載入更多內容。請重試。",
+      "refunded": {
+        "full": "已退款",
+        "partial": "部分退款"
+      },
+      "status": {
+        "uncollectible": "未付款",
+        "unknown": "狀態不明"
+      }
+    },
+    "pricing": {
+      "refund": {
+        "first": "第一次購買：如果你使用需要 Pro 的功能少於 {limit} 次，可以在 {days, plural, other {# 天}}內退款（週繳和週通行證：{hours, plural, other {# 小時}}內）。",
+        "packs": "練習包：只要這個練習包還沒有使用過任何一場面試，就可以退款。練習包的有效期間為 {months, plural, other {# 個月}}。",
+        "renewal": "誤扣的續訂款項：可以在扣款後 {days, plural, other {# 天}}內退款。",
+        "withdrawal": "在歐盟、歐洲經濟區、英國和台灣，你可以在 {days, plural, other {# 天}}內解除契約。如果你沒有要求我們立即開始，會全額退款。如果你要求了，訂閱只會退還你還沒使用的天數。解除契約會立即結束訂閱。"
+      },
+      "samePriceAsWeekly": "價格與週繳相同。通行證不會續訂；週繳則會續訂。",
+      "studentOffer": {
+        "how": "學生價適用於在「設定」中確認學校電子郵件的學生。確認電子郵件後，學生方案就會列在那裡。",
+        "row": "{name}：{price}。",
+        "title": "學生價"
+      }
+    },
+    "resume": {
+      "button": "保留我的方案",
+      "done": "已重新開啟續訂。",
+      "ended": "這個方案已經結束。請在下方選擇方案。",
+      "error": "續訂沒有重新開啟成功。請重試。",
+      "pending": "正在重新開啟續訂…"
+    },
+    "withdraw": {
+      "back": "保留這筆購買",
+      "checkError": "我們沒能確認你是否還能對最近的購買解除契約。",
+      "confirmButton": "解除契約並退款 {amount}",
+      "confirmRefund": "我們會把 {amount} 退回到你付款時使用的付款方式。",
+      "confirmTitle": "要解除 {plan} 的契約嗎？",
+      "done": "你已解除 {plan} 的契約。我們正在退款 {amount}。確認信正在寄出。",
+      "doneNoAmount": "你已解除 {plan} 的契約。退款和確認信都在處理中。",
+      "ended": {
+        "other": "這筆購買提供的內容已結束。",
+        "pack": "這個練習包剩下的練習面試場數，會在退款記錄完成後立即移除。",
+        "pass": "這張通行證提供的天數，會在退款記錄完成後立即結束。",
+        "subscription": "你的訂閱已結束，所以 Pro 已關閉。"
+      },
+      "ends": {
+        "other": "這筆購買提供的內容會立即結束。",
+        "pack": "這個練習包剩下的練習面試場數會立即移除。",
+        "pass": "這張通行證提供的天數會立即結束。",
+        "subscription": "你的訂閱會立即結束，Pro 也會馬上停止。"
+      },
+      "entryLabel": "{label}：{plan}",
+      "errors": {
+        "generic": "解除契約沒有成功。請重試。",
+        "notConfigured": "這裡尚未設定刷卡付款，所以無法送出退款。沒有任何變更。",
+        "provider": "付款服務商沒有確認這次解除契約。請重試。不會重複退款。",
+        "rateLimited": "你連續嘗試了很多次。請稍等一下再試。",
+        "unavailable": "這筆購買已無法解除契約。"
+      },
+      "intro": "{count, plural, other {你仍然可以對下方的購買解除契約。}}解除契約會退還顯示的金額，並立即結束這些購買提供的內容。",
+      "label": "解除契約",
+      "lastDay": "你可以在 {date} 前解除契約。",
+      "paid": "目前已付：{amount}。購買日期：{date}。",
+      "paidNoDate": "目前已付：{amount}。",
+      "pending": "解除契約中…",
+      "prorata": "你要求我們立即開始，所以退款涵蓋 {periodDays} 天中你還沒使用的 {unused} 天。",
+      "refreshError": "剛才沒有確認到退款金額。請重試。",
+      "refreshing": "正在確認退款金額…",
+      "refund": "現在解除契約的退款：{amount}。",
+      "unknownPlan": "你的購買"
     }
   },
   "extensionWeb": {
@@ -5637,7 +6443,12 @@
       "sponsorshipNeeded": "需要簽證贊助",
       "yearsMax": "最多 {max} 年",
       "yearsMin": "{min} 年以上",
-      "yearsValue": "{min}–{max} 年"
+      "yearsValue": "{min}–{max} 年",
+      "anywhereIn": "{country} 任何地點",
+      "cleared": "已清除篩選條件。",
+      "shiftValue": "班別：{shift}",
+      "sponsorshipNotNeeded": "不需要簽證贊助",
+      "undo": "復原"
     },
     "controls": {
       "add": "新增",
@@ -5728,7 +6539,10 @@
       "taxonomyIds": "職務類別",
       "titles": "職稱",
       "workModels": "工作模式",
-      "yearsRange": "要求的工作年資"
+      "yearsRange": "要求的工作年資",
+      "twDistricts": "行政區",
+      "twDistrictsOf": "{county}的行政區",
+      "workShifts": "班別"
     },
     "fit": {
       "hiding": "已隱藏 {count, plural, other {# 個適合度較低的職缺}}。",
@@ -5751,7 +6565,12 @@
       "skills": "要求其中任何一項技能的職缺。",
       "taxonomyIds": "選一個職務類別或特定職務。至少輸入 2 個字元。",
       "titles": "職稱符合其中任何一項的職缺。",
-      "yearsRange": "沒有寫明要求年資的職缺仍會留在清單中。"
+      "yearsRange": "沒有寫明要求年資的職缺仍會留在清單中。",
+      "twDistricts": "只顯示職缺說明有寫明所在行政區的職缺。沒有寫明行政區的職缺不會顯示。",
+      "twDistrictsFull": "最多可以選 {max} 個行政區。取消其中一個，才能再加入其他的。",
+      "twDistrictsOnly": "只會顯示你選的行政區。你其他地點的職缺不會顯示。",
+      "twPay": "在台灣，標示薪資的職缺大多來自台灣就業通。透過職缺搜尋找到的職缺很少標示薪資，所以開啟「只看有標示薪資的職缺」時，這些職缺不會顯示。月薪會依職缺說明所寫的方式顯示。",
+      "workShifts": "只顯示職缺說明有寫明班別的職缺。這類職缺大多來自台灣就業通，所以清單會變短。"
     },
     "hunt": {
       "moved": "職稱、地點、薪資、公司和產業的篩選條件，現在都放在下方已儲存的搜尋裡，這樣職缺清單和職缺通知會使用同一組篩選條件。"
@@ -5837,6 +6656,13 @@
         "hybrid": "混合辦公",
         "onsite": "現場辦公",
         "remote": "遠端"
+      },
+      "workShifts": {
+        "day": "日班",
+        "evening": "小夜班",
+        "night": "大夜班",
+        "part_time": "兼職時段",
+        "rotating": "輪班"
       }
     },
     "quick": {
@@ -5958,7 +6784,9 @@
         "visa_not_offered": "職缺說明寫明不提供簽證贊助：「{text}」",
         "visa_not_offered_plain": "職缺說明寫明不提供簽證贊助",
         "visa_offered": "職缺說明寫明提供簽證贊助：「{text}」",
-        "visa_offered_plain": "職缺說明寫明提供簽證贊助"
+        "visa_offered_plain": "職缺說明寫明提供簽證贊助",
+        "logistics_by_your_filters": "這些已經符合你設定的篩選條件，所以不會影響分數：{text}",
+        "skill_related": "他們要求 {text}，而你的履歷有相關的技能"
       },
       "intro": "分數由五個部分組成。每個部分都會列出我們在你的履歷和職缺說明中找到的內容。",
       "keys": {
@@ -5968,14 +6796,17 @@
         "skills": "他們要求的技能",
         "title_level": "職稱與層級"
       },
-      "notStated": "資料不足以比對，所以不計入分數。",
       "partLabel": "{label}：{score} / 100",
       "source": {
         "posting": "來自職缺說明",
         "resume": "來自你的履歷"
       },
       "title": "我們比對了什麼",
-      "weight": "權重 {weight}"
+      "weight": "權重 {weight}",
+      "byFilters": "未比對。你設定的篩選條件已經涵蓋這個部分。",
+      "notCompared": "資料不足以比對。",
+      "notComparedAi": "資料不足以比對，所以這個部分不計入分數。",
+      "notComparedEstimate": "資料不足以比對，所以這個部分以一般常見的數值計入。"
     },
     "degree": {
       "associate": "副學士學位",
@@ -5989,8 +6820,6 @@
       "error": "我們無法執行關鍵字檢查。請重試。",
       "intro": "把職缺說明中的要求和你的履歷逐一比對。這些項目和適合度分數使用的相同。",
       "loading": "正在檢查你的履歷…",
-      "mentioned": "你的履歷有提到",
-      "notMentioned": "你的履歷沒有提到",
       "required": "必備",
       "rows": {
         "education": "學歷",
@@ -6004,20 +6833,38 @@
         "not_met": "不符合",
         "not_stated": "職缺說明沒有寫明",
         "partly": "部分符合",
-        "unknown": "你的履歷上沒有寫到"
+        "unknown": "你的履歷上沒有寫到",
+        "not_checked": "尚未檢查"
       },
       "title": "關鍵字檢查",
       "titleHave": "你最近的職稱：{have}",
       "titleNeed": "職缺說明：{need}",
       "yearsHave": "你的履歷顯示約 {have} 年",
-      "yearsNeed": "他們要求 {need} 年以上"
+      "yearsNeed": "他們要求 {need} 年以上",
+      "add": {
+        "action": "為這個職缺開啟你的履歷",
+        "note": "你有其中一項嗎？請自己把原文用詞加到履歷裡。我們不會自動加入任何內容。",
+        "resume": "開啟你的履歷"
+      },
+      "countStates": "{total} 項中：{shown} 項已顯示、{related} 項相關",
+      "quote": "「{text}」",
+      "state": {
+        "not_shown": "你的履歷中沒有",
+        "related": "相關：你的履歷有提到 {term}",
+        "relatedPlain": "相關：你的履歷有提到相近的內容",
+        "shown": "你的履歷有提到"
+      },
+      "unchecked": "{count, plural, other {職缺說明中還有 # 項技能尚未檢查。}}",
+      "uncheckedAll": "{count, plural, other {職缺說明中的 # 項技能尚未檢查。}}"
     },
     "loading": "正在比對你的履歷和這個職缺…",
     "missing": {
-      "empty": "這則職缺說明列出的每一項技能，你的履歷或個人檔案都有提到。",
       "noSkillsListed": "這則職缺說明沒有列出可供檢查的具體技能。",
       "skillsHeading": "職缺說明列出了這些技能，而你的履歷和個人檔案都沒有提到：",
-      "title": "你還缺什麼"
+      "title": "你還缺什麼",
+      "emptyCompared": "我們為這則職缺比對的每一項技能，你的履歷或個人檔案都有提到。",
+      "noneChecked": "{count, plural, other {這則職缺說明中的 # 項技能尚未與你的履歷比對。}}",
+      "unchecked": "{count, plural, other {職缺說明中還有 # 項技能尚未檢查。}}"
     },
     "quickEstimate": "快速估算",
     "quickEstimateWhy": {
@@ -6043,7 +6890,35 @@
       "empty": "這則職缺說明列出的技能，在你的履歷或個人檔案中都沒有出現。",
       "haveSkills": "職缺說明列出了這些技能，而你的履歷或個人檔案有提到：",
       "noSkillsListed": "這則職缺說明沒有列出可供比對的具體技能。",
-      "title": "你為什麼適合"
+      "title": "你為什麼適合",
+      "notChecked": "這則職缺說明列出的技能，尚未與你的履歷比對。"
+    },
+    "confidence": {
+      "reason": {
+        "few_details": "這則職缺說明的內容太少，無法比對",
+        "no_level_stated": "這則職缺說明沒有寫明層級",
+        "no_role_evidence": "你的履歷上沒有可比對的職務",
+        "no_skills_listed": "這則職缺說明沒有列出技能"
+      }
+    },
+    "otherLanguage": {
+      "failed": "沒有重寫成功。請重試。",
+      "note": "這份分析的文字內容是另一種語言。分數不變。",
+      "rewrite": "改用這個語言重寫",
+      "rewriting": "重寫中…"
+    },
+    "requirements": {
+      "count": "{total} 項中：{met} 項符合、{partly} 項部分符合、{notShown} 項未顯示",
+      "intro": "每一行都是從職缺說明複製來的，並已與你的履歷比對。",
+      "must": "必備",
+      "note": "AI 已把每一行與你的履歷比對。請自行確認後再參考。",
+      "preferred": "加分條件",
+      "status": {
+        "met": "符合",
+        "not_shown": "你的履歷上沒有寫到",
+        "partly": "部分符合"
+      },
+      "title": "職缺說明的要求"
     }
   },
   "growth": {
@@ -6251,6 +7126,11 @@
       "surveyFailed": "你的回覆沒有送出。請重試。",
       "surveyTitle": "你為什麼取消訂閱？（可不填）",
       "thanks": "謝謝你告訴我們。"
+    },
+    "alertJobs": {
+      "item": "{company} 的 {title}",
+      "label": "這則職缺通知中的職缺",
+      "more": "{count, plural, other {清單中還有 # 個職缺。}}"
     }
   },
   "invite": {
@@ -6405,9 +7285,10 @@
     "close": "關閉",
     "closed": {
       "kept": "你為它儲存的內容都會留在「應徵紀錄」。",
-      "lastSeen": "最後一次出現：{date}。",
       "similarTitle": "還可以應徵的類似職缺",
-      "title": "這個職缺已不再刊登"
+      "title": "這個職缺已不再刊登",
+      "boardCheck": "你開啟這個頁面時，我們查看了雇主的徵才頁面。上面已經沒有這個職缺。",
+      "lastListed": "我們最後一次看到它刊登在 {date}。"
     },
     "company": {
       "fact": {
@@ -6441,7 +7322,8 @@
       "badge": {
         "direct_from_employer": "雇主直接刊登",
         "new": "新職缺",
-        "sponsorship": "簽證贊助"
+        "sponsorship": "簽證贊助",
+        "sponsorship_provider": "{provider} 列出提供簽證贊助"
       },
       "employmentType": {
         "contract": "約聘／承攬",
@@ -6659,7 +7541,8 @@
         "bookmarked": "已儲存",
         "interviewing": "面試中",
         "negotiating": "錄取",
-        "withdrawn": "已退出"
+        "withdrawn": "已退出",
+        "rejected": "未錄取"
       },
       "typed": "由你手動輸入",
       "warning": "{count, plural, one {# 行需要查看} other {# 行需要查看}}"
@@ -6713,12 +7596,17 @@
         "title": "新增公司徵才頁面",
         "token": "徵才頁面 ID",
         "tokenHint": "公司在其徵才頁面網址中的 ID。",
-        "willRead": "會讀取 {url}"
+        "willRead": "會讀取 {url}",
+        "countries": "要讀取的國家（可不填）",
+        "countriesHint": "以逗號分隔的兩個英文字母代碼，例如 TW, CN。留空則讀取所有國家。"
       },
       "errors": {
         "duplicate": "這個徵才頁面已經在清單中。",
         "generic": "出了點問題。請重試。",
-        "invalid": "請檢查欄位後再試。"
+        "invalid": "請檢查欄位後再試。",
+        "otherCountries": "這個徵才頁面已經在清單中，但它讀取的是其他國家，所以不會顯示在這裡。",
+        "otherCountriesAction": "也為這個網站讀取它",
+        "otherCountriesDone": "現在也會為這個網站讀取 {company}。它的職缺會在幾分鐘內加入。"
       },
       "eyebrow": "管理台",
       "list": {
@@ -6729,14 +7617,18 @@
           "jobs": "上次檢查時的職缺數",
           "lastChecked": "上次檢查",
           "problem": "最近一次問題",
-          "status": "狀態",
-          "system": "系統"
+          "system": "系統",
+          "countries": "讀取的國家",
+          "country": "城市提示",
+          "origin": "新增者",
+          "state": "狀態"
         },
         "empty": "還沒有公司徵才頁面。",
         "loadError": "清單沒有載入成功。請重試。",
         "never": "尚未檢查",
         "none": "—",
-        "title": "徵才頁面"
+        "title": "徵才頁面",
+        "all": "所有國家"
       },
       "loading": "載入中…",
       "notAuthorized": "只有管理員可以查看這個頁面。",
@@ -6752,17 +7644,68 @@
         "server_error": "徵才系統發生問題。稍後會再試一次。",
         "timeout": "這個徵才頁面回應時間過長。請稍後再試。",
         "unexpected_shape": "這個徵才頁面的職缺資料不是預期的格式。",
-        "unsupported_job_board": "不支援這個徵才系統。"
+        "unsupported_job_board": "不支援這個徵才系統。",
+        "connector_disabled": "這裡已關閉這個徵才系統，所以不會讀取這個徵才頁面。",
+        "empty_board": "檢查時，這個徵才頁面沒有列出任何職缺。",
+        "name_mismatch": "這個徵才頁面屬於另一個名稱的公司。",
+        "name_unconfirmed": "這個徵才頁面沒有寫明屬於哪家公司，所以無法確認。如果確定是正確的，請將它開啟。",
+        "sources_off": "目前已關閉讀取徵才頁面的功能。",
+        "tenant_denied": "這個徵才頁面在禁止讀取清單上。不會讀取它，它的職缺也已移除。",
+        "tenant_floor": "這個徵才頁面在不到 30 分鐘前才查詢過。請稍後再試。"
       },
       "run": {
-        "error": "{company}：徵才頁面沒有讀取成功。{problem}"
-      },
-      "status": {
-        "off": "已關閉",
-        "on": "已開啟"
+        "error": "{company}：徵才頁面沒有讀取成功。{problem}",
+        "queued": "{company}：徵才頁面列有 {listed} 個職缺。它們會在幾分鐘內加入。",
+        "waiting": "{company}：徵才頁面列有 {listed} 個職缺。它們會在下一次排定的讀取時加入。"
       },
       "systems": "徵才頁面可以來自：{names}。",
-      "title": "公司徵才頁面"
+      "title": "公司徵才頁面",
+      "import": {
+        "enable": "立即開啟新的徵才頁面",
+        "enableHint": "如果不勾選，每個新的徵才頁面會先檢查一次，只有在列有職缺、且公司名稱相符時才會開啟。",
+        "errors": {
+          "empty": "請先貼上清單或選擇檔案。",
+          "file": "無法讀取這個檔案。",
+          "invalid": "無法讀取這份清單。請檢查第一行後再試。",
+          "json": "無法把這份清單當成 JSON 讀取。請檢查後再試。",
+          "tooLarge": "清單太大了。一個檔案最多可放 5,000 個徵才頁面。"
+        },
+        "file": "或選擇 CSV 或 JSON 檔案",
+        "importing": "匯入中…",
+        "intro": "貼上清單或選擇檔案。請使用第一行是 {header} 的 CSV（國家以 | 分隔），或欄位相同的 JSON 清單。最多 5,000 個徵才頁面。",
+        "invalidMore": "{count, plural, other {還有 # 列。}}",
+        "invalidRow": "第 {line} 列：{reason}",
+        "invalidTitle": "沒有加入的列",
+        "paste": "徵才頁面清單",
+        "reason": {
+          "company_name_too_long": "公司名稱太長",
+          "connector_disabled": "這裡已關閉這個徵才系統",
+          "duplicate_in_file": "同一個徵才頁面已在檔案前面列出",
+          "invalid_board_id": "徵才頁面 ID 含有不允許的字元",
+          "invalid_country": "有國家不是兩個字母的代碼",
+          "too_many_countries": "國家太多",
+          "unknown_job_board": "不支援這個徵才系統",
+          "unreadable_row": "無法讀取這一列"
+        },
+        "submit": "匯入",
+        "summary": "已讀取 {total, plural, other {# 列}}：新增 {created} 個、{merged} 個已在清單中、{invalid} 個未加入。",
+        "title": "批次新增徵才頁面"
+      },
+      "offNote": "關閉或移除徵才頁面，會讓它招募中的職缺從職缺清單中消失。重新開啟後，會再次讀取該徵才頁面。已移除的徵才頁面不會再從職缺的連結中自動加入。若要恢復，請重新新增。",
+      "origin": {
+        "admin": "管理員",
+        "discovered": "從職缺的連結中發現",
+        "import": "匯入",
+        "seed": "初始清單"
+      },
+      "state": {
+        "notConfirmed": "尚未確認",
+        "off": "已關閉",
+        "offAfterFailures": "讀取失敗 3 次後已關閉",
+        "on": "已開啟",
+        "waiting": "等待第一次檢查"
+      },
+      "subtitle": "公司的公開徵才頁面，會被讀取並加入職缺清單。最近有更新的徵才頁面每 2 小時讀取一次，沒什麼變動的則每天讀取一到兩次。每則職缺都會保留公司名稱和原始連結，並出現在它所在國家的網站上。"
     },
     "meta": {
       "payAsPosted": "刊登的薪資：{text}",
@@ -6774,13 +7717,18 @@
       "quoteLabel": "摘自職缺說明",
       "regionLabel": "薪資與工作許可",
       "source": "來源：{name}",
-      "viewPosting": "開啟原始職缺頁面"
+      "viewPosting": "開啟原始職缺頁面",
+      "foundThroughGoogle": "{publisher} · 透過 Google 職缺搜尋找到",
+      "foundThroughGoogleOnly": "透過 Google 職缺搜尋找到"
     },
     "negotiable": {
       "filterHint": "寫「面議」的職缺沒有列出薪資。開啟「只看有標示薪資的職缺」就能隱藏它們。",
       "lawLink": "在全國法規資料庫閱讀第 5 條",
       "notAFigure": "這項規定是針對雇主的。它不是這個職缺的薪資；職缺沒有列出的薪資，這裡絕不會估算。",
-      "summary": "為什麼沒有列出薪資？"
+      "summary": "為什麼沒有列出薪資？",
+      "body": "這則職缺說明沒有列出金額（例如寫「面議」或「依公司規定」）。依台灣《就業服務法》第 5 條，只有在每月經常性薪資達 {amount} 以上時，雇主才可以不列出薪資。這是截至 {asOf} 法律中的金額。",
+      "bodyNoAmount": "這則職缺說明沒有列出金額（例如寫「面議」或「依公司規定」）。依台灣《就業服務法》第 5 條，只有在每月經常性薪資達到法律所訂的金額以上時，雇主才可以不列出薪資。",
+      "sourceLink": "到原始出處閱讀這項規定"
     }
   },
   "legal": {
@@ -6805,7 +7753,6 @@
     },
     "consents": {
       "changed": "{date} 變更",
-      "closeBody": "測試版期間，這項服務在中國大陸以外的地區運作，所以沒有這項同意就無法運作。撤回同意會立即關閉你的帳號並刪除你的資料。這項操作無法復原。",
       "closeConfirm": "撤回並刪除我的帳號",
       "closeKeep": "保留我的帳號",
       "closeTitle": "要撤回同意並刪除你的帳號嗎？",
@@ -6825,7 +7772,10 @@
       "retry": "重試",
       "title": "同意項目",
       "turnOff": "關閉",
-      "turnOn": "開啟"
+      "turnOn": "開啟",
+      "agreeCurrent": "同意這段文字",
+      "closeBodyCrossBorder": "這項服務仰賴中國大陸以外的供應商，所以沒有這項同意就無法運作。撤回同意會立即關閉你的帳號並刪除你的資料。這項操作無法復原。",
+      "textChanged": "這段文字在你回答之後已經變更。你的回答是針對先前的版本。"
     },
     "disclosures": {
       "colCountry": "國家",
@@ -6859,8 +7809,6 @@
       "tw-pdpa-notice": "台灣個人資料告知事項"
     },
     "explain": {
-      "fromPosting": "來自職缺說明",
-      "fromResume": "來自你的履歷",
       "gap": {
         "career_path": "這個職務和你過去的經歷相比，轉變比較大。",
         "industry": "你在這個產業的經驗比較少。",
@@ -6897,7 +7845,14 @@
         "skillsAligned": "你具備、而且這個職務有要求的技能：{skills}",
         "title_level": "你的職稱和層級與這個職務相符。"
       },
-      "title": "為什麼顯示這個職缺"
+      "title": "為什麼顯示這個職缺",
+      "notCompared": {
+        "industry": "資料不足，無法比較產業。",
+        "logistics": "資料不足，無法比較地點、薪資或工作模式。",
+        "title_level": "資料不足，無法比較職務與層級。"
+      },
+      "quoteFromPosting": "來自職缺說明：「{evidence}」",
+      "quoteFromResume": "來自你的履歷：「{evidence}」"
     },
     "footer": {
       "aiModels": "AI 模型：{models}",
@@ -6929,7 +7884,8 @@
       "colProvider": "供應商",
       "excluded": "請求經由閘道轉送時，會排除下列上游供應商：",
       "hosts": "{rule, select, mainland_only {允許使用的 AI 位址（包含其子網域）：} other {絕不使用的 AI 位址（包含其子網域）：}}",
-      "rule": "{rule, select, mainland_only {只使用中國大陸境內的 AI 服務。以下是我們可以使用的供應商，以及在我們沒有另外設定時，各自使用的位址：} other {帶有你資料的請求，絕不會送到中國大陸境內的 AI 服務。以下是我們可以使用的供應商，以及在我們沒有另外設定時，各自使用的位址：}}"
+      "rule": "{rule, select, mainland_only {只使用中國大陸境內的 AI 服務。以下是我們可以使用的供應商，以及在我們沒有另外設定時，各自使用的位址：} other {帶有你資料的請求，絕不會送到中國大陸境內的 AI 服務。以下是我們可以使用的供應商，以及在我們沒有另外設定時，各自使用的位址：}}",
+      "open": "AI 請求會送到「AI 模型」底下列出的模型服務，其中有些可能在中國大陸以外。以下是我們可以使用的供應商，以及在我們沒有另外設定時，各自使用的位址："
     },
     "page": {
       "draftBody": "這份文件仍在審閱中，不是最終版本。方括號內的章節尚未撰寫。",
@@ -7013,7 +7969,8 @@
       "payments": "付款",
       "speech": "語音辨識與語音",
       "storage": "檔案儲存",
-      "voice": "語音練習"
+      "voice": "語音練習",
+      "push": "推播通知"
     },
     "retention": {
       "colData": "資料",
@@ -7045,9 +8002,14 @@
         "known_devices": "你登入過的裝置，從該裝置最後一次登入起算",
         "product_events": "產品使用事件",
         "soft_deleted_rows": "你刪除的履歷、求職信、追蹤的職缺和助理記憶",
-        "tool_results": "免費工具的結果（報告，以及從你的檔案讀取的文字）"
+        "tool_results": "免費工具的結果（報告，以及從你的檔案讀取的文字）",
+        "billing_consent_archive": "你刪除帳號後，那些紀錄的佐證資料：你的帳號 ID、電子郵件地址的雜湊值、付款客戶 ID、你同意的內容與時間。不含 IP 位址或瀏覽器資訊。保存至你同意後 3 年，或方案結束後 1 年，以較晚者為準"
       },
       "title": "我們保留資料多久"
+    },
+    "crossBorder": {
+      "applies": "你的個人資料會由中國大陸以外的服務處理或儲存。這個頁面上的清單列出了這些服務。只有在你另外同意之後，才會這樣處理。撤回該項同意會關閉你的帳號並刪除你的資料。",
+      "none": "你的個人資料在中國大陸處理並儲存。"
     }
   },
   "offers": {
@@ -7292,7 +8254,13 @@
       "titleCapped": "我們找到 {count} 個以上適合你的職缺。請確認以下資料。",
       "titleNone": "目前還沒找到適合度高的職缺。請在下方調整搜尋條件。",
       "titlePending": "我們還在為你檢查職缺。請確認以下資料。",
-      "tooManyExtra": "最多新增 3 個職稱。"
+      "tooManyExtra": "最多新增 3 個職稱。",
+      "countNoteCompared": "只計算「還算適合」以上的職缺，範圍是我們拿來和你的履歷比對的 {compared, plural, other {# 個職缺}}。",
+      "searchNote": "這些是符合你搜尋條件、目前招募中的職缺。沒有比對任何履歷，所以這不是適合度的數量。",
+      "titleSearch": "{count, plural, other {我們找到 # 個符合你搜尋的職缺。請確認以下內容。}}",
+      "titleSearchCapped": "我們找到 {count, number}+ 個符合你搜尋的職缺。請確認以下內容。",
+      "titleSearchNone": "目前還沒有找到符合你搜尋的職缺。請在下方調整你的搜尋條件。",
+      "titleUncounted": "你的搜尋條件已儲存。請確認以下內容。"
     },
     "countries": {
       "AU": "澳洲",
@@ -7468,7 +8436,8 @@
         "pdfNeedsConsent": "少了你關閉的那個讀取選項，就無法讀取這份 PDF。請上傳 Word 或純文字檔，或貼上文字。",
         "tooLarge": "這個檔案超過 15 MB。",
         "unreadable": "這個檔案讀不出來。請改用 PDF，或貼上文字。",
-        "wrongType": "請使用 PDF、Word 或純文字檔。"
+        "wrongType": "請使用 PDF、Word 或純文字檔。",
+        "consentUnanswered": "請先回答上面的問題，再重新選擇你的 PDF。"
       },
       "linkedin": {
         "body": "在你的 LinkedIn 個人檔案頁面點開「更多」，選擇「存為 PDF」，再把那個檔案上傳到這裡。",
@@ -8499,7 +9468,8 @@
       "point_list": "每週一份符合你搜尋條件的職缺清單。你也可以自己加入任何職缺。",
       "point_review": "每份應徵準備包都由你檢查後再使用。履歷裡任何新增的內容，都必須經過你確認。",
       "start": "設定「準備應徵」",
-      "title": "把每一次應徵準備好，再由你自己送出"
+      "title": "把每一次應徵準備好，再由你自己送出",
+      "point_open": "你自己開啟應徵頁面，並自己送出應徵。"
     },
     "list": {
       "empty": {
@@ -8678,7 +9648,9 @@
         "seeApplication": "在「應徵紀錄」中查看",
         "title": "應徵",
         "undo": "復原 · 我沒有應徵",
-        "undone": "已移回。這個職缺沒有標示為已應徵。"
+        "undone": "已移回。這個職缺沒有標示為已應徵。",
+        "host": "這個頁面在 {host} 上。",
+        "leadNeutral": "在新分頁開啟應徵頁面，並把這個職缺移到「已應徵」。"
       },
       "practice": {
         "button": "針對這個職缺練習",
@@ -8697,7 +9669,8 @@
         "openAsIs": "開啟履歷",
         "title": "履歷",
         "use": "用在這份應徵準備包",
-        "verifyBlock": "使用這份履歷前，請先核對上方的 {count, plural, one {# 處細節} other {# 處細節}}。"
+        "verifyBlock": "使用這份履歷前，請先核對上方的 {count, plural, one {# 處細節} other {# 處細節}}。",
+        "fitNote": "「調整前」和「調整後」顯示的是這份履歷調整當時的適合度。職缺標題旁的適合度是今天的結果，所以兩者可能不同。"
       },
       "revise": "要求修改",
       "reviseLabel": {
@@ -8789,7 +9762,10 @@
         "sendDown": "儲存",
         "up": "適合",
         "verdictLabel": "{title} 適合你嗎？",
-        "why": "哪裡不適合？"
+        "why": "哪裡不適合？",
+        "later": "之後再評價職缺",
+        "laterNote": "你可以先繼續設定，之後再評價職缺。",
+        "noFeed": "這裡還沒有可以評價的職缺。"
       },
       "errors": {
         "calibration": "評價 3 個職缺才能完成這個步驟。",
@@ -9220,7 +10196,8 @@
       "previous": "上次：{label}，{score} / 100",
       "row": "{before} → {after}",
       "same": "問題數量還沒有變化。",
-      "title": "和上次檢查相比"
+      "title": "和上次檢查相比",
+      "notChecked": "這次沒有檢查"
     },
     "detail": {
       "evidence": "在你的履歷裡",
@@ -9431,6 +10408,11 @@
         "how": "用你做了什麼來開頭：建立、主導、降低、上線。",
         "title": "無力的開頭：「{opener}」",
         "why": "「負責」這類開頭描述的是職責，不是你實際做了什麼。"
+      },
+      "placeholder_unfilled": {
+        "how": "填入真實的數字，或改寫這一行、拿掉它。不要猜測數字。",
+        "title": "未填寫的空格：{placeholder}",
+        "why": "這一行還留著要填入你自己數字的空格。讀的人會看到方括號。"
       }
     },
     "keywords": {
@@ -9537,8 +10519,10 @@
       "summary_too_long": "個人簡介太長",
       "summary_too_short": "個人簡介太短",
       "summary_vague": "個人簡介太籠統",
-      "weak_verb": "無力的開頭"
-    }
+      "weak_verb": "無力的開頭",
+      "placeholder_unfilled": "未填寫的空格"
+    },
+    "carried": "來自你上次的檢查。這次沒有重新檢查。"
   },
   "seo": {
     "breadcrumb": {
@@ -9653,7 +10637,9 @@
       "seeFit": "看看它和你的履歷有多適合",
       "source": "來源",
       "viewOriginal": "查看原始職缺頁面",
-      "workModel": "工作模式"
+      "workModel": "工作模式",
+      "lastChecked": "上次核對 {date}",
+      "licence": "{holder}，人力資源服務許可證 {number}"
     },
     "pay": {
       "period": {
@@ -9730,9 +10716,7 @@
       "noChanges": "你選的區塊沒有需要調整的地方。",
       "open": "開啟這份履歷",
       "pendingBlock": "{count, plural, other {使用這份履歷前，請先核對 # 處細節。}}",
-      "scoreAfter": "調整後",
       "scoreAfterPending": "核對完每一處細節並使用這份履歷後，這裡就會顯示。",
-      "scoreBefore": "調整前",
       "scoreHeading": "適合度分數",
       "scoreNone": "這個版本沒有適合度分數。",
       "scoreValue": "{score} / 100",
@@ -9826,6 +10810,11 @@
       "terms": "這裡新出現的：{terms}",
       "title": "核對細節",
       "was": "你的履歷原本寫的是：{text}"
+    },
+    "fit": {
+      "note": "在你把這個版本設為主履歷之前，職缺頁面上的適合度仍是依你的主履歷計算。",
+      "withVersion": "使用這個版本",
+      "yours": "你的適合度"
     }
   },
   "taxonomy": {
@@ -9909,6 +10898,238 @@
       "video_production": "影片、攝影與創作者",
       "visual_design": "視覺、品牌與遊戲美術",
       "writing_editorial": "寫作、編輯與翻譯"
+    },
+    "roles": {
+      "academic_advisor": "學業或職涯顧問",
+      "account_executive": "客戶業務專員",
+      "account_manager": "客戶經理",
+      "accountant": "會計",
+      "actuary": "精算師",
+      "administrative_assistant": "行政助理",
+      "aerospace_engineer": "航太工程師",
+      "ai_product_manager": "AI 產品經理",
+      "ai_research_scientist": "AI 研究科學家",
+      "analytics_engineer": "分析工程師",
+      "android_engineer": "Android 工程師",
+      "architect": "建築師",
+      "auditor": "審計人員",
+      "automotive_engineer": "汽車工程師",
+      "autonomous_driving_engineer": "自動駕駛工程師",
+      "backend_engineer": "後端工程師",
+      "bank_teller": "銀行櫃員",
+      "bd_manager": "商務開發經理",
+      "bi_analyst": "商業智慧分析師",
+      "bioinformatics_scientist": "生物資訊科學家",
+      "biomedical_engineer": "生醫工程師",
+      "biomedical_scientist": "生醫研究科學家",
+      "blockchain_engineer": "區塊鏈工程師",
+      "bookkeeper": "記帳員與應收應付帳款專員",
+      "brand_manager": "品牌經理",
+      "business_analyst": "商業分析師",
+      "buyer": "採購專員",
+      "chef": "主廚或廚師",
+      "chemical_engineer": "化學工程師",
+      "chemist": "化學家",
+      "chip_design_engineer": "晶片設計工程師",
+      "chip_verification_engineer": "晶片驗證工程師",
+      "civil_engineer": "土木工程師",
+      "civil_servant": "公務員",
+      "clinical_research_associate": "臨床研究助理",
+      "cloud_engineer": "雲端工程師",
+      "cnc_machinist": "CNC 加工技術員",
+      "compensation_benefits": "薪資福利專員",
+      "compliance_officer": "法遵專員",
+      "construction_manager": "營建經理",
+      "content_creator": "內容創作者",
+      "content_marketer": "內容行銷經理",
+      "content_moderator": "內容審核員",
+      "content_operations": "內容營運專員",
+      "controls_engineer": "控制與自動化工程師",
+      "copywriter": "文案",
+      "cost_estimator": "成本估算人員／工料估算人員",
+      "customer_service_manager": "客服經理",
+      "customer_service_rep": "客服人員",
+      "customer_success_manager": "客戶成功經理",
+      "cv_engineer": "電腦視覺工程師",
+      "data_analyst": "資料分析師",
+      "data_annotator": "資料標註專員",
+      "data_architect": "資料架構師",
+      "data_engineer": "資料工程師",
+      "data_entry_clerk": "資料輸入與行政文書人員",
+      "data_scientist": "資料科學家",
+      "database_administrator": "資料庫管理師",
+      "dentist": "牙醫師",
+      "design_manager": "設計經理",
+      "devops_engineer": "DevOps 工程師",
+      "digital_marketing_manager": "數位行銷經理",
+      "driver": "司機與快遞員",
+      "early_childhood_teacher": "幼教老師",
+      "ecommerce_manager": "電商經理",
+      "economist": "經濟學家或政策研究員",
+      "editor": "編輯",
+      "education_administrator": "教育行政人員",
+      "electrical_engineer": "電機工程師",
+      "electrician": "電工",
+      "electronics_engineer": "電子工程師",
+      "embedded_software_engineer": "嵌入式軟體工程師",
+      "employee_relations": "員工關係專員",
+      "energy_engineer": "能源工程師",
+      "engineering_director": "工程總監／CTO",
+      "engineering_manager": "工程經理",
+      "environmental_engineer": "環境與環安衛工程師",
+      "erp_consultant": "ERP 顧問",
+      "event_planner": "活動企劃",
+      "executive_assistant": "高階主管助理",
+      "facilities_manager": "設施管理經理",
+      "finance_leader": "財務經理／財務主管",
+      "financial_advisor": "理財顧問",
+      "financial_analyst": "財務分析師",
+      "flight_attendant": "空服員",
+      "frontend_engineer": "前端工程師",
+      "fullstack_engineer": "全端工程師",
+      "game_artist": "遊戲美術",
+      "game_designer": "遊戲企劃",
+      "game_developer": "遊戲開發工程師",
+      "graphic_designer": "平面設計師",
+      "growth_marketer": "成長行銷專員",
+      "hardware_engineer": "硬體工程師",
+      "healthcare_administrator": "醫療行政人員",
+      "hotel_manager": "飯店經理",
+      "hr_generalist": "HR 專員",
+      "hr_manager": "HR 經理",
+      "hrbp": "HR 業務夥伴",
+      "illustrator": "插畫家",
+      "import_export": "進出口專員",
+      "in_house_counsel": "企業法務",
+      "industrial_designer": "工業設計師",
+      "industrial_engineer": "工業工程師",
+      "infrastructure_engineer": "基礎架構工程師",
+      "instructional_designer": "教學設計師",
+      "insurance_agent": "保險業務員",
+      "interior_designer": "室內設計師",
+      "investment_analyst": "投資分析師",
+      "investment_banker": "投資銀行分析師",
+      "ios_engineer": "iOS 工程師",
+      "ip_specialist": "智慧財產專員",
+      "it_manager": "IT 經理",
+      "it_project_manager": "IT 專案經理",
+      "it_support": "IT 支援專員",
+      "journalist": "記者",
+      "language_teacher": "語言教師",
+      "lawyer": "律師",
+      "learning_development": "教育訓練專員",
+      "live_commerce_operations": "直播電商營運專員",
+      "loan_officer": "貸款專員",
+      "logistics_coordinator": "物流專員",
+      "machine_operator": "機台操作員",
+      "maintenance_technician": "維修技術員",
+      "management_consultant": "管理顧問",
+      "manufacturing_engineer": "製造工程師",
+      "market_research_analyst": "市場研究分析師",
+      "marketing_manager": "行銷經理",
+      "marketing_specialist": "行銷專員",
+      "materials_engineer": "材料工程師",
+      "mechanical_engineer": "機械工程師",
+      "medical_coder": "病歷編碼與醫療申報人員",
+      "medical_sales_rep": "醫療業務代表",
+      "medical_technologist": "醫檢與醫學影像技術人員",
+      "mep_engineer": "MEP 機電工程師",
+      "ml_engineer": "機器學習工程師",
+      "mlops_engineer": "MLOps 工程師",
+      "mobile_engineer": "行動應用工程師",
+      "motion_designer": "動態設計師與動畫師",
+      "network_engineer": "網路工程師",
+      "nlp_engineer": "NLP 與 LLM 工程師",
+      "nonprofit_program_manager": "非營利組織計畫經理",
+      "nurse_practitioner": "專科護理師",
+      "office_manager": "辦公室經理",
+      "onboarding_specialist": "客戶導入專員",
+      "operations_analyst": "營運分析師",
+      "operations_manager": "營運經理",
+      "paralegal": "法務助理",
+      "partnerships_manager": "合作夥伴與通路經理",
+      "penetration_tester": "滲透測試人員",
+      "pharmacist": "藥師",
+      "photographer": "攝影師或影像攝影師",
+      "physical_therapist": "物理治療師或職能治療師",
+      "physician": "醫師",
+      "platform_engineer": "平台工程師",
+      "policy_analyst": "政策與公共事務",
+      "postdoc": "博士後研究員",
+      "pr_specialist": "傳播與公關專員",
+      "privacy_specialist": "隱私保護專員",
+      "producer": "製作人",
+      "product_analyst": "產品分析師",
+      "product_designer": "產品設計師",
+      "product_director": "產品主管",
+      "product_manager": "產品經理",
+      "product_marketing_manager": "產品行銷經理",
+      "product_operations": "產品營運專員",
+      "production_supervisor": "生產主管",
+      "professor": "教授或講師",
+      "program_manager": "計畫經理",
+      "project_manager": "專案經理",
+      "psychologist": "心理師或治療師",
+      "qa_engineer": "QA 工程師",
+      "quality_engineer": "品質工程師",
+      "quality_inspector": "品管檢驗員",
+      "quant_analyst": "量化分析師",
+      "real_estate_agent": "不動產經紀人",
+      "receptionist": "櫃檯接待",
+      "recruiter": "招募專員",
+      "recsys_engineer": "搜尋與推薦工程師",
+      "registered_nurse": "護理師",
+      "regulatory_affairs": "法規事務專員",
+      "research_assistant": "研究助理",
+      "restaurant_manager": "餐廳經理",
+      "retail_sales": "門市銷售人員",
+      "risk_analyst": "風險與信用分析師",
+      "robotics_engineer": "機器人工程師",
+      "sales_engineer": "業務工程師",
+      "sales_manager": "業務經理",
+      "school_teacher": "學校教師",
+      "scrum_master": "Scrum Master",
+      "sdet": "自動化測試工程師",
+      "sdr": "業務開發專員",
+      "security_analyst": "資安分析師",
+      "security_architect": "資安架構師",
+      "security_compliance": "資安法遵分析師",
+      "security_engineer": "資安工程師",
+      "security_leader": "資安主管／CISO",
+      "semiconductor_process_engineer": "半導體製程工程師",
+      "seo_specialist": "SEO 專員",
+      "server": "外場服務生、咖啡師或調酒師",
+      "social_media_manager": "社群媒體經理",
+      "social_worker": "社工",
+      "software_architect": "軟體架構師",
+      "software_engineer": "軟體工程師",
+      "special_education_teacher": "特殊教育教師",
+      "sre": "網站可靠性工程師",
+      "statistician": "統計師",
+      "store_manager": "店長",
+      "strategy_manager": "策略經理",
+      "supply_chain_manager": "供應鏈經理",
+      "sysadmin": "系統管理員",
+      "systems_analyst": "系統分析師",
+      "systems_software_engineer": "系統軟體工程師",
+      "talent_acquisition_manager": "人才招募經理",
+      "tax_specialist": "稅務專員",
+      "tech_lead": "技術主管",
+      "technical_product_manager": "技術產品經理",
+      "technical_support_engineer": "技術支援工程師",
+      "technical_writer": "技術文件撰寫員",
+      "trader": "交易員",
+      "translator": "翻譯或口譯人員",
+      "travel_consultant": "旅遊顧問",
+      "tutor": "家教",
+      "ui_designer": "UI 設計師",
+      "user_operations": "使用者營運專員",
+      "ux_designer": "UX 設計師",
+      "ux_researcher": "UX 研究員",
+      "video_editor": "影片剪輯師",
+      "warehouse_manager": "倉儲經理",
+      "web_developer": "網頁開發人員",
+      "welder": "銲工"
     }
   },
   "tools": {
@@ -9938,11 +11159,11 @@
       "title": "把這份履歷保留在你的帳號裡"
     },
     "consent": {
-      "label": "我同意 %BRAND% 用自動化軟體讀取這份履歷，以產生這份報告。除非我建立帳號，否則它會在 {hours} 小時後刪除。",
-      "offshore": "測試期間，這些內容會在中國大陸以外的地方處理，地點是美國。",
       "privacyLink": "隱私權聲明",
       "readingService": "檔案可能會傳送到 %BRAND% 使用的履歷讀取服務 {service}，其伺服器位於中國大陸。",
-      "whereUnknown": "由誰讀取、在哪裡處理，都寫在隱私權聲明裡。"
+      "whereUnknown": "由誰讀取、在哪裡處理，都寫在隱私權聲明裡。",
+      "labelAi": "我同意 %BRAND% 用自動化軟體（包括 AI 模型）讀取這份履歷，以產生這份報告。除非我建立帳號，否則它會在 {hours} 小時後刪除。",
+      "outsideMainland": "它會由隱私權聲明中列出的服務供應商，在中國大陸以外處理。"
     },
     "errors": {
       "consent_required": "請勾選方塊，同意讓 %BRAND% 讀取這份履歷。",
@@ -10140,7 +11361,8 @@
       "errors": {
         "generic": "出了點問題。請重試。",
         "rateLimited": "沒有帳號時可以問的問題已達上限。建立免費帳號就能繼續提問。",
-        "unavailable": "助理現在無法使用。"
+        "unavailable": "助理現在無法使用。",
+        "consent": "請先勾選上方的核取方塊。你同意之後，%BRAND% 才會用 AI 回答。"
       },
       "inputLabel": "你的問題",
       "intro": "你可以問這個頁面上的職缺、職缺說明列出的薪資，或 %BRAND% 是怎麼運作的。回答不會用到履歷，也絕不會評論你和某個職缺的適合度。",
@@ -10152,7 +11374,12 @@
       "signupCta": "建立免費帳號",
       "title": "詢問這個頁面的內容",
       "writing": "正在寫回答…",
-      "you": "你"
+      "you": "你",
+      "consent": {
+        "detail": "負責回答的 AI 服務可能會在中國大陸以外處理你的問題。你在這裡輸入的內容都不會被儲存。",
+        "label": "我同意 %BRAND% 把我的問題送到 AI 模型來回答。",
+        "privacyLink": "隱私權聲明"
+      }
     },
     "card": {
       "badge": {
@@ -10230,6 +11457,30 @@
       "login": "登入",
       "openJobs": "開啟你的職缺",
       "title": "查看符合你搜尋條件的所有職缺，以及每個職缺和你的適合度"
+    }
+  },
+  "companyFacts": {
+    "sponsorship": {
+      "dated": {
+        "imported": "檔案匯入於 {date}",
+        "published": "截至 {date}"
+      },
+      "disclaimer": "這些是關於雇主的公開紀錄，不是關於這個職缺。過去的申請紀錄或贊助許可，並不代表這家雇主會為這個職位提供簽證贊助。",
+      "earlier": "{count, plural, other {# 筆來自較早財政年度的紀錄}}",
+      "fact": {
+        "dolLca": "{year} 財政年度有 {count, plural, other {# 份 H-1B 勞工條件申請}}獲得認證",
+        "uk": "列於英國名冊的持證贊助單位",
+        "ukRating": "類型與評級：{rating}",
+        "ukRoutes": "{count, plural, other {簽證途徑}}：{routes}",
+        "ukTown": "城鎮：{town}",
+        "uscis": "{year} 財政年度：{approvals, plural, other {核准 # 份 H-1B 申請}}，駁回 {denials, number} 份"
+      },
+      "file": "檔案：{file}",
+      "intro": "關於這家雇主的公開紀錄。每一行都會標明來源與日期。",
+      "listedAs": "列為 {name}",
+      "source": "來源：<link>{name}</link>",
+      "title": "{company} 的簽證贊助紀錄",
+      "usNote": "獲得認證的申請不等於簽證核准或錄用。申請數量計算的是首次裁決，涵蓋新聘與續聘。"
     }
   }
 }

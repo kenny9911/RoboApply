@@ -16,9 +16,10 @@ import { getEmailTemplate } from '../registry.js';
 import { BILLING_REFUND_EMAIL_TEMPLATES, refundIssuedEmail, withdrawalConfirmedEmail, type RefundIssuedParams, type WithdrawalConfirmedParams } from './refunds.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const STAGED = JSON.parse(readFileSync(resolve(here, '../../../../i18n/email/staging/billingRefunds.en.json'), 'utf8')) as {
+// The refund and withdrawal copy, merged out of i18n/email/staging/billingRefunds.en.json into the English bundle.
+const COPY = (JSON.parse(readFileSync(resolve(here, '../../../../i18n/email/en.json'), 'utf8')) as {
   billingRefunds: Record<string, Record<string, string>>;
-};
+}).billingRefunds;
 
 const REFUND: RefundIssuedParams = { planKey: 'pro_monthly', amountMinor: 2499, currency: 'USD', full: true, completesEarlierRefunds: false, accessEnded: true };
 const WITHDRAWAL: WithdrawalConfirmedParams = { planKey: 'pro_monthly', amountMinor: 2082, currency: 'USD', withdrawnAt: '2026-10-10T08:00:00.000Z' };
@@ -152,11 +153,9 @@ describe('refund and withdrawal email templates', () => {
     expect(withdrawal({ amountMinor: 5, currency: 'USD' }).bodyText).toContain('$0.05');
   });
 
-  it('the staged copy names no competitor, promises no processing time and uses no em dash', () => {
-    const strings = Object.values(STAGED.billingRefunds).flatMap((group) => Object.values(group));
-    // A staging file holds exactly the namespace it is named after (scripts/i18n-merge-staging.mjs).
-    expect(Object.keys(STAGED)).toEqual(['billingRefunds']);
-    expect(Object.keys(STAGED.billingRefunds).sort()).toEqual(['refundIssued', 'withdrawalConfirmed']);
+  it('the English copy names no competitor, promises no processing time and uses no em dash', () => {
+    const strings = Object.values(COPY).flatMap((group) => Object.values(group));
+    expect(Object.keys(COPY).sort()).toEqual(['refundIssued', 'withdrawalConfirmed']);
     expect(strings.length).toBeGreaterThan(10);
     for (const s of strings) {
       expect(s, s).not.toMatch(/—|–/);

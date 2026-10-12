@@ -41,6 +41,15 @@
         "great": "Très adapté",
         "possible": "Possible",
         "unlikely": "Peu probable"
+      },
+      "confidence": {
+        "reason": {
+          "few_details": "Cette annonce en dit trop peu pour comparer",
+          "no_level_stated": "Cette annonce n’indique aucun niveau",
+          "no_resume": "Ajoute un CV pour une comparaison complète. Cette estimation s’appuie sur ton profil et tes préférences.",
+          "no_role_evidence": "Ton CV ne montre aucun poste à comparer",
+          "no_skills_listed": "Cette annonce ne mentionne aucune compétence"
+        }
       }
     },
     "item": {

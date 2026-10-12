@@ -24,7 +24,8 @@
       "heading": "アカウントの削除が予定されています",
       "notYou": "お心当たりがない場合は、すぐにこのメールに返信するか、サポートまでご連絡ください。",
       "subject": "%BRAND%アカウントの削除が予定されています",
-      "when": "アカウントとそのデータは、{days}日以内に削除します。バックアップは、その後90日以内に消去されます。"
+      "when": "アカウントとそのデータは、{days}日以内に削除します。バックアップは、その後90日以内に消去されます。",
+      "renewalStopped": "有料プランは更新されず、このプランの料金が再び請求されることもありません。"
     },
     "emailVerify": {
       "body": "このメールアドレスがご自身のものであることを確認してください。確認がお済みでなくても、%BRAND%は引き続きご利用いただけます。確認すると、無料の練習面接が利用できるようになります。",
@@ -124,7 +125,9 @@
       "pro_week_passCn": "Pro 1週間パス",
       "pro_weekly": "Pro 週払い",
       "student_monthly": "学生 月払い",
-      "student_quarterly": "学生 3か月払い"
+      "student_quarterly": "学生 3か月払い",
+      "student_monthlyCn": "学生 30日間パス",
+      "student_quarterlyCn": "学生 90日間パス"
     },
     "renewalReminder": {
       "bodyAuto": "{plan}は{date}に自動で更新されます。料金は{period}ごとに{price}です。",
@@ -137,7 +140,16 @@
       "headingAuto": "プランがまもなく更新されます",
       "headingManual": "パスがまもなく終了します",
       "subjectAuto": "%BRAND%のプランは{date}に更新されます",
-      "subjectManual": "%BRAND%のパスは{date}に終了します"
+      "subjectManual": "%BRAND%のパスは{date}に終了します",
+      "ctaGoapply": "%OTHER_BRAND%の料金を見る",
+      "goapplyLine": "中国本土にお住まいですか？%OTHER_BRAND%では、Alipayを使ってRMBでお支払いいただけます。"
+    },
+    "paymentActionRequired": {
+      "body": "{plan}の料金{price}のお支払いが、確認待ちになっています。お支払いページを開いて、手続きを完了してください。確認いただくまで、料金は請求されません。",
+      "bodyNoPlan": "{price}のお支払いが、確認待ちになっています。お支払いページを開いて、手続きを完了してください。確認いただくまで、料金は請求されません。",
+      "cta": "お支払いを確認する",
+      "heading": "銀行がこのお支払いの確認を求めています",
+      "subject": "%BRAND%のお支払いをご確認ください"
     }
   },
   "coaching": {
@@ -219,7 +231,8 @@
       "tierGood": "よく合う",
       "tierGreat": "とても合う",
       "tierPossible": "可能性あり",
-      "viewJob": "求人を見る"
+      "viewJob": "求人を見る",
+      "tierEstimate": "{tier} · 簡易推定"
     },
     "finishSetup": {
       "body": "これまでの回答は保存されています。初期設定を完了すると、検索条件に合う求人と、履歴書の直すべき点を確認できます。",
@@ -407,5 +420,40 @@
       },
       "searchAny": "すべての求人"
     }
+  },
+  "billingRefunds": {
+    "refundIssued": {
+      "accessEndedPack": "このパックの未使用の練習クレジットは、アカウントに残っていません。",
+      "accessEndedPlan": "今回のご購入分の有料期間は、アカウントに残っていません。ほかに有効な有料プランがない場合、アカウントは現在、無料プランです。",
+      "accessUnchanged": "プランとクレジットはそのままです。",
+      "bodyFull": "{plan}の{amount}を返金しました。お支払いいただいた全額です。",
+      "bodyPartial": "{plan}のお支払いのうち、{amount}を返金しました。",
+      "bodyRest": "{plan}の{amount}を返金しました。これまでの返金と合わせて、お支払いは全額返金されました。",
+      "cta": "プランを確認する",
+      "heading": "お支払いを返金しました",
+      "method": "返金は、お支払いに使った方法に戻ります。明細に反映される時期は、銀行またはカード会社によって決まります。",
+      "subject": "%BRAND%の返金のお知らせ：{amount}"
+    },
+    "withdrawalConfirmed": {
+      "body": "{plan}の契約を撤回しました。",
+      "cta": "プランを確認する",
+      "endedPack": "このパックの未使用の練習クレジットは、アカウントに残っていません。",
+      "endedPass": "パスは終了しました。パスの有料期間は、アカウントに残っていません。",
+      "endedSubscription": "サブスクリプションは終了しました。更新されることはなく、料金が再び請求されることもありません。",
+      "heading": "契約の撤回を確認しました",
+      "received": "{at}に撤回のお申し出を受け付けました。",
+      "refund": "{amount}を、お支払いに使った方法へ返金しています。明細に反映される時期は、銀行またはカード会社によって決まります。",
+      "refundNone": "お支払い済みの期間はすでに利用されているため、返金の対象はありません。",
+      "subject": "%BRAND%の契約撤回を確認しました"
+    }
+  },
+  "shell": {
+    "preferences": "メールの設定",
+    "reasonAlert": "このメールは、%BRAND%で求人アラートをオンにされているためお送りしています。",
+    "reasonMarketing": "このメールは、%BRAND%の製品ニュースの受信に同意されているためお送りしています。",
+    "reasonTips": "このメールは、%BRAND%の設定で「ヒントとリマインダー」がオンになっているためお送りしています。",
+    "reasonTransactional": "このメールは、%BRAND%アカウントに関するお知らせとしてお送りしています。",
+    "sentBy": "送信元：{entity}",
+    "unsubscribe": "配信を停止する"
   }
 }

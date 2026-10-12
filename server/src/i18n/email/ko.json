@@ -24,7 +24,8 @@
       "heading": "계정이 삭제될 예정이에요",
       "notYou": "요청한 적이 없다면 바로 이 이메일에 답장하거나 고객 지원에 문의해 주세요.",
       "subject": "%BRAND% 계정이 삭제될 예정이에요",
-      "when": "계정과 계정 데이터는 {days}일 안에 삭제돼요. 백업은 그 뒤 90일 안에 지워져요."
+      "when": "계정과 계정 데이터는 {days}일 안에 삭제돼요. 백업은 그 뒤 90일 안에 지워져요.",
+      "renewalStopped": "유료 요금제는 더 이상 갱신되지 않고, 이 요금제로 다시 결제되지 않아요."
     },
     "emailVerify": {
       "body": "이 이메일 주소가 본인 주소가 맞는지 인증해 주세요. 아직 인증하지 않아도 %BRAND%를 계속 쓸 수 있어요. 인증하면 무료 연습 면접을 이용할 수 있어요.",
@@ -124,7 +125,9 @@
       "pro_week_passCn": "Pro 주간 이용권",
       "pro_weekly": "Pro, 주간 결제",
       "student_monthly": "학생 월간",
-      "student_quarterly": "학생 분기"
+      "student_quarterly": "학생 분기",
+      "student_monthlyCn": "학생 30일 이용권",
+      "student_quarterlyCn": "학생 90일 이용권"
     },
     "renewalReminder": {
       "bodyAuto": "{date}에 {plan} 요금제가 자동으로 갱신되고, {period}마다 {price}씩 결제돼요.",
@@ -137,7 +140,16 @@
       "headingAuto": "요금제가 곧 갱신돼요",
       "headingManual": "이용권이 곧 끝나요",
       "subjectAuto": "%BRAND% 요금제가 {date}에 갱신돼요",
-      "subjectManual": "%BRAND% 이용권이 {date}에 끝나요"
+      "subjectManual": "%BRAND% 이용권이 {date}에 끝나요",
+      "ctaGoapply": "%OTHER_BRAND% 요금 보기",
+      "goapplyLine": "중국 본토에 계신가요? %OTHER_BRAND%에서는 Alipay로 RMB 결제를 할 수 있어요."
+    },
+    "paymentActionRequired": {
+      "body": "{plan}에 대한 {price} 결제가 확인을 기다리고 있어요. 결제 페이지를 열어 마무리해 주세요. 확인하기 전에는 결제되는 금액이 없어요.",
+      "bodyNoPlan": "{price} 결제가 확인을 기다리고 있어요. 결제 페이지를 열어 마무리해 주세요. 확인하기 전에는 결제되는 금액이 없어요.",
+      "cta": "결제 확인하기",
+      "heading": "은행에서 이 결제를 확인해 달라고 요청했어요",
+      "subject": "%BRAND% 결제를 확인해 주세요"
     }
   },
   "coaching": {
@@ -219,7 +231,8 @@
       "tierGood": "잘 맞음",
       "tierGreat": "아주 잘 맞음",
       "tierPossible": "가능성 있음",
-      "viewJob": "공고 보기"
+      "viewJob": "공고 보기",
+      "tierEstimate": "{tier} · 간단 추정"
     },
     "finishSetup": {
       "body": "지금까지 입력한 답변은 저장돼 있어요. 초기 설정을 마치면 내 검색에 맞는 공고와 이력서에서 고칠 부분을 볼 수 있어요.",
@@ -407,5 +420,40 @@
       },
       "searchAny": "모든 공고"
     }
+  },
+  "billingRefunds": {
+    "refundIssued": {
+      "accessEndedPack": "이 팩에서 쓰지 않은 연습 크레딧은 더 이상 계정에 남아 있지 않아요.",
+      "accessEndedPlan": "이번 구매로 받은 유료 이용 기간은 더 이상 계정에 남아 있지 않아요. 이용 중인 다른 유료 요금제가 없다면 계정은 지금 무료 요금제예요.",
+      "accessUnchanged": "요금제와 크레딧은 그대로예요.",
+      "bodyFull": "{plan}에 대해 {amount} 환불을 처리했어요. 결제한 전체 금액이에요.",
+      "bodyPartial": "{plan}에 대해 결제한 금액 중 {amount} 환불을 처리했어요.",
+      "bodyRest": "{plan}에 대해 {amount} 환불을 처리했어요. 이전 환불까지 합치면 결제 금액이 전액 환불됐어요.",
+      "cta": "내 요금제 보기",
+      "heading": "결제 금액을 환불했어요",
+      "method": "환불금은 결제할 때 사용한 결제 수단으로 돌아가요. 명세서에 언제 반영될지는 은행이나 카드사가 정해요.",
+      "subject": "%BRAND% 환불 안내: {amount}"
+    },
+    "withdrawalConfirmed": {
+      "body": "{plan} 청약을 철회했어요.",
+      "cta": "내 요금제 보기",
+      "endedPack": "이 팩에서 쓰지 않은 연습 크레딧은 더 이상 계정에 남아 있지 않아요.",
+      "endedPass": "이용권이 종료됐어요. 이 이용권으로 받은 유료 이용 기간은 더 이상 계정에 남아 있지 않아요.",
+      "endedSubscription": "구독이 종료됐어요. 더 이상 갱신되지 않고, 이 구독으로 다시 결제되지 않아요.",
+      "heading": "청약 철회가 확인됐어요",
+      "received": "{at}에 청약 철회 요청을 받았어요.",
+      "refund": "결제할 때 사용한 결제 수단으로 환불하고 있어요. 환불 금액: {amount}. 명세서에 언제 반영될지는 은행이나 카드사가 정해요.",
+      "refundNone": "결제한 기간을 이미 사용해서 환불할 금액이 없어요.",
+      "subject": "%BRAND% 청약 철회가 확인됐어요"
+    }
+  },
+  "shell": {
+    "preferences": "이메일 설정",
+    "reasonAlert": "%BRAND%에서 공고 알림을 켜 두셔서 이 이메일을 보내드려요.",
+    "reasonMarketing": "%BRAND%의 제품 소식을 받기로 동의하셔서 이 이메일을 보내드려요.",
+    "reasonTips": "%BRAND% 설정에서 ‘팁과 리마인더’가 켜져 있어서 이 이메일을 보내드려요.",
+    "reasonTransactional": "%BRAND% 계정에 관한 내용이라 이 이메일을 보내드려요.",
+    "sentBy": "보낸 곳: {entity}",
+    "unsubscribe": "수신 거부"
   }
 }
