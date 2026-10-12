@@ -57,7 +57,9 @@ Use Node 24.x and the committed `package-lock.json`; install dependencies with
 
 ## Work in progress on this branch
 
-`feat/jobright-clone` carries the Jobright clone (dual brand: RoboApply and GoApply). Before doing anything on it, read `docs/jobright-clone/HANDOFF.md`: the current state, the remaining steps with their commands, and the rules that are easy to break (Alipay tests are frozen, schema changes are additive only, the local Stripe key is live).
+`feat/practice-prep` adds the interview-prep agents and skills to practice interviews (job search for the practice target, per-job interview plans with generated interviewers and focuses, researched company interview styles, 15/20/30-minute practices). Read `docs/interview-practice/PREP_AGENTS.md` before changing `server/src/interview-engine/prep/`, `server/src/interview-engine/skills/` or the `/practice` setup.
+
+The Jobright clone (dual brand: RoboApply and GoApply) is merged; its record and the rules that are easy to break (Alipay tests are frozen, schema changes are additive only, the local Stripe key is live) are in `docs/jobright-clone/HANDOFF.md`.
 
 ## Verification
 
