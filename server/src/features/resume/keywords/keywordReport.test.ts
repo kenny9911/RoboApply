@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseResume } from '../check/resumeText.js';
-import { buildKeywordReport, displayTerm, educationFrom, plausibleSkill, requiredYearsFrom, resumeEducation, resumeYears, showsTerm, termsFromPosting } from './keywordReport.js';
+import { buildKeywordReport, displayTerm, educationFrom, plausibleSkill, requiredEducationFrom, requiredYearsFrom, resumeEducation, resumeYears, showsTerm, termsFromPosting } from './keywordReport.js';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
 
@@ -235,6 +235,37 @@ describe('buildKeywordReport', () => {
     expect(report.keywordSource).toBe('posting');
     expect(report.hardSkills.missing).toEqual(expect.arrayContaining(['sql', 'tableau']));
     expect(report.fit).toBeNull();
+  });
+
+  // Browser pass of HANDOFF step 5: "BS/MS in Computer Science" told a B.S. holder their degree was below the listed level.
+  it('reads the lowest degree a posting asks for, never a wish or a word that only looks like a degree', () => {
+    expect(requiredEducationFrom('BS/MS in Computer Science or an equivalent field with 2+ years of industry work experience')).toBe('bachelor');
+    expect(requiredEducationFrom("Bachelor's or Master's degree in Statistics")).toBe('bachelor');
+    expect(requiredEducationFrom("Bachelor's degree required. Master's degree preferred.")).toBe('bachelor');
+    expect(requiredEducationFrom('BS in CS, MS preferred')).toBe('bachelor');
+    expect(requiredEducationFrom("Master's or PhD in a quantitative field")).toBe('master');
+    expect(requiredEducationFrom('PhD in Physics or a related field')).toBe('phd');
+    expect(requiredEducationFrom('High school diploma or GED')).toBe('high_school');
+    expect(requiredEducationFrom("Bachelor's degree in CS or similar")).toBe('bachelor');
+    expect(requiredEducationFrom('本科及以上，硕士优先')).toBe('bachelor');
+    expect(requiredEducationFrom('硕士及以上学历')).toBe('master');
+    // A wish alone is not a requirement; words that only look like a degree are not one.
+    expect(requiredEducationFrom("A Master's degree is a plus")).toBeNull();
+    expect(requiredEducationFrom('Preferably a PhD in Machine Learning')).toBeNull();
+    expect(requiredEducationFrom('Certified Scrum Master. Office in Boston, MA. Fluent with MS Office.')).toBeNull();
+    expect(requiredEducationFrom('Join us to analyse things with SQL and Tableau.')).toBeNull();
+  });
+
+  it('meets "BS/MS" with a B.S.; the resume side still reads the best degree', () => {
+    const report = buildKeywordReport({
+      resumeMarkdown: RESUME,
+      job: { title: 'Senior Backend Engineer', text: 'You will need:\n- BS/MS in Computer Science or an equivalent field\n- 5+ years building backend services' },
+      now: NOW,
+    });
+    const byKey = Object.fromEntries(report.rows.map((r) => [r.key, r]));
+    expect(byKey.education!.status).toBe('pass');
+    expect(byKey.education!.params).toEqual({ required: 'bachelor', found: 'bachelor' });
+    expect(educationFrom('BS/MS in Computer Science')).toBe('master');
   });
 
   it('fails education below the listed level and years well below', () => {

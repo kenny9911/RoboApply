@@ -190,6 +190,41 @@ export function educationFrom(text: string): string | null {
   return null;
 }
 
+/** Lines of a posting: a sentence ends at a full stop after a word ("required. Master's"), not inside "B.S.". */
+const EDU_LINE_SPLIT = /\n+|[。；;]\s*|(?<=\p{Ll}{3}\.)\s+(?=\p{Lu})/u;
+/** A line that talks about a degree at all: keeps "Scrum Master", "Boston, MA" and "MS Office" out. */
+const EDU_CONTEXT =
+  /\bdegree\b|\bdiploma\b|\bbachelor|\bmaster'?s\b|\bph\.?\s?d\b|\bdoctora|\bmba\b|\b(?:b\.?s\.?c?|b\.?a\.?|m\.?s\.?c?|m\.?a\.?)\s*(?:\/|\bor\b|\bin\b)|学历|学位|學歷|學位|本科|硕士|碩士|学士|學士|博士|大专|專科|专科/i;
+/** Words that make the degree just before them a wish, not the requirement ("MS preferred", "硕士优先"). */
+const EDU_WISH_AFTER = /\b(?:preferred|nice to have|a plus|bonus|desirable)\b|优先|加分|更佳|为佳|為佳/i;
+const EDU_WISH_BEFORE = /\b(?:preferably|ideally)\b/i;
+
+/**
+ * The lowest degree a posting asks for, or null when it names none. A posting
+ * that names several ("BS/MS in Computer Science", "Bachelor's or Master's") is
+ * met by the lowest, a degree named as a wish is not the requirement, and only
+ * lines that talk about a degree count (the rule `jobs/normalize/level.ts`
+ * `educationFromText` applies to Chinese postings). `educationFrom` reads the
+ * highest level anywhere: right for a resume, the person's best degree, and it
+ * read "BS/MS" as a master's, so a B.S. holder was told their degree was below
+ * the listed level.
+ */
+export function requiredEducationFrom(text: string): string | null {
+  let lowest: string | null = null;
+  for (const line of text.split(EDU_LINE_SPLIT)) {
+    if (!EDU_CONTEXT.test(line)) continue;
+    for (const [level, re] of EDU_PATTERNS) {
+      for (const m of line.matchAll(new RegExp(re.source, 'gi'))) {
+        const start = m.index ?? 0;
+        const clause = line.slice(start + m[0].length).split(/[,;，；.。]/)[0]!.slice(0, 40);
+        if (EDU_WISH_AFTER.test(clause) || EDU_WISH_BEFORE.test(line.slice(Math.max(0, start - 20), start))) continue;
+        if (lowest === null || EDUCATION_RANK[level]! < EDUCATION_RANK[lowest]!) lowest = level;
+      }
+    }
+  }
+  return lowest;
+}
+
 /** Highest degree in the resume's education section (or anywhere when no section). */
 export function resumeEducation(r: ParsedResume): string | null {
   const edu = sectionsOf(r, 'education');
@@ -293,7 +328,7 @@ function yearsRow(job: KeywordJobInput, r: ParsedResume, now: Date): KeywordRepo
 }
 
 function educationRow(job: KeywordJobInput, r: ParsedResume): KeywordReportRow {
-  const required = job.educationLevel && job.educationLevel !== 'none' ? job.educationLevel : educationFrom(job.text);
+  const required = job.educationLevel && job.educationLevel !== 'none' ? job.educationLevel : requiredEducationFrom(job.text);
   const found = resumeEducation(r);
   let status: KeywordRowStatus = 'unknown';
   if (required && found && EDUCATION_RANK[required] !== undefined && EDUCATION_RANK[found] !== undefined) {
