@@ -214,9 +214,19 @@ export function createJobSearchAgent(dependencies: {
         signal.addEventListener('abort', onAbort, { once: true });
         timer = setTimeout(() => controller.abort(), deadlineMs);
       });
-      const raw = await Promise.race([planner(input, { ...context, signal }), stopped]);
+      const ask = () => Promise.race([planner(input, { ...context, signal }), stopped]);
+      const raw = await ask();
       throwIfAborted(signal);
-      return parseAgentPlan(raw);
+      try {
+        return parseAgentPlan(raw);
+      } catch (error) {
+        // An answer outside the plan's shape (a field the strict check refuses, broken JSON) is asked for once
+        // more, within the same deadline and reservation; a request that names no role is an answer and is not.
+        if (error instanceof JobSearchValidationError) throw error;
+        const again = await ask();
+        throwIfAborted(signal);
+        return parseAgentPlan(again);
+      }
     } catch (error) {
       throwIfAborted(context.signal);
       if (error instanceof JobSearchValidationError && error.field === 'request') throw error;

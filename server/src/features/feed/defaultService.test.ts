@@ -10,6 +10,8 @@ const hasLiveConsent = vi.fn();
 vi.mock('../../platform/consent/index.js', () => ({ hasLiveConsent: (...a: unknown[]) => hasLiveConsent(...a) }));
 const ingestForProfile = vi.fn();
 vi.mock('../jobs/ingest/index.js', () => ({ ingestForProfile: (...a: unknown[]) => ingestForProfile(...a) }));
+const configuredSearchPlanner = vi.fn();
+vi.mock('../../job-search/agent.js', () => ({ configuredSearchPlanner: (...a: unknown[]) => configuredSearchPlanner(...a) }));
 
 import { setEmbeddingsClientForTests } from '../../platform/embeddings/index.js';
 import { defaultFeedDeps, defaultFeedEmbeddings, defaultFeedRetrieval, defaultRequestIngest } from './defaultService.js';
@@ -18,6 +20,7 @@ import { isFeedPersonalized } from './index.js';
 beforeEach(() => {
   hasLiveConsent.mockReset();
   ingestForProfile.mockReset();
+  configuredSearchPlanner.mockReset();
 });
 afterEach(() => {
   setEmbeddingsClientForTests(null);
@@ -83,5 +86,30 @@ describe('production wiring of hybrid retrieval (MKT-4F)', () => {
     await defaultRequestIngest('sp9');
     expect(ingestForProfile).toHaveBeenCalledTimes(1);
     expect(ingestForProfile).toHaveBeenCalledWith('sp9', 0);
+  });
+});
+
+// Browser pass of HANDOFF step 5: one model answer with a field the strict plan check refuses made the
+// sentence search answer 503 "AI unavailable"; the same sentence planned fine on the next call.
+describe('the sentence planner of the feed', () => {
+  const PLAN = { queries: ['软件工程师'], country: 'cn', location: '上海', unverifiedPreferences: [] };
+
+  it('asks the model once more when its answer is outside the plan\'s shape', async () => {
+    configuredSearchPlanner.mockResolvedValueOnce(JSON.stringify({ ...PLAN, rankedBy: ['Java'] })).mockResolvedValueOnce(JSON.stringify(PLAN));
+    const plan = await defaultFeedDeps().planner('上海的软件工程师职位', { userId: 'u1', locale: 'zh' });
+    expect(plan.queries).toEqual(['软件工程师']);
+    expect(configuredSearchPlanner).toHaveBeenCalledTimes(2);
+    // Both calls share one deadline.
+    expect(configuredSearchPlanner.mock.calls[0]![1].signal).toBe(configuredSearchPlanner.mock.calls[1]![1].signal);
+  });
+
+  it('gives up after the second answer outside the shape, and never asks again for a request that names no role', async () => {
+    configuredSearchPlanner.mockResolvedValue('not json');
+    await expect(defaultFeedDeps().planner('上海的软件工程师职位', { userId: 'u1', locale: 'zh' })).rejects.toThrow();
+    expect(configuredSearchPlanner).toHaveBeenCalledTimes(2);
+    configuredSearchPlanner.mockReset();
+    configuredSearchPlanner.mockResolvedValue(JSON.stringify({ queries: [], unverifiedPreferences: [] }));
+    await expect(defaultFeedDeps().planner('在上海找份工作', { userId: 'u1', locale: 'zh' })).rejects.toMatchObject({ name: 'JobSearchValidationError' });
+    expect(configuredSearchPlanner).toHaveBeenCalledTimes(1);
   });
 });

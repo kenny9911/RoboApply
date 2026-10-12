@@ -159,6 +159,25 @@ describe('planned search and durable ordering', () => {
 });
 
 describe('cancellation and model runtime', () => {
+  // Browser pass of HANDOFF step 5: one answer with a field the strict check refuses failed the whole search.
+  it('asks the model once more when its answer is outside the plan\'s shape, and gives up after the second', async () => {
+    const { agent, planner, service } = setup();
+    planner.mockResolvedValueOnce({ ...PLAN, rankedBy: ['Rust'] });
+    const response = await agent.search(INPUT, CONTEXT);
+    expect(planner).toHaveBeenCalledTimes(2);
+    expect(response.agent.queries).toEqual(PLAN.queries);
+    expect(service.search).toHaveBeenCalled();
+
+    const broken = setup({ ...PLAN, providers: ['jsearch'] });
+    await expect(broken.agent.search(INPUT, CONTEXT)).rejects.toMatchObject({ code: 'agent_unavailable' });
+    expect(broken.planner).toHaveBeenCalledTimes(2);
+    expect(broken.service.search).not.toHaveBeenCalled();
+  });
+  it('does not ask again when the request names no role', async () => {
+    const { agent, planner } = setup({ queries: [], unverifiedPreferences: [] });
+    await expect(agent.search({ request: 'I want a job somewhere in Taipei.' }, CONTEXT)).rejects.toMatchObject({ name: 'JobSearchValidationError' });
+    expect(planner).toHaveBeenCalledTimes(1);
+  });
   it('bounds a nonresponsive model and aborts its signal', async () => {
     const { service, quota } = setup(); let signal: AbortSignal | undefined;
     const agent = createJobSearchAgent({ service: service as never, quota: quota as never, planningTimeoutMs: 50, planner: async (_input, context) => { signal = context.signal; return new Promise(() => {}); } });

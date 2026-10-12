@@ -49,9 +49,23 @@ async function defaultAiAllowed(userId: string): Promise<boolean> {
  * layer (GoApply: domestic models + content safety). 20 s budget.
  */
 async function defaultPlanner(text: string, ctx: { userId: string; locale: string }): Promise<PlannerPlan> {
-  const [{ configuredSearchPlanner }, { parseAgentPlan }] = await Promise.all([import('../../job-search/agent.js'), import('../../job-search/agent-validation.js')]);
-  const raw = await configuredSearchPlanner({ request: text, locale: ctx.locale }, { userId: ctx.userId, signal: AbortSignal.timeout(20_000) });
-  return parseAgentPlan(raw) as PlannerPlan;
+  const [{ configuredSearchPlanner }, { parseAgentPlan }, { JobSearchValidationError }] = await Promise.all([
+    import('../../job-search/agent.js'),
+    import('../../job-search/agent-validation.js'),
+    import('../../job-search/validation.js'),
+  ]);
+  const signal = AbortSignal.timeout(20_000);
+  const ask = () => configuredSearchPlanner({ request: text, locale: ctx.locale }, { userId: ctx.userId, signal });
+  const raw = await ask();
+  try {
+    return parseAgentPlan(raw) as PlannerPlan;
+  } catch (err) {
+    // A request that names no role is an answer, not a fault. An answer outside the plan's shape (a field the
+    // strict check refuses, broken JSON) is asked for once more, within the same 20 s: one such answer made
+    // the sentence search fail with "AI unavailable" (browser pass of HANDOFF step 5).
+    if (err instanceof JobSearchValidationError) throw err;
+    return parseAgentPlan(await ask()) as PlannerPlan;
+  }
 }
 
 /**
