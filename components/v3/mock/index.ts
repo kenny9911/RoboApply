@@ -13,10 +13,12 @@ export {
   PracticeSetupSkeleton,
   PracticeSetupError,
   JD_MIN_CHARS,
+  DEFAULT_PRACTICE_MINUTES,
+  PRACTICE_DURATIONS,
   practiceDurationOptions,
   type RoleSourceMode,
 } from './PracticeSetupFlow';
-export { MarketRequirementsPanel } from './MarketRequirementsPanel';
+export { PracticeTargetPicker, type PracticeTarget, type LoadState } from './PracticeTargetPicker';
 
 // Live (Route 6)
 export { LiveBar } from './LiveBar';

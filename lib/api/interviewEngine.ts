@@ -178,6 +178,14 @@ export interface IESessionSummary {
   createdAt: string;
   startedAt: string | null;
   endedAt: string | null;
+  /** A planned practice's generated interviewer (null for a catalog persona; absent on older APIs). */
+  interviewer?: { name: string; title: string } | null;
+  /** A planned practice's focus label (null otherwise). */
+  focusLabel?: string | null;
+  /** The target company the practice was planned for (null otherwise). */
+  company?: string | null;
+  /** The job the practice was for, when it was one of ours. */
+  jobId?: string | null;
 }
 
 export interface IESessionDetail extends IESessionSummary {
@@ -297,6 +305,8 @@ export interface PracticeCreateBody extends Omit<IECreateBody, 'resumeContext'> 
   /** Resume (variant) to practise with; omitted → the job's tailored one, else the primary. */
   resumeId?: string | null;
   recording?: PracticeRecordingRequest;
+  /** The interview plan shown at setup and the interviewer + focus chosen from it. */
+  prep?: PracticePrepSelection;
 }
 
 export interface PracticeCreateResponse {
@@ -345,7 +355,167 @@ export interface PracticeSessionInfo {
   completedAt: string | null;
 }
 
+// ─── Interview prep ────────────────────────────────────────────────────────
+//   GET  /v1/practice/prep/industries · POST /roles · POST /search · POST /plan
+// Mirrors server/src/interview-engine/prep/contract.ts.
+
+export interface PrepIndustry {
+  id: string;
+  label: string;
+  /** Shown before "More industries". */
+  top: boolean;
+}
+
+export interface PrepRoleSuggestion {
+  title: string;
+  titleEn: string | null;
+  source: 'taxonomy' | 'ai';
+  context: string | null;
+  taxonomyId?: string | null;
+}
+
+export type PrepPostingSource = 'index' | 'provider' | 'web';
+
+export interface PrepPosting {
+  ref: string;
+  source: PrepPostingSource;
+  provider: string | null;
+  jobId: string | null;
+  title: string;
+  company: string | null;
+  location: string | null;
+  postedAt: string | null;
+  url: string | null;
+  snippet: string | null;
+  description: string | null;
+}
+
+export type PrepSourceStatus = 'ok' | 'empty' | 'unavailable' | 'error' | 'skipped';
+
+export interface PrepSearchResult {
+  query: string;
+  understood: { titles: string[]; seniority: string | null; industry: string | null };
+  roles: PrepRoleSuggestion[];
+  postings: PrepPosting[];
+  market: { key: string; country: string | null };
+  sources: Array<{ id: 'index' | 'providers' | 'web'; status: PrepSourceStatus; count: number }>;
+}
+
+export interface PrepSearchBody {
+  query: string;
+  company?: string;
+  industry?: string;
+  external?: boolean;
+}
+
+export interface PrepRequirements {
+  summary: string;
+  seniority: string;
+  mustHave: string[];
+  niceToHave: string[];
+  responsibilities: string[];
+  competencies: string[];
+}
+
+export interface PrepSource {
+  title: string;
+  url: string;
+}
+
+export interface PrepCompanyStyle {
+  company: string;
+  summary: string;
+  stages: Array<{ name: string; description: string }>;
+  values: string[];
+  evaluates: string[];
+  questionThemes: string[];
+  tips: string[];
+  patterns: string[];
+  sources: PrepSource[];
+  basis: 'sources' | 'general';
+}
+
+export interface PrepInterviewer {
+  key: string;
+  name: string;
+  title: string;
+  background: string;
+  style: string;
+  archetype: string;
+  difficulty: 1 | 2 | 3;
+  voiceGender: 'female' | 'male';
+  baseId: string;
+  focusKeys: string[];
+  patterns: string[];
+}
+
+export interface PrepFocus {
+  key: string;
+  label: string;
+  description: string;
+  format: string;
+  patterns: string[];
+  topics: string[];
+}
+
+export interface PrepStrategy {
+  summary: string;
+  stages: Array<{ name: string; goal: string; share: number }>;
+  tactics: string[];
+  prepTips: string[];
+}
+
+export interface PrepPlan {
+  v: 1;
+  role: string;
+  company: string | null;
+  industry: string | null;
+  market: string;
+  language: string;
+  jobId: string | null;
+  posting: { title: string; company: string | null; location: string | null; url: string | null } | null;
+  requirements: PrepRequirements;
+  companyStyle: PrepCompanyStyle | null;
+  interviewers: PrepInterviewer[];
+  focuses: PrepFocus[];
+  recommended: { interviewerKey: string; focusKey: string };
+  strategy: PrepStrategy;
+  domain: { key: string; label: string } | null;
+  sources: PrepSource[];
+  generatedAt: string;
+  /** Planned without the language model: the screen labels the catalog ids itself. */
+  fallback?: boolean;
+}
+
+export interface PrepPlanBody {
+  role?: string;
+  company?: string;
+  industry?: string;
+  jobId?: string;
+  jdText?: string;
+  posting?: { title: string; company?: string | null; location?: string | null; url?: string | null };
+  language?: string;
+  durationMinutes?: number;
+}
+
+/** What Start sends: the plan and the interviewer + focus chosen from it. */
+export interface PracticePrepSelection {
+  plan: PrepPlan;
+  interviewerKey: string;
+  focusKey: string;
+}
+
 const PRACTICE = `${BASE}/v1/practice`;
+const PREP = `${PRACTICE}/prep`;
+
+export const prepApi = {
+  industries: () => roboApi.get<{ industries: PrepIndustry[] }>(`${PREP}/industries`),
+  roles: (industry: string) => roboApi.post<{ roles: PrepRoleSuggestion[] }>(`${PREP}/roles`, { industry }),
+  search: (body: PrepSearchBody, opts: { signal?: AbortSignal } = {}) =>
+    roboApi.post<PrepSearchResult>(`${PREP}/search`, body, { signal: opts.signal }),
+  plan: (body: PrepPlanBody, opts: { signal?: AbortSignal } = {}) =>
+    roboApi.post<{ plan: PrepPlan }>(`${PREP}/plan`, body, { signal: opts.signal }),
+};
 
 export const practiceApi = {
   setup: (query: { job?: string | null; resume?: string | null } = {}) => {
@@ -377,6 +547,10 @@ export interface TextPracticeStartBody {
   durationMinutes?: number;
   /** Loaded and market-checked on the server (404 job_not_found). */
   jobId?: string | null;
+  /** The interview plan and the interviewer + focus chosen from it. */
+  prep?: PracticePrepSelection;
+  /** A live session switched to writing: the server reuses its plan. */
+  fromSessionId?: string | null;
 }
 
 export interface TextPracticeQuestion {

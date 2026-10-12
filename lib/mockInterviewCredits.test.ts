@@ -23,8 +23,11 @@ describe('defaultPracticeMinutes', () => {
     expect(defaultPracticeMinutes({ preferred: 45, options: OPTIONS, balance: 1, creditMinutes: 20 })).toBe(15);
     // GoApply's 50-minute live-coding default with one credit.
     expect(defaultPracticeMinutes({ preferred: 50, options: [15, 30, 45, 50, 60], balance: 1, creditMinutes: 20 })).toBe(15);
-    // The AI-interview format offers 20, 25 and 30 minutes: one credit covers 20.
-    expect(defaultPracticeMinutes({ preferred: 25, options: [20, 25, 30], balance: 1, creditMinutes: 20 })).toBe(20);
+    // A practice offers 15, 20 or 30 minutes and starts on 20: one credit covers it, three quarters cover 15.
+    expect(defaultPracticeMinutes({ preferred: 20, options: [15, 20, 30], balance: 1, creditMinutes: 20 })).toBe(20);
+    expect(defaultPracticeMinutes({ preferred: 20, options: [15, 20, 30], balance: 0.75, creditMinutes: 20 })).toBe(15);
+    // The AI-interview format offers 20 or 30 minutes: a length one credit cannot cover falls back to 20.
+    expect(defaultPracticeMinutes({ preferred: 30, options: [20, 30], balance: 1, creditMinutes: 20 })).toBe(20);
   });
 
   it('picks the longest length the balance covers', () => {

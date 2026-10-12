@@ -1628,7 +1628,83 @@
       "insufficientCreditsNoPurchase": "这场面试需要 {required} 个额度，你还有 {balance} 个。",
       "creditCost": "消耗 {n, plural, other {# 个额度}}",
       "creditsRemaining": "剩余 {n, plural, other {# 个额度}}",
-      "insufficientCredits": "这场面试需要 {required, plural, other {# 个额度}}，而你有 {balance} 个。请获取额度后继续。"
+      "insufficientCredits": "这场面试需要 {required, plural, other {# 个额度}}，而你有 {balance} 个。请获取额度后继续。",
+      "prep": {
+        "target": {
+          "tabFind": "找职位",
+          "searchLabel": "职位名称",
+          "searchPlaceholder": "职位名称，例如：AI 解决方案工程师",
+          "companyLabel": "目标公司（选填）",
+          "companyPlaceholder": "例如：腾讯、字节跳动、华为",
+          "clearCompany": "清除公司",
+          "companyHint": "填写公司后，面试会按这家公司常见的面试方式进行。",
+          "industriesLabel": "还没想好？按行业浏览",
+          "moreIndustries": "更多行业",
+          "fewerIndustries": "收起行业",
+          "otherIndustry": "其他行业…",
+          "otherIndustryPlaceholder": "输入行业，例如：商业航天",
+          "otherIndustryApply": "查看职位",
+          "industryRolesTitle": "{industry}的常见职位",
+          "industryRolesLoading": "正在查找{industry}招聘的职位…",
+          "industryRolesError": "暂时无法列出这个行业的职位。",
+          "searching": "正在搜索职位…",
+          "searchError": "职位搜索没有响应。",
+          "retry": "重试",
+          "rolesTitle": "匹配的职位",
+          "postingsTitle": "在招职位",
+          "postingsTitleIn": "{market}的在招职位",
+          "noPostings": "没有找到“{query}”的在招职位。你仍可以练习这个职位，或者直接粘贴职位描述。",
+          "noResults": "没有与“{query}”匹配的结果。换个职位名称试试，或者直接粘贴职位描述。",
+          "practiceFor": "练习{company}的{title}面试",
+          "practiceForRole": "练习{title}面试",
+          "viewPost": "查看职位",
+          "webNote": "来自网络搜索：请打开原帖确认职位是否仍在招聘。",
+          "boardsUnavailable": "部分招聘平台没有响应，以下是能找到的职位。",
+          "selectedTitle": "你要练习的是",
+          "roleOnly": "这个职位的通用面试，不针对某个具体职位",
+          "findJobsForRole": "查找这个职位的在招岗位",
+          "change": "更换"
+        },
+        "source": {
+          "index": "%BRAND% 职位",
+          "provider": "招聘平台",
+          "web": "网页 · {host}"
+        },
+        "plan": {
+          "loadingTitle": "正在准备你的面试",
+          "steps": {
+            "reading": "阅读职位要求",
+            "company": "研究{company}的面试方式",
+            "panel": "挑选这个职位的面试官"
+          },
+          "error": "暂时无法准备这场面试。",
+          "hint": "已为这个职位定制，哪项都能改。",
+          "fallbackHint": "暂用通用的面试官和形式，哪项都能改。"
+        },
+        "difficulty": {
+          "1": "温和",
+          "2": "适中",
+          "3": "严格"
+        },
+        "launchTitle": "{role} · {company}",
+        "brief": {
+          "title": "你的面试准备简报",
+          "requirements": "这个职位考察什么",
+          "mustHave": "必备要求",
+          "focusTopics": "{focus}会涉及：{topics}",
+          "company": "{company}怎么面试",
+          "companySourced": "来自公开资料，由 AI 整理。面试流程可能变化，请查看原文链接。",
+          "companyGeneral": "没有找到关于{company}面试的可靠公开资料，以下是同类公司通常的面试方式。",
+          "values": "考察的价值观",
+          "evaluates": "看重什么",
+          "sources": "来源：",
+          "strategy": "这场练习怎么进行",
+          "minutes": "{n} 分钟",
+          "tactics": "面试官会怎么做",
+          "prepTips": "开始前请准备",
+          "aiNote": "由 AI 根据职位和公开资料生成。面试官为模拟角色。"
+        }
+      }
     },
     "live": {
       "loading": "正在准备你的面试间…",

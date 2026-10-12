@@ -146,6 +146,15 @@ describe('/practice/[id]/report', () => {
     expect(screen.getAllByText('A stronger answer').length).toBeGreaterThan(0);
   });
 
+  it('a planned practice comes back with its company, so the next plan is written in that company’s style', async () => {
+    const base = makeReport();
+    await renderReport({ ...base, session: { ...base.session, company: 'Acme' } });
+    expect(await screen.findByRole('link', { name: 'Run it again' })).toHaveAttribute(
+      'href',
+      '/practice?role=Backend+Engineer&type=behavioral&mode=voice&language=en&duration=20&interviewer=maya&company=Acme',
+    );
+  });
+
   it('shows only the recovery state when the server marks the answers too short', async () => {
     const base = makeReport();
     await renderReport({

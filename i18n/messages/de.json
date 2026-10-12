@@ -1628,7 +1628,83 @@
       "creditCost": "Kostet {n, plural, one {# Credit} other {# Credits}}",
       "creditsRemaining": "{n, plural, one {# Credit} other {# Credits}} übrig",
       "insufficientCredits": "Dieses Gespräch braucht {required, plural, one {# Credit} other {# Credits}}, du hast {balance}. Hol dir Credits, um fortzufahren.",
-      "insufficientCreditsNoPurchase": "Dieses Gespräch braucht {required, plural, one {# Credit} other {# Credits}}, du hast {balance}."
+      "insufficientCreditsNoPurchase": "Dieses Gespräch braucht {required, plural, one {# Credit} other {# Credits}}, du hast {balance}.",
+      "prep": {
+        "target": {
+          "tabFind": "Job finden",
+          "searchLabel": "Jobtitel",
+          "searchPlaceholder": "Jobtitel, z. B. AI Forward Deployed Engineer",
+          "companyLabel": "Zielunternehmen (optional)",
+          "companyPlaceholder": "z. B. SAP, Siemens, Google",
+          "clearCompany": "Unternehmen entfernen",
+          "companyHint": "Mit einem Unternehmen folgt das Gespräch dem Stil, für den es bekannt ist.",
+          "industriesLabel": "Noch unsicher? Nach Branche stöbern",
+          "moreIndustries": "Mehr Branchen",
+          "fewerIndustries": "Weniger Branchen",
+          "otherIndustry": "Andere Branche…",
+          "otherIndustryPlaceholder": "Branche eingeben, z. B. Raumfahrttechnik",
+          "otherIndustryApply": "Rollen anzeigen",
+          "industryRolesTitle": "Rollen in {industry}",
+          "industryRolesLoading": "Suche die Rollen, für die {industry} einstellt …",
+          "industryRolesError": "Die Rollen dieser Branche konnten nicht geladen werden.",
+          "searching": "Jobs werden gesucht …",
+          "searchError": "Die Jobsuche hat nicht geantwortet.",
+          "retry": "Erneut versuchen",
+          "rolesTitle": "Passende Rollen",
+          "postingsTitle": "Offene Stellen",
+          "postingsTitleIn": "Offene Stellen ({market})",
+          "noPostings": "Keine offenen Stellen für „{query}“ gefunden. Du kannst die Rolle trotzdem üben oder eine Stellenanzeige einfügen.",
+          "noResults": "Nichts passt zu „{query}“. Versuch einen anderen Titel oder füg eine Stellenanzeige ein.",
+          "practiceFor": "Für {title} bei {company} üben",
+          "practiceForRole": "Für {title} üben",
+          "viewPost": "Anzeige ansehen",
+          "webNote": "Im Web gefunden: Öffne die Anzeige, um zu prüfen, ob sie noch offen ist.",
+          "boardsUnavailable": "Einige Jobbörsen haben nicht geantwortet – das sind die Stellen, die wir erreichen konnten.",
+          "selectedTitle": "Du übst für",
+          "roleOnly": "Die Rolle allgemein, keine bestimmte Anzeige",
+          "findJobsForRole": "Offene Stellen für diese Rolle finden",
+          "change": "Ändern"
+        },
+        "source": {
+          "index": "%BRAND%-Jobs",
+          "provider": "Jobbörse",
+          "web": "Web · {host}"
+        },
+        "plan": {
+          "loadingTitle": "Dein Gespräch wird vorbereitet",
+          "steps": {
+            "reading": "Die Stelle wird gelesen",
+            "company": "Recherche, wie {company} Gespräche führt",
+            "panel": "Gesprächspersonen für diese Stelle werden gewählt"
+          },
+          "error": "Dieses Gespräch konnte nicht vorbereitet werden.",
+          "hint": "Für diese Stelle erstellt. Ändere, was du willst.",
+          "fallbackHint": "Vorerst allgemeine Gesprächspersonen und Formate. Ändere, was du willst."
+        },
+        "difficulty": {
+          "1": "Behutsam",
+          "2": "Ausgewogen",
+          "3": "Anspruchsvoll"
+        },
+        "launchTitle": "{role} · {company}",
+        "brief": {
+          "title": "Dein Vorbereitungs-Briefing",
+          "requirements": "Was diese Stelle prüft",
+          "mustHave": "Muss-Kriterien",
+          "focusTopics": "{focus} umfasst: {topics}",
+          "company": "So führt {company} Gespräche",
+          "companySourced": "Aus öffentlichen Quellen, von KI zusammengefasst. Abläufe ändern sich – prüf die Links.",
+          "companyGeneral": "Wir haben keine verlässliche öffentliche Beschreibung der Gespräche bei {company} gefunden. Daher zeigen wir, wie vergleichbare Unternehmen üblicherweise vorgehen.",
+          "values": "Bewertete Werte",
+          "evaluates": "Worauf sie achten",
+          "sources": "Quellen:",
+          "strategy": "So läuft dieses Training ab",
+          "minutes": "{n} Min.",
+          "tactics": "Was deine Gesprächsperson tun wird",
+          "prepTips": "Vor dem Start vorbereiten",
+          "aiNote": "Von KI aus der Stelle und öffentlichen Quellen erstellt. Die Gesprächspersonen sind simuliert."
+        }
+      }
     },
     "live": {
       "loading": "Dein Raum wird eingerichtet…",

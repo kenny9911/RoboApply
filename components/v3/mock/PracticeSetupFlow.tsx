@@ -2,28 +2,27 @@
 
 // /practice setup — ONE screen, not a wizard.
 //
-// The wizard this replaces had four steps, three of which asked nothing: the
-// recommendation engine had already picked the interviewer, the focus, the
-// format, the length and the language before the candidate reached them, so
-// steps 2–4 were a slideshow of decisions already made, ending in a read-only
-// recap of the slideshow. Three Continue clicks to reach a button that was
-// ready at step one.
+// The shape follows what actually has to be decided:
 //
-// The shape here matches what actually has to be decided:
-//
-//   • The job is the only required input. It gets the top of the page.
-//   • Everything else is a PLAN — pre-matched, always visible as a row of
-//     chips, each one opening an inline tray of alternatives. No navigation,
-//     no modal, no <details> hiding the thing the user came to change.
-//   • The launch dock is sticky and live from the moment a job is chosen, so
+//   • The job is the only required input. It gets the top of the page
+//     (PracticeTargetPicker: search real openings, browse an industry, or
+//     paste a post; optionally name the company).
+//   • Everything else is a PLAN, written for that job: the interview prep
+//     agents return the interviewers a real loop for it would include, the
+//     angles it is tested on, the company's interview style and a strategy.
+//     The plan shows as a row of chips, each opening an inline tray of the
+//     job's own alternatives. No navigation, no modal.
+//   • The launch dock is sticky and live from the moment the plan is ready, so
 //     the shortest path through this page is pick-a-job → Start.
-//   • Past sessions sit at the top as a lane, not behind a header dropdown:
-//     repeating a practice is the single highest-intent action a returning
-//     candidate takes, and it prefills the whole brief in one click.
+//   • The prep brief under the dock is the coaching before the interview:
+//     what the job tests, how the company interviews (with its sources), how
+//     this practice will run, and what to prepare.
+//   • Past sessions sit at the top as a lane: repeating a practice is the
+//     single highest-intent action a returning candidate takes.
 //
 // Two things the screen only offers when they exist:
 //   • the Format chip (video or voice) — `formatChoice` is false where the
-//     practice runs in writing, so no video or voice option is shown there;
+//     practice runs in writing;
 //   • the "Get credits" link — `canGetCredits` is false where nothing is on
 //     sale, so a credit shortfall never points at a page that sells nothing.
 
@@ -42,16 +41,10 @@ import { useTranslations } from 'next-intl';
 
 import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
 import { canAffordMinutes, longestAffordableMinutes, mockCreditsForMinutes } from '../../../lib/mockInterviewCredits';
-import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
 import { CN_FORMAT_DURATIONS, isCnFormatType, useLocalizeType } from '../../features/practice-cn';
-import type { IERequirements } from '../../../lib/api/interviewEngine';
-import type {
-  RAMockFormat,
-  RAMockInterviewer,
-  RAMockRoleCategory,
-  RAMockSessionSummary,
-  RAMockType,
-} from '../../../lib/api/v2/types';
+import { AiGeneratedBadge } from '../../features/market';
+import type { PrepFocus, PrepInterviewer, PrepPlan } from '../../../lib/api/interviewEngine';
+import type { RAMockFormat, RAMockSessionSummary } from '../../../lib/api/v2/types';
 import {
   IconCamera,
   IconChevron,
@@ -59,70 +52,60 @@ import {
   IconGlobe,
   IconHistory,
   IconPerson,
-  IconSearch,
+  IconRefresh,
   IconTarget,
   IconTrash,
   IconWaveform,
 } from '../primitives/Iconset';
-import { MarketRequirementsPanel, type PreviewState } from './MarketRequirementsPanel';
+import { JD_MIN_CHARS, type LoadState, type RoleSourceMode } from './PracticeTargetPicker';
 import styles from './PracticeSetupFlow.module.css';
+
+export { JD_MIN_CHARS, type RoleSourceMode };
 
 /** Where practice packs and plans are sold: the plan picker, like the report's
  *  "get more" link (features/practice/PracticeReportEnd PRACTICE_PLANS_HREF). */
 const PRACTICE_PLANS_HREF = '/settings/billing#plans';
 
-/** Browse the catalog, or paste the job post itself. */
-export type RoleSourceMode = 'role' | 'jd';
-
-/** A job post needs at least this many characters before it's worth rewriting. */
-export const JD_MIN_CHARS = 40;
-
-/** Search results are capped so the grid never becomes a scroll region. */
-const SEARCH_CAP = 12;
-
-/** Lengths always offered, plus whatever the chosen focus recommends. */
-const BASE_DURATIONS = [15, 30, 45, 60];
+/** The practice lengths. 20 is the default (one practice credit at the standard rate). */
+export const PRACTICE_DURATIONS: readonly number[] = [15, 20, 30];
+export const DEFAULT_PRACTICE_MINUTES = 20;
 
 /**
- * The lengths offered for an interview type, shortest first. GoApply's
- * AI-interview practice runs 20–30 minutes, so only those lengths are offered
- * for it; every other type gets the base lengths plus its own.
+ * The lengths offered for a focus's format, shortest first. GoApply's
+ * AI-interview format runs 20–30 minutes, so only the practice lengths in that
+ * range are offered for it.
  */
-export function practiceDurationOptions(type: Pick<RAMockType, 'id' | 'minutes'> | null | undefined): number[] {
+export function practiceDurationOptions(type: { id: string } | null | undefined): number[] {
   if (isCnFormatType(type?.id)) return [...CN_FORMAT_DURATIONS];
-  return Array.from(new Set([...BASE_DURATIONS, ...(type ? [type.minutes] : [])])).sort((a, b) => a - b);
+  return [...PRACTICE_DURATIONS];
 }
 
 /** Recent sessions shown in the lane before "show all". */
 const RECENT_LANE_LIMIT = 3;
 
+/** How long each "preparing" step stays highlighted (the steps are what the server does, in order). */
+const PREP_STEP_MS = 7000;
+
 type TrayKey = 'interviewer' | 'focus' | 'mode' | 'length' | 'language';
 
 interface Props {
-  categories: RAMockRoleCategory[];
-  totalRoles: number;
-  query: string;
-  onQueryChange: (value: string) => void;
-  activeCategory: string;
-  onCategoryChange: (value: string) => void;
-  selectedRole: string | null;
-  effectiveRole: string | null;
-  onSelectRole: (value: string) => void;
-  sourceMode: RoleSourceMode;
-  onSourceModeChange: (value: RoleSourceMode) => void;
-  jdText: string;
-  onJdTextChange: (value: string) => void;
+  /** The "which job" section (PracticeTargetPicker). */
+  targetSection: ReactNode;
+  /** A job, role or post is chosen: the plan is (being) written for it. */
   hasRoleSource: boolean;
+  /** The role the dock names. */
+  effectiveRole: string | null;
+  company: string | null;
 
-  interviewers: RAMockInterviewer[];
-  selectedInterviewerId: string | null;
-  onSelectInterviewer: (value: string) => void;
-  recommendedPersonaIds?: string[];
-
-  types: RAMockType[];
-  selectedTypeId: string | null;
-  onSelectType: (value: string) => void;
-  recommendedTypeIds?: string[];
+  planState: LoadState;
+  /** True while AI practice is not allowed here (the gate notice says why): no plan area is shown. */
+  planBlocked?: boolean;
+  plan: PrepPlan | null;
+  onRetryPlan: () => void;
+  selectedInterviewerKey: string | null;
+  onSelectInterviewer: (key: string) => void;
+  selectedFocusKey: string | null;
+  onSelectFocus: (key: string) => void;
 
   format: RAMockFormat;
   onFormatChange: (value: RAMockFormat) => void;
@@ -134,23 +117,13 @@ interface Props {
   language: string;
   onLanguageChange: (value: string) => void;
   durationMinutes: number;
+  durationOptions: number[];
   onDurationChange: (value: number) => void;
 
   recentSessions: RAMockSessionSummary[];
   onReplay: (session: RAMockSessionSummary) => void;
   onRepeat: (session: RAMockSessionSummary) => void;
   onDelete: (session: RAMockSessionSummary) => void;
-
-  previewState: PreviewState;
-  requirements: IERequirements | null;
-  webSources: Array<{ title: string; url: string }>;
-  sampleQuestions: string[];
-  groundedOn?: 'jd' | 'market' | 'role';
-  /** False hides the market-requirements preview entirely. Default true: it is shown on both brands. */
-  showPreview?: boolean;
-  canPreview: boolean;
-  onPreview: () => void;
-  onRetryPreview: () => void;
 
   creditCost: number;
   creditMinutes: number;
@@ -171,7 +144,7 @@ interface Props {
   onStart: () => void;
 
   // ── WP-43 slots (practice from a job, notices, recording) ──
-  /** Under the intro: the job banner and one-line notices. */
+  /** Under the intro: one-line notices. */
   topSlot?: ReactNode;
   /** Next to the intro copy: e.g. the "Practice questions" link. */
   introAside?: ReactNode;
@@ -216,6 +189,8 @@ interface Option<T extends string | number> {
   id: T;
   title: string;
   sub?: string;
+  /** A second, quieter line (an interviewer's style, a focus's topics). */
+  detail?: string;
   badge?: string;
   /** Rendered dimmed with an explanatory note; still selectable. */
   muted?: boolean;
@@ -262,6 +237,7 @@ function OptionGrid<T extends string | number>({
           <span className={styles.optionBody}>
             <strong>{option.title}</strong>
             {option.sub ? <small>{option.sub}</small> : null}
+            {option.detail ? <small className={styles.optionDetail}>{option.detail}</small> : null}
           </span>
           {option.badge ? <em className={styles.optionBadge}>{option.badge}</em> : null}
         </button>
@@ -270,49 +246,212 @@ function OptionGrid<T extends string | number>({
   );
 }
 
+/** "Preparing your interview": the server's steps, highlighted in turn while the plan is written. */
+function PlanPreparing({ company }: { company: string | null }) {
+  const t = useTranslations('practice');
+  const steps = [
+    t('setup.prep.plan.steps.reading'),
+    ...(company ? [t('setup.prep.plan.steps.company', { company })] : []),
+    t('setup.prep.plan.steps.panel'),
+  ];
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setActive((value) => Math.min(value + 1, steps.length - 1)), PREP_STEP_MS);
+    return () => window.clearInterval(id);
+  }, [steps.length]);
+  return (
+    <div className={styles.planPreparing} role="status" aria-live="polite">
+      <strong>{t('setup.prep.plan.loadingTitle')}</strong>
+      <ol>
+        {steps.map((step, index) => (
+          <li key={step} data-state={index < active ? 'done' : index === active ? 'active' : 'todo'}>
+            <span aria-hidden className={styles.planStepMark} />
+            {step}
+          </li>
+        ))}
+      </ol>
+      <div className={styles.skeletonChips} aria-hidden>
+        {[132, 156, 108, 116, 120].map((width, index) => (
+          <span key={index} className={styles.shimmer} style={{ width, height: 54, borderRadius: 'var(--r-md)' }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The prep brief: what the job tests, how the company interviews, how this practice runs, what to prepare. */
+function PrepBrief({
+  plan,
+  focus,
+  durationMinutes,
+}: {
+  plan: PrepPlan;
+  focus: PrepFocus | null;
+  durationMinutes: number;
+}) {
+  const t = useTranslations('practice');
+  const [open, setOpen] = useState(true);
+  const bodyId = useId();
+  const req = plan.requirements;
+  const style = plan.companyStyle;
+  const strategy = plan.strategy;
+  const hasRequirements = !!req.summary || req.mustHave.length > 0;
+  const hasStrategy = !!strategy.summary || strategy.stages.length > 0 || strategy.tactics.length > 0;
+  const hasTips = strategy.prepTips.length > 0;
+  if (!hasRequirements && !style && !hasStrategy && !hasTips) return null;
+
+  // Stage minutes from the shares the plan gave, for the length chosen now.
+  const shareTotal = strategy.stages.reduce((sum, stage) => sum + stage.share, 0) || 1;
+  const minutesOf = (share: number) => Math.max(1, Math.round((share / shareTotal) * durationMinutes));
+
+  return (
+    <section className={styles.prepBrief} aria-labelledby={`${bodyId}-title`}>
+      <button
+        type="button"
+        className={styles.previewToggle}
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <IconChevron size={14} aria-hidden className={open ? styles.chevronUp : undefined} />
+        <span id={`${bodyId}-title`}>{t('setup.prep.brief.title')}</span>
+        <AiGeneratedBadge />
+      </button>
+
+      {open ? (
+        <div id={bodyId} className={styles.prepBriefBody}>
+          {hasRequirements ? (
+            <div className={styles.prepBlock}>
+              <h3>{t('setup.prep.brief.requirements')}</h3>
+              {req.summary ? <p>{req.summary}</p> : null}
+              {req.mustHave.length ? (
+                <ul className={styles.tagList} aria-label={t('setup.prep.brief.mustHave')}>
+                  {req.mustHave.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              ) : null}
+              {focus && focus.topics.length ? (
+                <p className={styles.fieldHint}>{t('setup.prep.brief.focusTopics', { focus: focus.label, topics: focus.topics.join(' · ') })}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {style ? (
+            <div className={styles.prepBlock}>
+              <h3>{t('setup.prep.brief.company', { company: style.company })}</h3>
+              <p className={styles.fieldHint}>
+                {style.basis === 'sources'
+                  ? t('setup.prep.brief.companySourced')
+                  : t('setup.prep.brief.companyGeneral', { company: style.company })}
+              </p>
+              <p>{style.summary}</p>
+              {style.stages.length ? (
+                <ol className={styles.stageList}>
+                  {style.stages.map((stage) => (
+                    <li key={stage.name}>
+                      <strong>{stage.name}</strong>
+                      {stage.description ? <span>{stage.description}</span> : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+              {style.values.length ? (
+                <>
+                  <h4>{t('setup.prep.brief.values')}</h4>
+                  <ul className={styles.tagList}>
+                    {style.values.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </>
+              ) : null}
+              {style.evaluates.length ? (
+                <>
+                  <h4>{t('setup.prep.brief.evaluates')}</h4>
+                  <ul className={styles.plainList}>
+                    {style.evaluates.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </>
+              ) : null}
+              {style.sources.length ? (
+                <p className={styles.sourceLinks}>
+                  <span>{t('setup.prep.brief.sources')}</span>
+                  {style.sources.map((source) => (
+                    <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">
+                      {source.title}
+                    </a>
+                  ))}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {hasStrategy ? (
+            <div className={styles.prepBlock}>
+              <h3>{t('setup.prep.brief.strategy')}</h3>
+              {strategy.summary ? <p>{strategy.summary}</p> : null}
+              {strategy.stages.length ? (
+                <ol className={styles.stageList}>
+                  {strategy.stages.map((stage) => (
+                    <li key={stage.name}>
+                      <strong>
+                        {stage.name}
+                        <em>{t('setup.prep.brief.minutes', { n: minutesOf(stage.share) })}</em>
+                      </strong>
+                      {stage.goal ? <span>{stage.goal}</span> : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+              {strategy.tactics.length ? (
+                <>
+                  <h4>{t('setup.prep.brief.tactics')}</h4>
+                  <ul className={styles.plainList}>
+                    {strategy.tactics.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          {hasTips ? (
+            <div className={styles.prepBlock}>
+              <h3>{t('setup.prep.brief.prepTips')}</h3>
+              <ul className={styles.plainList}>
+                {strategy.prepTips.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
+          ) : null}
+
+          <p className={styles.fieldHint}>{t('setup.prep.brief.aiNote')}</p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function PracticeSetupFlow({
-  categories,
-  totalRoles,
-  query,
-  onQueryChange,
-  activeCategory,
-  onCategoryChange,
-  selectedRole,
-  effectiveRole,
-  onSelectRole,
-  sourceMode,
-  onSourceModeChange,
-  jdText,
-  onJdTextChange,
+  targetSection,
   hasRoleSource,
-  interviewers,
-  selectedInterviewerId,
+  effectiveRole,
+  company,
+  planState,
+  planBlocked = false,
+  plan,
+  onRetryPlan,
+  selectedInterviewerKey,
   onSelectInterviewer,
-  recommendedPersonaIds,
-  types,
-  selectedTypeId,
-  onSelectType,
-  recommendedTypeIds,
+  selectedFocusKey,
+  onSelectFocus,
   format,
   onFormatChange,
   formatChoice = true,
   language,
   onLanguageChange,
   durationMinutes,
+  durationOptions,
   onDurationChange,
   recentSessions,
   onReplay,
   onRepeat,
   onDelete,
-  previewState,
-  requirements,
-  webSources,
-  sampleQuestions,
-  groundedOn,
-  showPreview = true,
-  canPreview,
-  onPreview,
-  onRetryPreview,
   creditCost,
   creditMinutes,
   creditsRemaining,
@@ -330,12 +469,10 @@ export function PracticeSetupFlow({
   wrapStart,
 }: Props) {
   const t = useTranslations('practice');
-  const { localizeCategory, localizeRole } = useMockRoleLabels();
-  // Type labels, with GoApply's AI-interview practice under its own name (practiceCn.format.*).
+  // Fallback plans carry catalog ids; their labels come from the bundles.
   const localizeType = useLocalizeType();
 
   const [tray, setTray] = useState<TrayKey | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [allRecent, setAllRecent] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -344,30 +481,35 @@ export function PracticeSetupFlow({
   const chipRefs = useRef<Partial<Record<TrayKey, HTMLButtonElement | null>>>({});
   const dockRef = useRef<HTMLDivElement | null>(null);
 
-  const selectedInterviewer = interviewers.find((item) => item.id === selectedInterviewerId) ?? null;
-  const selectedType = types.find((item) => item.id === selectedTypeId) ?? null;
+  const interviewers = plan?.interviewers ?? [];
+  const focuses = plan?.focuses ?? [];
+  const selectedInterviewer = interviewers.find((item) => item.key === selectedInterviewerKey) ?? null;
+  const selectedFocus = focuses.find((item) => item.key === selectedFocusKey) ?? null;
+  const planReady = hasRoleSource && planState === 'ready' && !!plan;
 
-  const personaRecIds = recommendedPersonaIds ?? [];
-  const typeRecIds = recommendedTypeIds ?? [];
-  const personaRecSet = useMemo(() => new Set(personaRecIds), [recommendedPersonaIds]);
-  const typeRecSet = useMemo(() => new Set(typeRecIds), [recommendedTypeIds]);
-
-  // Suggested options float to the front of their tray; the rest keep catalog order.
+  // The plan's recommendation floats to the front of its tray.
   const orderedInterviewers = useMemo(() => {
-    const rank = new Map(personaRecIds.map((id, index) => [id, index]));
-    return [...interviewers].sort(
-      (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-    );
-  }, [interviewers, recommendedPersonaIds]);
+    const rec = plan?.recommended.interviewerKey;
+    return [...interviewers].sort((a, b) => Number(b.key === rec) - Number(a.key === rec));
+  }, [interviewers, plan]);
+  const orderedFocuses = useMemo(() => {
+    const rec = plan?.recommended.focusKey;
+    return [...focuses].sort((a, b) => Number(b.key === rec) - Number(a.key === rec));
+  }, [focuses, plan]);
 
-  const orderedTypes = useMemo(() => {
-    const rank = new Map(typeRecIds.map((id, index) => [id, index]));
-    return [...types].sort(
-      (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-    );
-  }, [types, recommendedTypeIds]);
+  function interviewerTitle(item: PrepInterviewer): string {
+    if (!plan?.fallback) return item.title;
+    const key = `setup.personas.${item.baseId}.role`;
+    return t.has(key) ? t(key) : item.title;
+  }
 
-  const durationOptions = useMemo(() => practiceDurationOptions(selectedType), [selectedType]);
+  function focusLabel(item: PrepFocus): string {
+    return plan?.fallback ? localizeType(item.format, 'label', item.label) : item.label;
+  }
+
+  function focusSub(item: PrepFocus): string {
+    return plan?.fallback ? localizeType(item.format, 'sub', item.description) : item.description;
+  }
 
   // The longest interview the current balance actually covers — offered as the
   // one-click repair inside the shortfall notice.
@@ -381,30 +523,6 @@ export function PracticeSetupFlow({
       ? { balance: creditsRemaining, required: creditCost }
       : null
   );
-
-  // ── Role source ──────────────────────────────────────────────────────────
-
-  const allRoles = useMemo(() => categories.flatMap((c) => c.roles), [categories]);
-
-  // Browsing a category renders that category whole (seven or eight roles), so
-  // the grid never needs an inner scrollbar. Only search can overflow, and it
-  // says so rather than silently truncating.
-  const { roles: visibleRoles, overflow } = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (q) {
-      const matches = allRoles.filter(
-        (r) => r.toLowerCase().includes(q) || localizeRole(r).toLowerCase().includes(q),
-      );
-      return { roles: matches.slice(0, SEARCH_CAP), overflow: Math.max(0, matches.length - SEARCH_CAP) };
-    }
-    const category = categories.find((c) => c.name === activeCategory);
-    return { roles: category?.roles ?? [], overflow: 0 };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, allRoles, categories, activeCategory]);
-
-  const jdLength = jdText.trim().length;
-  const hasVisibleSelectedRole = selectedRole ? visibleRoles.includes(selectedRole) : false;
-  const searching = query.trim().length > 0;
 
   // ── Tray behaviour ───────────────────────────────────────────────────────
 
@@ -433,12 +551,12 @@ export function PracticeSetupFlow({
     trayRef.current?.querySelector<HTMLElement>('[role="radio"][tabindex="0"], [role="radio"]')?.focus();
   }, [tray]);
 
-  // Losing the role source collapses the plan; an open tray would be pointing
-  // at controls that are no longer on screen. The same goes for the Format
-  // tray once there is no format to choose.
+  // Losing the plan collapses the trays; an open tray would be pointing at
+  // controls that are no longer on screen. The same goes for the Format tray
+  // once there is no format to choose.
   useEffect(() => {
-    if (!hasRoleSource) setTray(null);
-  }, [hasRoleSource]);
+    if (!planReady) setTray(null);
+  }, [planReady]);
 
   useEffect(() => {
     if (!formatChoice) setTray((current) => (current === 'mode' ? null : current));
@@ -448,12 +566,9 @@ export function PracticeSetupFlow({
     setTray((current) => (current === key ? null : key));
   }
 
-  function personaText(persona: RAMockInterviewer, field: 'role' | 'company'): string {
-    const key = `setup.personas.${persona.id}.${field}`;
-    return t.has(key) ? t(key) : persona[field];
-  }
-
   const languageLabel = INTERVIEW_LOCALES.find((locale) => locale.code === language)?.label ?? language;
+  const recInterviewer = plan?.recommended.interviewerKey ?? null;
+  const recFocus = plan?.recommended.focusKey ?? null;
 
   const allChips: Array<{
     key: TrayKey;
@@ -467,14 +582,14 @@ export function PracticeSetupFlow({
       icon: <IconPerson size={15} />,
       label: t('setup.launch.interviewer'),
       value: selectedInterviewer?.name ?? t('setup.launch.pickInterviewer'),
-      suggested: !!selectedInterviewer && personaRecSet.has(selectedInterviewer.id),
+      suggested: !!selectedInterviewer && selectedInterviewer.key === recInterviewer,
     },
     {
       key: 'focus',
       icon: <IconTarget size={15} />,
       label: t('setup.flow.chip.focus'),
-      value: selectedType ? localizeType(selectedType.id, 'label', selectedType.label) : t('setup.launch.pickType'),
-      suggested: !!selectedType && typeRecSet.has(selectedType.id),
+      value: selectedFocus ? focusLabel(selectedFocus) : t('setup.launch.pickType'),
+      suggested: !!selectedFocus && selectedFocus.key === recFocus,
     },
     {
       key: 'mode',
@@ -521,6 +636,10 @@ export function PracticeSetupFlow({
       dockRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
     });
   }
+
+  const launchTitle = effectiveRole
+    ? company ? t('setup.prep.launchTitle', { role: effectiveRole, company }) : effectiveRole
+    : t('setup.launch.roleFromJd');
 
   return (
     <div className={`${styles.page} ${hasRoleSource ? styles.pageLive : ''}`}>
@@ -601,257 +720,151 @@ export function PracticeSetupFlow({
         </section>
       ) : null}
 
-      <section className={styles.brief} aria-labelledby="practice-role-heading">
-        <div className={styles.roleHead}>
-          <h2 id="practice-role-heading">{t('setup.flow.roleLegend')}</h2>
+      {targetSection}
 
-          <div
-            className={styles.sourceToggle}
-            role="radiogroup"
-            aria-label={t('setup.flow.roleLegend')}
-            onKeyDown={(event) => moveRadioSelection(
-              event,
-              ['role', 'jd'] as RoleSourceMode[],
-              sourceMode,
-              onSourceModeChange,
-            )}
-          >
-            {(['role', 'jd'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={sourceMode === value}
-                tabIndex={sourceMode === value ? 0 : -1}
-                className={sourceMode === value ? styles.sourceOn : undefined}
-                onClick={() => onSourceModeChange(value)}
-              >
-                {value === 'role' ? t('setup.role.tabBrowse') : t('setup.role.tabPaste')}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {sourceMode === 'role' ? (
-          <>
-            <div className={styles.search}>
-              <IconSearch size={15} aria-hidden />
-              <input
-                type="search"
-                value={query}
-                placeholder={t('setup.role.searchPlaceholder')}
-                aria-label={t('setup.role.sub', { count: totalRoles })}
-                onChange={(event) => onQueryChange(event.target.value)}
-              />
+      <div className={`${styles.dock} ${hasRoleSource ? styles.dockLive : ''}`} ref={dockRef}>
+        {hasRoleSource && !planBlocked ? (
+          planState === 'loading' || (planState === 'idle' && !plan) ? (
+            <PlanPreparing company={company} />
+          ) : planState === 'error' || !plan ? (
+            <div className={styles.alert} role="alert">
+              <span>{t('setup.prep.plan.error')}</span>
+              <span className={styles.alertActions}>
+                <button type="button" className={styles.laneGhost} onClick={onRetryPlan}>
+                  <IconRefresh size={13} aria-hidden /> {t('setup.prep.target.retry')}
+                </button>
+              </span>
             </div>
-
-            {searching ? null : (
-              <div className={styles.categories} role="tablist" aria-label={t('setup.flow.categories')}>
-                {categories.map((category) => (
-                  <button
-                    key={category.name}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeCategory === category.name}
-                    tabIndex={activeCategory === category.name ? 0 : -1}
-                    className={activeCategory === category.name ? styles.categoryOn : undefined}
-                    onClick={() => onCategoryChange(category.name)}
-                  >
-                    {localizeCategory(category.name)}
-                    <span>{category.roles.length}</span>
-                  </button>
-                ))}
+          ) : (
+            <>
+              <div className={styles.planHead}>
+                <h2>{t('setup.flow.planLegend')}</h2>
+                <p>{plan.fallback ? t('setup.prep.plan.fallbackHint') : t('setup.prep.plan.hint')}</p>
               </div>
-            )}
 
-            {visibleRoles.length === 0 ? (
-              <p className={styles.noMatch}>{t('setup.flow.noMatch', { query: query.trim() })}</p>
-            ) : (
-              <div
-                className={styles.roleGrid}
-                role="radiogroup"
-                aria-label={t('setup.flow.roleLegend')}
-                onKeyDown={(event) => moveRadioSelection(event, visibleRoles, selectedRole, onSelectRole)}
-              >
-                {visibleRoles.map((role, index) => {
-                  const category = categories.find((item) => item.roles.includes(role));
-                  const selected = selectedRole === role;
+              <div className={styles.chipRow}>
+                {chips.map((chip) => {
+                  const open = tray === chip.key;
                   return (
                     <button
-                      key={role}
+                      key={chip.key}
                       type="button"
-                      role="radio"
-                      aria-label={localizeRole(role)}
-                      aria-checked={selected}
-                      tabIndex={selected || (!hasVisibleSelectedRole && index === 0) ? 0 : -1}
-                      className={`${styles.roleChip} ${selected ? styles.roleChipOn : ''}`}
-                      onClick={() => onSelectRole(role)}
+                      ref={(node) => { chipRefs.current[chip.key] = node; }}
+                      className={`${styles.chip} ${open ? styles.chipOpen : ''}`}
+                      aria-expanded={open}
+                      aria-controls={open ? trayId : undefined}
+                      onClick={() => toggleTray(chip.key)}
                     >
-                      <span className={styles.optionMark} aria-hidden />
-                      <span className={styles.roleChipBody}>
-                        <strong>{localizeRole(role)}</strong>
-                        {searching && category ? <small>{localizeCategory(category.name)}</small> : null}
+                      <span className={styles.chipIcon} aria-hidden>{chip.icon}</span>
+                      <span className={styles.chipText}>
+                        <small>{chip.label}</small>
+                        <strong>{chip.value}</strong>
                       </span>
+                      {chip.suggested ? (
+                        <span className={styles.chipDot} title={t('setup.type.recommendedBadge')}>
+                          <span className="sr-only">{t('setup.type.recommendedBadge')}</span>
+                        </span>
+                      ) : null}
+                      <IconChevron size={14} aria-hidden className={styles.chipChevron} />
                     </button>
                   );
                 })}
               </div>
-            )}
 
-            {overflow > 0 ? (
-              <p className={styles.overflowHint}>{t('setup.role.more', { count: overflow })}</p>
-            ) : null}
-          </>
-        ) : (
-          <div className={styles.jd}>
-            <textarea
-              value={jdText}
-              rows={9}
-              placeholder={t('setup.role.jdPlaceholder')}
-              aria-label={t('setup.role.jdPlaceholder')}
-              aria-describedby="practice-jd-hint"
-              onChange={(event) => onJdTextChange(event.target.value)}
-            />
-            <p className={styles.jdMeta}>
-              <span id="practice-jd-hint">
-                {jdLength > 0 && jdLength < JD_MIN_CHARS ? t('setup.role.jdTooShort') : t('setup.role.jdHint')}
-              </span>
-              <span className={jdLength >= JD_MIN_CHARS ? styles.jdCountOk : undefined}>
-                {t('setup.role.jdCount', { count: jdLength })}
-              </span>
-            </p>
-          </div>
-        )}
-      </section>
+              {tray ? (
+                <div className={styles.tray} id={trayId} ref={trayRef} role="group" aria-label={trayTitle[tray]}>
+                  <div className={styles.trayHead}>
+                    <h3>{trayTitle[tray]}</h3>
+                    <button type="button" className={styles.trayDone} onClick={() => closeTray(true)}>
+                      {t('setup.flow.done')}
+                    </button>
+                  </div>
 
-      <div className={`${styles.dock} ${hasRoleSource ? styles.dockLive : ""}`} ref={dockRef}>
-        {hasRoleSource ? (
-          <>
-            <div className={styles.planHead}>
-              <h2>{t('setup.flow.planLegend')}</h2>
-              <p>{t('setup.flow.planHint')}</p>
-            </div>
+                  {tray === 'interviewer' ? (
+                    <OptionGrid
+                      label={trayTitle.interviewer}
+                      value={selectedInterviewerKey}
+                      onChange={onSelectInterviewer}
+                      onCommit={() => closeTray(true)}
+                      options={orderedInterviewers.map((item) => ({
+                        id: item.key,
+                        title: item.name,
+                        sub: `${interviewerTitle(item)} · ${t(`setup.prep.difficulty.${item.difficulty}`)}`,
+                        detail: plan.fallback ? undefined : item.style,
+                        badge: item.key === recInterviewer ? t('setup.type.recommendedBadge') : undefined,
+                      }))}
+                    />
+                  ) : null}
 
-            <div className={styles.chipRow}>
-              {chips.map((chip) => {
-                const open = tray === chip.key;
-                return (
-                  <button
-                    key={chip.key}
-                    type="button"
-                    ref={(node) => { chipRefs.current[chip.key] = node; }}
-                    className={`${styles.chip} ${open ? styles.chipOpen : ''}`}
-                    aria-expanded={open}
-                    aria-controls={open ? trayId : undefined}
-                    onClick={() => toggleTray(chip.key)}
-                  >
-                    <span className={styles.chipIcon} aria-hidden>{chip.icon}</span>
-                    <span className={styles.chipText}>
-                      <small>{chip.label}</small>
-                      <strong>{chip.value}</strong>
-                    </span>
-                    {chip.suggested ? (
-                      <span className={styles.chipDot} title={t('setup.type.recommendedBadge')}>
-                        <span className="sr-only">{t('setup.type.recommendedBadge')}</span>
-                      </span>
-                    ) : null}
-                    <IconChevron size={14} aria-hidden className={styles.chipChevron} />
-                  </button>
-                );
-              })}
-            </div>
+                  {tray === 'focus' ? (
+                    <OptionGrid
+                      label={trayTitle.focus}
+                      value={selectedFocusKey}
+                      onChange={onSelectFocus}
+                      onCommit={() => closeTray(true)}
+                      options={orderedFocuses.map((item) => ({
+                        id: item.key,
+                        title: focusLabel(item),
+                        sub: focusSub(item),
+                        detail: item.topics.length ? item.topics.join(' · ') : undefined,
+                        badge: item.key === recFocus ? t('setup.type.recommendedBadge') : undefined,
+                      }))}
+                    />
+                  ) : null}
 
-            {tray ? (
-              <div className={styles.tray} id={trayId} ref={trayRef} role="group" aria-label={trayTitle[tray]}>
-                <div className={styles.trayHead}>
-                  <h3>{trayTitle[tray]}</h3>
-                  <button type="button" className={styles.trayDone} onClick={() => closeTray(true)}>
-                    {t('setup.flow.done')}
-                  </button>
+                  {tray === 'mode' && formatChoice ? (
+                    <OptionGrid
+                      label={trayTitle.mode}
+                      value={format}
+                      onChange={onFormatChange}
+                      onCommit={() => closeTray(true)}
+                      options={(['video', 'voice'] as const).map((value) => ({
+                        id: value,
+                        title: t(`setup.format.${value}.title`),
+                        // WP-43: honest format lines (no "eye contact noted":
+                        // only the answers are scored, never the face).
+                        sub: t(`mode.${value}.desc`),
+                        badge: value === 'video' ? t('setup.format.video.tag') : undefined,
+                      }))}
+                    />
+                  ) : null}
+
+                  {tray === 'length' ? (
+                    <OptionGrid
+                      label={trayTitle.length}
+                      columns={3}
+                      value={durationMinutes}
+                      onChange={onDurationChange}
+                      onCommit={() => closeTray(true)}
+                      options={durationOptions.map((minutes) => {
+                        const cost = mockCreditsForMinutes(minutes, creditMinutes);
+                        const unaffordable = creditsRemaining !== undefined && !canAffordMinutes(minutes, creditsRemaining, creditMinutes);
+                        return {
+                          id: minutes,
+                          title: t('setup.type.minutes', { minutes }),
+                          // The price is shown where the decision is made, not as
+                          // an error after the fact.
+                          sub: unaffordable ? t('setup.flow.costShort', { n: cost }) : t('setup.creditCost', { n: cost }),
+                          muted: unaffordable,
+                        };
+                      })}
+                    />
+                  ) : null}
+
+                  {tray === 'language' ? (
+                    <OptionGrid
+                      label={trayTitle.language}
+                      columns={3}
+                      value={language}
+                      onChange={onLanguageChange}
+                      onCommit={() => closeTray(true)}
+                      options={INTERVIEW_LOCALES.map((locale) => ({ id: locale.code, title: locale.label }))}
+                    />
+                  ) : null}
                 </div>
-
-                {tray === 'interviewer' ? (
-                  <OptionGrid
-                    label={trayTitle.interviewer}
-                    value={selectedInterviewerId}
-                    onChange={onSelectInterviewer}
-                    onCommit={() => closeTray(true)}
-                    options={orderedInterviewers.map((persona) => ({
-                      id: persona.id,
-                      title: persona.name,
-                      sub: `${personaText(persona, 'role')} · ${personaText(persona, 'company')}`,
-                      badge: personaRecSet.has(persona.id) ? t('setup.type.recommendedBadge') : undefined,
-                    }))}
-                  />
-                ) : null}
-
-                {tray === 'focus' ? (
-                  <OptionGrid
-                    label={trayTitle.focus}
-                    value={selectedTypeId}
-                    onChange={onSelectType}
-                    onCommit={() => closeTray(true)}
-                    options={orderedTypes.map((item) => ({
-                      id: item.id,
-                      title: localizeType(item.id, 'label', item.label),
-                      sub: localizeType(item.id, 'sub', item.sub),
-                      badge: typeRecSet.has(item.id) ? t('setup.type.recommendedBadge') : undefined,
-                    }))}
-                  />
-                ) : null}
-
-                {tray === 'mode' && formatChoice ? (
-                  <OptionGrid
-                    label={trayTitle.mode}
-                    value={format}
-                    onChange={onFormatChange}
-                    onCommit={() => closeTray(true)}
-                    options={(['video', 'voice'] as const).map((value) => ({
-                      id: value,
-                      title: t(`setup.format.${value}.title`),
-                      // WP-43: honest format lines (no "eye contact noted":
-                      // only the answers are scored, never the face).
-                      sub: t(`mode.${value}.desc`),
-                      badge: value === 'video' ? t('setup.format.video.tag') : undefined,
-                    }))}
-                  />
-                ) : null}
-
-                {tray === 'length' ? (
-                  <OptionGrid
-                    label={trayTitle.length}
-                    columns={3}
-                    value={durationMinutes}
-                    onChange={onDurationChange}
-                    onCommit={() => closeTray(true)}
-                    options={durationOptions.map((minutes) => {
-                      const cost = mockCreditsForMinutes(minutes, creditMinutes);
-                      const unaffordable = creditsRemaining !== undefined && !canAffordMinutes(minutes, creditsRemaining, creditMinutes);
-                      return {
-                        id: minutes,
-                        title: t('setup.type.minutes', { minutes }),
-                        // The price is shown where the decision is made, not as
-                        // an error after the fact.
-                        sub: unaffordable ? t('setup.flow.costShort', { n: cost }) : t('setup.creditCost', { n: cost }),
-                        muted: unaffordable,
-                      };
-                    })}
-                  />
-                ) : null}
-
-                {tray === 'language' ? (
-                  <OptionGrid
-                    label={trayTitle.language}
-                    columns={3}
-                    value={language}
-                    onChange={onLanguageChange}
-                    onCommit={() => closeTray(true)}
-                    options={INTERVIEW_LOCALES.map((locale) => ({ id: locale.code, title: locale.label }))}
-                  />
-                ) : null}
-              </div>
-            ) : null}
-          </>
+              ) : null}
+            </>
+          )
         ) : null}
 
         {dockSlot}
@@ -889,7 +902,7 @@ export function PracticeSetupFlow({
           <p className={styles.launchMeta}>
             {hasRoleSource ? (
               <>
-                <strong>{effectiveRole ? localizeRole(effectiveRole) : t('setup.launch.roleFromJd')}</strong>
+                <strong>{launchTitle}</strong>
                 <span>
                   {t('setup.creditCost', { n: creditCost })}
                   {creditsRemaining !== undefined ? ` · ${t('setup.creditsRemaining', { n: creditsRemaining })}` : ''}
@@ -913,42 +926,13 @@ export function PracticeSetupFlow({
         </div>
       </div>
 
-      {showPreview ? (
-        <div className={styles.previewShell}>
-          <button
-            type="button"
-            className={styles.previewToggle}
-            aria-expanded={previewOpen}
-            aria-controls="practice-preview"
-            onClick={() => setPreviewOpen((value) => !value)}
-          >
-            <IconChevron size={14} aria-hidden className={previewOpen ? styles.chevronUp : undefined} />
-            {t('setup.flow.previewToggle')}
-          </button>
-
-          {previewOpen ? (
-            <div id="practice-preview" className={styles.previewBody}>
-              <MarketRequirementsPanel
-                compact
-                state={previewState}
-                requirements={requirements}
-                webSources={webSources}
-                sampleQuestions={sampleQuestions}
-                groundedOn={groundedOn}
-                canPreview={canPreview}
-                onPreview={onPreview}
-                onRetry={onRetryPreview}
-              />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {planReady && plan ? <PrepBrief plan={plan} focus={selectedFocus} durationMinutes={durationMinutes} /> : null}
     </div>
   );
 }
 
-/** First paint while the catalog loads: the real page's silhouette, so the
- *  layout does not jump when the roles arrive. */
+/** First paint while the page's own data loads: the real page's silhouette, so
+ *  the layout does not jump. */
 export function PracticeSetupSkeleton() {
   const t = useTranslations('practice');
   return (
@@ -969,18 +953,13 @@ export function PracticeSetupSkeleton() {
             <span key={index} className={styles.shimmer} style={{ width, height: 32, borderRadius: 'var(--r-pill)' }} />
           ))}
         </div>
-        <div className={styles.skeletonGrid} aria-hidden>
-          {Array.from({ length: 6 }).map((_, index) => (
-            <span key={index} className={styles.shimmer} style={{ height: 56, borderRadius: 'var(--r-md)' }} />
-          ))}
-        </div>
       </div>
     </div>
   );
 }
 
-/** The catalog failed. Nothing the candidate typed is lost — the only thing
- *  missing is the role list, so the recovery is a retry, not a restart. */
+/** The page's own data failed. Nothing the candidate typed is lost — the
+ *  recovery is a retry, not a restart. */
 export function PracticeSetupError({ onRetry }: { onRetry: () => void }) {
   const t = useTranslations('practice');
   return (

@@ -1628,7 +1628,83 @@
       "creditCost": "Coûte {n, plural, one {# crédit} other {# crédits}}",
       "creditsRemaining": "{n, plural, one {# crédit restant} other {# crédits restants}}",
       "insufficientCredits": "Cet entretien demande {required, plural, one {# crédit} other {# crédits}} et tu en as {balance}. Ajoute des crédits pour continuer.",
-      "insufficientCreditsNoPurchase": "Cet entretien demande {required, plural, one {# crédit} other {# crédits}} et tu en as {balance}."
+      "insufficientCreditsNoPurchase": "Cet entretien demande {required, plural, one {# crédit} other {# crédits}} et tu en as {balance}.",
+      "prep": {
+        "target": {
+          "tabFind": "Trouver une offre",
+          "searchLabel": "Intitulé du poste",
+          "searchPlaceholder": "Intitulé, p. ex. ingénieur de déploiement IA",
+          "companyLabel": "Entreprise visée (facultatif)",
+          "companyPlaceholder": "p. ex. Google, L’Oréal, Airbus",
+          "clearCompany": "Effacer l’entreprise",
+          "companyHint": "Avec une entreprise, l’entretien suit la façon dont elle est connue pour recruter.",
+          "industriesLabel": "Pas encore décidé ? Parcours par secteur",
+          "moreIndustries": "Plus de secteurs",
+          "fewerIndustries": "Moins de secteurs",
+          "otherIndustry": "Autre secteur…",
+          "otherIndustryPlaceholder": "Saisis un secteur, p. ex. spatial",
+          "otherIndustryApply": "Voir les postes",
+          "industryRolesTitle": "Postes : {industry}",
+          "industryRolesLoading": "Recherche des postes que recrute le secteur {industry}…",
+          "industryRolesError": "Impossible d’afficher les postes de ce secteur.",
+          "searching": "Recherche d’offres…",
+          "searchError": "La recherche d’offres n’a pas répondu.",
+          "retry": "Réessayer",
+          "rolesTitle": "Postes correspondants",
+          "postingsTitle": "Offres ouvertes",
+          "postingsTitleIn": "Offres ouvertes ({market})",
+          "noPostings": "Aucune offre ouverte trouvée pour « {query} ». Tu peux quand même t’entraîner sur le poste ou coller une annonce.",
+          "noResults": "Rien ne correspond à « {query} ». Essaie un autre intitulé ou colle une annonce.",
+          "practiceFor": "S’entraîner pour {title} chez {company}",
+          "practiceForRole": "S’entraîner pour {title}",
+          "viewPost": "Voir l’annonce",
+          "webNote": "Trouvée sur le web : ouvre l’annonce pour vérifier qu’elle est toujours ouverte.",
+          "boardsUnavailable": "Certains sites d’emploi n’ont pas répondu ; voici les offres que nous avons pu trouver.",
+          "selectedTitle": "Tu t’entraînes pour",
+          "roleOnly": "Le poste en général, pas une annonce précise",
+          "findJobsForRole": "Trouver des offres ouvertes pour ce poste",
+          "change": "Modifier"
+        },
+        "source": {
+          "index": "Offres %BRAND%",
+          "provider": "Site d’emploi",
+          "web": "Web · {host}"
+        },
+        "plan": {
+          "loadingTitle": "Préparation de ton entretien",
+          "steps": {
+            "reading": "Lecture de l’offre",
+            "company": "Recherche sur la façon dont {company} recrute",
+            "panel": "Choix des interlocuteurs pour ce poste"
+          },
+          "error": "Impossible de préparer cet entretien.",
+          "hint": "Préparé pour ce poste. Change ce que tu veux.",
+          "fallbackHint": "Interlocuteurs et formats généraux pour l’instant. Change ce que tu veux."
+        },
+        "difficulty": {
+          "1": "Bienveillant",
+          "2": "Équilibré",
+          "3": "Exigeant"
+        },
+        "launchTitle": "{role} · {company}",
+        "brief": {
+          "title": "Ta fiche de préparation",
+          "requirements": "Ce que ce poste évalue",
+          "mustHave": "Indispensables",
+          "focusTopics": "{focus} couvre : {topics}",
+          "company": "Comment {company} recrute",
+          "companySourced": "D’après des sources publiques, résumées par l’IA. Les processus changent : vérifie les liens.",
+          "companyGeneral": "Nous n’avons trouvé aucune description publique fiable des entretiens chez {company} ; voici comment des entreprises comparables recrutent en général.",
+          "values": "Valeurs évaluées",
+          "evaluates": "Ce qu’ils recherchent",
+          "sources": "Sources :",
+          "strategy": "Déroulement de cet entraînement",
+          "minutes": "{n} min",
+          "tactics": "Ce que fera ton interlocuteur",
+          "prepTips": "À préparer avant de commencer",
+          "aiNote": "Rédigé par l’IA à partir de l’offre et de sources publiques. Les interlocuteurs sont simulés."
+        }
+      }
     },
     "live": {
       "loading": "Préparation de ta salle…",

@@ -333,6 +333,8 @@ describe('network pre-check', () => {
     expect(await screen.findByText('Tell me about a project.')).toBeInTheDocument();
     expect(practice.textStart).toHaveBeenCalledWith(expect.objectContaining({
       role: 'Backend Engineer', interviewerId: 'maya', typeId: 'behavioral', jobId: 'job1',
+      // A planned practice keeps its plan in writing: the server reads it from this session.
+      fromSessionId: 's1',
     }));
     expect(api.connection).not.toHaveBeenCalled();
   });
