@@ -7,6 +7,36 @@ import {
   resolveReasoningEffort,
 } from './reasoningEffort.js';
 
+/**
+ * Tokens reserved for thinking ON TOP of the caller's answer budget. Gemini 2.5
+ * and 3 count thinking against maxOutputTokens, so an answer-sized cap ends in
+ * MAX_TOKENS with a cut-off answer once the model thinks: the practice
+ * planner (cap 3200, ~5.7k-token prompt) got 128 answer tokens and fell back
+ * to the catalog panel. Same reserve as DeepSeekProvider; thinking tokens are
+ * only billed if generated.
+ */
+const DEFAULT_GOOGLE_THINKING_HEADROOM_TOKENS = 8_000;
+
+/**
+ * maxOutputTokens for one call: the caller's cap plus the thinking reserve
+ * (GOOGLE_REASONING_MAX_TOKENS, else 8000; the agent's reasoningMaxTokens when
+ * larger) on a thinking Gemini. Gemini 3 has no token budget for thinking, so
+ * the small reasoning caps agents set for OpenRouter cannot shrink it.
+ */
+export function googleMaxOutputTokens(
+  model: string,
+  maxTokens: number | undefined,
+  reasoningMaxTokens?: number,
+): number | undefined {
+  if (!maxTokens) return maxTokens;
+  const id = model.toLowerCase().split('/').pop() ?? '';
+  if (!/^gemini-(?:2\.5|3)(?:[.-]|$)/.test(id)) return maxTokens;
+  const raw = parseInt((process.env.GOOGLE_REASONING_MAX_TOKENS || '').trim(), 10);
+  const reserve = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_GOOGLE_THINKING_HEADROOM_TOKENS;
+  const explicit = typeof reasoningMaxTokens === 'number' && Number.isFinite(reasoningMaxTokens) ? reasoningMaxTokens : 0;
+  return maxTokens + Math.max(reserve, explicit);
+}
+
 export class GoogleProvider implements LLMProvider {
   private genAI: GoogleGenerativeAI;
   private defaultModel: string;
@@ -71,7 +101,7 @@ export class GoogleProvider implements LLMProvider {
     // GenerateContent REST field.
     const generationConfig = {
       temperature: options?.temperature ?? 0.7,
-      maxOutputTokens: options?.maxTokens,
+      maxOutputTokens: googleMaxOutputTokens(modelName, options?.maxTokens, options?.reasoningMaxTokens),
       ...(thinkingConfig ? { thinkingConfig } : {}),
       // API-level JSON mode. Gemini's native structured-output knob — forces
       // a single application/json response (compatible with thinking models).
