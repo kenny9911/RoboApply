@@ -17,8 +17,8 @@ vi.mock('../../../../../lib/api/cnJobs', async (orig) => ({ ...(await orig<Recor
 
 import { ExternalSearchLinks, ExternalSearchPanel } from '..';
 import { groupExternalLinks, type ExternalLinkView } from '../../../../../lib/api/cnJobs';
-import stagedEn from '../../../../../i18n/staging/jobsCn.en.json';
-import stagedZh from '../../../../../i18n/staging/jobsCn.zh.json';
+import bundleEn from '../../../../../i18n/messages/en.json';
+import bundleZh from '../../../../../i18n/messages/zh.json';
 
 const link = (board: string, label: string, audience?: 'campus' | 'experienced' | 'both'): ExternalLinkView =>
   ({ board, label, url: `https://${board}.search.test/jobs?q=x`, ...(audience ? { audience } : {}) }) as ExternalLinkView;
@@ -214,22 +214,22 @@ describe('ExternalSearchPanel with grouped links', () => {
   });
 });
 
-describe('staged copy (jobsCn.external)', () => {
+describe('copy (jobsCn.external, en.json and zh.json)', () => {
   // Site names are server data (the copy gate bans two of them in zh copy).
   const strings = (v: unknown): string[] => (typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(strings) : []);
 
   it('names no job site in English or Chinese, and has the same keys in both files', () => {
     const banned = [...NAMES, '北森', 'BOSS', 'Boss直聘', '51job', 'Lagou', 'Nowcoder', 'Shixiseng', 'Zhaopin', 'Liepin'];
-    for (const bundle of [stagedEn, stagedZh]) {
+    for (const bundle of [bundleEn, bundleZh]) {
       for (const s of strings(bundle.jobsCn.external)) for (const name of banned) expect(s).not.toContain(name);
     }
     const keys = (v: unknown, at = ''): string[] => (v && typeof v === 'object' ? Object.entries(v).flatMap(([k, x]) => keys(x, at ? `${at}.${k}` : k)) : [at]);
-    expect(keys(stagedZh.jobsCn.external).sort()).toEqual(keys(stagedEn.jobsCn.external).sort());
-    expect(keys(stagedEn.jobsCn.external)).toEqual(expect.arrayContaining(['none', 'groups.campus', 'groups.experienced', 'groups.campusNote']));
+    expect(keys(bundleZh.jobsCn.external).sort()).toEqual(keys(bundleEn.jobsCn.external).sort());
+    expect(keys(bundleEn.jobsCn.external)).toEqual(expect.arrayContaining(['none', 'groups.campus', 'groups.experienced', 'groups.campusNote']));
   });
 
   it('uses no em dash and promises nothing on the other sites', () => {
-    for (const s of [...strings(stagedEn.jobsCn.external), ...strings(stagedZh.jobsCn.external)]) {
+    for (const s of [...strings(bundleEn.jobsCn.external), ...strings(bundleZh.jobsCn.external)]) {
       expect(s).not.toMatch(/—|–/);
       expect(s).not.toMatch(/apply for you|we apply|替你投递|帮你投递|自动投递/);
     }

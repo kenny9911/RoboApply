@@ -81,15 +81,22 @@ describe('home routes', () => {
   // but never in the JSON-LD, which therefore never says more than the page.
   it('GoApply / and /en carry a FAQPage with the five questions the page always renders (not the jobs question)', async () => {
     brand.id = 'goapply';
+    // `/` is GoApply's default locale (zh): its questions are the Chinese of zh.json; `/en` asks them in English.
     const json = JSON.parse(kids((await RootPage()) as El).find((c) => c.type === JsonLd)!.props.json!);
     const faq = json['@graph'].find((n: { '@type': string }) => n['@type'] === 'FAQPage');
     expect(faq.mainEntity).toHaveLength(5);
     const names = faq.mainEntity.map((q: { name: string }) => q.name);
-    expect(names).toContain('What does it cost?');
-    expect(names).not.toContain('Where do the jobs come from?');
-    expect(JSON.stringify(faq)).not.toMatch(/Every job shows its source/);
+    expect(names).toContain('费用是多少？');
+    expect(names).not.toContain('这些职位从哪里来？');
+    expect(JSON.stringify(faq)).not.toMatch(/Every job shows its source|每个职位都会显示来源/);
     const localized = JSON.parse(kids((await LocalePage(params('en'))) as El).find((c) => c.type === JsonLd)!.props.json!);
-    expect(localized['@graph'].find((n: { '@type': string }) => n['@type'] === 'FAQPage').mainEntity).toHaveLength(5);
+    const enFaq = localized['@graph'].find((n: { '@type': string }) => n['@type'] === 'FAQPage');
+    expect(enFaq.mainEntity).toHaveLength(5);
+    const enNames = enFaq.mainEntity.map((q: { name: string }) => q.name);
+    expect(enNames).toContain('What does it cost?');
+    expect(enNames).not.toContain('Where do the jobs come from?');
+    expect(JSON.stringify(enFaq)).not.toMatch(/Every job shows its source/);
+    expect(JSON.stringify(enFaq)).not.toMatch(/RoboApply|%BRAND%/);
     expect(JSON.stringify(faq)).not.toMatch(/RoboApply|%BRAND%/);
     expect(JSON.stringify(json)).not.toMatch(/"@type":"(Offer|AggregateOffer|AggregateRating|Review)"|"price"/);
   });
@@ -184,12 +191,12 @@ describe('feature and subpage routes', () => {
       'ready-to-apply': '每周备好申请材料，由你自己提交 | GoApply',
       'referral-codes': '其他求职者分享的内推码 | GoApply',
     };
-    const zh = (await import('../../../../i18n/staging/landing.zh.json')).default.landing.features.goapply as Record<string, { metaTitle: string }>;
+    const zh = (await import('../../../../i18n/messages/zh.json')).default.landing.features.goapply as Record<string, { metaTitle: string }>;
     for (const [s, title] of Object.entries(titles)) {
       expect(await FeatureRoute(slug(s)), s).toBeTruthy();
       const meta = await featureMetadata(slug(s));
       expect(meta.alternates?.canonical, s).toBe(`https://www.goapply.top/features/${s}`);
-      // The page title is the staged copy: English until the locale merge, the staged Chinese after it.
+      // The page title is GoApply's own Chinese, in zh.json since the locale merge.
       const def = featuresFor('goapply').find((f) => f.slug === s)!;
       expect(`${zh[def.key]!.metaTitle} | GoApply`, s).toBe(title);
       expect(String(meta.title), s).toMatch(/\| GoApply$/);

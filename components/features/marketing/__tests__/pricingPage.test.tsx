@@ -617,14 +617,17 @@ describe('/pricing: the limits table prints the credit catalog (free autofill 20
   });
 });
 
-describe('the staged copy carries no number and the Chinese source text matches the English arguments', () => {
+describe('the pricing copy carries no number and the Chinese source text matches the English arguments', () => {
   type Tree = { [key: string]: string | Tree };
-  const read = (file: string) => JSON.parse(readFileSync(join(process.cwd(), 'i18n/staging', file), 'utf8')) as Tree;
+  // The pricing strings were staged by the market wave and are merged into the two bundles GoApply serves.
+  const read = (file: string) => JSON.parse(readFileSync(join(process.cwd(), 'i18n/messages', file), 'utf8')) as Tree;
   const leaves = (node: string | Tree | undefined, prefix: string): Array<[string, string]> =>
     node === undefined ? [] : typeof node === 'string' ? [[prefix, node]] : Object.entries(node).flatMap(([k, v]) => leaves(v, `${prefix}.${k}`));
   const args = (text: string) => Array.from(new Set(Array.from(text.matchAll(/\{(\w+)/g), (m) => m[1]).filter((name) => !['one', 'other'].includes(name!)))).sort();
-  const en = { credits: (read('credits.en.json').credits as Tree).pricing as Tree, billingCn: (read('billingCn.en.json').billingCn as Tree).pricing as Tree };
-  const zh = { credits: (read('credits.zh.json').credits as Tree).pricing as Tree, billingCn: (read('billingCn.zh.json').billingCn as Tree).pricing as Tree };
+  const enBundle = read('en.json');
+  const zhBundle = read('zh.json');
+  const en = { credits: (enBundle.credits as Tree).pricing as Tree, billingCn: (enBundle.billingCn as Tree).pricing as Tree };
+  const zh = { credits: (zhBundle.credits as Tree).pricing as Tree, billingCn: (zhBundle.billingCn as Tree).pricing as Tree };
 
   it('no amount, percentage, day count or currency symbol is written in a pricing string (en and zh)', () => {
     const all = [...leaves(en.credits, 'credits.pricing'), ...leaves(en.billingCn, 'billingCn.pricing'), ...leaves(zh.credits, 'credits.pricing'), ...leaves(zh.billingCn, 'billingCn.pricing')];
@@ -647,7 +650,7 @@ describe('the staged copy carries no number and the Chinese source text matches 
     expect(zhLeaves.get('billingCn.pricing.refund.oneTime')).toContain('一次性付款 · 到期不自动续费');
     expect(zhLeaves.get('billingCn.pricing.refund.entity')).toBe('收款主体：{entity}');
     expect(zhLeaves.get('billingCn.pricing.refund.first')).toMatch(/周卡：\{hours\} 小时/);
-    // The staged Chinese of the shared namespace keeps the English arguments too.
+    // The Chinese of the shared namespace keeps the English arguments too.
     const enCredits = new Map(leaves(en.credits, 'credits.pricing'));
     for (const [path, text] of leaves(zh.credits, 'credits.pricing')) expect(args(text), path).toEqual(args(enCredits.get(path)!));
   });

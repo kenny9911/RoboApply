@@ -32,8 +32,8 @@ import { CareerBoardsPanel, JobSourcesPanel, SourcesConsole, TALLY_ORDER, boardP
 import type { BrandHealth, JobSourceRunView, JobSourceView, SystemStatusResponse } from '../../../../lib/api/admin';
 import type { CareerSourceView } from '../../../../lib/api/careerSources';
 import { RoboApiError } from '../../../../lib/api/client';
-import en from '../../../../i18n/staging/admin.en.json';
-import zh from '../../../../i18n/staging/admin.zh.json';
+import en from '../../../../i18n/messages/en.json';
+import zh from '../../../../i18n/messages/zh.json';
 
 const admin = () => buildAuthValue({ user: { ...buildFakeUser(), role: 'admin' } as never });
 
@@ -281,14 +281,21 @@ describe('CareerBoardsPanel (GoApply can add a public board)', () => {
   });
 });
 
-describe('staged copy', () => {
+describe('the admin copy of the market wave (staged, now merged into en.json and zh.json)', () => {
   const keys = (o: Record<string, unknown>, p = ''): string[] => Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v as Record<string, unknown>, `${p}${k}.`) : [`${p}${k}`]));
+  // What the wave staged under admin.console: three subtrees and three single keys.
+  const PARTS = ['sources', 'system.providers', 'system.payments', 'safety.problemsDegraded', 'refund.sub', 'refund.issueElsewhere'];
+  const pick = (bundle: { admin: { console: Record<string, unknown> } }): Record<string, unknown> =>
+    Object.fromEntries(PARTS.map((part) => [part, part.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], bundle.admin.console)]));
+  const enCopy = pick(en);
+  const zhCopy = pick(zh);
   it('every English key has its Chinese twin, with the same placeholders, and no brand name or long dash is typed', () => {
-    expect(keys(zh).sort()).toEqual(keys(en).sort());
+    for (const part of PARTS) expect([part, enCopy[part] !== undefined, zhCopy[part] !== undefined]).toEqual([part, true, true]);
+    expect(keys(zhCopy).sort()).toEqual(keys(enCopy).sort());
     const flat = (o: Record<string, unknown>, p = ''): Array<[string, string]> => Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' ? flat(v as Record<string, unknown>, `${p}${k}.`) : [[`${p}${k}`, String(v)] as [string, string]]));
-    const zhText = new Map(flat(zh));
+    const zhText = new Map(flat(zhCopy));
     const vars = (s: string) => [...s.matchAll(/\{(\w+)/g)].map((m) => m[1]).sort();
-    for (const [key, text] of flat(en)) {
+    for (const [key, text] of flat(enCopy)) {
       expect(vars(zhText.get(key) ?? ''), key).toEqual(vars(text));
       expect(text, key).not.toMatch(/RoboApply|GoApply|—/);
       expect(zhText.get(key), key).not.toMatch(/RoboApply|GoApply|——/);

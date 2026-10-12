@@ -27,7 +27,7 @@ vi.mock('../market', () => ({
   withOwnImport: (meta: unknown) => meta,
 }));
 
-import staged from '../../../i18n/staging/companyFacts.en.json';
+import enMessages from '../../../i18n/messages/en.json';
 import { SPONSORSHIP_DISCLAIMER } from '../../../server/src/features/jobs/companies/sponsorship/contract';
 import type { CompanySponsorshipResponse, SponsorshipFact } from '../../../lib/api/companyFacts';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
@@ -364,17 +364,19 @@ describe('copy: the block never says the job sponsors', () => {
     /will sponsor (you|your)/i,
     /h-?1b (sponsored|sponsor likely)/i,
   ];
+  // The block's copy, merged out of i18n/staging/companyFacts.en.json into the English bundle.
+  const copy = { companyFacts: enMessages.companyFacts };
   const leaves = (node: unknown, path = ''): Array<[string, string]> =>
     typeof node === 'string' ? [[path, node]] : Object.entries(node as Record<string, unknown>).flatMap(([k, v]) => leaves(v, path ? `${path}.${k}` : k));
 
-  it('no staged string claims it; the only sentence that names the role is the disclaimer, and it denies it', () => {
-    const strings = leaves(staged);
+  it('no string of the block claims it; the only sentence that names the role is the disclaimer, and it denies it', () => {
+    const strings = leaves(copy);
     expect(strings.length).toBeGreaterThan(10);
     // The disclaimer is the one sentence that names the job, and it is a denial: it is read apart below.
     const aboutTheJob = strings.filter(([, text]) => /\b(job|role|position)\b/i.test(text)).map(([path]) => path);
     expect(aboutTheJob).toEqual(['companyFacts.sponsorship.disclaimer']);
     for (const [path, text] of strings.filter(([p]) => !aboutTheJob.includes(p))) for (const claim of CLAIMS) expect(text, path).not.toMatch(claim);
-    expect(staged.companyFacts.sponsorship.disclaimer).toBe(DISCLAIMER);
+    expect(copy.companyFacts.sponsorship.disclaimer).toBe(DISCLAIMER);
     // The English the API sends with every answer is the same sentence.
     expect(SPONSORSHIP_DISCLAIMER).toBe(DISCLAIMER);
     expect(DISCLAIMER).toMatch(/not about this job/);
@@ -398,13 +400,13 @@ describe('copy: the block never says the job sponsors', () => {
     }
   });
 
-  it('every string the component asks for is staged (a missing one would print its key)', () => {
+  it('every string the component asks for is in the bundle (a missing one would print its key)', () => {
     const source = readFileSync(join(process.cwd(), 'components/features/job/SponsorshipFacts.tsx'), 'utf8');
     const keys = [...source.matchAll(/\bt(?:\.rich)?\(\s*'([\w.]+)'/g)].map((m) => m[1]!).concat(['dated.published', 'dated.imported']);
     expect(keys).toEqual(expect.arrayContaining(['title', 'intro', 'fact.dolLca', 'fact.uscis', 'fact.uk', 'fact.ukRating', 'fact.ukRoutes', 'fact.ukTown', 'earlier', 'listedAs', 'source', 'file', 'usNote', 'disclaimer']));
-    const stagedKeys = new Set(leaves(staged.companyFacts.sponsorship).map(([path]) => path));
-    for (const key of keys) expect(stagedKeys.has(key), key).toBe(true);
-    // And nothing is staged that the block does not use.
-    expect([...stagedKeys].sort()).toEqual([...new Set(keys)].sort());
+    const copyKeys = new Set(leaves(copy.companyFacts.sponsorship).map(([path]) => path));
+    for (const key of keys) expect(copyKeys.has(key), key).toBe(true);
+    // And nothing is in the namespace that the block does not use.
+    expect([...copyKeys].sort()).toEqual([...new Set(keys)].sort());
   });
 });

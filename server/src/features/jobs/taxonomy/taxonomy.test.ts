@@ -258,17 +258,20 @@ describe('navigation helpers', () => {
 });
 
 describe('i18n bundle', () => {
-  it('has one English label per category and group, equal to the data', () => {
-    // The `taxonomy` namespace of the English web bundle (WP-91 merged it out of i18n/staging/taxonomy.en.json).
+  it('has one English label per category, group and role, equal to the data', () => {
+    // The `taxonomy` namespace of the English web bundle (WP-91 merged the categories and groups out of
+    // i18n/staging/taxonomy.en.json; the merge after the market wave added the roles).
     const english = JSON.parse(readFileSync(path.join(repoRoot, 'i18n/messages/en.json'), 'utf8')) as {
-      taxonomy: { categories: Record<string, string>; groups: Record<string, string> };
+      taxonomy: { categories: Record<string, string>; groups: Record<string, string>; roles: Record<string, string> };
     };
     const bundle = { taxonomy: english.taxonomy };
-    expect(Object.keys(bundle.taxonomy).sort()).toEqual(['categories', 'groups']);
+    expect(Object.keys(bundle.taxonomy).sort()).toEqual(['categories', 'groups', 'roles']);
     const l1 = Object.fromEntries(TAXONOMY_NODES.filter((n) => n.level === 1).map((n) => [n.id, n.en]));
     const l2 = Object.fromEntries(TAXONOMY_NODES.filter((n) => n.level === 2).map((n) => [n.id, n.en]));
+    const l3 = Object.fromEntries(TAXONOMY_NODES.filter((n) => n.level === 3).map((n) => [n.id, n.en]));
     expect(bundle.taxonomy.categories).toEqual(l1);
     expect(bundle.taxonomy.groups).toEqual(l2);
+    expect(bundle.taxonomy.roles).toEqual(l3);
     const text = JSON.stringify(bundle);
     expect(text).not.toMatch(/RoboApply|GoApply|\bunlimited\b|\bats\b|\bjd\b/i);
   });

@@ -68,9 +68,9 @@ describe('formula', () => {
     const what = RANKING_FACTORS.find((f) => f.key === 'fit')!.what;
     expect(what).toMatch(/halfway between its quick estimate and its AI score/);
     const here = path.dirname(fileURLToPath(import.meta.url));
-    const staged = JSON.parse(readFileSync(path.resolve(here, '../../../../i18n/staging/landing.en.json'), 'utf8')) as { landing: { ranking: { fit: { body: string } } } };
-    expect(staged.landing.ranking.fit.body).toMatch(/halfway between its quick estimate and its analysed score/);
-    expect(staged.landing.ranking.fit.body).toMatch(/can differ from the number on its card/);
+    const english = JSON.parse(readFileSync(path.resolve(here, '../../../../i18n/messages/en.json'), 'utf8')) as { landing: { ranking: { fit: { body: string } } } };
+    expect(english.landing.ranking.fit.body).toMatch(/halfway between its quick estimate and its analysed score/);
+    expect(english.landing.ranking.fit.body).toMatch(/can differ from the number on its card/);
     // "Halfway" is the constant, not a figure of speech.
     expect(RANK_BLEND_AI_SHARE).toBe(0.5);
   });

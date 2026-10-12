@@ -19,8 +19,7 @@ import { RETURN_POLL_ATTEMPTS, RETURN_POLL_MS, RETURN_RECONCILE_EVERY, isPackKey
 import { canResumeSubscription, renewalPeriod, resumeTerms, subscriptionIsOver } from '../ResumeSubscription';
 import { RoboApiError } from '../../../../lib/api/client';
 import { clientBrandFor } from '../../../../lib/brand/client';
-import stagedCredits from '../../../../i18n/staging/credits.en.json';
-import stagedCreditsZh from '../../../../i18n/staging/credits.zh.json';
+import zhMessages from '../../../../i18n/messages/zh.json';
 import { checkoutRedirectUrl } from '../../../../hooks/credits/useBillingActions';
 import { applyDraft, draftFromOverride, invalidCells, parseOverrideValue, revenueShare } from '../adminCatalog';
 import { bucketLabelKey, calendarDaysUntil, knownTimeZone, planMonths, planNameKey, pricePeriod, refillLabel } from '../labels';
@@ -433,9 +432,9 @@ describe('the plan sheet for a subscriber (ST-5) and for a mainland visitor (AL-
     }
   });
 
-  it('the staged line names the other brand by token, in English and in Chinese, with one link', () => {
-    const enLine = stagedCredits.credits.planSheet.cnVisitor;
-    const zhLine = stagedCreditsZh.credits.planSheet.cnVisitor;
+  it('the mainland-visitor line names the other brand by token, in English and in Chinese, with one link', () => {
+    const enLine = en.credits.planSheet.cnVisitor;
+    const zhLine = zhMessages.credits.planSheet.cnVisitor;
     expect(enLine).toBe('In mainland China? <link>You can pay in RMB with Alipay on %OTHER_BRAND%.</link>');
     expect(zhLine).toBe('在中国大陆？<link>可在 %OTHER_BRAND% 用支付宝以人民币付款。</link>');
     for (const line of [enLine, zhLine]) {
@@ -445,7 +444,7 @@ describe('the plan sheet for a subscriber (ST-5) and for a mainland visitor (AL-
   });
 
   it('the new lifecycle copy states no amount, date or plan name (they come from the API)', () => {
-    const { planSheet, quote, resume } = stagedCredits.credits;
+    const { planSheet, quote, resume } = en.credits;
     for (const text of [planSheet.portalScope, planSheet.cnVisitor, ...Object.values(quote), ...Object.values(resume)]) {
       expect(text).not.toMatch(/[0-9$¥€£]/);
       expect(text).not.toMatch(/—|Weekly|Monthly|Quarterly/);

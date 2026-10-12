@@ -377,9 +377,8 @@ describe('/features/[slug]', () => {
     }
   });
 
-  it('every GoApply feature page has complete copy in English and in the staged Chinese', async () => {
+  it('every GoApply feature page has complete copy in English and in Chinese', () => {
     const en = (messagesFor('goapply') as { landing: { features: { goapply: Record<string, Record<string, unknown>> } } }).landing.features.goapply;
-    const zhStaged = (await import('../../../../i18n/staging/landing.zh.json')).default.landing.features.goapply as Record<string, Record<string, unknown>>;
     const zhBundle = (loadMessages('zh', 'goapply') as { landing: { features: { goapply: Record<string, Record<string, unknown>> } } }).landing.features.goapply;
     const shape = (o: unknown): string[] => (o && typeof o === 'object' ? Object.entries(o as Record<string, unknown>).flatMap(([k, v]) => (typeof v === 'string' ? [k] : shape(v).map((c) => `${k}.${c}`))).sort() : []);
     const reference = shape(en.resume);
@@ -387,8 +386,8 @@ describe('/features/[slug]', () => {
     expect(reference).toHaveLength(18);
     for (const def of featuresFor('goapply')) {
       expect([def.key, shape(en[def.key])]).toEqual([def.key, reference]);
-      // Chinese: already in the bundle (older pages) or staged by this change (the new ones).
-      const zh = zhStaged[def.key] ?? zhBundle[def.key];
+      // Chinese: zh.json as GoApply serves it (the staged pages were merged into it).
+      const zh = zhBundle[def.key];
       expect([def.key, shape(zh)]).toEqual([def.key, reference]);
       expect(JSON.stringify(zh)).toMatch(/[一-鿿]/);
     }

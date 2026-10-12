@@ -158,12 +158,12 @@ describe('the amount lives in config, not in a message bundle (JT-6)', () => {
   /** A statutory amount written into copy: NT$40,000, 40,000, 4萬 / 5萬, 四萬. */
   const AMOUNT = /NT\$\s?\d|\b\d{2},\d{3}\b|[4-9]\s*[萬万]|[四五]\s*[萬万]/;
 
-  it('the staged English of the note takes {amount} and {asOf} and holds no number', () => {
-    const staged = read('i18n/staging/jobsTw.en.json').jobsTw as { negotiable: Record<string, string> };
-    expect(staged.negotiable.body).toContain('{amount}');
-    expect(staged.negotiable.body).toContain('{asOf}');
-    for (const [path, text] of leaves(staged.negotiable)) expect(text, path).not.toMatch(AMOUNT);
-    expect(staged.negotiable.bodyNoAmount).not.toMatch(/\{amount\}|\{asOf\}/);
+  it('the English of the note takes {amount} and {asOf} and holds no number', () => {
+    const english = read('i18n/messages/en.json').jobsTw as { negotiable: Record<string, string> };
+    expect(english.negotiable.body).toContain('{amount}');
+    expect(english.negotiable.body).toContain('{asOf}');
+    for (const [path, text] of leaves(english.negotiable)) expect(text, path).not.toMatch(AMOUNT);
+    expect(english.negotiable.bodyNoAmount).not.toMatch(/\{amount\}|\{asOf\}/);
   });
 
   it('English as the app serves it (en.json with the staged strings over it) has no amount anywhere under jobsTw.negotiable', () => {
@@ -392,11 +392,11 @@ describe('JobMetaTw: a Taiwan row found through Google\'s job index (JT-8)', () 
     }
   });
 
-  it('nothing suggests a partnership: the wording is "found through", and the staged strings say nothing else', () => {
-    const staged = JSON.parse(readFileSync(join(ROOT, 'i18n/staging/jobsTw.en.json'), 'utf8')) as { jobsTw: { meta: Record<string, string> } };
-    expect(staged.jobsTw.meta.foundThroughGoogle).toBe('{publisher} · found through Google job search');
-    expect(staged.jobsTw.meta.foundThroughGoogleOnly).toBe('Found through Google job search');
-    for (const text of Object.values(staged.jobsTw.meta)) expect(text).not.toMatch(/partner|official|in cooperation|powered by|verified by|from 104|104|1111|Cake/i);
+  it('nothing suggests a partnership: the wording is "found through", and the two lines say nothing else', () => {
+    const { meta } = (JSON.parse(readFileSync(join(ROOT, 'i18n/messages/en.json'), 'utf8')) as { jobsTw: { meta: Record<string, string> } }).jobsTw;
+    expect(meta.foundThroughGoogle).toBe('{publisher} · found through Google job search');
+    expect(meta.foundThroughGoogleOnly).toBe('Found through Google job search');
+    for (const text of [meta.foundThroughGoogle, meta.foundThroughGoogleOnly]) expect(text).not.toMatch(/partner|official|in cooperation|powered by|verified by|from 104|104|1111|Cake/i);
   });
 
   it('other rows are untouched: an employer-board row keeps "Source: company · job board", an open-data row keeps its attribution and gets no search line', () => {

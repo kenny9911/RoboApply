@@ -24,7 +24,7 @@ import {
 } from './filterModel';
 import { withoutUnchangedSearchKeys } from './keys';
 import { localizedTaxonomyLabels, readableTaxonomyId } from './useFilterQueries';
-import stagedTaxonomy from '../../i18n/staging/taxonomy.en.json';
+import enMessages from '../../i18n/messages/en.json';
 import taxonomyV1 from '../../server/src/features/jobs/taxonomy/taxonomy.v1.json';
 
 describe('field lists', () => {
@@ -148,11 +148,11 @@ describe('localizedTaxonomyLabels', () => {
     expect(readableTaxonomyId('data_scientist')).toBe('Data scientist');
   });
 
-  it('every role of the taxonomy is staged for translation, with the taxonomy\'s own English name', () => {
-    const staged = (stagedTaxonomy as { taxonomy: { roles: Record<string, string> } }).taxonomy.roles;
+  it('every role of the taxonomy is in the English bundle for translation, with the taxonomy\'s own English name', () => {
+    const bundled = (enMessages as { taxonomy: { roles: Record<string, string> } }).taxonomy.roles;
     const roles = (taxonomyV1 as { nodes: Array<{ id: string; level: number; en: string }> }).nodes.filter((n) => n.level === 3);
-    expect(Object.keys(staged).sort()).toEqual(roles.map((r) => r.id).sort());
-    for (const r of roles) expect(staged[r.id], r.id).toBe(r.en);
+    expect(Object.keys(bundled).sort()).toEqual(roles.map((r) => r.id).sort());
+    for (const r of roles) expect(bundled[r.id], r.id).toBe(r.en);
   });
 });
 
