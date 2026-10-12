@@ -37,6 +37,7 @@ Merged, gated and pushed, in order:
 | Market phase M3 | `55e7177` | Job sources per market: quota, planner, posting identity, employer boards, Taiwan open data, deep links |
 | Market phase M4 | `df4aaf2` | Hybrid retrieval, scorer v4, withdrawal and admin billing, validated board seeds (505 intl / 41 TW / 52 CN) |
 | Market phase M5 (merged; **gate done 2026-10-12**) | `198ee6b`, then the gate's own commit | Licensed feed behind its quota gate, more board connectors, closure and liveness check, USAJobs and 事求人, GoHire syndication adapter, Taiwan extras, sponsorship facts, env examples. Gate, after its cross-review fix pass: 779 test files / 20,853 tests passed (1 skipped, 10 todo), both typechecks, `npm run check`, extension 710 tests, `npm run eval:match -- --enforce M4` |
+| Step 3: i18n merge and translation | `348d2db`, `a713ab6`, `14c1af8` | Staged strings merged; tests read the merged bundles; 8,412 strings translated into the eight locales; 59 unread keys retired. `npm run check` clean, both typechecks, extension 710 tests |
 
 Last full gate run (M5, 2026-10-12, after the cross-review fix pass): `npx prisma validate`, `npm run db:generate`, `npm run gen:brand` (no diff), both typechecks, 779 test files / 20,853 tests passed (1 skipped, 10 todo, 0 failed), `npm run check` (six checks clean), extension typecheck and 710 tests (36 files), `npm run eval:match -- --enforce M4` exit 0 with the ranking baseline untouched. `interview-agent/` did not change in M5 and was not run. Nothing was run against a database, a browser or a provider.
 
@@ -44,17 +45,11 @@ Last full gate run (M5, 2026-10-12, after the cross-review fix pass): `npx prism
 
 The M5 gate is committed and pushed as `4e449f6` (the paragraph about uncommitted gate paths no longer applies).
 
-**Step 3 is in progress (2026-10-12).** Done: `node scripts/i18n-merge-staging.mjs` was run (1,171 new and 30 changed keys are in `i18n/messages/en.json`; GoApply Chinese is in `zh.json`; staging is reset) and committed. So `npm run check` is RED on this commit with `missing-key` violations in the eight other locales until the translations are applied: that is expected, and it is the only thing red. To do: translate the gap and apply it.
+**Step 3 is done (2026-10-12).** The merge (`348d2db`) emptied every staging file, which broke eleven test files that imported staged strings (17 type errors stopped the production build, 17 tests failed): `a713ab6` points them at the merged bundles. The translation pass then applied 8,412 strings in 39 chunks (web 8,077, email 295, extension 40; every chunk validated with 0 rejected leaves), corrected one mistranslation found on the way (`credits.admin.refunds.facts.paidThrough` names the payment method, six locales had read it as "paid until"), and removed the 59 keys the gates listed as unread (PAR, M1 to M5 and FIX carry-overs; each grep-checked; `npm run check` resolves every call site). Kept on purpose: `legal.explain.notStated.{title_level,industry,logistics}` (M1 said remove them only if `EXPLAIN_KEYS` still lacks them; it does, but the open fix of `waveM5-carryover.md` item 9 brings back the posting-side-missing sentence, which is exactly these keys). `npm run check` is green.
 
-```bash
-python3 docs/jobright-clone/orch/make-delta-chunks.py --size 450     # real gap per locale -> .i18n-work/in/<kind>/<locale>/<nn>.json (8,412 strings in 39 chunks on 2026-10-12)
-# one translator per chunk writes .i18n-work/out/<kind>/<locale>/<nn>.json with the same key structure
-node docs/jobright-clone/orch/apply-translations.mjs "$PWD" .i18n-work/out        # validates and merges; exit 1 lists rejected leaves
-python3 docs/jobright-clone/orch/make-delta-chunks.py --size 450     # run again: prints nothing to translate when the gap is closed
-npm run check && npx vitest run --exclude ".claude/**"
-```
+**Step 4 passes** on `a713ab6` in the build worktree (`npm run build` exit 0; both `/legal` routes trace all 17 files of `content/legal/`). Rebuild once more on the translation commit before the PR.
 
-`.i18n-work/` is local and not in git. If chunks already exist under `.i18n-work/out`, apply them before making new ones (the chunker moves older `in/` and `out/` folders aside to `prev-*`, it does not delete them). **Start at step 3, "translate the gap"**, unless a later line says the translations are committed.
+**Step 5 runs on a stack that cannot reach anyone.** The Neon branch is a copy of production, and the dev API registers the platform crons in process (job alerts every 15 minutes, lifecycle e-mails and reminders hourly, queue-drain every 5 minutes). Earlier runs tried to send alert and lifecycle mail and web push; every attempt failed (Resend: `roboapply.io` not verified, `example.com` refused), so nothing was delivered, but that is luck, not design. Start the stack for verification with these lines in `.env.local` (not `.env`; remove them afterwards): `ROBOAPPLY_CRON_DISABLED=true` (no in-process schedule), `ENRICH_DAILY_JOBS=0` (no LLM enrichment: 43,305 `job.enrich` items were queued on 2026-10-12, up to 8,000 model calls a day per market), `RA_ONBOARDING_EXTERNAL_JOBS_DISABLED=true` (no metered job-search calls). Trigger only `jobs-plan`, `jobs-boards` and `jobs-ingest` by hand; `queue-drain` runs every worker kind (notifications and push included) and `score-precompute` scores real users' copies. The feed is already stocked on the branch (about 49,600 open international and 2,050 mainland rows from the employer boards on 2026-10-11).
 
 ## 4. What remains, in order
 
