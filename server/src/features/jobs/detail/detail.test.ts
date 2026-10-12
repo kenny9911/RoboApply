@@ -226,6 +226,21 @@ describe('view rules (D3)', () => {
     expect(toSections({ responsibilities: null, qualifications: null, benefits: null, description: '  ' })).toEqual([]);
   });
 
+  // An employer board stores the posting's HTML; the page renders a section as Markdown, which drops raw HTML.
+  it('the description is sent as text: the stored plain text, else the HTML read as text', () => {
+    const html = '<h3><strong>Our Mission</strong></h3>\n<p>We build things.</p>\n<ul><li>Python</li><li>Go &amp; Rust</li></ul>';
+    expect(toSections({ responsibilities: null, qualifications: null, benefits: null, description: html, descriptionPlain: 'Our Mission\n\nWe build things.' })).toEqual([
+      { kind: 'description', body: 'Our Mission\n\nWe build things.' },
+    ]);
+    const [section] = toSections({ responsibilities: null, qualifications: null, benefits: null, description: html, descriptionPlain: null });
+    expect(section!.kind).toBe('description');
+    expect(section!.body).not.toMatch(/<[a-z/]/i);
+    expect(section!.body).toContain('Our Mission');
+    expect(section!.body).toContain('• Go & Rust');
+    // A plain description (a provider row with no text column) is unchanged.
+    expect(toSections({ responsibilities: null, qualifications: null, benefits: null, description: 'all', descriptionPlain: '' })).toEqual([{ kind: 'description', body: 'all' }]);
+  });
+
   it('sponsorship needs the posting quote; otherwise it is not stated', () => {
     expect(toSponsorship({ sponsorship: 'offered', sponsorshipEvidence: 'We sponsor.' })).toEqual({ status: 'offered', quote: 'We sponsor.' });
     expect(toSponsorship({ sponsorship: 'not_offered', sponsorshipEvidence: '' })).toEqual({ status: 'not_stated', quote: null });

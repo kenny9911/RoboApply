@@ -40,7 +40,7 @@ import {
 } from '../../feed/contract.js';
 import { toWireKind } from '../../match/contract.js';
 import type { Fit } from '../../match/index.js';
-import { payPlausible, statesAmount } from '../normalize/index.js';
+import { htmlToPlain, payPlausible, statesAmount } from '../normalize/index.js';
 import { bestTaxonomyMatch, taxonomyLabel } from '../taxonomy/index.js';
 import { findCity, resolveCountry } from '../geo/index.js';
 import {
@@ -229,8 +229,14 @@ function clean(s: string | null | undefined): string | null {
   return t ? t : null;
 }
 
-/** The posting's own sections, verbatim; the full description when none were split out. */
-export function toSections(row: Pick<JobRow, 'responsibilities' | 'qualifications' | 'benefits' | 'description'>): JobDetail['sections'] {
+/**
+ * The posting's own sections, verbatim; the full description when none were split out.
+ * The description is its text: an employer board's row keeps the posting's HTML in
+ * `description` and the same words as text in `descriptionPlain` (ingest), and the page
+ * renders a section as Markdown, which drops raw HTML blocks whole. Sent as HTML, every
+ * board posting showed an empty "About the job".
+ */
+export function toSections(row: Pick<JobRow, 'responsibilities' | 'qualifications' | 'benefits' | 'description' | 'descriptionPlain'>): JobDetail['sections'] {
   const out: JobDetail['sections'] = [];
   const r = clean(row.responsibilities);
   const q = clean(row.qualifications);
@@ -238,7 +244,7 @@ export function toSections(row: Pick<JobRow, 'responsibilities' | 'qualification
   if (r) out.push({ kind: 'responsibilities', body: r });
   if (q) out.push({ kind: 'qualifications', body: q });
   if (b) out.push({ kind: 'benefits', body: b });
-  const d = clean(row.description);
+  const d = clean(row.descriptionPlain) ?? clean(htmlToPlain(row.description));
   if (!out.length && d) out.push({ kind: 'description', body: d });
   return out;
 }
