@@ -325,7 +325,8 @@ function PrepBrief({
               <h3>{t('setup.prep.brief.requirements')}</h3>
               {req.summary ? <p>{req.summary}</p> : null}
               {req.mustHave.length ? (
-                <ul className={styles.tagList} aria-label={t('setup.prep.brief.mustHave')}>
+                // Must-haves are sentences, not names: a list reads better than wrapped pills.
+                <ul className={styles.plainList} aria-label={t('setup.prep.brief.mustHave')}>
                   {req.mustHave.map((item) => <li key={item}>{item}</li>)}
                 </ul>
               ) : null}
