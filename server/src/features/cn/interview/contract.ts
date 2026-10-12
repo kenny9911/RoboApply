@@ -13,10 +13,10 @@
 /** Format id, registered in server/src/interview-engine/catalog/interviewFormats.ts (market `cn`). */
 export const CN_AI_INTERVIEW_FORMAT_ID = 'cn_ai_interview';
 
-/** The format runs 20–30 minutes; the default plan is 25. */
+/** The format runs 20–30 minutes; the default plan is 20 (the practice default, 2026-10-12). */
 export const CN_FORMAT_MIN_MINUTES = 20;
 export const CN_FORMAT_MAX_MINUTES = 30;
-export const CN_FORMAT_DEFAULT_MINUTES = 25;
+export const CN_FORMAT_DEFAULT_MINUTES = 20;
 
 /**
  * General interview types a GoApply practice runs in this format. Skill

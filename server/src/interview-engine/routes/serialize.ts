@@ -6,13 +6,30 @@
 import type { InterviewSession } from '../../generated/prisma/client.js';
 import { isBrandId } from '../../platform/brand/registry.js';
 import { getInterviewMediaPolicy } from '../config.js';
+import { readStoredPrep } from '../prep/contract.js';
 
 function sectionFailed(report: Record<string, unknown>, section: string): boolean {
   return Array.isArray(report.failedSections) && report.failedSections.includes(section);
 }
 
+/**
+ * What a planned practice shows in place of the catalog names: the generated
+ * interviewer, the focus and the target company (blueprint.prep). Null fields
+ * for a session without a plan; the client then labels the catalog ids.
+ */
+function prepDisplay(s: Pick<InterviewSession, 'blueprint'>) {
+  const prep = readStoredPrep(s.blueprint);
+  return {
+    interviewer: prep ? { name: prep.interviewer.name, title: prep.interviewer.title } : null,
+    focusLabel: prep?.focus.label ?? null,
+    company: prep?.company ?? null,
+  };
+}
+
 export function toSessionSummary(s: InterviewSession) {
   return {
+    ...prepDisplay(s),
+    jobId: s.jobId ?? null,
     id: s.id,
     // 'preparing' | 'created' | 'live' | 'finalizing' | 'completed' | 'failed' | 'expired'
     status: s.status,

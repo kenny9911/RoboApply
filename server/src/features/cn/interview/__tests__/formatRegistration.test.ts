@@ -46,7 +46,7 @@ describe('the cn format', () => {
   it('is registered for market cn, listed first there, and resolvable by id', () => {
     expect(MARKET_FORMATS.map((f) => f.id)).toEqual([CN_AI_INTERVIEW_FORMAT_ID]);
     const cn = formatsAsTypes('cn');
-    expect(cn[0]).toMatchObject({ id: CN_AI_INTERVIEW_FORMAT_ID, minutes: 25 });
+    expect(cn[0]).toMatchObject({ id: CN_AI_INTERVIEW_FORMAT_ID, minutes: 20 });
     expect(cn.slice(1).map((t) => t.id)).toEqual(INTL_IDS);
     expect(getFormat(CN_AI_INTERVIEW_FORMAT_ID)?.blueprintDirective).toBe(CN_FORMAT_BLUEPRINT_DIRECTIVE);
     expect(getFormat(CN_AI_INTERVIEW_FORMAT_ID)?.markets).toEqual(['cn']);

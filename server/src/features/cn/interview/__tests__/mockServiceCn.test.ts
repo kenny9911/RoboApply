@@ -192,7 +192,7 @@ describe('start on GoApply', () => {
 
   it('the format picked by name is valid on GoApply only', async () => {
     const out = await raMockService.start('u1', { ...START, typeId: CN_AI_INTERVIEW_FORMAT_ID, market: 'cn' });
-    expect(m.rows.get(out.sessionId)).toMatchObject({ typeId: CN_AI_INTERVIEW_FORMAT_ID, plannedDurationMinutes: 25 });
+    expect(m.rows.get(out.sessionId)).toMatchObject({ typeId: CN_AI_INTERVIEW_FORMAT_ID, plannedDurationMinutes: 20 });
     expect(out.cnFormat?.questions.length).toBe(out.questions.length);
     await expect(raMockService.start('u1', { ...START, typeId: CN_AI_INTERVIEW_FORMAT_ID, market: 'intl' })).rejects.toBeInstanceOf(MockValidationError);
     await expect(raMockService.start('u1', { ...START, typeId: CN_AI_INTERVIEW_FORMAT_ID })).rejects.toBeInstanceOf(MockValidationError);

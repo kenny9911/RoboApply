@@ -31,6 +31,8 @@ import { findPersona } from '../catalog/interviewCatalog.js';
 import { getArchetype } from '../catalog/interviewArchetypes.js';
 import { getDomainExpert } from '../catalog/domainExperts.js';
 import { attachCnReport, cnEvaluationLens, isCnPracticeSession } from './cnRubricBranch.js';
+import { readStoredPrep } from '../prep/contract.js';
+import { prepEvaluationLens } from '../prep/promptContext.js';
 
 export interface EvaluationResult {
   richReport: RichInterviewReport;
@@ -147,7 +149,8 @@ async function evaluate(
   // frames feedback through the SAME lens the interview was conducted in (e.g. a
   // 'depth' interview penalizes high-level answers; a 'potential' one grades
   // reasoning quality over correctness). Defaults safely when persona is unknown.
-  const playbook = getArchetype(findPersona(session.personaId ?? '')?.archetype);
+  const prep = readStoredPrep(session.blueprint);
+  const playbook = getArchetype(prep?.interviewer.archetype ?? findPersona(session.personaId ?? '')?.archetype);
   // Domain lens: the same field-expert playbook that shaped the questions also
   // shapes the grading — appended so the archetype lens keeps precedence on
   // style while the domain lens adds field-authenticity judgment.
@@ -155,7 +158,11 @@ async function evaluate(
   const baseLens = domainExpert
     ? `${playbook.evaluationLens}\n\nDomain lens (${domainExpert.labelEn}): ${domainExpert.evaluationLens}`
     : playbook.evaluationLens;
-  const evaluationLens = extraLens ? `${baseLens}\n\nFormat lens: ${extraLens}` : baseLens;
+  // The planned prep (generated loop): its patterns, the market's norms and
+  // the company's researched criteria grade the answers too.
+  const prepLens = prep ? prepEvaluationLens(prep) : null;
+  const plannedLens = prepLens ? `${baseLens}\n\nPrep lens: ${prepLens}` : baseLens;
+  const evaluationLens = extraLens ? `${plannedLens}\n\nFormat lens: ${extraLens}` : plannedLens;
   const archetypeLabel = playbook.labelEn;
   const primaryDimensions = playbook.primaryDimensions;
 

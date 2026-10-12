@@ -26,6 +26,7 @@ import {
 import type { InterviewCharacteristics } from '../types.js';
 import { getWebEvidenceTimeoutMs } from '../config.js';
 import { InterviewLlmUnavailableError, isLlmUnavailableError } from './llmFailure.js';
+import { renderPrepForBlueprint, renderPrepForVoice, type PrepPromptContext } from '../prep/promptContext.js';
 
 export interface SeedQuestion {
   q: string;
@@ -77,6 +78,12 @@ export interface PromptGenerationInput {
    * fall back. Unset (preview, external API) keeps the never-throws posture.
    */
   strictLlm?: boolean;
+  /**
+   * The interview prep the candidate planned at setup (prep/promptContext.ts):
+   * the generated interviewer and focus, the company style, the loop's
+   * patterns and the market's norms. Absent = the session runs as before.
+   */
+  prep?: PrepPromptContext | null;
 }
 
 /** Real job boards we prefer to ground requirements on (the "competitive market
@@ -162,6 +169,16 @@ function fallbackBlueprint(input: PromptGenerationInput): GeneratedBlueprint {
   };
 }
 
+/** The prep, as lines of the human-readable interviewer brief (report / debugging). */
+function renderPrepForBrief(prep: PrepPromptContext): string[] {
+  return [
+    `Practice focus: ${prep.focusLabel}${prep.focusTopics.length ? ` (${prep.focusTopics.join('; ')})` : ''}`,
+    prep.company ? `Company: ${prep.company}${prep.companySourced ? ' (style from public sources)' : ' (usual practice; no public description found)'}` : '',
+    prep.marketLabel ? `Market norms: ${prep.marketLabel}` : '',
+    prep.strategySummary ? `Planned strategy: ${prep.strategySummary}` : '',
+  ].filter(Boolean);
+}
+
 function blueprintToSeedQuestions(bp: InterviewBlueprint): SeedQuestion[] {
   return bp.questions.slice(0, 8).map((q) => ({
     q: q.q,
@@ -204,6 +221,8 @@ export class InterviewPromptService {
       archetypeVoiceDirective: getArchetype(input.archetype).voiceDirective,
       domainVoiceDirective: domain?.voiceDirective,
       domainLabel: domain?.labelEn,
+      prepVoiceLines: input.prep ? renderPrepForVoice(input.prep) : undefined,
+      prepBriefLines: input.prep ? renderPrepForBrief(input.prep) : undefined,
     };
     const systemPrompt = composeVoiceSystemPrompt(composeParams);
     const openingInstruction = composeOpeningInstruction(composeParams);
@@ -346,6 +365,7 @@ export class InterviewPromptService {
           webEvidence,
           jdText: input.jdText,
           resumeContext: input.resumeContext,
+          prepBrief: input.prep ? renderPrepForBlueprint(input.prep) : undefined,
           // Scale the plan with the clock: ~1 question per 5 minutes, clamped to
           // the blueprint agent's 4..10 band. A 15-min screen plans 4; a 60-min
           // deep dive plans 10 instead of leaving the live LLM to improvise
