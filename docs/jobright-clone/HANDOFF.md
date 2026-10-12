@@ -147,8 +147,9 @@ Start with `docs/jobright-clone/orch/parity-verify.md` (exact commands and expec
 
 ## 6. What only the owner can do
 
-- `ALLOWED_BRANDS=roboapply` on Vercel (Production and Preview) before this branch reaches production, unless GoApply is to go live at the same moment: a deployment with no value serves both brands.
-- Run `server/prisma/sql/001_vector.sql` and the additive schema push on the production database before the deploy (`server/prisma/sql/README.md`).
+- ~~`ALLOWED_BRANDS=roboapply` on Vercel (Production and Preview) before this branch reaches production~~ **Done 2026-10-12** (both environments). Remove it on the day GoApply goes live: a deployment with no value serves both brands.
+- ~~Run `server/prisma/sql/001_vector.sql` and the additive schema push on the production database before the deploy~~ **Done 2026-10-12** on `ep-empty-snow-a6mdqwbe`: pgvector 0.8.6; the reviewed additive diff (86 tables, 11 column groups, 195 indexes, 83 foreign keys, one enum value) applied in one transaction; the second diff is empty apart from the `KNOWN_DRIFT.md` pair. Both diffs: `schema-diffs/production-2026-10-12-before.sql` and `-after.sql`.
+- `CRON_SECRET` is not set on Vercel, so every cron route answers 401 in production (it never ran there, `main`'s crons included). Setting it starts all 16 schedules at once: job reads every 5 to 10 minutes, LLM enrichment up to `ENRICH_DAILY_JOBS` (default 8,000 a day per market), job alerts, lifecycle mail, the account purge. Decide the budgets first.
 - Stripe: a `sk_test_` key and a `stripe listen` webhook secret for local checkout tests; the live webhook endpoint and its secret for production (`market/STRIPE_TEST_RECIPE.md`).
 - Alipay: `ALIPAY_CALLBACK_SECRET` in the GoApply environment; one supervised ¥12 order (`market/ALIPAY_CUTOVER.md`).
 - Recruiter-bank jobs (RoboHire, GoHire) are synced but not listed until the bank has a candidate-facing posting page: set `ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE` / `GOHIRE_PUBLIC_JOB_URL_TEMPLATE` when it exists (work in the RoboHire repository).
