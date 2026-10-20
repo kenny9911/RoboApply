@@ -127,6 +127,8 @@ interface Labels {
 
 interface Props {
   source: ImportSource;
+  /** A file already chosen (dropped on the hub): the modal opens with it ready to read. */
+  initialFile?: File | null;
   labels: Labels;
   /** Localized failure copy keyed by backend error code (invalid_url,
    *  fetch_failed, parse_failed, …). Falls back to `labels.error` when a code
@@ -163,6 +165,7 @@ const TEMPLATES: { key: string; lblKey: keyof Labels }[] = [
 
 export function ImportModal({
   source,
+  initialFile = null,
   labels,
   errorMessages,
   lostResponseCodes,
@@ -175,8 +178,10 @@ export function ImportModal({
   onDone,
 }: Props) {
   const [stage, setStage] = useState<Stage>('input');
-  const [file, setFile] = useState<{ name: string; size: string } | null>(null);
-  const [realFile, setRealFile] = useState<File | null>(null);
+  const [file, setFile] = useState<{ name: string; size: string } | null>(
+    initialFile ? { name: initialFile.name, size: humanSize(initialFile.size) } : null,
+  );
+  const [realFile, setRealFile] = useState<File | null>(initialFile);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [templateKey, setTemplateKey] = useState(TEMPLATES[0].key);
   const [parsed, setParsed] = useState<IngestItem[]>([]);

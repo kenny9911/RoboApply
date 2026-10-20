@@ -1,5 +1,5 @@
-// WP-36b — resume hub UI: tabs, base slots, primary + target title, tailored
-// versions per job, the Layout panel (templates incl. the two-column
+// WP-36b — resume hub UI: tabs, base slots, the target title edited in place,
+// tailored versions per job, the Layout panel (templates incl. the two-column
 // warning), the live paper following the layout, and the export dialog
 // (ruling C12 block, file-name presets, AI note, WeChat banner). Renders
 // through the real en.json + staged English, so a missing key fails here.
@@ -28,7 +28,8 @@ vi.mock('../auth-cn', () => ({
 }));
 vi.mock('../market', () => ({ AiGeneratedBadge: () => <span data-testid="ai-badge">AI generated</span> }));
 
-import { BaseSlots, ResumeHubMeta, ResumeHubTabs, TailoredVersions, groupTailored, verifyDetailsHref } from './ResumeHub';
+import { BaseSlots, ResumeHubTabs, TailoredVersions, groupTailored, verifyDetailsHref } from './ResumeHub';
+import { TargetTitleField } from './hub';
 import { LayoutPanel } from './LayoutPanel';
 import { resolveLayout } from './layout';
 import { DownloadModal } from '../../v3/resume-editor/DownloadModal';
@@ -72,26 +73,39 @@ describe('hub tabs and slots', () => {
   });
 });
 
-describe('ResumeHubMeta', () => {
-  it('shows the primary badge, or a Make primary button', () => {
-    const onMakePrimary = vi.fn();
-    const { rerender } = renderWithProviders(
-      <ResumeHubMeta resume={summary({ isPrimary: true })} onMakePrimary={onMakePrimary} onSaveTargetTitle={vi.fn()} />,
-    );
-    expect(screen.getByText('Primary')).toBeInTheDocument();
-    rerender(<ResumeHubMeta resume={summary({ isPrimary: false })} onMakePrimary={onMakePrimary} onSaveTargetTitle={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Make primary' }));
-    expect(onMakePrimary).toHaveBeenCalled();
-  });
-
-  it('saves the target title on Enter and reports the result', async () => {
+describe('TargetTitleField (library cards)', () => {
+  it('reads as a line and is edited in place: Enter saves the trimmed title and reports it', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
-    renderWithProviders(<ResumeHubMeta resume={summary({ targetTitle: null })} onMakePrimary={vi.fn()} onSaveTargetTitle={save} />);
+    renderWithProviders(<TargetTitleField value={null} onSave={save} />);
+    fireEvent.click(screen.getByRole('button', { name: "Add the job title you're aiming for" }));
     const input = screen.getByLabelText("Job title you're aiming for");
     fireEvent.change(input, { target: { value: '  Data Analyst ' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(save).toHaveBeenCalledWith('Data Analyst'));
+    expect(save).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('Saved')).toBeInTheDocument();
+  });
+
+  it('keeps a title that did not save: opening the field again brings it back', async () => {
+    const save = vi.fn().mockRejectedValue(new Error('offline'));
+    renderWithProviders(<TargetTitleField value={null} onSave={save} />);
+    fireEvent.click(screen.getByRole('button', { name: "Add the job title you're aiming for" }));
+    fireEvent.change(screen.getByLabelText("Job title you're aiming for"), { target: { value: 'Data Analyst' } });
+    fireEvent.keyDown(screen.getByLabelText("Job title you're aiming for"), { key: 'Enter' });
+    expect(await screen.findByText('Not saved. Try again.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: "Add the job title you're aiming for" }));
+    expect(screen.getByLabelText("Job title you're aiming for")).toHaveValue('Data Analyst');
+  });
+
+  it('Escape puts the old title back and saves nothing', () => {
+    const save = vi.fn();
+    renderWithProviders(<TargetTitleField value="Analyst" onSave={save} />);
+    fireEvent.click(screen.getByRole('button', { name: "Change the job title you're aiming for: Analyst" }));
+    const input = screen.getByLabelText("Job title you're aiming for");
+    fireEvent.change(input, { target: { value: 'Engineer' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByText('Aimed at Analyst')).toBeInTheDocument();
   });
 });
 

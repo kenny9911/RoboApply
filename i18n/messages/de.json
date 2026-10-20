@@ -425,27 +425,12 @@
     "title_lead": "Schreib den Lebenslauf, ",
     "title_accent": "den du selbst einstellen würdest",
     "title_after": ".",
-    "subtitle": "Fang bei null an, lade deinen vorhandenen hoch oder importiere ihn von LinkedIn. Danach passt du für jeden Wunschjob eine Kopie an.",
+    "subtitle": "Halte einen starken Hauptlebenslauf bereit, prüfe ihn und pass für jeden Job, den du willst, eine Version an.",
     "common": {
       "cancel": "Abbrechen",
       "close": "Schließen"
     },
     "create": {
-      "scratch": {
-        "title": "Bei null anfangen",
-        "desc": "Eine saubere Vorlage mit Hilfe bei jeder Zeile. Am besten, wenn du am Anfang deiner Laufbahn stehst.",
-        "meta": "Etwa 10 Minuten"
-      },
-      "file": {
-        "title": "Lebenslauf hochladen",
-        "desc": "Zieh ein PDF oder DOCX hierher. Es wird gelesen, sortiert, und schwache Zeilen werden markiert.",
-        "meta": "PDF · DOCX · Apple Pages"
-      },
-      "linkedin": {
-        "title": "Von LinkedIn importieren",
-        "desc": "Speichere dein LinkedIn-Profil als PDF und lade es hier hoch. Gleiche Auswertung, gleiche Markierungen.",
-        "meta": "Als PDF speichern, dann hochladen"
-      },
       "default_name": {
         "scratch": "Entwurf ohne Titel",
         "file": "Hochgeladener Lebenslauf",
@@ -456,15 +441,7 @@
       "title": "Deine Lebensläufe"
     },
     "card": {
-      "base": "Hauptlebenslauf — nicht auf einen Job angepasst",
-      "edited": "Bearbeitet {when}",
-      "delete": "Lebenslauf löschen",
-      "versions_used": "{used} von {cap} Versionen genutzt",
-      "tailored_stamp": "Angepasst"
-    },
-    "tip": {
-      "label": "Wenn du am Anfang deiner Laufbahn stehst",
-      "body": "Wenig Berufserfahrung ist kein Problem. Studienprojekte, Hackathons, Freelance-Aufträge und eigene Projekte werden zu echten Stichpunkten. Nutz bei jeder Zeile „Studien- und Praktikumsarbeit umschreiben“."
+      "edited": "Bearbeitet {when}"
     },
     "empty": {
       "title_lead": "Noch keine ",
@@ -766,7 +743,8 @@
       "cancel": "Abbrechen",
       "confirm": "Lebenslauf löschen",
       "confirming": "Wird gelöscht…",
-      "error": "Dieser Lebenslauf konnte nicht gelöscht werden. Versuch es erneut."
+      "error": "Dieser Lebenslauf konnte nicht gelöscht werden. Versuch es erneut.",
+      "in_use": "Du kannst deinen einzigen Lebenslauf nicht löschen, solange du gemerkte Jobs hast. Füge zuerst einen weiteren Lebenslauf hinzu und lösche dann diesen."
     },
     "extra": {
       "hint": "Aus deinem ursprünglichen Lebenslauf übernommen — als reinen Text bearbeiten",
@@ -835,7 +813,8 @@
       },
       "primary": {
         "badge": "Hauptlebenslauf",
-        "make": "Zum Hauptlebenslauf machen"
+        "make": "Zum Hauptlebenslauf machen",
+        "make_aria": "{name} zum Hauptlebenslauf machen"
       },
       "slots": {
         "full": "Alle Plätze belegt",
@@ -864,7 +843,100 @@
         "label": "Jobbezeichnung, die du anstrebst",
         "placeholder": "Zum Beispiel Product Manager",
         "saved": "Gespeichert",
-        "saving": "Wird gespeichert…"
+        "saving": "Wird gespeichert…",
+        "add": "Jobbezeichnung hinzufügen, die du anstrebst",
+        "edit_aria": "Angestrebte Jobbezeichnung ändern: {title}"
+      },
+      "card": {
+        "open": "Bearbeiten",
+        "open_aria": "{name} bearbeiten",
+        "tailor": "Anpassen",
+        "tailor_aria": "{name} für einen Job anpassen",
+        "delete_aria": "{name} löschen",
+        "tailored_count": "{count, plural, one {1 Version für einen bestimmten Job} other {# Versionen für bestimmte Jobs}}",
+        "source": {
+          "upload": "Hochgeladene Datei",
+          "linkedin": "Von LinkedIn",
+          "template": "Aus einer Vorlage",
+          "scratch": "Hier erstellt"
+        }
+      },
+      "check": {
+        "none": "Noch nicht geprüft",
+        "run": "Prüfung starten",
+        "run_aria": "Prüfung für {name} starten",
+        "open": "Prüfung ansehen",
+        "open_aria": "Prüfung für {name} ansehen",
+        "again_aria": "{name} erneut prüfen",
+        "running": "Wird geprüft…"
+      },
+      "studio": {
+        "eyebrow": "Anpassen mit KI",
+        "title": "Erstell eine Version für den nächsten Job, den du willst",
+        "body": "Wähle einen gemerkten Job oder füge die Stellenanzeige ein. Die KI schreibt eine Kopie deines Lebenslaufs passend um; dein Original bleibt, wie es ist.",
+        "honesty": "Jedes neue Stichwort, jede neue Zahl und jede neue Aussage wartet auf dein OK, bevor du die Kopie herunterladen kannst.",
+        "base": "Ausgangsbasis",
+        "base_one": "Basiert auf <b>{name}</b>",
+        "saved": "Gemerkte Jobs ohne angepasste Version",
+        "job_aria": "Version für {title} anpassen",
+        "job_aria_company": "Version für {title} bei {company} anpassen",
+        "more": "{count, plural, one {1 weiterer gemerkter Job} other {# weitere gemerkte Jobs}}",
+        "ask": "Den Assistenten fragen",
+        "prompts": {
+          "fix_first": "Was sollte ich an meinem Lebenslauf zuerst verbessern?",
+          "summary": "Mach mein Kurzprofil überzeugender für den Job, den ich will.",
+          "lead": "Mit welcher Erfahrung sollte mein Lebenslauf beginnen?"
+        }
+      },
+      "next": {
+        "title": "Als Nächstes",
+        "empty": "Gerade braucht nichts deine Aufmerksamkeit.",
+        "loading": "Nächste Schritte werden geladen",
+        "verify_detail": "{name} · du kannst ihn herunterladen, sobald jede Angabe geprüft ist",
+        "check_none": "Prüf deinen Hauptlebenslauf",
+        "check_none_detail": "{name} · sieh, was du zuerst beheben solltest, jeweils mit Begründung",
+        "check_stale_detail": "{name} · du hast ihn nach der letzten Prüfung geändert",
+        "check_failed_detail": "{name} · starte sie auf der Prüfungsseite neu",
+        "check_running_detail": "{name} · das kann bis zu 45 Sekunden dauern",
+        "fix_urgent": "{count, plural, one {1 Problem zuerst beheben} other {# Probleme zuerst beheben}}",
+        "fix_critical": "{count, plural, one {1 wichtiges Problem} other {# wichtige Probleme}}",
+        "fix_detail": "{name} · zu jedem gibt es einen Weg, es zu beheben"
+      },
+      "new": {
+        "title": "Neuer Lebenslauf",
+        "hint": "Wähle, wie du anfangen willst, oder zieh eine Lebenslauf-Datei hierher.",
+        "upload": {
+          "title": "Datei hochladen",
+          "desc": "PDF oder Word. Die KI liest sie und teilt sie in bearbeitbare Abschnitte."
+        },
+        "builder": {
+          "title": "Geführt erstellen",
+          "desc": "Kurze Fragen, ein Abschnitt nach dem anderen. Gut für den ersten Lebenslauf."
+        },
+        "template": {
+          "title": "Mit einer Vorlage starten",
+          "desc": "Ein klares Layout zum Ausfüllen."
+        },
+        "linkedin": {
+          "title": "LinkedIn-PDF",
+          "desc": "Dein Profil, auf LinkedIn als PDF gespeichert."
+        },
+        "ai_help": "KI-Schreibhilfe"
+      },
+      "start": {
+        "title": "Fang mit dem Lebenslauf an, den du hast",
+        "body": "Lade ihn hoch, und die KI liest ihn und teilt ihn in bearbeitbare Abschnitte. Noch kein Lebenslauf? Beim geführten Erstellen beantwortest du kurze Fragen und baust ihn Schritt für Schritt auf.",
+        "drop_title": "Lade deinen Lebenslauf hoch",
+        "drop_body": "Zieh eine Datei hierher oder wähle eine aus. Die KI liest sie abschnittsweise und markiert schwache Zeilen.",
+        "or": "Weitere Möglichkeiten",
+        "how": {
+          "read_title": "Lesen",
+          "read_body": "Deine Datei wird zu bearbeitbaren Abschnitten.",
+          "check_title": "Prüfen",
+          "check_body": "Eine Checkliste zeigt, was du zuerst beheben solltest und wie.",
+          "tailor_title": "Anpassen",
+          "tailor_body": "Eine Version für jeden Job. Neue Stichwörter, Zahlen und Aussagen warten auf dein OK."
+        }
       }
     },
     "layout": {

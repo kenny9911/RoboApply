@@ -3,15 +3,14 @@
 // Resume hub pieces (WP-36b; PRODUCT_PLAN.md F-RES-02):
 //   <ResumeHubTabs active="resumes" />     Resumes · Cover letters (/resume/letters)
 //   <BaseSlots used={n} />                 "{n} of 5 resumes" (tailored versions not counted)
-//   <ResumeHubMeta resume … />             Primary badge / Make primary + target title
 //   <TailoredVersions items … />           tailored versions grouped per job; one with
 //                                          details still to check links to "Verify details"
 //                                          (`/resume?tailorSession=<id>`, the tailor flow)
+// The library cards, AI tailoring and "Up next" are in ./hub.
 //
-// Data comes from the page (useResumeList); mutations are passed in, so these
-// stay presentational and testable. Counts are real list lengths (D3).
+// Data comes from the page (useResumeList), so these stay presentational and
+// testable. Counts are real list lengths (D3).
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
@@ -47,72 +46,6 @@ export function BaseSlots({ used }: { used: number }) {
       {t('slots.used', { used, limit: BASE_RESUME_LIMIT })}
       {full ? <span className={styles.slotsFull}> · {t('slots.full')}</span> : null}
     </p>
-  );
-}
-
-export interface ResumeHubMetaProps {
-  resume: ResumeSummary;
-  onMakePrimary: () => void;
-  onSaveTargetTitle: (title: string) => Promise<unknown>;
-  primaryBusy?: boolean;
-}
-
-/** Primary badge or "Make primary", and the editable target title. */
-export function ResumeHubMeta({ resume, onMakePrimary, onSaveTargetTitle, primaryBusy }: ResumeHubMetaProps) {
-  const t = useTranslations('resume.hub');
-  const [title, setTitle] = useState(resume.targetTitle ?? '');
-  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  useEffect(() => setTitle(resume.targetTitle ?? ''), [resume.targetTitle]);
-  const inputId = `target-${resume.id}`;
-
-  async function save() {
-    const next = title.trim();
-    if (next === (resume.targetTitle ?? '')) return;
-    setState('saving');
-    try {
-      await onSaveTargetTitle(next);
-      setState('saved');
-    } catch {
-      setState('error');
-    }
-  }
-
-  return (
-    <div className={styles.meta}>
-      <div className={styles.metaRow}>
-        {resume.isPrimary ? (
-          <span className={styles.primaryBadge}>{t('primary.badge')}</span>
-        ) : (
-          <button type="button" className={styles.linkButton} onClick={onMakePrimary} disabled={primaryBusy}>
-            {t('primary.make')}
-          </button>
-        )}
-      </div>
-      <label className={styles.targetLabel} htmlFor={inputId}>
-        {t('target.label')}
-      </label>
-      <input
-        id={inputId}
-        className={styles.targetInput}
-        value={title}
-        maxLength={120}
-        placeholder={t('target.placeholder')}
-        onChange={(e) => {
-          setTitle(e.target.value);
-          setState('idle');
-        }}
-        onBlur={() => void save()}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            void save();
-          }
-        }}
-      />
-      <span className={styles.targetStatus} role="status" aria-live="polite">
-        {state === 'saving' ? t('target.saving') : state === 'saved' ? t('target.saved') : state === 'error' ? t('target.error') : ''}
-      </span>
-    </div>
   );
 }
 
@@ -167,15 +100,17 @@ export function TailoredVersions({ resumes, baseNames, formatDate }: TailoredVer
           <ul className={styles.versionList}>
             {g.versions.map((v) => (
               <li key={v.id} className={styles.versionRow}>
-                <Link href={`/resume/${v.id}`} className={styles.versionLink}>
-                  {v.name}
-                </Link>
-                <span className={styles.muted}>
-                  {v.basedOnVariantId && baseNames.get(v.basedOnVariantId)
-                    ? t('tailored.from', { name: baseNames.get(v.basedOnVariantId)! })
-                    : null}
-                  {v.basedOnVariantId && baseNames.get(v.basedOnVariantId) ? ' · ' : null}
-                  {t('tailored.edited', { when: formatDate(v.lastEditedAt) })}
+                <span className={styles.versionMain}>
+                  <Link href={`/resume/${v.id}`} className={styles.versionLink}>
+                    {v.name}
+                  </Link>
+                  <span className={styles.muted}>
+                    {v.basedOnVariantId && baseNames.get(v.basedOnVariantId)
+                      ? t('tailored.from', { name: baseNames.get(v.basedOnVariantId)! })
+                      : null}
+                    {v.basedOnVariantId && baseNames.get(v.basedOnVariantId) ? ' · ' : null}
+                    {t('tailored.edited', { when: formatDate(v.lastEditedAt) })}
+                  </span>
                 </span>
                 {v.unverifiedClaims && v.unverifiedClaims > 0 ? (
                   <span className={styles.verifyRow} data-verify={v.id}>

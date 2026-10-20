@@ -1,49 +1,43 @@
 'use client';
 
-// /resume — the resume hub (WP-36b; PRODUCT_PLAN.md F-RES-02). Tabs: Resumes ·
-// Cover letters (/resume/letters, WP-37). Up to 5 base resumes (Free and Pro)
-// with one primary and a target title each; tailored versions are listed per
-// job underneath and do not take a slot. LinkedIn means the user's own
-// "Save to PDF" export only (no URL import; hidden on GoApply).
+// /resume — the resume hub (WP-36b; PRODUCT_PLAN.md F-RES-02), AI first. Tabs:
+// Resumes · Cover letters (/resume/letters, WP-37). Up to 5 base resumes (Free
+// and Pro) with one primary and a target title each; tailored versions are
+// listed per job underneath and do not take a slot. LinkedIn means the user's
+// own "Save to PDF" export only (no URL import; hidden on GoApply).
 //
-// Layout (source: RoboApply_V3/resume.jsx ResumeLibrary):
-//   PageHeader (eyebrow + h1 + sub)
-//   CreateCards   — Start from scratch / Upload a resume / Import from LinkedIn
-//   SectionHead   — "Your resumes · {n} versions" + sort
-//   ResumeList    — <ResumeCard> per variant (or loading / empty / error states)
-//   YoungCareerTip footer
-//   ImportModal   — scratch | file | linkedin → input → parsing → done → push
+// Layout (components/features/resume/hub):
+//   PageHeader · ResumeHubTabs
+//   Studio     — TailorPanel: AI tailoring from a saved job (those without a
+//                tailored version) or a pasted posting (only when AI may run
+//                for this user, R-04) · beside it NextSteps ("Up next":
+//                details to verify, the main resume's check) and AskAssistant
+//                (questions about the main resume, when the Assistant is on)
+//   Library    — LibraryCard per base resume (the resume itself as the
+//                preview, its latest check, target title, actions) and the
+//                NewResumeTile (upload or drop a file, guided builder at
+//                /resume/new, template, LinkedIn PDF)
+//   Tailored   — TailoredVersions, grouped per job
+// First visit (no base resume): ResumeStart in place of studio and library.
 //
-// Data: `useResumeList()` (existing) for the grid; `useCreateResumeMutation()`
-// (existing) to materialize a new variant. On a successful create the modal's
-// "Open editor" hands back the variant and we `router.push('/resume/[id]')` —
-// Lane F owns that editor page; the route push is the ONLY coupling point.
+// Data: `useResumeList()` for the library; per card `useResume(id)` (preview)
+// and `useLatestResumeCheck(id)` (check). The main resume's latest check also
+// says whether AI may run for this user (`aiAvailable`), which with the
+// `ai.text` flag gates tailoring exactly as useTailorAvailability does. Saved
+// jobs come from the tracker (useTailorTargets), read only when tailoring is
+// available. Creating goes through ImportModal; "Open editor" pushes
+// `/resume/[id]`, the only coupling point with the editor.
 //
 // The (auth) layout already wraps children in `.main-inner`, so this page does
 // NOT render its own wrapper. All strings live under the `resume` namespace.
 
 import { Suspense, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 
 import { parseResumeMarkdown } from '../../../lib/resumeStructure';
-import {
-  PageHeader,
-  Btn,
-  EmptyState,
-  IconEdit,
-  IconFile,
-  IconSparkle,
-} from '../../../components/v3/primitives';
-import {
-  CreateCard,
-  ResumeCard,
-  ImportModal,
-  joinPhrase,
-  type CreateSource,
-  type ImportSource,
-  type ImportCreateContext,
-} from '../../../components/v3/resumes';
+import { PageHeader, Btn, EmptyState } from '../../../components/v3/primitives';
+import { ImportModal, joinPhrase, type ImportSource, type ImportCreateContext } from '../../../components/v3/resumes';
 import {
   useResumeList,
   useCreateResumeMutation,
@@ -52,21 +46,36 @@ import {
   useDeleteResumeMutation,
   useSetPrimaryResumeMutation,
 } from '../../../hooks/useResumes';
+import { useLatestResumeCheck } from '../../../hooks/resume/useResumeCheck';
+import { useBuilderConfig } from '../../../hooks/resume/useResumeBuilder';
+import { useTailorTargets } from '../../../hooks/tailor';
+import { useOpenAssistant } from '../../../hooks/shared/useOpenAssistant';
 import { patchResume, BASE_RESUME_LIMIT, RESUME_UPLOADS_PER_DAY, type ResumeSummary } from '../../../lib/api/resumes';
+import { RoboApiError } from '../../../lib/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../../lib/brand';
+import { useFlag } from '../../../lib/flags';
 import { DeleteResumeConfirm } from '../../../components/resumes/DeleteResumeConfirm';
 import {
+  AskAssistant,
   BaseSlots,
-  ResumeCheckEntry,
-  ResumeHubMeta,
+  LibraryCard,
+  NewResumeTile,
+  NextSteps,
   ResumeHubTabs,
+  ResumeStart,
+  TailorPanel,
   TailoredVersions,
+  checkStateOf,
   isBaseSlot,
+  mainResumeOf,
+  nextSteps,
+  sortBases,
+  untailoredJobs,
+  type StartMethod,
 } from '../../../components/features/resume';
-import { TailorLaunchHost } from '../../../components/features/tailor';
-import checkStyles from '../../../components/features/resume/ResumeCheck.module.css';
-import hubStyles from '../../../components/features/resume/ResumeHub.module.css';
+import { TailorLaunchHost, TailorSheet } from '../../../components/features/tailor';
+import styles from '../../../components/features/resume/hub/Hub.module.css';
 import type { RAResumeVariant, ResumeCreateBody } from '../../../lib/api/v2/types';
 
 // Stub-side seed markdown for an upload / LinkedIn import or a fresh scratch
@@ -95,31 +104,18 @@ A two-sentence pitch. The agent will help you sharpen this in the editor.
 Product strategy · Roadmapping · Experimentation
 `;
 
-function LinkedInGlyph() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" strokeWidth="2" />
-      <path
-        d="M8 10v8M8 7v.01"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M12 18v-6c0-1.7 1.3-3 3-3s3 1.3 3 3v6M12 10v8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+/** How a resume began, as the card names it (`sourceKind`; unknown kinds say nothing). */
+const SOURCE_LABELS = ['upload', 'linkedin', 'template', 'scratch'] as const;
+
+interface Tailoring {
+  resumeId: string;
+  jobId: string | null;
+  jobTitle: string | null;
 }
 
 export default function ResumesPage() {
   const t = useTranslations('resume');
+  const locale = useLocale();
   const router = useRouter();
   const { data, isLoading, isError, refetch } = useResumeList();
   const createMut = useCreateResumeMutation();
@@ -132,34 +128,48 @@ export default function ResumesPage() {
   // GoApply has no LinkedIn door (PRODUCT_PLAN.md G-onboarding resume step).
   const showLinkedIn = brand.market !== 'cn';
 
-  const [importing, setImporting] = useState<ImportSource | null>(null);
-  const [limitNotice, setLimitNotice] = useState(false);
-  const [deleteTarget, setDeleteTarget] =
-    useState<ResumeSummary | null>(null);
+  const [importing, setImporting] = useState<{ source: ImportSource; file: File | null } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ResumeSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [tailoring, setTailoring] = useState<Tailoring | null>(null);
+  const [baseChoice, setBaseChoice] = useState<string | null>(null);
 
   const resumes = useMemo(() => data?.resumes ?? [], [data]);
-
   // Base resumes (they take a slot), primary first, then newest edit.
-  const sorted = useMemo(() => {
-    return resumes
-      .filter(isBaseSlot)
-      .sort((a, b) => Number(Boolean(b.isPrimary)) - Number(Boolean(a.isPrimary)) || b.lastEditedAt.localeCompare(a.lastEditedAt));
-  }, [resumes]);
+  const bases = useMemo(() => sortBases(resumes), [resumes]);
   const tailored = useMemo(() => resumes.filter((r) => !isBaseSlot(r)), [resumes]);
   const baseNames = useMemo(() => new Map(resumes.map((r) => [r.id, r.name])), [resumes]);
-  const slotsFull = sorted.length >= BASE_RESUME_LIMIT;
+  const tailoredPerBase = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of tailored) if (r.basedOnVariantId) counts.set(r.basedOnVariantId, (counts.get(r.basedOnVariantId) ?? 0) + 1);
+    return counts;
+  }, [tailored]);
+  const slotsFull = bases.length >= BASE_RESUME_LIMIT;
+  const main = mainResumeOf(bases);
+  const baseId = (baseChoice && bases.some((b) => b.id === baseChoice) ? baseChoice : main?.id) ?? null;
 
-  // Version label: oldest created = v1, ascending. Derived (no contract field).
-  const versionById = useMemo(() => {
-    const byAge = [...resumes].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    const map = new Map<string, string>();
-    byAge.forEach((r, i) => map.set(r.id, `v${i + 1}`));
-    return map;
-  }, [resumes]);
+  // AI tailoring: the brand capability AND this user's consent, which the
+  // server answers on the main resume's latest check (useTailorAvailability).
+  // Without both, no AI entry is shown (R-04).
+  const aiText = useFlag('ai.text');
+  const mainCheck = useLatestResumeCheck(main?.id);
+  const tailorAvailable = aiText && mainCheck.data?.aiAvailable === true;
+  const targets = useTailorTargets(tailorAvailable);
+  const untailored = useMemo(() => untailoredJobs(targets.data ?? [], resumes), [targets.data, resumes]);
+  const steps = nextSteps({ resumes, main: main ? { resume: main, check: checkStateOf(mainCheck) } : null });
+  const stepsLoading = Boolean(main) && mainCheck.isLoading;
+  const showStudio = tailorAvailable || stepsLoading || steps.length > 0;
+
+  // The guided builder says itself whether its AI writing help is on.
+  const builderAi = useBuilderConfig().data?.aiAvailable === true;
+
+  // Questions for the Assistant, scoped to the main resume (F-RES-11).
+  const assistantOn = useFlag('copilot');
+  const openAssistant = useOpenAssistant();
 
   function formatDate(iso: string): string {
     try {
-      return new Date(iso).toLocaleDateString(undefined, {
+      return new Date(iso).toLocaleDateString(locale, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -169,13 +179,20 @@ export default function ResumesPage() {
     }
   }
 
-  function editedLabel(r: ResumeSummary): string {
-    return t('card.edited', { when: formatDate(r.lastEditedAt) });
+  function sourceLabel(r: ResumeSummary): string | null {
+    const kind = SOURCE_LABELS.find((k) => k === r.sourceKind);
+    return kind ? t(`hub.card.source.${kind}`) : null;
   }
 
   async function saveTargetTitle(id: string, title: string) {
     await patchResume(id, { targetTitle: title });
     await qc.invalidateQueries({ queryKey: ['v2', 'resumes'] });
+  }
+
+  function startTailoring(resumeId: string | null, jobId: string | null) {
+    if (!resumeId) return;
+    const job = jobId ? (targets.data ?? []).find((j) => j.jobId === jobId) : null;
+    setTailoring({ resumeId, jobId, jobTitle: job?.title ?? null });
   }
 
   // Build the create body for the scratch source (template clone). `file` and
@@ -299,14 +316,15 @@ export default function ResumesPage() {
     ai_unavailable: t('hub.errors.ai_off'),
   };
 
-  function handleSelect(source: CreateSource) {
-    // Every base slot is taken: say so instead of opening a doomed import.
-    if (slotsFull) {
-      setLimitNotice(true);
-      return;
-    }
-    setLimitNotice(false);
-    setImporting(source);
+  function handleSelect(method: StartMethod) {
+    // Every base slot is taken: the ways to start are disabled and say so.
+    if (slotsFull) return;
+    setImporting({ source: method, file: null });
+  }
+
+  function handleFile(file: File) {
+    if (slotsFull) return;
+    setImporting({ source: 'file', file });
   }
 
   function handleDone(variant: RAResumeVariant) {
@@ -320,6 +338,8 @@ export default function ResumesPage() {
     setImporting(null);
     void refetch();
   }
+
+  const startProps = { showLinkedIn, builderAi, onSelect: handleSelect, onFile: handleFile };
 
   return (
     <>
@@ -338,59 +358,10 @@ export default function ResumesPage() {
         <TailorLaunchHost />
       </Suspense>
 
-      {limitNotice ? (
-        <p className={hubStyles.notice} role="status">
-          {t('hub.slots.limit_error', { limit: BASE_RESUME_LIMIT })}
-        </p>
-      ) : null}
-
-      {/* Create cards */}
-      <div className="rb-create">
-        <CreateCard
-          source="scratch"
-          icon={<IconEdit size={22} strokeWidthValue={2} />}
-          title={t('create.scratch.title')}
-          description={t('create.scratch.desc')}
-          meta={t('create.scratch.meta')}
-          onSelect={handleSelect}
-        />
-        <CreateCard
-          source="file"
-          icon={<IconFile size={22} strokeWidthValue={2} />}
-          title={t('create.file.title')}
-          description={t('create.file.desc')}
-          meta={t('create.file.meta')}
-          onSelect={handleSelect}
-        />
-        {showLinkedIn ? (
-          <CreateCard
-            source="linkedin"
-            icon={<LinkedInGlyph />}
-            title={t('create.linkedin.title')}
-            description={t('create.linkedin.desc')}
-            meta={t('create.linkedin.meta')}
-            onSelect={handleSelect}
-          />
-        ) : null}
-      </div>
-
-      {/* Existing resumes */}
-      <div className={hubStyles.sectionHead}>
-        <h2 className={hubStyles.sectionTitle}>{t('library.title')}</h2>
-        {data ? <BaseSlots used={sorted.length} /> : null}
-      </div>
-
       {isLoading ? (
-        <div className="rb-list" aria-busy="true">
+        <div className={styles.grid} aria-busy="true">
           {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="rb-card"
-              style={{ cursor: 'default', opacity: 0.5, minHeight: 300 }}
-              aria-hidden="true"
-            >
-              <div className="rb-card-paper" style={{ background: 'var(--surface-2)' }} />
-            </div>
+            <div key={i} className={styles.cardSkeleton} aria-hidden="true" />
           ))}
         </div>
       ) : isError ? (
@@ -403,81 +374,79 @@ export default function ResumesPage() {
             </Btn>
           }
         />
-      ) : sorted.length === 0 ? (
-        <EmptyState
-          title={joinPhrase(t('empty.title_lead'), t('empty.title_accent'))}
-          sub={t('empty.sub')}
-          action={
-            <Btn variant="primary" onClick={() => handleSelect('scratch')}>
-              {t('empty.cta')}
-            </Btn>
-          }
-        />
+      ) : bases.length === 0 ? (
+        <ResumeStart {...startProps} />
       ) : (
-        <div className="rb-list">
-          {sorted.map((r) => (
-            // Each card carries a Resume check entry (WP-22; F-RES-02).
-            <div key={r.id} className={`${checkStyles.entryWrap} ${hubStyles.cardStack}`}>
-              <ResumeCard
-                resume={r}
-                version={versionById.get(r.id) ?? 'v1'}
-                editedLabel={editedLabel(r)}
-                baseLabel={r.targetTitle ? t('hub.target.for', { title: r.targetTitle }) : t('card.base')}
-                onOpen={() => router.push(`/resume/${r.id}`)}
-                onDelete={() => setDeleteTarget(r)}
-                deleteLabel={t('card.delete')}
-              />
-              <ResumeHubMeta
-                resume={r}
-                primaryBusy={primaryMut.isPending}
-                onMakePrimary={() => primaryMut.mutate(r.id)}
-                onSaveTargetTitle={(title) => saveTargetTitle(r.id, title)}
-              />
-              <ResumeCheckEntry resumeId={r.id} name={r.name} />
+        <>
+          {showStudio ? (
+            <div className={styles.studio} data-single={tailorAvailable ? undefined : true}>
+              {tailorAvailable && baseId ? (
+                <TailorPanel
+                  bases={bases}
+                  baseId={baseId}
+                  onBaseChange={setBaseChoice}
+                  jobs={untailored}
+                  onTailor={(jobId) => startTailoring(baseId, jobId)}
+                />
+              ) : null}
+              <div className={styles.side}>
+                <NextSteps steps={steps} loading={stepsLoading} />
+                {/* Same gate as the editor's Ask button: the Assistant on, and AI allowed for this user. */}
+                {tailorAvailable && assistantOn && main ? (
+                  <AskAssistant onAsk={(prompt) => void openAssistant({ source: 'resume', resumeId: main.id, scope: 'resume', prompt })} />
+                ) : null}
+              </div>
             </div>
-          ))}
-        </div>
+          ) : null}
+
+          <section aria-labelledby="hub-library">
+            <div className={styles.sectionHead}>
+              <h2 className={styles.sectionTitle} id="hub-library">
+                {t('library.title')}
+              </h2>
+              <BaseSlots used={bases.length} />
+            </div>
+            <div className={styles.grid}>
+              {bases.map((r) => (
+                <LibraryCard
+                  key={r.id}
+                  resume={r}
+                  editedLabel={t('card.edited', { when: formatDate(r.lastEditedAt) })}
+                  sourceLabel={sourceLabel(r)}
+                  tailoredCount={tailoredPerBase.get(r.id) ?? 0}
+                  primaryBusy={primaryMut.isPending}
+                  onMakePrimary={() => primaryMut.mutate(r.id)}
+                  onSaveTargetTitle={(title) => saveTargetTitle(r.id, title)}
+                  onDelete={() => {
+                    setDeleteError(null);
+                    setDeleteTarget(r);
+                  }}
+                  onTailor={tailorAvailable ? () => startTailoring(r.id, null) : undefined}
+                />
+              ))}
+              <NewResumeTile {...startProps} full={slotsFull} limit={BASE_RESUME_LIMIT} />
+            </div>
+          </section>
+        </>
       )}
 
       {/* Tailored versions, grouped per job (not counted in the 5). */}
-      {data && !isError ? (
+      {data && !isError && (bases.length > 0 || tailored.length > 0) ? (
         <section aria-labelledby="hub-tailored">
-          <div className={hubStyles.sectionHead}>
-            <h2 className={hubStyles.sectionTitle} id="hub-tailored">
+          <div className={styles.sectionHead}>
+            <h2 className={styles.sectionTitle} id="hub-tailored">
               {t('hub.tailored.title')}
             </h2>
-            <p className={hubStyles.muted}>{t('hub.tailored.sub')}</p>
+            <p className={styles.sectionSub}>{t('hub.tailored.sub')}</p>
           </div>
           <TailoredVersions resumes={tailored} baseNames={baseNames} formatDate={formatDate} />
         </section>
       ) : null}
 
-      {/* Young-career coach FYI */}
-      <div className="rb-foot-tip">
-        <div className="iv-coach-orb" style={{ width: 26, height: 26 }} aria-hidden="true" />
-        <div>
-          <div className="iv-coach-lbl">{t('tip.label')}</div>
-          <div
-            style={{
-              fontSize: 'var(--fs-meta)',
-              color: 'var(--text)',
-              marginTop: 4,
-              lineHeight: 1.5,
-              display: 'flex',
-              gap: 6,
-              alignItems: 'flex-start',
-              flexWrap: 'wrap',
-            }}
-          >
-            <IconSparkle size={14} style={{ color: 'var(--action)', flexShrink: 0, marginTop: 2 }} />
-            <span>{t('tip.body')}</span>
-          </div>
-        </div>
-      </div>
-
       {importing && (
         <ImportModal
-          source={importing}
+          source={importing.source}
+          initialFile={importing.file}
           labels={importLabels}
           errorMessages={importErrorMessages}
           lostResponseCodes={LOST_RESPONSE_CODES}
@@ -491,11 +460,25 @@ export default function ResumesPage() {
         />
       )}
 
-      {/* Delete confirm — typed-confirm; list refetches via mutation onSuccess. */}
+      {/* AI tailoring started on this page: a saved job, or (no job) pick one or paste a posting. */}
+      {tailoring ? (
+        <TailorSheet
+          open
+          onClose={() => setTailoring(null)}
+          resumeId={tailoring.resumeId}
+          jobId={tailoring.jobId}
+          jobTitle={tailoring.jobTitle}
+          onOpenResume={(id) => router.push(`/resume/${encodeURIComponent(id)}`)}
+        />
+      ) : null}
+
+      {/* Delete confirm — typed-confirm; list refetches via mutation onSuccess.
+          A refused delete stays open and says why. */}
       <DeleteResumeConfirm
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         resumeName={deleteTarget?.name ?? ''}
+        error={deleteError}
         labels={{
           title: t('delete.title'),
           body: t('delete.body'),
@@ -506,8 +489,15 @@ export default function ResumesPage() {
           confirming: t('delete.confirming'),
         }}
         onConfirm={async () => {
-          if (deleteTarget) await deleteMut.mutateAsync(deleteTarget.id);
-          setDeleteTarget(null);
+          if (!deleteTarget) return;
+          setDeleteError(null);
+          try {
+            await deleteMut.mutateAsync(deleteTarget.id);
+            setDeleteTarget(null);
+          } catch (err) {
+            // 409: the only base resume while saved jobs exist (RAResumeService.delete).
+            setDeleteError(err instanceof RoboApiError && err.status === 409 ? t('delete.in_use') : t('delete.error'));
+          }
         }}
       />
     </>

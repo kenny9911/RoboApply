@@ -425,27 +425,12 @@
     "title_lead": "寫出",
     "title_accent": "連你自己都想錄取",
     "title_after": "的履歷。",
-    "subtitle": "從空白開始寫、上傳你現有的那一份，或者從 LinkedIn 匯入。然後為每一個想要的職缺調整出一份專用的。",
+    "subtitle": "留一份夠強的主履歷，先做檢查，再為每個想爭取的職缺調整出一個版本。",
     "common": {
       "cancel": "取消",
       "close": "關閉"
     },
     "create": {
-      "scratch": {
-        "title": "從空白開始",
-        "desc": "乾淨的範本，每一行都有提示。剛開始工作的人最適合。",
-        "meta": "大約 10 分鐘"
-      },
-      "file": {
-        "title": "上傳履歷",
-        "desc": "拖一個 PDF 或 DOCX 進來。系統會讀取、整理，並標出寫得弱的地方。",
-        "meta": "PDF · DOCX · Apple Pages"
-      },
-      "linkedin": {
-        "title": "從 LinkedIn 匯入",
-        "desc": "把 LinkedIn 個人檔案存成 PDF 再拖進來。同樣會讀取和標註。",
-        "meta": "先存成 PDF，再上傳"
-      },
       "default_name": {
         "scratch": "未命名草稿",
         "file": "上傳的履歷",
@@ -456,15 +441,7 @@
       "title": "你的履歷"
     },
     "card": {
-      "base": "主履歷 —— 沒有針對某個職缺調整",
-      "edited": "修改於 {when}",
-      "delete": "刪除履歷",
-      "versions_used": "已用 {used} / {cap} 個版本",
-      "tailored_stamp": "已調整"
-    },
-    "tip": {
-      "label": "如果你剛開始工作",
-      "body": "工作經驗少不是問題。課堂專題、黑客松、接過的案子和個人專案都能寫成真正的經歷。每一行都可以用「改寫校園與實習經歷」。"
+      "edited": "修改於 {when}"
     },
     "empty": {
       "title_lead": "還沒有",
@@ -766,7 +743,8 @@
       "cancel": "取消",
       "confirm": "刪除履歷",
       "confirming": "刪除中…",
-      "error": "這份履歷沒有刪除成功。請重試。"
+      "error": "這份履歷沒有刪除成功。請重試。",
+      "in_use": "你有已儲存的職缺時，不能刪除唯一的一份履歷。請先新增另一份履歷，再刪除這一份。"
     },
     "extra": {
       "hint": "從你原本的履歷裡保留下來的 —— 可以當成純文字編輯",
@@ -835,7 +813,8 @@
       },
       "primary": {
         "badge": "主履歷",
-        "make": "設為主履歷"
+        "make": "設為主履歷",
+        "make_aria": "把 {name} 設為主履歷"
       },
       "slots": {
         "full": "名額已用完",
@@ -864,7 +843,100 @@
         "label": "你的目標職稱",
         "placeholder": "例如：產品經理",
         "saved": "已儲存",
-        "saving": "儲存中…"
+        "saving": "儲存中…",
+        "add": "加上你的目標職稱",
+        "edit_aria": "修改你的目標職稱：{title}"
+      },
+      "card": {
+        "open": "編輯",
+        "open_aria": "編輯 {name}",
+        "tailor": "調整",
+        "tailor_aria": "為某個職缺調整 {name}",
+        "delete_aria": "刪除 {name}",
+        "tailored_count": "{count, plural, other {# 個針對特定職缺的版本}}",
+        "source": {
+          "upload": "上傳的檔案",
+          "linkedin": "來自 LinkedIn",
+          "template": "來自範本",
+          "scratch": "在這裡建立"
+        }
+      },
+      "check": {
+        "none": "還沒檢查過",
+        "run": "開始檢查",
+        "run_aria": "檢查 {name}",
+        "open": "查看檢查結果",
+        "open_aria": "查看 {name} 的檢查結果",
+        "again_aria": "再檢查一次 {name}",
+        "running": "正在檢查…"
+      },
+      "studio": {
+        "eyebrow": "AI 調整",
+        "title": "為你想爭取的下一個職缺調整出一個版本",
+        "body": "選一個你儲存的職缺，或貼上職缺內容。AI 會改寫一份履歷副本來貼合它，你原本的履歷會維持原樣。",
+        "honesty": "每個新增的關鍵字、數字或描述，都要等你確認後才能下載這份副本。",
+        "base": "根據",
+        "base_one": "根據 <b>{name}</b>",
+        "saved": "還沒有調整版本的已儲存職缺",
+        "job_aria": "為 {title} 調整出一個版本",
+        "job_aria_company": "為 {company} 的 {title} 調整出一個版本",
+        "more": "{count, plural, other {還有 # 個已儲存的職缺}}",
+        "ask": "問問助理",
+        "prompts": {
+          "fix_first": "我的履歷最該先改哪裡？",
+          "summary": "把我的個人簡介改得更有說服力，貼合我想要的職缺。",
+          "lead": "我的履歷應該把哪段經歷放在最前面？"
+        }
+      },
+      "next": {
+        "title": "接下來",
+        "empty": "目前沒有需要你處理的事。",
+        "loading": "正在載入接下來要做的事",
+        "verify_detail": "{name} · 每一處都核對完才能下載",
+        "check_none": "檢查你的主履歷",
+        "check_none_detail": "{name} · 看看該先改哪裡，每一項都附上原因",
+        "check_stale_detail": "{name} · 上次檢查後你又改過",
+        "check_failed_detail": "{name} · 到檢查頁面重新開始",
+        "check_running_detail": "{name} · 最多需要 45 秒",
+        "fix_urgent": "{count, plural, other {# 個問題要優先修正}}",
+        "fix_critical": "{count, plural, other {# 個重要問題}}",
+        "fix_detail": "{name} · 每一項都附有修改方法"
+      },
+      "new": {
+        "title": "新增履歷",
+        "hint": "選一種方式開始，或把履歷檔案拖到這裡。",
+        "upload": {
+          "title": "上傳檔案",
+          "desc": "PDF 或 Word。AI 會把它讀成可以編輯的區塊。"
+        },
+        "builder": {
+          "title": "引導式填寫",
+          "desc": "一次一個區塊，回答幾個簡短問題。適合寫第一份履歷。"
+        },
+        "template": {
+          "title": "從範本開始",
+          "desc": "簡潔的版面，直接填寫。"
+        },
+        "linkedin": {
+          "title": "LinkedIn PDF",
+          "desc": "你從 LinkedIn 存成 PDF 的個人檔案。"
+        },
+        "ai_help": "AI 協助撰寫"
+      },
+      "start": {
+        "title": "從你現有的履歷開始",
+        "body": "上傳後，AI 會把它讀成可以編輯的區塊。還沒有履歷？引導式填寫會問你幾個簡短問題，和你一起完成一份。",
+        "drop_title": "上傳你的履歷",
+        "drop_body": "把檔案拖到這裡，或選擇一個檔案。AI 會把它讀成各個區塊，並標出寫得弱的地方。",
+        "or": "其他開始方式",
+        "how": {
+          "read_title": "讀取",
+          "read_body": "你的檔案會變成可以編輯的區塊。",
+          "check_title": "檢查",
+          "check_body": "一份清單告訴你該先改哪裡、怎麼改。",
+          "tailor_title": "調整",
+          "tailor_body": "每個職缺一個版本。新增的關鍵字、數字和描述都要等你確認。"
+        }
       }
     },
     "layout": {

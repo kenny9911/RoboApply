@@ -1,8 +1,6 @@
-// V3 Resume library components (Lane E). The /resumes page composes these;
-// the editor at /resumes/[id] is Lane F and shares nothing but the route push.
+// V3 Resume library pieces (Lane E): the create flow and the headline helper.
+// The library cards themselves live in components/features/resume/hub.
 
-export { CreateCard, type CreateSource } from './CreateCard';
-export { ResumeCard } from './ResumeCard';
 export {
   ImportModal,
   type ImportSource,

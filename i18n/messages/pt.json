@@ -425,27 +425,12 @@
     "title_lead": "Escreva o currículo ",
     "title_accent": "que você contrataria",
     "title_after": ".",
-    "subtitle": "Comece do zero, envie o que você já tem ou importe do LinkedIn. Depois adapte uma cópia para cada vaga que quiser.",
+    "subtitle": "Tenha um currículo principal forte, confira-o e adapte uma versão para cada vaga que você quer.",
     "common": {
       "cancel": "Cancelar",
       "close": "Fechar"
     },
     "create": {
-      "scratch": {
-        "title": "Começar do zero",
-        "desc": "Um modelo limpo com ajuda em cada linha. Melhor se você está no começo da carreira.",
-        "meta": "Cerca de 10 minutos"
-      },
-      "file": {
-        "title": "Enviar um currículo",
-        "desc": "Solte um PDF ou DOCX. Ele é lido, organizado, e as linhas fracas ficam marcadas.",
-        "meta": "PDF · DOCX · Apple Pages"
-      },
-      "linkedin": {
-        "title": "Importar do LinkedIn",
-        "desc": "Salve seu perfil do LinkedIn como PDF e solte aqui. Mesma leitura, mesmas marcações.",
-        "meta": "Salvar em PDF e depois enviar"
-      },
       "default_name": {
         "scratch": "Rascunho sem título",
         "file": "Currículo enviado",
@@ -456,15 +441,7 @@
       "title": "Seus currículos"
     },
     "card": {
-      "base": "Currículo principal — não adaptado a nenhuma vaga",
-      "edited": "Editado {when}",
-      "delete": "Excluir currículo",
-      "versions_used": "{used} de {cap} versões usadas",
-      "tailored_stamp": "Adaptado"
-    },
-    "tip": {
-      "label": "Se você está no começo da carreira",
-      "body": "Pouca experiência de trabalho não é problema. Projetos de faculdade, hackathons, trabalhos freelance e projetos pessoais viram tópicos de verdade. Use “Reescrever trabalho de faculdade e estágio” em cada linha."
+      "edited": "Editado {when}"
     },
     "empty": {
       "title_lead": "Nenhum currículo ",
@@ -766,7 +743,8 @@
       "cancel": "Cancelar",
       "confirm": "Excluir currículo",
       "confirming": "Excluindo…",
-      "error": "Esse currículo não pôde ser excluído. Tente de novo."
+      "error": "Esse currículo não pôde ser excluído. Tente de novo.",
+      "in_use": "Você não pode excluir seu único currículo enquanto tiver vagas salvas. Adicione outro currículo primeiro e depois exclua este."
     },
     "extra": {
       "hint": "Mantido do seu currículo original — edite como texto simples",
@@ -835,7 +813,8 @@
       },
       "primary": {
         "badge": "Principal",
-        "make": "Tornar principal"
+        "make": "Tornar principal",
+        "make_aria": "Tornar {name} seu currículo principal"
       },
       "slots": {
         "full": "Todos os espaços usados",
@@ -864,7 +843,100 @@
         "label": "Cargo que você busca",
         "placeholder": "Por exemplo, Gerente de Produto",
         "saved": "Salvo",
-        "saving": "Salvando…"
+        "saving": "Salvando…",
+        "add": "Adicione o cargo que você busca",
+        "edit_aria": "Mudar o cargo que você busca: {title}"
+      },
+      "card": {
+        "open": "Editar",
+        "open_aria": "Editar {name}",
+        "tailor": "Adaptar",
+        "tailor_aria": "Adaptar {name} a uma vaga",
+        "delete_aria": "Excluir {name}",
+        "tailored_count": "{count, plural, one {# versão para uma vaga específica} other {# versões para vagas específicas}}",
+        "source": {
+          "upload": "Arquivo enviado",
+          "linkedin": "Do LinkedIn",
+          "template": "De um modelo",
+          "scratch": "Criado aqui"
+        }
+      },
+      "check": {
+        "none": "Ainda não conferido",
+        "run": "Fazer uma conferência",
+        "run_aria": "Conferir {name}",
+        "open": "Ver a conferência",
+        "open_aria": "Ver a conferência de {name}",
+        "again_aria": "Conferir {name} de novo",
+        "running": "Conferindo…"
+      },
+      "studio": {
+        "eyebrow": "Adaptação com IA",
+        "title": "Crie uma versão para a próxima vaga que você quer",
+        "body": "Escolha uma vaga salva ou cole o anúncio. A IA reescreve uma cópia do seu currículo para combinar com ela; seu original fica como está.",
+        "honesty": "Cada palavra-chave, número ou afirmação nova espera o seu OK antes que você possa baixar a cópia.",
+        "base": "Partir de",
+        "base_one": "Parte de <b>{name}</b>",
+        "saved": "Vagas salvas sem versão adaptada",
+        "job_aria": "Adaptar uma versão para {title}",
+        "job_aria_company": "Adaptar uma versão para {title} em {company}",
+        "more": "{count, plural, one {Mais # vaga salva} other {Mais # vagas salvas}}",
+        "ask": "Perguntar ao Assistente",
+        "prompts": {
+          "fix_first": "O que devo corrigir primeiro no meu currículo?",
+          "summary": "Deixe meu resumo mais forte para a vaga que eu quero.",
+          "lead": "Com qual experiência meu currículo deve começar?"
+        }
+      },
+      "next": {
+        "title": "A seguir",
+        "empty": "Nada precisa da sua atenção agora.",
+        "loading": "Carregando o que vem a seguir",
+        "verify_detail": "{name} · você poderá baixar quando conferir cada um",
+        "check_none": "Confira seu currículo principal",
+        "check_none_detail": "{name} · veja o que corrigir primeiro, com o motivo de cada item",
+        "check_stale_detail": "{name} · você mudou o currículo depois da última conferência",
+        "check_failed_detail": "{name} · comece de novo na página de conferência",
+        "check_running_detail": "{name} · pode levar até 45 segundos",
+        "fix_urgent": "{count, plural, one {# problema para corrigir primeiro} other {# problemas para corrigir primeiro}}",
+        "fix_critical": "{count, plural, one {# problema importante} other {# problemas importantes}}",
+        "fix_detail": "{name} · cada um vem com uma forma de corrigir"
+      },
+      "new": {
+        "title": "Novo currículo",
+        "hint": "Escolha como começar ou solte um arquivo de currículo aqui.",
+        "upload": {
+          "title": "Enviar um arquivo",
+          "desc": "PDF ou Word. A IA lê e divide em seções que você pode editar."
+        },
+        "builder": {
+          "title": "Criação guiada",
+          "desc": "Perguntas curtas, uma seção por vez. Ótimo para o primeiro currículo."
+        },
+        "template": {
+          "title": "Começar com um modelo",
+          "desc": "Um layout limpo para preencher."
+        },
+        "linkedin": {
+          "title": "PDF do LinkedIn",
+          "desc": "Seu perfil, salvo como PDF no LinkedIn."
+        },
+        "ai_help": "Ajuda da IA para escrever"
+      },
+      "start": {
+        "title": "Comece com o currículo que você já tem",
+        "body": "Envie o arquivo e a IA lê e divide em seções que você pode editar. Ainda não tem currículo? A criação guiada faz perguntas curtas e monta um com você.",
+        "drop_title": "Envie seu currículo",
+        "drop_body": "Solte um arquivo aqui ou escolha um. A IA lê por seções e marca as linhas fracas.",
+        "or": "Outras formas de começar",
+        "how": {
+          "read_title": "Ler",
+          "read_body": "Seu arquivo vira seções que você pode editar.",
+          "check_title": "Conferir",
+          "check_body": "Uma lista mostra o que corrigir primeiro, e como.",
+          "tailor_title": "Adaptar",
+          "tailor_body": "Uma versão para cada vaga. Palavras-chave, números e afirmações novas esperam o seu OK."
+        }
       }
     },
     "layout": {

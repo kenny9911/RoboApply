@@ -425,27 +425,12 @@
     "title_lead": "Escribe el currículum ",
     "title_accent": "que tú contratarías",
     "title_after": ".",
-    "subtitle": "Empieza desde cero, sube el que ya tienes o impórtalo de LinkedIn. Después adapta una copia para cada empleo que quieras.",
+    "subtitle": "Ten un currículum principal sólido, revísalo y adapta una versión para cada empleo que quieras.",
     "common": {
       "cancel": "Cancelar",
       "close": "Cerrar"
     },
     "create": {
-      "scratch": {
-        "title": "Empezar desde cero",
-        "desc": "Una plantilla limpia con ayuda en cada línea. Ideal si estás empezando tu carrera.",
-        "meta": "Unos 10 minutos"
-      },
-      "file": {
-        "title": "Subir un currículum",
-        "desc": "Suelta un PDF o un DOCX. Se lee, se ordena y se señalan las líneas flojas.",
-        "meta": "PDF · DOCX · Apple Pages"
-      },
-      "linkedin": {
-        "title": "Importar de LinkedIn",
-        "desc": "Guarda tu perfil de LinkedIn como PDF y súbelo. Misma lectura, mismas señales.",
-        "meta": "Guardar en PDF y subirlo"
-      },
       "default_name": {
         "scratch": "Borrador sin título",
         "file": "Currículum subido",
@@ -456,15 +441,7 @@
       "title": "Tus currículums"
     },
     "card": {
-      "base": "Currículum principal — sin adaptar a ningún empleo",
-      "edited": "Editado {when}",
-      "delete": "Eliminar currículum",
-      "versions_used": "{used} de {cap} versiones usadas",
-      "tailored_stamp": "Adaptado"
-    },
-    "tip": {
-      "label": "Si estás empezando tu carrera",
-      "body": "Tener poca experiencia laboral no es un problema. Los trabajos de clase, los hackatones, los encargos freelance y los proyectos personales se convierten en líneas reales. Usa «Reescribir trabajo de estudios y pasantías» en cada línea."
+      "edited": "Editado {when}"
     },
     "empty": {
       "title_lead": "Todavía no hay ",
@@ -766,7 +743,8 @@
       "cancel": "Cancelar",
       "confirm": "Eliminar currículum",
       "confirming": "Eliminando…",
-      "error": "Ese currículum no se pudo eliminar. Inténtalo otra vez."
+      "error": "Ese currículum no se pudo eliminar. Inténtalo otra vez.",
+      "in_use": "No puedes eliminar tu único currículum mientras tengas empleos guardados. Añade otro currículum primero y luego elimina este."
     },
     "extra": {
       "hint": "Conservado de tu currículum original — edítalo como texto simple",
@@ -835,7 +813,8 @@
       },
       "primary": {
         "badge": "Principal",
-        "make": "Marcar como principal"
+        "make": "Marcar como principal",
+        "make_aria": "Marcar {name} como tu currículum principal"
       },
       "slots": {
         "full": "Todos los espacios usados",
@@ -864,7 +843,100 @@
         "label": "Puesto al que apuntas",
         "placeholder": "Por ejemplo, Product Manager",
         "saved": "Guardado",
-        "saving": "Guardando…"
+        "saving": "Guardando…",
+        "add": "Añade el puesto al que apuntas",
+        "edit_aria": "Cambiar el puesto al que apuntas: {title}"
+      },
+      "card": {
+        "open": "Editar",
+        "open_aria": "Editar {name}",
+        "tailor": "Adaptar",
+        "tailor_aria": "Adaptar {name} a un empleo",
+        "delete_aria": "Eliminar {name}",
+        "tailored_count": "{count, plural, one {1 versión para un empleo concreto} other {# versiones para empleos concretos}}",
+        "source": {
+          "upload": "Archivo subido",
+          "linkedin": "Desde LinkedIn",
+          "template": "Desde una plantilla",
+          "scratch": "Creado aquí"
+        }
+      },
+      "check": {
+        "none": "Aún sin revisar",
+        "run": "Revisar",
+        "run_aria": "Revisar {name}",
+        "open": "Ver la revisión",
+        "open_aria": "Ver la revisión de {name}",
+        "again_aria": "Revisar {name} otra vez",
+        "running": "Revisando…"
+      },
+      "studio": {
+        "eyebrow": "Adaptación con IA",
+        "title": "Crea una versión para el próximo empleo que quieres",
+        "body": "Elige un empleo guardado o pega la oferta. La IA reescribe una copia de tu currículum para ajustarla; tu original queda tal como está.",
+        "honesty": "Cada palabra clave, cifra o afirmación nueva espera tu visto bueno antes de que puedas descargar la copia.",
+        "base": "Partir de",
+        "base_one": "Parte de <b>{name}</b>",
+        "saved": "Empleos guardados sin versión adaptada",
+        "job_aria": "Adaptar una versión para {title}",
+        "job_aria_company": "Adaptar una versión para {title} en {company}",
+        "more": "{count, plural, one {1 empleo guardado más} other {# empleos guardados más}}",
+        "ask": "Preguntar al Asistente",
+        "prompts": {
+          "fix_first": "¿Qué debería corregir primero en mi currículum?",
+          "summary": "Haz que mi resumen sea más sólido para el empleo que quiero.",
+          "lead": "¿Con qué experiencia debería empezar mi currículum?"
+        }
+      },
+      "next": {
+        "title": "Lo siguiente",
+        "empty": "Nada necesita tu atención ahora mismo.",
+        "loading": "Cargando lo siguiente",
+        "verify_detail": "{name} · podrás descargarlo cuando revises cada uno",
+        "check_none": "Revisa tu currículum principal",
+        "check_none_detail": "{name} · mira qué corregir primero, con el motivo de cada cosa",
+        "check_stale_detail": "{name} · lo cambiaste después de la última revisión",
+        "check_failed_detail": "{name} · iníciala de nuevo desde la página de revisión",
+        "check_running_detail": "{name} · puede tardar hasta 45 segundos",
+        "fix_urgent": "{count, plural, one {1 problema que corregir primero} other {# problemas que corregir primero}}",
+        "fix_critical": "{count, plural, one {1 problema importante} other {# problemas importantes}}",
+        "fix_detail": "{name} · cada uno trae una forma de corregirlo"
+      },
+      "new": {
+        "title": "Nuevo currículum",
+        "hint": "Elige cómo empezar o suelta aquí un archivo de currículum.",
+        "upload": {
+          "title": "Subir un archivo",
+          "desc": "PDF o Word. La IA lo lee y lo divide en secciones que puedes editar."
+        },
+        "builder": {
+          "title": "Creación guiada",
+          "desc": "Preguntas breves, una sección a la vez. Ideal para un primer currículum."
+        },
+        "template": {
+          "title": "Empezar con una plantilla",
+          "desc": "Un diseño limpio para completar."
+        },
+        "linkedin": {
+          "title": "PDF de LinkedIn",
+          "desc": "Tu perfil, guardado como PDF desde LinkedIn."
+        },
+        "ai_help": "Ayuda de IA para redactar"
+      },
+      "start": {
+        "title": "Empieza con el currículum que ya tienes",
+        "body": "Súbelo y la IA lo lee y lo divide en secciones que puedes editar. ¿Aún no tienes currículum? La creación guiada te hace preguntas breves y lo armas paso a paso.",
+        "drop_title": "Sube tu currículum",
+        "drop_body": "Suelta un archivo aquí o elige uno. La IA lo lee por secciones y señala las líneas flojas.",
+        "or": "Otras formas de empezar",
+        "how": {
+          "read_title": "Leer",
+          "read_body": "Tu archivo se convierte en secciones que puedes editar.",
+          "check_title": "Revisar",
+          "check_body": "Una lista te muestra qué corregir primero y cómo.",
+          "tailor_title": "Adaptar",
+          "tailor_body": "Una versión para cada empleo. Las palabras clave, cifras y afirmaciones nuevas esperan tu visto bueno."
+        }
       }
     },
     "layout": {
