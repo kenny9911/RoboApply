@@ -115,7 +115,53 @@ const practiceReport = {
   transcriptUrl: null,
 };
 
+// Resume hub fixtures. The hub's AI panels open only when the brand's AI flags
+// are on (flags fail closed) and the main resume's latest check says AI may run;
+// AI tailoring offers the saved jobs that have no tailored version yet.
+const publicBrand = {
+  id: 'roboapply', market: 'intl', name: 'RoboApply', canonicalOrigin: 'https://www.roboapply.io',
+  locales: ['en', 'zh', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'pt', 'de'], defaultLocale: 'en',
+  currency: 'USD', defaultCountry: 'US', authMethods: ['email_password', 'google'], paymentRails: [],
+  // Only the two AI capabilities; every other flag stays off, as before.
+  flags: { hiringContacts: 'off', 'ai.text': true, copilot: true },
+  otherBrand: { id: 'goapply', name: 'GoApply', canonicalOrigin: 'https://www.goapply.top' },
+};
+const resumeGrade = (resumeVariantId: string) => ({
+  id: `grade_${resumeVariantId}`, resumeVariantId, status: 'done', label: 'good', score: 74,
+  counts: { urgent: 2, critical: 3, optional: 4 }, issues: [], profile: 'intl', method: 'rules_ai',
+  aiSkipped: null, rulesChecked: 24, targetTitle: null, contentHash: 'preview',
+  createdAt: ago(3), completedAt: ago(3),
+});
+const savedJob = (id: string, title: string, companyName: string, daysAgo: number) => ({
+  id: `trk_${id}`, userId: 'design-preview-avery', jobId: id, status: 'saved', excitementStars: 0,
+  maxSalary: null, maxSalaryCurrency: null, notesMarkdown: null, dateSaved: ago(daysAgo), dateApplied: null,
+  deadline: null, followUpAt: null, appliedVia: null, linkedRunId: null,
+  job: { title, companyName, companyLogoUrl: null, location: null, workType: 'remote', applyUrl: 'https://example.test/job', closed: false, visibility: 'public' },
+  externalSnapshot: null, createdAt: ago(daysAgo), updatedAt: ago(daysAgo), source: null, stageDetail: null,
+  outcome: null, interviewAt: null, offer: null, tailoredVariantId: null, coverLetterId: null,
+});
+const builderConfig = {
+  variant: 'intl', docLanguages: ['en'], defaultDocLanguage: 'en', steps: [], headings: { en: {}, zh: {}, 'zh-TW': {} },
+  aiAvailable: true, page: 'letter', maxPages: 1, template: 'standard',
+  photo: { offered: false, defaultOn: { en: false, zh: false, 'zh-TW': false } },
+  personalFields: [], salaryKinds: [], certificateSuggestions: [],
+};
+
 const fixtures: Record<string, unknown> = {
+  '/api/v1/public/brand': publicBrand,
+  [`${base}/v2/resumes/cm_rv_base/grade/latest`]: { grade: resumeGrade('cm_rv_base'), previous: null, stale: false, aiAvailable: true },
+  [`${base}/v2/resumes/cm_rv_ats/grade/latest`]: { grade: null, previous: null, stale: false, aiAvailable: true },
+  [`${base}/v2/resumes/builder/config`]: builderConfig,
+  [`${base}/v2/tracker`]: {
+    entries: [
+      savedJob('cm_job_anthropic_ai', 'AI Engineer, Claude Platform', 'Anthropic', 1),
+      savedJob('job_preview_stripe', 'Senior Product Manager', 'Stripe', 2),
+      savedJob('job_preview_notion', 'Product Lead, AI', 'Notion', 4),
+      savedJob('job_preview_figma', 'Group Product Manager', 'Figma', 6),
+    ],
+    statusCounts: { saved: 4 },
+    total: 4,
+  },
   [`${base}/account`]: {
     id: 'design-preview-avery', email: 'avery@example.test', name: 'Avery Chen',
     provider: 'email', hasPassword: true, memberSince: '2026-05-01T00:00:00.000Z',
