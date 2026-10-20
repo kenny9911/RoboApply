@@ -67,11 +67,16 @@ function escapeCsv(v: unknown): string {
 }
 
 function operationsQuery(req: Request): OperationsQuery {
+  const brand = str(req.query.brand);
   return {
     range: resolveRange(str(req.query.from), str(req.query.to), str(req.query.tz)),
     q: str(req.query.q), userId: str(req.query.userId), region: str(req.query.region), provider: str(req.query.provider),
     type: str(req.query.type), status: str(req.query.status), currency: str(req.query.currency),
     page: intOr(req.query.page, 1), pageSize: intOr(req.query.pageSize, 25),
+    // The product brand, and the users list's sort (the service maps an unknown key to its default order).
+    ...(brand === 'roboapply' || brand === 'goapply' ? { brand } : {}),
+    ...(str(req.query.sort) ? { sort: str(req.query.sort) } : {}),
+    ...(req.query.dir === 'asc' || req.query.dir === 'desc' ? { dir: req.query.dir } : {}),
   };
 }
 
@@ -106,7 +111,7 @@ for (const [path, load] of [
         ? ['id','userId','email','name','provider','type','status','region','amountMinor','currency','reference','tier','createdAt','paidAt']
         : path === '/activity'
           ? ['id','userId','email','name','region','type','feature','path','units','costUsd','source','createdAt']
-          : ['userId','email','name','role','isActive','region','tier','status','createdAt','subscriptionCurrency','subscriptionAmountMinor','loginEvents','featureEvents','usageUnits','periodCostUsd','lastLoginAt','lastActiveAt'];
+          : ['userId','email','name','role','isActive','brand','region','tier','status','createdAt','onboardingStep','resumes','subscriptionCurrency','subscriptionAmountMinor','loginEvents','featureEvents','usageUnits','periodCostUsd','lastLoginAt','lastActiveAt'];
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="roboapply-${path.split('/').at(-1)}.csv"`);
       if ('coverage' in data) res.setHeader('X-Payment-Coverage', data.coverage.stripe);
