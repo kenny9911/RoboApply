@@ -4,9 +4,16 @@
 // /admin/<area> routers are unaffected).
 
 import { Router, type Request } from 'express';
-import { requireAuth } from '../../middleware/auth.js';
+import { ignoreViewAs, requireAuth } from '../../middleware/auth.js';
 import { requireAdmin } from '../../middleware/admin.js';
-import { allowedBrands, type BrandId } from '../../platform/brand/index.js';
+import { allowedBrands, getCurrentBrand, type BrandId } from '../../platform/brand/index.js';
+import {
+  VIEW_AS_COOKIE,
+  clearViewAsCookieOptions,
+  requestSessionToken,
+  requestViewAsToken,
+  viewAsCookieOptions,
+} from '../../platform/viewAs/index.js';
 import { parseBody, parseParams, parseQuery, requireUserId, route } from '../../platform/http.js';
 import type { FeatureRouterDeps } from '../index.js';
 import { createPrismaAuditStore, listAdminAudit, writeAdminAudit, type AuditStore } from './audit.js';
@@ -25,7 +32,10 @@ import {
   SafetyQuerySchema,
   SystemQuerySchema,
   WorkItemParamsSchema,
+  ViewAsStartBodySchema,
   ADMIN_AUDIT_EVENTS,
+  type ViewAsStartResponse,
+  type ViewAsStopResponse,
 } from './contract.js';
 import { createAdminOverride, deleteAdminOverride, listAdminOverrides, type OverridesService } from './overrides.js';
 import type { CostStore } from './costs.js';
@@ -36,6 +46,7 @@ import type { QueueStore } from './queue.js';
 import type { ReportsStore } from './reports.js';
 import type { SafetyStore } from './safety.js';
 import type { SystemStore } from './system.js';
+import type { ViewAsStore } from './viewAs.js';
 
 // The panels' modules (and the areas they read: alerts, copilot, cn/jobs,
 // jobs/enrich, content safety) load on the first admin request, not when
@@ -47,6 +58,7 @@ const lazy = {
   reports: () => import('./reports.js'),
   safety: () => import('./safety.js'),
   system: () => import('./system.js'),
+  viewAs: () => import('./viewAs.js'),
 };
 
 /** Test seams: every store defaults to its Prisma implementation. */
@@ -60,6 +72,7 @@ export interface AdminConsoleDeps extends FeatureRouterDeps {
   audit?: AuditStore;
   overrides?: OverridesService;
   referrals?: ReferralModeration;
+  viewAs?: ViewAsStore;
   now?: () => Date;
 }
 
@@ -208,6 +221,57 @@ export function createAdminConsoleRouter(deps: AdminConsoleDeps = {}): Router {
     route(async (req) => {
       const m = await lazy.feedback();
       return m.listAdminFeedback(deps.feedback ?? m.createPrismaFeedbackStore(), parseQuery(req, CopilotFeedbackQuerySchema));
+    }),
+  );
+
+  // ── View as (the god's-eye view; platform/viewAs) ───────────────────────
+  // Both routes authenticate as the signed-in admin whatever grant the
+  // browser holds (`ignoreViewAs`): starting another view replaces the
+  // current one, and ending works from inside a view.
+  router.post(
+    '/view-as',
+    ignoreViewAs,
+    ...admin,
+    route(async (req, res): Promise<ViewAsStartResponse> => {
+      const { userId } = parseBody(req, ViewAsStartBodySchema);
+      const signedIn = req.user!;
+      const brand = getCurrentBrand().id;
+      const m = await lazy.viewAs();
+      const started = await m.startViewAs(deps.viewAs ?? m.createPrismaViewAsStore(), {
+        admin: { id: signedIn.id, email: signedIn.email, name: signedIn.name ?? null },
+        subjectUserId: userId,
+        brand,
+        sessionToken: requestSessionToken(req),
+        now: now(),
+        env,
+      });
+      res.cookie(VIEW_AS_COOKIE, started.token, viewAsCookieOptions(req));
+      await writeAdminAudit(audit(), {
+        adminId: signedIn.id,
+        subjectUserId: userId,
+        eventType: ADMIN_AUDIT_EVENTS.viewAsStarted,
+        payload: { brand, expiresAt: started.view.expiresAt },
+      });
+      return started.view;
+    }),
+  );
+  router.post(
+    '/view-as/stop',
+    ignoreViewAs,
+    ...admin,
+    route(async (req, res): Promise<ViewAsStopResponse> => {
+      const m = await lazy.viewAs();
+      const grant = m.grantToEnd(requestViewAsToken(req), adminId(req), { now: now() });
+      res.clearCookie(VIEW_AS_COOKIE, clearViewAsCookieOptions(req));
+      if (grant) {
+        await writeAdminAudit(audit(), {
+          adminId: grant.adminId,
+          subjectUserId: grant.subjectUserId,
+          eventType: ADMIN_AUDIT_EVENTS.viewAsEnded,
+          payload: { minutes: Math.max(0, Math.round((now().getTime() / 1000 - grant.iat) / 60)) },
+        });
+      }
+      return { ended: Boolean(grant) };
     }),
   );
 

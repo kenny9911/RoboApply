@@ -11,6 +11,8 @@ import {
   creditErrorToHttp,
 } from './errors.js';
 import { isErrorCode, mapError } from '../http.js';
+import { ViewAsReadOnlyError } from '../viewAs/index.js';
+import { setCurrentViewAs, withRequestContext } from '../../lib/requestContext.js';
 import { createCreditService } from './CreditService.js';
 import { createCreditTestKit } from './testkit.js';
 import type { AccountSnapshot } from './EntitlementService.js';
@@ -46,6 +48,19 @@ describe('reserve → commit', () => {
     await expect(kit.credits.reserve({ userId: 'u1', bucket: 'nope' as never, idempotencyKey: 'k' })).rejects.toBeInstanceOf(UnknownBucketError);
     await expect(kit.credits.reserve({ userId: 'u1', bucket: 'practice' as never, idempotencyKey: 'k' })).rejects.toBeInstanceOf(UnknownBucketError);
     await expect(kit.credits.reserve({ userId: 'u1', bucket: 'tailor', idempotencyKey: '  ' })).rejects.toBeInstanceOf(InvalidIdempotencyKeyError);
+  });
+
+  it('never spends while an admin views as the person (403 view_as_read_only, nothing reserved)', async () => {
+    const kit = createCreditTestKit();
+    const err = await withRequestContext({ requestId: 'r1' }, async () => {
+      setCurrentViewAs({ adminId: 'admin1', subjectUserId: 'u1' });
+      return kit.credits.reserve({ userId: 'u1', bucket: 'tailor', idempotencyKey: 'k1' }).catch((e) => e);
+    });
+    expect(err).toBeInstanceOf(ViewAsReadOnlyError);
+    expect(mapError(err)).toMatchObject({ status: 403, body: { code: 'view_as_read_only' } });
+    expect(kit.store.ledger).toEqual([]);
+    // The same reservation outside a view goes through.
+    await expect(kit.credits.reserve({ userId: 'u1', bucket: 'tailor', idempotencyKey: 'k1' })).resolves.toMatchObject({ status: 'reserved' });
   });
 });
 

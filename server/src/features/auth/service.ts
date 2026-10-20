@@ -29,6 +29,7 @@
 import bcrypt from 'bcryptjs';
 import prisma from '../../lib/prisma.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import { getCurrentViewAs } from '../../lib/requestContext.js';
 import { logger } from '../../services/LoggerService.js';
 import { clampLocaleToBrand, getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
@@ -927,6 +928,8 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
    * centre at most once per user per process. Never throws.
    */
   async function rememberRegion(userId: string, country: string | null | undefined): Promise<void> {
+    // An admin viewing as this user (platform/viewAs) is somewhere else; their country is not the user's.
+    if (getCurrentViewAs()) return;
     const c = typeof country === 'string' && /^[A-Za-z]{2}$/.test(country) ? country.toUpperCase() : null;
     if (!c || REGION_REMEMBERED.has(userId)) return;
     if (REGION_REMEMBERED.size >= REGION_REMEMBERED_MAX) REGION_REMEMBERED.clear();

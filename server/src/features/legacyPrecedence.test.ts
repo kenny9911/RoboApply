@@ -33,6 +33,8 @@ vi.mock('../middleware/auth.js', () => {
     rateLimit: () => (_req: unknown, _res: unknown, next: () => void) => next(),
     requireAuth,
     optionalAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
+    // Admin "view as" routes (features/admin) put it before requireAuth.
+    ignoreViewAs: (_req: unknown, _res: unknown, next: () => void) => next(),
   };
 });
 vi.mock('../roboapply/engine/services/SeekerAuthService.js', () => ({

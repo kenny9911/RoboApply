@@ -80,6 +80,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, Market } from '../../platform/brand/registry.js';
 import { cnRecruitmentInfoMode } from '../../platform/flags.js';
+import { getCurrentViewAs } from '../../lib/requestContext.js';
 import { HttpError } from '../../platform/http.js';
 import { logger } from '../../services/LoggerService.js';
 import type { ExplainMatchInput } from '../compliance/index.js';
@@ -1412,11 +1413,13 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       windowEndsId: w.windowEndsId,
       expiresAt: new Date(ctx.now.getTime() + L.sessionTtlMin * 60_000),
     });
+    // An admin viewing as the person (platform/viewAs) reads the list without it counting as their visit.
+    const ownVisit = !getCurrentViewAs();
     // Opening the list is a visit: the Jobs badge counts from here (a category browse is not).
-    if (!browse) await repo.stampFeedVisit(ctx.userId, ctx.now).catch((err) => logger.warn('FEED', 'could not stamp the feed visit', { error: String(err) }));
+    if (!browse && ownVisit) await repo.stampFeedVisit(ctx.userId, ctx.now).catch((err) => logger.warn('FEED', 'could not stamp the feed visit', { error: String(err) }));
     // The saved search as it is (no one-off override, no typed query) came back thin: one targeted ingest.
     const asSaved = !browse && input.q === undefined && !Object.keys(input.overrides ?? {}).length;
-    if (asSaved && w.rows.length < L.widenBelowRows) requestIngestOnce(profile, ctx.now);
+    if (asSaved && ownVisit && w.rows.length < L.widenBelowRows) requestIngestOnce(profile, ctx.now);
     const first = await page(state, session, 0, order);
     // With a text to rank by: say whether it took part in this list (a leg asked with it returned rows), so a
     // reader can leave "Ranked by …" out when no posting matched the words. Only the first page knows.

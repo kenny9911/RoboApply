@@ -3,11 +3,24 @@ import authService from '../services/AuthService.js';
 import prisma from '../lib/prisma.js';
 import type { AuthUser, ApiKeyScope } from '../types/auth.js';
 import { withUserUsageLimits } from './usageMeter.js';
-import { getCurrentBrandId, setCurrentUserId, setCurrentUserName } from '../lib/requestContext.js';
+import { getCurrentBrandId, setCurrentUserId, setCurrentUserName, setCurrentViewAs } from '../lib/requestContext.js';
 import { logger } from '../services/LoggerService.js';
 import { evaluateSubscriptionGate } from '../lib/subscriptionGate.js';
 import { resolveGraceDaysForUser } from '../lib/subscriptionGraceConfig.js';
 import { SESSION_COOKIE_NAME } from '../lib/cookieOptions.js';
+import {
+  VIEW_AS_COOKIE,
+  VIEW_AS_ENDED_HEADER,
+  VIEW_AS_READ_ONLY,
+  clearViewAsCookieOptions,
+  isAdminAccount,
+  isViewAsRead,
+  requestSessionToken,
+  requestViewAsToken,
+  sessionFingerprint,
+  verifyViewAsGrant,
+  type ViewAsOnRequest,
+} from '../platform/viewAs/index.js';
 // Import auth types to extend Express
 import '../types/auth.js';
 
@@ -146,6 +159,109 @@ function touchLastActive(user: { id: string; lastActiveAt?: Date | string | null
 /** Test seam: forget the in-process touch throttle. */
 export function resetLastActiveTouchesForTests(): void {
   lastActiveTouchedAt.clear();
+}
+
+// ─── Admin "view as" (platform/viewAs) ───────────────────────────────────
+//
+// The signed-in admin may be reading the app as one of its users. The grant
+// cookie is checked against the admin this request authenticated as (same
+// id, still an admin, same session); the request then answers as the viewed
+// user, read-only. Writes never get through while a grant is in play, not
+// even when the grant no longer holds: a write meant for the viewed account
+// must not land on the admin's own.
+
+/** Reads the viewed user's row (the whole row, like a session lookup). */
+export type ViewAsSubjectReader = (userId: string) => Promise<Record<string, unknown> | null>;
+
+const defaultViewAsSubjectReader: ViewAsSubjectReader = (userId) =>
+  prisma.user.findUnique({ where: { id: userId } }) as Promise<Record<string, unknown> | null>;
+
+let viewAsSubjectReader: ViewAsSubjectReader = defaultViewAsSubjectReader;
+
+/** Tests only: replace the viewed-user read (null restores the database read). */
+export function setViewAsSubjectReaderForTests(reader: ViewAsSubjectReader | null): void {
+  viewAsSubjectReader = reader ?? defaultViewAsSubjectReader;
+}
+
+type ViewAsOutcome =
+  | { kind: 'none' }
+  | { kind: 'applied'; subject: AuthUser; viewAs: ViewAsOnRequest }
+  /** A grant is in play and the request writes. */
+  | { kind: 'refuse' };
+
+async function resolveViewAs(req: Request, res: Response, signedIn: AuthUser): Promise<ViewAsOutcome> {
+  const token = requestViewAsToken(req);
+  // API keys act for their owner only; the routes that start a grant act as the admin.
+  if (!token || req.apiKeyId || req.ignoreViewAs) return { kind: 'none' };
+  const writes = !isViewAsRead(req.method, req.originalUrl ?? req.url);
+  const drop = (reason: string): ViewAsOutcome => {
+    res.clearCookie(VIEW_AS_COOKIE, clearViewAsCookieOptions(req));
+    res.setHeader(VIEW_AS_ENDED_HEADER, 'ended');
+    logger.info('AUTH', 'view-as grant dropped', { reason, userId: signedIn.id });
+    return writes ? { kind: 'refuse' } : { kind: 'none' };
+  };
+
+  const grant = verifyViewAsGrant(token);
+  if (!grant) return drop('invalid_or_expired');
+  if (grant.adminId !== signedIn.id || signedIn.role !== 'admin') return drop('not_this_admin');
+  const sessionToken = requestSessionToken(req);
+  if (!sessionToken || sessionFingerprint(sessionToken) !== grant.sid) return drop('other_session');
+  if (writes) return { kind: 'refuse' };
+
+  const row = await viewAsSubjectReader(grant.subjectUserId);
+  if (!row) return drop('subject_missing');
+  const { passwordHash: _passwordHash, ...subject } = row;
+  if (isAdminAccount(subject)) return drop('subject_admin');
+  if (isOtherBrandSession(subject, currentRequestBrandId())) return drop('subject_other_brand');
+  return {
+    kind: 'applied',
+    subject: subject as unknown as AuthUser,
+    viewAs: {
+      admin: { id: signedIn.id, email: signedIn.email, name: signedIn.name ?? null },
+      subjectUserId: grant.subjectUserId,
+      startedAt: new Date(grant.iat * 1000),
+      expiresAt: new Date(grant.exp * 1000),
+    },
+  };
+}
+
+function rejectViewAsWrite(res: Response): void {
+  res.status(403).json({ success: false, ...VIEW_AS_READ_ONLY });
+}
+
+/**
+ * Put before requireAuth on a route that manages view-as itself (starting a
+ * grant): the request authenticates as the signed-in admin whatever grant the
+ * browser already holds, so starting another one replaces it.
+ */
+export function ignoreViewAs(req: Request, _res: Response, next: NextFunction): void {
+  req.ignoreViewAs = true;
+  next();
+}
+
+/**
+ * Attach the user the request acts as, and thread it through the request
+ * context and the logger. While viewing as someone, the log label names both
+ * people and the context carries the grant.
+ */
+async function attachUser(req: Request, signedIn: AuthUser, viewing: ViewAsOutcome): Promise<void> {
+  const applied = viewing.kind === 'applied' ? viewing : null;
+  req.user = await toAuthenticatedUser((applied ? applied.subject : signedIn) as LimitAwareAuthUser);
+  // The person at the keyboard is active; a viewed account never is.
+  touchLastActive(signedIn as { id: string; lastActiveAt?: Date | string | null });
+  if (applied) {
+    req.viewAs = applied.viewAs;
+    setCurrentViewAs({ adminId: applied.viewAs.admin.id, subjectUserId: applied.viewAs.subjectUserId });
+  }
+  // Thread the authenticated userId + display name through the async
+  // context + logger so every subsequent log line within this request
+  // carries them — lets ops scan server logs by name without joining
+  // requestId ↔ user.
+  const label = resolveLogDisplayName(req.user);
+  const displayName = applied ? `${label ?? req.user.id} (viewed by admin ${resolveLogDisplayName(signedIn) ?? signedIn.id})` : label;
+  setCurrentUserId(req.user.id);
+  setCurrentUserName(displayName);
+  if (req.requestId) logger.setRequestUserId(req.requestId, req.user.id, displayName);
 }
 
 // ─── Bearer JWT cut-off (two-step sign-in; F-TRUST-07) ───────────────────
@@ -570,16 +686,14 @@ export async function requireAuth(
       return;
     }
 
-    req.user = await toAuthenticatedUser(user as LimitAwareAuthUser);
-    touchLastActive(user as { id: string; lastActiveAt?: Date | string | null });
-    // Thread the authenticated userId + display name through the async
-    // context + logger so every subsequent log line within this request
-    // carries them — lets ops scan server logs by name without joining
-    // requestId ↔ user.
-    const displayName = resolveLogDisplayName(req.user);
-    setCurrentUserId(req.user.id);
-    setCurrentUserName(displayName);
-    if (req.requestId) logger.setRequestUserId(req.requestId, req.user.id, displayName);
+    // Admin "view as": the signed-in admin may be reading as one of the users.
+    const viewing = await resolveViewAs(req, res, user);
+    if (viewing.kind === 'refuse') {
+      rejectViewAsWrite(res);
+      return;
+    }
+
+    await attachUser(req, user, viewing);
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
@@ -684,12 +798,12 @@ export async function optionalAuth(
 
       // An other-brand session is treated as anonymous on optional routes.
       if (user && !isOtherBrandSession(user as { brand?: unknown; role?: unknown }, currentRequestBrandId())) {
-        req.user = await toAuthenticatedUser(user as LimitAwareAuthUser);
-        touchLastActive(user as { id: string; lastActiveAt?: Date | string | null });
-        const displayName = resolveLogDisplayName(req.user);
-        setCurrentUserId(req.user.id);
-        setCurrentUserName(displayName);
-        if (req.requestId) logger.setRequestUserId(req.requestId, req.user.id, displayName);
+        const viewing = await resolveViewAs(req, res, user);
+        if (viewing.kind === 'refuse') {
+          rejectViewAsWrite(res);
+          return;
+        }
+        await attachUser(req, user, viewing);
       }
     }
 

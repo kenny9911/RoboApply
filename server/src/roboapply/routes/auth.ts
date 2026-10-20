@@ -31,8 +31,9 @@
 //   GET  /me        — user + profile + the WP-10 additions (brand,
 //                     onboarding, entitlements, flags, unreadCount,
 //                     emailVerified). `mission` is no longer returned and the
-//                     V1 mission is no longer read.
-//   POST /logout    — logout.
+//                     V1 mission is no longer read. While an admin views as
+//                     the user (platform/viewAs), also `viewAs`.
+//   POST /logout    — logout (also ends an admin "view as" grant).
 // Rate limits are DB-backed (platform/ratelimit): signup 5/min + 20/day per
 // IP, login 10/min per IP.
 //
@@ -82,9 +83,20 @@ import {
 import { AuthCnError } from '../../features/auth-cn/index.js';
 import { signupRequestContext } from '../../features/auth/requestContext.js';
 import { HttpError } from '../../platform/http.js';
+import { VIEW_AS_COOKIE, clearViewAsCookieOptions, type ViewAsOnRequest } from '../../platform/viewAs/index.js';
+import type { ViewAsSessionView } from '../../features/admin/contract.js';
 import { generateJwt } from '../engine/lib/seekerSession.js';
 
 const router = Router();
+
+/** `/me.viewAs` on the wire. */
+function viewAsSessionView(viewAs: ViewAsOnRequest): ViewAsSessionView {
+  return {
+    admin: viewAs.admin,
+    startedAt: viewAs.startedAt.toISOString(),
+    expiresAt: viewAs.expiresAt.toISOString(),
+  };
+}
 
 /** The request's product brand (brand middleware), stamped on signup and checked on login. */
 function requestBrandId(req: Request): BrandId | undefined {
@@ -611,6 +623,8 @@ router.get(
           profile,
           onboardingState,
           ...(additions ?? {}),
+          // An admin viewing as this user (platform/viewAs): the app shows the read-only banner.
+          ...(req.viewAs ? { viewAs: viewAsSessionView(req.viewAs) } : {}),
           // There used to be a `jobApplyingEnabled` field here, mirroring the
           // JOB_APPLYING_ENABLED env var so the frontend could hide the
           // auto-apply surface. Auto-apply is gone (ruling R1), the four
@@ -660,6 +674,8 @@ router.post(
         await invalidateSeekerSession(token);
       }
       res.clearCookie(SESSION_COOKIE_NAME, clearSessionCookieOptions());
+      // An admin "view as" grant is tied to the session that just ended.
+      if (req.cookies?.[VIEW_AS_COOKIE]) res.clearCookie(VIEW_AS_COOKIE, clearViewAsCookieOptions(req));
       return res.status(204).send();
     } catch (err) {
       logger.error(

@@ -13,6 +13,7 @@
 //   GET/POST /overrides · DELETE /overrides/:id   per-user overrides (audited; credits area service)
 //   GET  /copilot-feedback            Assistant feedback (copilot.listFeedback(), PII-redacted excerpt)
 //   POST /referrals/:id/moderate      GoApply referral-code moderation (cn/referrals service, audited)
+//   POST /view-as · POST /view-as/stop  read-only "view as" one user (platform/viewAs, audited)
 // Area-specific admin routers are mounted at /admin/<area> by their owners
 // (credits, compliance, prep, coaching, announcements, cn/jobs, cn/campus,
 // cn/referrals, auth-cn, career-sources).
@@ -557,4 +558,54 @@ export const ADMIN_AUDIT_EVENTS = {
   workItemRetried: 'admin_work_item_retried',
   referralModerated: 'admin_referral_moderated',
   inviteRewardReviewed: 'admin_invite_reward_reviewed',
+  viewAsStarted: 'admin_view_as_started',
+  viewAsEnded: 'admin_view_as_ended',
 } as const;
+
+// ── View as (the god's-eye view; platform/viewAs) ─────────────────────────
+//
+//   POST /view-as        { userId } → ViewAsStartResponse; sets the httpOnly
+//                        `ra_view_as` cookie and writes admin_view_as_started.
+//                        Refusals: 404 not_found; 409 conflict or 403
+//                        forbidden with `details.reason` (VIEW_AS_BLOCKED_REASONS).
+//   POST /view-as/stop   → ViewAsStopResponse; clears the cookie and writes
+//                        admin_view_as_ended when a grant was in place.
+// While the cookie holds, every request of that browser answers as the viewed
+// person, read-only (403 view_as_read_only on any write), and
+// `/auth/me.viewAs` (ViewAsSessionView) tells the app to show the banner.
+
+export const ViewAsStartBodySchema = z.object({ userId: Id }).strict();
+
+/**
+ * Why an account cannot be viewed: the admin's own account, an admin account,
+ * an account without a RoboApply/GoApply profile, a deleted account, an account
+ * of the other brand (viewed from that brand's admin console), or a browser
+ * without a session cookie to tie the grant to.
+ */
+export const VIEW_AS_BLOCKED_REASONS = ['self', 'admin_account', 'not_seeker', 'deleted', 'other_brand', 'needs_session'] as const;
+export type ViewAsBlockedReason = (typeof VIEW_AS_BLOCKED_REASONS)[number];
+
+export interface ViewAsPerson {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
+/** `/auth/me.viewAs`: present only while the signed-in admin views as the user `/auth/me` describes. */
+export interface ViewAsSessionView {
+  /** The admin at the keyboard. */
+  admin: ViewAsPerson;
+  startedAt: string;
+  expiresAt: string;
+}
+
+export interface ViewAsStartResponse extends ViewAsSessionView {
+  subject: ViewAsPerson;
+  /** Where the person lands after signing in: their onboarding screen while it is unfinished, else the first-value page. */
+  landing: string;
+}
+
+export interface ViewAsStopResponse {
+  /** True when a grant was in place and is now ended. */
+  ended: boolean;
+}

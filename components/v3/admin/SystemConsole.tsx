@@ -688,7 +688,7 @@ export function ErrorPanel({ retry }: { retry: () => void }) {
 // ── Admin actions (RAAdminAuditLog) ──────────────────────────────────────
 
 /** Actions the filter offers (ADMIN_AUDIT_EVENTS, server/src/features/admin/contract.ts). Other areas' events still list under "All". */
-export const AUDIT_ACTIONS = ['admin_override_created', 'admin_override_deleted', 'admin_report_resolved', 'admin_work_item_retried', 'admin_referral_moderated', 'admin_invite_reward_reviewed'] as const;
+export const AUDIT_ACTIONS = ['admin_override_created', 'admin_override_deleted', 'admin_report_resolved', 'admin_work_item_retried', 'admin_referral_moderated', 'admin_invite_reward_reviewed', 'admin_view_as_started', 'admin_view_as_ended'] as const;
 
 function AuditView() {
   const t = useTranslations('admin.console.audit');
