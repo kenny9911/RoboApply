@@ -23,19 +23,15 @@ export { PracticeTargetPicker, type PracticeTarget, type LoadState } from './Pra
 // Live (Route 6)
 export { LiveBar } from './LiveBar';
 export { InterviewerTile, type AiState } from './InterviewerTile';
-export { QuestionCard } from './QuestionCard';
 export { YourTile } from './YourTile';
 export { MicViz } from './MicViz';
-export { LiveControls } from './LiveControls';
-export { CoachNudge } from './CoachNudge';
 export { LiveTranscript } from './LiveTranscript';
-// Live coach layer (conversational engine): hint + nudge + meters + toggle.
+// Live coach layer (conversational engine): hint + nudge + meters.
 export {
   useLiveCoach,
   LiveQuestionCard,
   LiveCoachNudge,
   CoachMeters,
-  CoachToggle,
   type CoachMetrics,
   type LiveTurn,
   type UseLiveCoachResult,
@@ -44,8 +40,6 @@ export {
 export { DeviceCheck, deviceFix, deviceStateLabel, type DeviceCheckResult } from './DeviceCheck';
 
 // Report (Route 7)
-export { ResultsTop } from './ResultsTop';
-export { ResultsGrid } from './ResultsGrid';
 export { QuestionBreakdownSection } from './QuestionBreakdownSection';
 export { QuestionBreakdownItem } from './QuestionBreakdownItem';
 export { RatingChip } from './RatingChip';
