@@ -35,6 +35,32 @@ describe('OpenRouter attribution headers follow the brand', () => {
     });
   });
 
+  it('calls the endpoint in OPENROUTER_BASE_URL (an API root) when no credential base URL is set', () => {
+    const saved = { root: process.env.OPENROUTER_BASE_URL, full: process.env.OPENROUTER_API_BASE_URL };
+    try {
+      delete process.env.OPENROUTER_BASE_URL;
+      delete process.env.OPENROUTER_API_BASE_URL;
+      new OpenRouterProvider('k', 'openai/gpt-4o');
+      expect(state.ctorOpts.at(-1)!.baseURL).toBe('https://openrouter.ai/api/v1');
+
+      process.env.OPENROUTER_BASE_URL = 'https://openrouter.ai/api';
+      new OpenRouterProvider('k', 'openai/gpt-4o');
+      expect(state.ctorOpts.at(-1)!.baseURL).toBe('https://openrouter.ai/api/v1');
+
+      process.env.OPENROUTER_BASE_URL = 'https://api.together.xyz';
+      new OpenRouterProvider('k', 'openai/gpt-4o');
+      expect(state.ctorOpts.at(-1)!.baseURL).toBe('https://api.together.xyz/v1');
+
+      new OpenRouterProvider('k', 'openai/gpt-4o', { baseUrl: 'https://cred.example.com/v1' });
+      expect(state.ctorOpts.at(-1)!.baseURL).toBe('https://cred.example.com/v1');
+    } finally {
+      if (saved.root === undefined) delete process.env.OPENROUTER_BASE_URL;
+      else process.env.OPENROUTER_BASE_URL = saved.root;
+      if (saved.full === undefined) delete process.env.OPENROUTER_API_BASE_URL;
+      else process.env.OPENROUTER_API_BASE_URL = saved.full;
+    }
+  });
+
   it('asks OpenRouter never to forward the prompt to a mainland-China upstream', async () => {
     const provider = new OpenRouterProvider('k', 'deepseek/deepseek-v4-flash');
     await runWithBrand('roboapply', () => provider.chat([{ role: 'user', content: 'hi' }]));

@@ -23,6 +23,7 @@ import { encryptField, decryptField } from '../crypto.js';
 import { logger } from '../../services/LoggerService.js';
 import { isDbConfigDisabled } from './llmStackConfigSchema.js';
 import { parseReasoningEffort, type ReasoningEffort } from '../../services/llm/reasoningEffort.js';
+import { openRouterBaseUrlFromEnv } from '../../platform/llm/openRouterBaseUrl.js';
 import {
   BYOK_PROVIDERS,
   baseUrlRequirement,
@@ -103,7 +104,7 @@ function envCredential(providerType: string): ResolvedProviderCredential {
     case 'openai':
       return base(process.env.OPENAI_API_KEY || '', trimmed('OPENAI_BASE_URL'));
     case 'openrouter':
-      return base(process.env.OPENROUTER_API_KEY || '', trimmed('OPENROUTER_API_BASE_URL'));
+      return base(process.env.OPENROUTER_API_KEY || '', openRouterBaseUrlFromEnv());
     case 'google': {
       const t = parseInt((process.env.GOOGLE_LLM_TIMEOUT_MS || process.env.LLM_TIMEOUT_MS || '').trim(), 10);
       // GEMINI_API_KEY fallback: .env.example documents "one Google key serves

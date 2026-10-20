@@ -31,6 +31,7 @@ import {
   type EnvLike,
   type LlmPolicyDecision,
 } from './brandPolicy.js';
+import { OPENROUTER_DEFAULT_BASE_URL, openRouterBaseUrlFromEnv } from './openRouterBaseUrl.js';
 
 /**
  * Built-in base URL of each provider client when neither the credential nor
@@ -39,7 +40,7 @@ import {
  */
 export const PROVIDER_DEFAULT_BASE_URLS: Record<string, string | null> = {
   openai: 'https://api.openai.com/v1',
-  openrouter: 'https://openrouter.ai/api/v1',
+  openrouter: OPENROUTER_DEFAULT_BASE_URL,
   google: 'https://generativelanguage.googleapis.com',
   gemini: 'https://generativelanguage.googleapis.com',
   anthropic: 'https://api.anthropic.com',
@@ -57,10 +58,12 @@ export const PROVIDER_DEFAULT_BASE_URLS: Record<string, string | null> = {
   ark: 'https://ark.cn-beijing.volces.com/api/v3',
 };
 
-/** Env overrides each provider client reads when no credential base URL is set. */
+/**
+ * Env overrides each provider client reads when no credential base URL is set.
+ * OpenRouter reads two variables (openRouterBaseUrlFromEnv), so it is not here.
+ */
 const PROVIDER_BASE_URL_ENV: Record<string, string> = {
   openai: 'OPENAI_BASE_URL',
-  openrouter: 'OPENROUTER_API_BASE_URL',
   google: 'GEMINI_BASE_URL',
   anthropic: 'ANTHROPIC_BASE_URL',
   kimi: 'KIMI_API_BASE_URL',
@@ -90,7 +93,7 @@ export function effectiveLlmBaseUrl(
   if (explicit) return explicit;
   const p = (provider || '').trim().toLowerCase();
   const envName = PROVIDER_BASE_URL_ENV[p];
-  const fromEnv = envName ? (env[envName] || '').trim() : '';
+  const fromEnv = p === 'openrouter' ? openRouterBaseUrlFromEnv(env) ?? '' : envName ? (env[envName] || '').trim() : '';
   if (fromEnv) return fromEnv;
   return PROVIDER_DEFAULT_BASE_URLS[p] ?? null;
 }

@@ -73,6 +73,8 @@ export {
 } from './egressPolicy.js';
 export type { LlmEgressDecision, LlmEgressInput } from './egressPolicy.js';
 
+export { OPENROUTER_DEFAULT_BASE_URL, openAICompatibleBaseUrl, openRouterBaseUrlFromEnv } from './openRouterBaseUrl.js';
+
 export {
   ContentBlockedError,
   checkInput,

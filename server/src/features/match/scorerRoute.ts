@@ -25,12 +25,15 @@
 
 import { checkLlmRoute, type EnvLike, type LlmRoute } from '../../platform/llm/brandPolicy.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
+import { openRouterBaseUrlFromEnv } from '../../platform/llm/openRouterBaseUrl.js';
 import { DEFAULT_PROVIDER_MODE, resolveProviderPrefix, resolveSelectorRoute } from '../../services/llm/providerPrefixes.js';
 
-/** Env var holding each provider's base URL override (mirrors lib/llm/systemCredentials.ts). */
+/**
+ * Env var holding each provider's base URL override (mirrors lib/llm/systemCredentials.ts).
+ * OpenRouter reads two variables (openRouterBaseUrlFromEnv), so it is not here.
+ */
 const BASE_URL_ENV: Record<string, string> = {
   openai: 'OPENAI_BASE_URL',
-  openrouter: 'OPENROUTER_API_BASE_URL',
   google: 'GEMINI_BASE_URL',
   kimi: 'KIMI_API_BASE_URL',
   moonshot: 'KIMI_API_BASE_URL',
@@ -77,7 +80,9 @@ export function scorerRoute(
   const mode = (defaultProvider || '').trim().toLowerCase() || (profile === 'domestic_cn' ? '' : DEFAULT_PROVIDER_MODE);
   const provider = resolveSelectorRoute(model, mode, defaultModel, profile).providerType;
   const envKey = BASE_URL_ENV[provider];
-  const baseUrl = envKey ? env[envKey]?.trim() || null : null;
+  const baseUrl = provider === 'openrouter'
+    ? openRouterBaseUrlFromEnv(env) ?? null
+    : envKey ? env[envKey]?.trim() || null : null;
   return { provider, baseUrl, model };
 }
 
