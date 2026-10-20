@@ -3718,7 +3718,9 @@
           "admin_override_deleted": "1人のユーザーの上限または機能を削除",
           "admin_referral_moderated": "共有された紹介コードを確認",
           "admin_report_resolved": "報告された求人について判断",
-          "admin_work_item_retried": "バックグラウンド処理を再試行"
+          "admin_work_item_retried": "バックグラウンド処理を再試行",
+          "admin_view_as_started": "1人のユーザーの視点でアプリを閲覧のみで表示",
+          "admin_view_as_ended": "1人のユーザーの視点での閲覧のみの表示を終了"
         },
         "admin": "管理者",
         "adminPage": "アカウント{id}の管理ページを開く",
@@ -3729,7 +3731,7 @@
         "first": "最初に戻る",
         "loading": "読み込み中…",
         "more": "さらに表示",
-        "sub": "管理者が行った変更です：ユーザーごとの上限、報告された求人についての判断、紹介コードの確認、バックグラウンド処理の再試行。新しい順に表示します。各行は操作が行われた時点で記録され、アカウントが削除されても残ります。",
+        "sub": "管理者が行った変更です：ユーザーごとの上限、報告された求人についての判断、紹介コードの確認、バックグラウンド処理の再試行、ユーザー視点での閲覧のみの表示。新しい順に表示します。各行は操作が行われた時点で記録され、アカウントが削除されても残ります。",
         "title": "管理者の操作",
         "what": "操作",
         "when": "日時"
@@ -4726,7 +4728,55 @@
     "open": "支払い待ち",
     "draft": "下書き",
     "void": "無効化済み",
-    "uncollectible": "回収不能"
+    "uncollectible": "回収不能",
+    "site": "サイト",
+    "allSites": "すべてのサイト",
+    "onboarding": "初期設定",
+    "onboardingDone": "完了",
+    "onboardingNotStarted": "未開始",
+    "onboardingAt": "ステップ：{step}",
+    "onboardingStage": {
+      "situation": "状況",
+      "consent": "同意",
+      "identity": "本人情報",
+      "education": "学歴",
+      "basics": "基本情報",
+      "intent": "希望条件",
+      "tags": "タグ",
+      "goal": "目標",
+      "preferences": "こだわり条件",
+      "resume": "履歴書",
+      "matching": "マッチング",
+      "confirm": "確認",
+      "tour": "ツアー"
+    },
+    "resumes": "履歴書",
+    "noResume": "なし",
+    "viewAs": {
+      "action": "ユーザー視点で表示",
+      "aria": "{name} さんの視点でアプリを閲覧のみで表示",
+      "button": "{name} さんの視点で表示",
+      "opening": "開いています…",
+      "hint": "このユーザーに見えているとおりにアプリを開きます。閲覧のみで、何も保存されません。",
+      "failed": "この表示を開けませんでした。もう一度お試しください。",
+      "blocked": {
+        "self": "ご自身のアカウントです。",
+        "admin_account": "管理者アカウントは表示できません。",
+        "not_seeker": "このアカウントはアプリを利用したことがありません。",
+        "deleted": "このアカウントは削除されています。",
+        "other_brand": "このアカウントは %OTHER_BRAND% を利用しています。そのサイトの管理画面から表示してください。",
+        "needs_session": "このブラウザで再度ログインしてから、他のユーザーの視点で表示してください。"
+      }
+    }
+  },
+  "viewAs": {
+    "label": "管理者による他のユーザーのアカウント表示",
+    "title": "{name} さんの視点で表示中",
+    "readOnly": "閲覧のみです。ここでの操作は保存も送信もされません。",
+    "blocked": "保存されませんでした：この表示は閲覧のみです。",
+    "endsIn": "{minutes, plural, other {残り#分で終了}}",
+    "exit": "表示を終了",
+    "exiting": "終了しています…"
   },
   "accountV2": {
     "challenge": {

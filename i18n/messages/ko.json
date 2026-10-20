@@ -3718,7 +3718,9 @@
           "admin_override_deleted": "한 사람의 한도나 기능을 삭제했어요",
           "admin_referral_moderated": "공유된 추천 코드를 검토했어요",
           "admin_report_resolved": "신고된 공고에 대해 결정했어요",
-          "admin_work_item_retried": "백그라운드 작업을 다시 시도했어요"
+          "admin_work_item_retried": "백그라운드 작업을 다시 시도했어요",
+          "admin_view_as_started": "한 사람의 앱을 읽기 전용으로 봤어요",
+          "admin_view_as_ended": "한 사람의 앱 읽기 전용 보기를 끝냈어요"
         },
         "admin": "관리자",
         "adminPage": "계정 {id}의 관리자 페이지 열기",
@@ -3729,7 +3731,7 @@
         "first": "처음으로",
         "loading": "불러오는 중…",
         "more": "더 보기",
-        "sub": "관리자가 바꾼 내용이에요: 개인별 한도, 신고된 공고에 대한 결정, 추천 코드 검토, 다시 시도한 백그라운드 작업. 최신순으로 보여요. 각 행은 조치가 이뤄질 때 기록되고, 계정이 삭제돼도 남아요.",
+        "sub": "관리자가 바꾼 내용이에요: 개인별 한도, 신고된 공고에 대한 결정, 추천 코드 검토, 다시 시도한 백그라운드 작업, 다른 사람의 앱을 읽기 전용으로 본 기록. 최신순으로 보여요. 각 행은 조치가 이뤄질 때 기록되고, 계정이 삭제돼도 남아요.",
         "title": "관리자 조치",
         "what": "조치",
         "when": "일시"
@@ -4726,7 +4728,55 @@
     "open": "결제 대기",
     "draft": "초안",
     "void": "무효 처리됨",
-    "uncollectible": "회수 불가"
+    "uncollectible": "회수 불가",
+    "site": "사이트",
+    "allSites": "모든 사이트",
+    "onboarding": "초기 설정",
+    "onboardingDone": "완료",
+    "onboardingNotStarted": "시작 전",
+    "onboardingAt": "단계: {step}",
+    "onboardingStage": {
+      "situation": "상황",
+      "consent": "동의",
+      "identity": "신원",
+      "education": "학력",
+      "basics": "기본 정보",
+      "intent": "희망 조건",
+      "tags": "태그",
+      "goal": "목표",
+      "preferences": "선호 조건",
+      "resume": "이력서",
+      "matching": "매칭",
+      "confirm": "확인",
+      "tour": "둘러보기"
+    },
+    "resumes": "이력서",
+    "noResume": "없음",
+    "viewAs": {
+      "action": "이 사람으로 보기",
+      "aria": "{name} 님이 보는 앱을 읽기 전용으로 보기",
+      "button": "{name} 님으로 보기",
+      "opening": "여는 중…",
+      "hint": "이 사람이 보는 그대로 앱을 열어요. 읽기 전용이라 아무것도 저장되지 않아요.",
+      "failed": "이 화면을 열 수 없었어요. 다시 시도해 주세요.",
+      "blocked": {
+        "self": "내 계정이에요.",
+        "admin_account": "관리자 계정은 볼 수 없어요.",
+        "not_seeker": "이 계정은 앱을 사용한 적이 없어요.",
+        "deleted": "삭제된 계정이에요.",
+        "other_brand": "이 계정은 %OTHER_BRAND%를 사용해요. 해당 사이트의 관리자 화면에서 확인해 주세요.",
+        "needs_session": "이 브라우저에서 다시 로그인하면 다른 사람으로 볼 수 있어요."
+      }
+    }
+  },
+  "viewAs": {
+    "label": "관리자가 다른 사람의 계정을 보고 있어요",
+    "title": "{name} 님으로 보는 중",
+    "readOnly": "읽기 전용이에요. 여기서 하는 어떤 작업도 저장되거나 전송되지 않아요.",
+    "blocked": "저장되지 않았어요: 이 화면은 읽기 전용이에요.",
+    "endsIn": "{minutes, plural, other {#분 후 종료}}",
+    "exit": "보기 종료",
+    "exiting": "종료하는 중…"
   },
   "accountV2": {
     "challenge": {

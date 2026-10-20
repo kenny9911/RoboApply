@@ -3718,7 +3718,9 @@
           "admin_override_deleted": "A retiré une limite ou une fonction pour une personne",
           "admin_referral_moderated": "A vérifié un code de cooptation partagé",
           "admin_report_resolved": "A pris une décision sur une offre signalée",
-          "admin_work_item_retried": "A relancé une tâche de fond"
+          "admin_work_item_retried": "A relancé une tâche de fond",
+          "admin_view_as_started": "A consulté l’app d’une personne en lecture seule",
+          "admin_view_as_ended": "A terminé une vue en lecture seule de l’app d’une personne"
         },
         "admin": "Admin",
         "adminPage": "Ouvrir la page admin du compte {id}",
@@ -3729,7 +3731,7 @@
         "first": "Revenir au début",
         "loading": "Chargement…",
         "more": "Afficher plus",
-        "sub": "Les changements faits par les admins : limites par personne, décisions sur les offres signalées, vérifications de codes de cooptation et tâches de fond relancées. Les plus récents d’abord. Chaque ligne est écrite au moment de l’action et reste conservée même si un compte est supprimé.",
+        "sub": "Les changements faits par les admins : limites par personne, décisions sur les offres signalées, vérifications de codes de cooptation, tâches de fond relancées et vues en lecture seule de l’app d’une personne. Les plus récents d’abord. Chaque ligne est écrite au moment de l’action et reste conservée même si un compte est supprimé.",
         "title": "Actions admin",
         "what": "Action",
         "when": "Quand"
@@ -4726,7 +4728,55 @@
     "open": "En attente de paiement",
     "draft": "Brouillon",
     "void": "Annulé",
-    "uncollectible": "Irrécouvrable"
+    "uncollectible": "Irrécouvrable",
+    "site": "Site",
+    "allSites": "Tous les sites",
+    "onboarding": "Configuration initiale",
+    "onboardingDone": "Terminée",
+    "onboardingNotStarted": "Pas commencée",
+    "onboardingAt": "Étape : {step}",
+    "onboardingStage": {
+      "situation": "Situation",
+      "consent": "Consentement",
+      "identity": "Identité",
+      "education": "Études",
+      "basics": "Infos de base",
+      "intent": "Recherche visée",
+      "tags": "Étiquettes",
+      "goal": "Objectif",
+      "preferences": "Préférences",
+      "resume": "CV",
+      "matching": "Correspondances",
+      "confirm": "Confirmation",
+      "tour": "Visite guidée"
+    },
+    "resumes": "CV",
+    "noResume": "Aucun",
+    "viewAs": {
+      "action": "Voir en tant que",
+      "aria": "Voir l’app en tant que {name}, en lecture seule",
+      "button": "Voir en tant que {name}",
+      "opening": "Ouverture…",
+      "hint": "Ouvre l’app telle que cette personne la voit. Lecture seule : rien n’est enregistré.",
+      "failed": "Impossible d’ouvrir cette vue. Réessaie.",
+      "blocked": {
+        "self": "C’est ton propre compte.",
+        "admin_account": "Les comptes admin ne peuvent pas être consultés.",
+        "not_seeker": "Ce compte n’a jamais utilisé l’app.",
+        "deleted": "Ce compte a été supprimé.",
+        "other_brand": "Ce compte utilise %OTHER_BRAND%. Consulte-le depuis l’admin de ce site.",
+        "needs_session": "Reconnecte-toi dans ce navigateur pour voir l’app en tant que quelqu’un d’autre."
+      }
+    }
+  },
+  "viewAs": {
+    "label": "Vue admin du compte d’une autre personne",
+    "title": "Vue en tant que {name}",
+    "readOnly": "Lecture seule. Rien de ce que tu fais ici n’est enregistré ni envoyé.",
+    "blocked": "Non enregistré : cette vue est en lecture seule.",
+    "endsIn": "{minutes, plural, one {Se termine dans # minute} other {Se termine dans # minutes}}",
+    "exit": "Quitter la vue",
+    "exiting": "Fermeture…"
   },
   "accountV2": {
     "challenge": {

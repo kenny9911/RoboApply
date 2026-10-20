@@ -3809,7 +3809,9 @@
           "admin_override_deleted": "移除了某位用户的一项上限或功能",
           "admin_referral_moderated": "审核了一个分享的内推码",
           "admin_report_resolved": "处理了一个被举报的职位",
-          "admin_work_item_retried": "重试了后台任务"
+          "admin_work_item_retried": "重试了后台任务",
+          "admin_view_as_started": "以只读方式查看了某位用户的应用",
+          "admin_view_as_ended": "结束了对某位用户应用的只读查看"
         },
         "admin": "管理员",
         "adminPage": "打开账号 {id} 的管理页面",
@@ -3820,7 +3822,7 @@
         "first": "回到开头",
         "loading": "加载中…",
         "more": "显示更多",
-        "sub": "管理员做过的更改：针对单个用户的上限、对被举报职位的处理、内推码审核，以及重试的后台任务。最新的排在最前。每条记录在操作发生时写入，即使账号被删除也会保留。",
+        "sub": "管理员做过的更改：针对单个用户的上限、对被举报职位的处理、内推码审核、重试的后台任务，以及以只读方式查看他人的应用。最新的排在最前。每条记录在操作发生时写入，即使账号被删除也会保留。",
         "title": "管理员操作",
         "what": "操作",
         "when": "时间"
@@ -4817,7 +4819,55 @@
     "open": "待支付",
     "draft": "草稿",
     "void": "已作废",
-    "uncollectible": "无法收款"
+    "uncollectible": "无法收款",
+    "site": "站点",
+    "allSites": "全部站点",
+    "onboarding": "初始设置",
+    "onboardingDone": "已完成",
+    "onboardingNotStarted": "未开始",
+    "onboardingAt": "步骤：{step}",
+    "onboardingStage": {
+      "situation": "求职状况",
+      "consent": "同意条款",
+      "identity": "身份",
+      "education": "教育经历",
+      "basics": "基本信息",
+      "intent": "求职意向",
+      "tags": "标签",
+      "goal": "目标",
+      "preferences": "偏好",
+      "resume": "简历",
+      "matching": "匹配",
+      "confirm": "确认",
+      "tour": "导览"
+    },
+    "resumes": "简历",
+    "noResume": "无",
+    "viewAs": {
+      "action": "以其身份查看",
+      "aria": "以只读方式查看 {name} 看到的应用",
+      "button": "以 {name} 的身份查看",
+      "opening": "正在打开…",
+      "hint": "按此人看到的样子打开应用。只读：不会保存任何内容。",
+      "failed": "无法打开此视图，请重试。",
+      "blocked": {
+        "self": "这是你自己的账号。",
+        "admin_account": "无法查看管理员账号。",
+        "not_seeker": "此账号从未使用过本应用。",
+        "deleted": "此账号已被删除。",
+        "other_brand": "此账号使用的是 %OTHER_BRAND%，请在该站点的管理后台查看。",
+        "needs_session": "请在此浏览器中重新登录，再以他人身份查看。"
+      }
+    }
+  },
+  "viewAs": {
+    "label": "管理员正在查看他人的账号",
+    "title": "正在以 {name} 的身份查看",
+    "readOnly": "只读模式。你在这里的任何操作都不会保存或发送。",
+    "blocked": "未保存：此视图为只读。",
+    "endsIn": "{minutes, plural, other {# 分钟后结束}}",
+    "exit": "退出查看",
+    "exiting": "正在退出…"
   },
   "authCn": {
     "consent": {

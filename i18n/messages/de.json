@@ -3718,7 +3718,9 @@
           "admin_override_deleted": "Limit oder Funktion für eine Person entfernt",
           "admin_referral_moderated": "Geteilten Empfehlungscode geprüft",
           "admin_report_resolved": "Über einen gemeldeten Job entschieden",
-          "admin_work_item_retried": "Hintergrundaufgabe erneut gestartet"
+          "admin_work_item_retried": "Hintergrundaufgabe erneut gestartet",
+          "admin_view_as_started": "App einer Person schreibgeschützt angesehen",
+          "admin_view_as_ended": "Schreibgeschützte Ansicht der App einer Person beendet"
         },
         "admin": "Admin",
         "adminPage": "Admin-Seite von Konto {id} öffnen",
@@ -3729,7 +3731,7 @@
         "first": "Zurück zum Anfang",
         "loading": "Wird geladen…",
         "more": "Mehr anzeigen",
-        "sub": "Änderungen von Admins: Limits für einzelne Personen, Entscheidungen zu gemeldeten Jobs, Prüfungen von Empfehlungscodes und erneut gestartete Hintergrundaufgaben. Neueste zuerst. Jede Zeile wird geschrieben, wenn die Aktion passiert, und bleibt erhalten, auch wenn ein Konto gelöscht wird.",
+        "sub": "Änderungen von Admins: Limits für einzelne Personen, Entscheidungen zu gemeldeten Jobs, Prüfungen von Empfehlungscodes, erneut gestartete Hintergrundaufgaben und schreibgeschützte Ansichten der App einer Person. Neueste zuerst. Jede Zeile wird geschrieben, wenn die Aktion passiert, und bleibt erhalten, auch wenn ein Konto gelöscht wird.",
         "title": "Admin-Aktionen",
         "what": "Aktion",
         "when": "Wann"
@@ -4726,7 +4728,55 @@
     "open": "Zahlung ausstehend",
     "draft": "Entwurf",
     "void": "Ungültig",
-    "uncollectible": "Uneinbringlich"
+    "uncollectible": "Uneinbringlich",
+    "site": "Website",
+    "allSites": "Alle Websites",
+    "onboarding": "Einrichtung",
+    "onboardingDone": "Abgeschlossen",
+    "onboardingNotStarted": "Nicht begonnen",
+    "onboardingAt": "Schritt: {step}",
+    "onboardingStage": {
+      "situation": "Situation",
+      "consent": "Einwilligung",
+      "identity": "Identität",
+      "education": "Ausbildung",
+      "basics": "Grunddaten",
+      "intent": "Jobwunsch",
+      "tags": "Tags",
+      "goal": "Ziel",
+      "preferences": "Vorlieben",
+      "resume": "Lebenslauf",
+      "matching": "Abgleich",
+      "confirm": "Bestätigen",
+      "tour": "Rundgang"
+    },
+    "resumes": "Lebensläufe",
+    "noResume": "Keiner",
+    "viewAs": {
+      "action": "Ansehen als",
+      "aria": "Die App als {name} ansehen, nur lesen",
+      "button": "Als {name} ansehen",
+      "opening": "Wird geöffnet…",
+      "hint": "Öffnet die App so, wie diese Person sie sieht. Nur lesen: Es wird nichts gespeichert.",
+      "failed": "Diese Ansicht konnte nicht geöffnet werden. Versuch es noch einmal.",
+      "blocked": {
+        "self": "Das ist dein eigenes Konto.",
+        "admin_account": "Admin-Konten können nicht angesehen werden.",
+        "not_seeker": "Dieses Konto hat die App nie genutzt.",
+        "deleted": "Dieses Konto wurde gelöscht.",
+        "other_brand": "Dieses Konto nutzt %OTHER_BRAND%. Sieh es dir im Admin-Bereich dieser Website an.",
+        "needs_session": "Melde dich in diesem Browser neu an, um die App als jemand anderes anzusehen."
+      }
+    }
+  },
+  "viewAs": {
+    "label": "Admin-Ansicht des Kontos einer anderen Person",
+    "title": "Ansicht als {name}",
+    "readOnly": "Nur lesen. Nichts, was du hier tust, wird gespeichert oder gesendet.",
+    "blocked": "Nicht gespeichert: Diese Ansicht ist schreibgeschützt.",
+    "endsIn": "{minutes, plural, one {Endet in # Minute} other {Endet in # Minuten}}",
+    "exit": "Ansicht beenden",
+    "exiting": "Wird beendet…"
   },
   "accountV2": {
     "challenge": {
