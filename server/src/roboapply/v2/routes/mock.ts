@@ -19,20 +19,44 @@
 // The brand's market comes from the request (never from the body): GoApply
 // gets its AI-interview practice format in the catalog and the `cn` report
 // block on a score (WP-66). RoboApply responses are unchanged.
+// All writes use the Interview Engine's written-practice service: the same
+// duration/credit gate, verification grant and idempotent completion debit.
 
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../lib/raAuth.js';
 import { legacyAiGates } from '../lib/legacyAiGates.js';
 import { getRequestLocale } from '../lib/raLocale.js';
 import { logger } from '../../../services/LoggerService.js';
-import { withSearchKnownValues } from '../services/RAInterviewPromptService.js';
+import { raMockService } from '../services/RAMockService.js';
 import {
-  raMockService,
-  MockValidationError,
-  MockSessionNotFoundError,
-} from '../services/RAMockService.js';
+  interviewSessionService,
+  ensureFirstPracticeGrant,
+  InterviewInsufficientCreditsError,
+  InterviewValidationError,
+  type FirstPracticeState,
+} from '../../../interview-engine/sessions/InterviewSessionService.js';
+import { handleEngineError } from '../../../interview-engine/routes/errors.js';
 
 const router = Router();
+
+function isAdmin(req: Request): boolean {
+  const user = req.user as { role?: string; roles?: string[] } | undefined;
+  return user?.role === 'admin' || user?.roles?.includes('admin') === true;
+}
+
+function practiceError(res: Response, op: string, err: unknown, userId: string, firstPractice: FirstPracticeState | null = null): Response {
+  if (err instanceof InterviewInsufficientCreditsError) {
+    return res.status(402).json({
+      error: 'insufficient_credits', message: err.message,
+      balance: err.balance, required: err.required, tier: err.tier,
+      bucket: 'practice', firstPractice,
+    });
+  }
+  // Keep the legacy validation response; other engine errors retain their
+  // normal status (404 ownership, 409 ended, etc.).
+  if (err instanceof InterviewValidationError) return res.status(422).json({ error: err.message });
+  return handleEngineError(res, op, err, { userId });
+}
 
 /** The market of the request's brand (intl when it cannot be read). */
 async function requestMarket(): Promise<'intl' | 'cn'> {
@@ -74,34 +98,27 @@ router.get('/recent-sessions', requireAuth, async (req: Request, res: Response) 
 
 // POST /start — create a session + generate questions.
 router.post('/start', requireAuth, ...legacyAiGates(), async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  let firstPractice: FirstPracticeState | null = null;
   try {
-    const userId = req.user!.id;
-    const { role, interviewerId, typeId, format, language, durationMinutes } = req.body ?? {};
-    const market = await requestMarket();
-    // The account name must never reach the web-search vendor in the role-research query
-    // (PAR-4 review finding 5): the prompt service checks its query against these values,
-    // as it does for the first-party practice routes.
-    const result = await withSearchKnownValues([req.user!.name], () =>
-      raMockService.start(userId, {
-        role,
-        interviewerId,
-        typeId,
-        format,
-        language: typeof language === 'string' ? language : undefined,
-        durationMinutes: typeof durationMinutes === 'number' ? durationMinutes : undefined,
-        market,
-      }, getRequestLocale(req)),
-    );
+    const b = req.body ?? {};
+    const admin = isAdmin(req);
+    firstPractice = admin ? null : await ensureFirstPracticeGrant(userId);
+    const { jobId: _jobId, ...result } = await interviewSessionService.startTextPractice({
+      userId,
+      role: typeof b.role === 'string' ? b.role : '',
+      interviewerId: typeof b.interviewerId === 'string' ? b.interviewerId : '',
+      typeId: typeof b.typeId === 'string' ? b.typeId : '',
+      language: typeof b.language === 'string' ? b.language : undefined,
+      durationMinutes: typeof b.durationMinutes === 'number' ? b.durationMinutes : undefined,
+      job: null,
+      creditExempt: admin,
+      locale: getRequestLocale(req),
+      knownValues: [req.user!.name ?? ''],
+    });
     return res.json(result);
   } catch (err) {
-    if (err instanceof MockValidationError) {
-      return res.status(422).json({ error: err.message });
-    }
-    logger.error('RA_V2_MOCK', 'start failed', {
-      userId: req.user?.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
+    return practiceError(res, 'legacy_mock_start', err, userId, firstPractice);
   }
 });
 
@@ -110,25 +127,17 @@ router.post('/next-turn', requireAuth, ...legacyAiGates(), async (req: Request, 
   try {
     const userId = req.user!.id;
     const { sessionId, answer, questionIndex } = req.body ?? {};
-    const result = await raMockService.nextTurn(userId, {
-      sessionId,
-      answer,
-      questionIndex,
-    }, getRequestLocale(req));
+    const result = await interviewSessionService.textPracticeTurn({
+      userId,
+      sessionId: typeof sessionId === 'string' ? sessionId : '',
+      answer: typeof answer === 'string' ? answer.slice(0, 8000) : '',
+      questionIndex: Number.isInteger(questionIndex) ? questionIndex : 0,
+      locale: getRequestLocale(req),
+      legacy: { creditExempt: isAdmin(req) },
+    });
     return res.json(result);
   } catch (err) {
-    if (err instanceof MockSessionNotFoundError) {
-      return res.status(404).json({ error: 'not_found' });
-    }
-    if (err instanceof MockValidationError) {
-      return res.status(422).json({ error: err.message });
-    }
-    logger.error('RA_V2_MOCK', 'nextTurn failed', {
-      userId: req.user?.id,
-      sessionId: req.body?.sessionId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
+    return practiceError(res, 'legacy_mock_turn', err, req.user!.id);
   }
 });
 
@@ -136,21 +145,12 @@ router.post('/next-turn', requireAuth, ...legacyAiGates(), async (req: Request, 
 router.post('/:sessionId/score', requireAuth, ...legacyAiGates(), async (req: Request<{ sessionId: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
-    const result = await raMockService.score(userId, req.params.sessionId, { market: await requestMarket() });
+    const { jobId: _jobId, practiceCounted: _counted, ...result } = await interviewSessionService.scoreTextPractice({
+      userId, sessionId: req.params.sessionId, legacy: { creditExempt: isAdmin(req) },
+    });
     return res.json(result);
   } catch (err) {
-    if (err instanceof MockSessionNotFoundError) {
-      return res.status(404).json({ error: 'not_found' });
-    }
-    if (err instanceof MockValidationError) {
-      return res.status(422).json({ error: err.message });
-    }
-    logger.error('RA_V2_MOCK', 'score failed', {
-      userId: req.user?.id,
-      sessionId: req.params.sessionId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
+    return practiceError(res, 'legacy_mock_score', err, req.user!.id);
   }
 });
 

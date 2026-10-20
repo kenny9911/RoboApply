@@ -15,6 +15,8 @@ import { startRouteHarness, type RouteHarness } from '../../../test/routeHarness
 const m = vi.hoisted(() => ({
   aiAvailable: true,
   phoneBound: true,
+  admin: false,
+  grant: vi.fn(async () => ({ method: 'email', verified: true, grant: 'already_granted' })),
   start: vi.fn(async () => ({ sessionId: 's1' })),
   nextTurn: vi.fn(async () => ({})),
   score: vi.fn(async () => ({})),
@@ -28,7 +30,7 @@ const m = vi.hoisted(() => ({
 
 vi.mock('../lib/raAuth.js', () => ({
   requireAuth: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.user = { id: 'u1', subscriptionTier: 'free' };
+    req.user = { id: 'u1', name: 'Candidate Name', role: m.admin ? 'admin' : 'seeker', subscriptionTier: 'free' };
     next();
   },
 }));
@@ -45,6 +47,11 @@ vi.mock('../services/RAMockService.js', () => ({
   raMockService: { start: m.start, nextTurn: m.nextTurn, score: m.score, catalog: () => ({}), recentSessions: async () => ({ sessions: [] }) },
   MockValidationError: class extends Error {},
   MockSessionNotFoundError: class extends Error {},
+}));
+vi.mock('../../../interview-engine/sessions/InterviewSessionService.js', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  ensureFirstPracticeGrant: m.grant,
+  interviewSessionService: { startTextPractice: m.start, textPracticeTurn: m.nextTurn, scoreTextPractice: m.score },
 }));
 vi.mock('../services/RACrossBankSearchService.js', () => ({ raCrossBankSearchService: { run: m.discoverRun } }));
 // The discover route's daily cap counts deduction rows; everything else on the client is untouched.
@@ -71,6 +78,7 @@ afterAll(async () => {
 beforeEach(() => {
   m.aiAvailable = true;
   m.phoneBound = true;
+  m.admin = false;
   vi.clearAllMocks();
 });
 
@@ -109,6 +117,43 @@ describe('legacy /v2 model routes', () => {
   it('the catalog (no model call) is not gated', async () => {
     m.aiAvailable = false;
     expect((await h.request('GET', '/v2/mock/catalog')).status).toBe(200);
+  });
+
+  it('uses the shared credit gate, grants verification first and ignores a client exemption', async () => {
+    const { InterviewInsufficientCreditsError } = await import('../../../interview-engine/sessions/InterviewSessionService.js');
+    m.start.mockRejectedValueOnce(new InterviewInsufficientCreditsError({ balance: 0, required: 1.5, tier: 'free' }));
+    const res = await h.request('POST', '/v2/mock/start', { body: { role: 'Engineer', interviewerId: 'maya', typeId: 'behavioral', durationMinutes: 30, creditExempt: true } });
+    expect(res.status).toBe(402);
+    expect(res.body).toMatchObject({ error: 'insufficient_credits', bucket: 'practice', balance: 0, required: 1.5, tier: 'free', firstPractice: { grant: 'already_granted' } });
+    expect(m.grant).toHaveBeenCalledWith('u1');
+    expect(m.grant.mock.invocationCallOrder[0]).toBeLessThan(m.start.mock.invocationCallOrder[0]!);
+    expect(m.start).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1', durationMinutes: 30, creditExempt: false, knownValues: ['Candidate Name'] }));
+  });
+
+  it('keeps the server-derived admin exemption of current practice', async () => {
+    m.admin = true;
+    expect((await h.request('POST', '/v2/mock/start', { body: {} })).status).toBe(200);
+    expect(m.start).toHaveBeenCalledWith(expect.objectContaining({ creditExempt: true }));
+    expect(m.grant).not.toHaveBeenCalled();
+  });
+
+  it('sends legacy turns and scores through the shared metering flow and preserves the score response', async () => {
+    await h.request('POST', '/v2/mock/next-turn', { body: { sessionId: 's1', answer: 'An answer', questionIndex: 0, creditExempt: true } });
+    expect(m.nextTurn).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1', sessionId: 's1', legacy: { creditExempt: false } }));
+    m.score.mockResolvedValueOnce({ overall: 70, jobId: null, practiceCounted: true });
+    const res = await h.request('POST', '/v2/mock/s1/score', { body: { creditExempt: true } });
+    expect(res.body).toEqual({ overall: 70 });
+    expect(m.score).toHaveBeenCalledWith({ userId: 'u1', sessionId: 's1', legacy: { creditExempt: false } });
+  });
+
+  it('preserves ownership and completed-session errors from the shared flow', async () => {
+    const { InterviewNotFoundError, InterviewSessionEndedError } = await import('../../../interview-engine/sessions/InterviewSessionService.js');
+    m.score.mockRejectedValueOnce(new InterviewNotFoundError());
+    expect((await h.request('POST', '/v2/mock/other/score', { body: {} })).status).toBe(404);
+    m.nextTurn.mockRejectedValueOnce(new InterviewSessionEndedError('complete'));
+    const res = await h.request('POST', '/v2/mock/next-turn', { body: { sessionId: 's1' } });
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ error: 'session_ended' });
   });
 });
 

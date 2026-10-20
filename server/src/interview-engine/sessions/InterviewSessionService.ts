@@ -2263,9 +2263,37 @@ export class InterviewSessionService {
     return { ...started, jobId: meta.jobId };
   }
 
-  async textPracticeTurn(input: { userId: string; sessionId: string; answer: string; questionIndex: number; locale?: string }) {
+  /** Adopt unfinished legacy sessions into the same metering flow before more work. */
+  private async ownedTextPractice(input: TextPracticeAccess) {
     const row = await practiceDeps.findTextPractice(input.userId, input.sessionId);
-    if (!row || !textPracticeMetaOf(row)) throw new InterviewNotFoundError();
+    if (!row) throw new InterviewNotFoundError();
+    let meta = textPracticeMetaOf(row);
+    if (!meta && input.legacy) {
+      // Reports completed before metering was introduced remain readable without
+      // retroactive charges. They cannot be resumed through textPracticeTurn.
+      if (row.status === 'complete') return { row, meta: null };
+      if (!input.legacy.creditExempt) {
+        const afford = await practiceDeps.gatePractice(input.userId, row.plannedDurationMinutes ?? TEXT_MINUTES_DEFAULT);
+        if (!afford.ok) throw new InterviewInsufficientCreditsError(afford);
+      }
+      meta = {
+        v: 1, kind: 'text', jobId: row.jobId ?? null, jobTitle: null,
+        companyName: null, creditExempt: input.legacy.creditExempt,
+      };
+      // Unlike the display-only tags, this tag controls billing. Do not allow
+      // work to continue if the metering decision could not be persisted.
+      const saved = await practiceDeps.mergePracticeMeta('text', row.id, meta as unknown as Record<string, unknown>);
+      if (!saved) throw new InterviewNotReadyError();
+    }
+    if (!meta) throw new InterviewNotFoundError();
+    return { row, meta };
+  }
+
+  async textPracticeTurn(input: TextPracticeAccess & { answer: string; questionIndex: number; locale?: string }) {
+    const { row } = await this.ownedTextPractice(input);
+    // A completed session has already been settled. Reusing it for more model
+    // calls would bypass the credit gate for a new practice.
+    if (row.status !== 'in_progress') throw new InterviewSessionEndedError(row.status);
     return practiceDeps.textTurn(
       input.userId,
       { sessionId: input.sessionId, answer: input.answer, questionIndex: input.questionIndex },
@@ -2279,11 +2307,10 @@ export class InterviewSessionService {
    * session, capped at what the start gate authorised), stamp it completed
    * for its job and tick the checklist step once.
    */
-  async scoreTextPractice(input: { userId: string; sessionId: string }): Promise<TextPracticeScoreResult> {
-    const row = await practiceDeps.findTextPractice(input.userId, input.sessionId);
-    const meta = row ? textPracticeMetaOf(row) : null;
-    if (!row || !meta) throw new InterviewNotFoundError();
+  async scoreTextPractice(input: TextPracticeAccess): Promise<TextPracticeScoreResult> {
+    const { row, meta } = await this.ownedTextPractice(input);
     const score = await practiceDeps.textScore(input.userId, input.sessionId, practiceDeps.currentMarket());
+    if (!meta) return { ...score, practiceCounted: false, jobId: row.jobId ?? null };
     const answered = countTextAnswers(row.transcript) > 0;
     if (answered) {
       if (!meta.creditExempt) {
@@ -2292,7 +2319,7 @@ export class InterviewSessionService {
             userId: input.userId,
             sessionId: input.sessionId,
             durationSec: Math.max(1, Math.round(score.durationMinutes)) * 60,
-            plannedDurationMinutes: row.plannedDurationMinutes,
+            plannedDurationMinutes: row.plannedDurationMinutes ?? TEXT_MINUTES_DEFAULT,
           })
           .catch((err) => {
             logger.warn('INTERVIEW_ENGINE_SESSION', 'written practice debit failed', {
@@ -2783,6 +2810,13 @@ export interface TextPracticeStartInput {
   knownValues?: ReadonlyArray<string | null | undefined>;
   /** The interview prep planned at setup (see CreateSessionInput.prep). */
   prep?: StoredPrep | null;
+}
+
+interface TextPracticeAccess {
+  userId: string;
+  sessionId: string;
+  /** Server-only compatibility for the old /v2/mock routes; never read from the request body. */
+  legacy?: { creditExempt: boolean };
 }
 
 export interface TextPracticeStartResult {
