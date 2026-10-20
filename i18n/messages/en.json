@@ -9297,7 +9297,11 @@
       "scoreBody": "Great fit, Good fit, Possible and Unlikely compare your resume with the job's requirements.",
       "scoreLine": "This is not your chance of getting hired.",
       "resumeCheck": "{count, plural, =0 {Your resume check is ready.} one {Your resume check is ready: # thing to fix.} other {Your resume check is ready: # things to fix.}}",
-      "resumeCheckAction": "See the check"
+      "resumeCheckAction": "See the check",
+      "addResumeTitle": "Add your resume",
+      "addResumeBody": "We compare it with each job and use it to write tailored resumes and cover letters.",
+      "addResumeAction": "Add a resume",
+      "addResumeDismiss": "No thanks"
     },
     "skillsCheck": {
       "title": "Do you have these skills?",

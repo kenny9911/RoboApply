@@ -531,6 +531,8 @@ export const ONBOARDING_UI_KEYS = {
   scoreTip: 'onboarding.scoreTip',
   resumeCheckBanner: 'onboarding.resumeCheckBanner',
   skillsCheck: 'onboarding.skillsCheck',
+  /** "Add your resume" tip for a user with no resume; a dismissal hides it for good. */
+  addResumeTip: 'onboarding.addResumeTip',
 } as const;
 /** Dismissals after which the finish banner becomes a line in Settings. */
 export const FINISH_BANNER_MAX_DISMISSALS = 2;

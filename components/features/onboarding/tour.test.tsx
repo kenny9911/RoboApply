@@ -30,6 +30,11 @@ vi.mock('../../../lib/ui/popupGate', async (orig) => {
   };
 });
 vi.mock('../growth', () => ({ GettingStartedChecklist: () => <p>Checklist card</p> }));
+// The dock reads the resume list for its add-resume tip (onboarding.test.tsx): everyone here has a resume.
+vi.mock('../../../hooks/useResumes', async (orig) => ({
+  ...(await orig<typeof import('../../../hooks/useResumes')>()),
+  useResumeList: () => ({ data: { resumes: [{ id: 'rv1', name: 'Main' }] } }),
+}));
 
 import { installFetch, ok, renderWith } from '../filters/filters.testkit';
 import { TourOverlay } from './TourOverlay';

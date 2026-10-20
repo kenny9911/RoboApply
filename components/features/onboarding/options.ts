@@ -89,5 +89,6 @@ export const UI_KEYS = {
   scoreTip: 'onboarding.scoreTip',
   resumeCheckBanner: 'onboarding.resumeCheckBanner',
   skillsCheck: 'onboarding.skillsCheck',
+  addResumeTip: 'onboarding.addResumeTip',
 } as const;
 export const FINISH_BANNER_MAX_DISMISSALS = 2;

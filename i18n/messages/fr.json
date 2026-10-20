@@ -8593,6 +8593,10 @@
       "title": "Postes à pourvoir en ce moment"
     },
     "tips": {
+      "addResumeAction": "Ajouter un CV",
+      "addResumeBody": "Nous le comparons à chaque offre et l’utilisons pour rédiger des CV adaptés et des lettres de motivation.",
+      "addResumeDismiss": "Non merci",
+      "addResumeTitle": "Ajoute ton CV",
       "close": "Fermer",
       "dismiss": "Compris",
       "resumeCheck": "{count, plural, =0 {La vérification de ton CV est prête.} one {La vérification de ton CV est prête : # point à corriger.} other {La vérification de ton CV est prête : # points à corriger.}}",

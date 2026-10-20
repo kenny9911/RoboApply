@@ -8593,6 +8593,10 @@
       "title": "Vacantes ahora mismo"
     },
     "tips": {
+      "addResumeAction": "Añadir un currículum",
+      "addResumeBody": "Lo comparamos con cada empleo y lo usamos para escribir currículums adaptados y cartas de presentación.",
+      "addResumeDismiss": "No, gracias",
+      "addResumeTitle": "Añade tu currículum",
       "close": "Cerrar",
       "dismiss": "Entendido",
       "resumeCheck": "{count, plural, =0 {La revisión de tu currículum está lista.} one {La revisión de tu currículum está lista: # cosa por corregir.} other {La revisión de tu currículum está lista: # cosas por corregir.}}",

@@ -8593,6 +8593,10 @@
       "title": "Vagas abertas agora"
     },
     "tips": {
+      "addResumeAction": "Adicionar um currículo",
+      "addResumeBody": "Comparamos seu currículo com cada vaga e o usamos para escrever currículos adaptados e cartas de apresentação.",
+      "addResumeDismiss": "Não, obrigado",
+      "addResumeTitle": "Adicione seu currículo",
       "close": "Fechar",
       "dismiss": "Entendi",
       "resumeCheck": "{count, plural, =0 {A conferência do seu currículo está pronta.} one {A conferência do seu currículo está pronta: # ponto a corrigir.} other {A conferência do seu currículo está pronta: # pontos a corrigir.}}",

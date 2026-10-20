@@ -8593,6 +8593,10 @@
       "title": "Aktuell offene Stellen"
     },
     "tips": {
+      "addResumeAction": "Lebenslauf hinzufügen",
+      "addResumeBody": "Wir vergleichen ihn mit jedem Job und schreiben daraus angepasste Lebensläufe und Anschreiben.",
+      "addResumeDismiss": "Nein danke",
+      "addResumeTitle": "Füg deinen Lebenslauf hinzu",
       "close": "Schließen",
       "dismiss": "Verstanden",
       "resumeCheck": "{count, plural, =0 {Deine Lebenslauf-Prüfung ist fertig.} one {Deine Lebenslauf-Prüfung ist fertig: # Punkt zu korrigieren.} other {Deine Lebenslauf-Prüfung ist fertig: # Punkte zu korrigieren.}}",
