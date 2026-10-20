@@ -266,8 +266,28 @@ function schedule(): void {
   }
 }
 
+// ── Admin "view as" ──────────────────────────────────────────────────────
+// While an admin views the app as someone (components/v3/shell/ViewAsBanner),
+// nothing is recorded: the admin's clicks are not that person's product
+// activity (the server refuses the writes anyway). Leaving the view reloads
+// the page, which starts recording again.
+
+let paused = false;
+
+/** Stop (or resume) recording; stopping also drops what is waiting to be sent. */
+export function pauseAnalytics(on: boolean): void {
+  paused = on;
+  if (!on) return;
+  state.queue.length = 0;
+  if (state.timer !== null) {
+    clearTimeout(state.timer);
+    state.timer = null;
+  }
+}
+
 /** Queue one event. Never throws and never blocks the caller. */
 export function track<N extends ProductEventName>(name: N, props?: ProductEventProps<N>, options: { path?: string } = {}): void {
+  if (paused) return;
   try {
     const path = options.path ?? (typeof location !== 'undefined' ? location.pathname : undefined);
     const event: QueuedEvent = { name, at: new Date().toISOString() };
@@ -287,7 +307,7 @@ export function track<N extends ProductEventName>(name: N, props?: ProductEventP
  * events are best-effort and must not pile up or retry in a loop).
  */
 export async function flush(mode: 'fetch' | 'beacon' = 'fetch'): Promise<void> {
-  if (!state.configured) return;
+  if (!state.configured || paused) return;
   if (state.timer !== null) {
     clearTimeout(state.timer);
     state.timer = null;
@@ -415,4 +435,5 @@ export function __resetAnalyticsForTests(): void {
   }
   reviewListeners.clear();
   state = freshState();
+  paused = false;
 }

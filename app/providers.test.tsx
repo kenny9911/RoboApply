@@ -15,8 +15,10 @@ import { useFormatter, useTimeZone } from 'next-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // The session loader is not what is under test, and it would call the API.
+// Signed out, so the root's admin "view as" banner renders nothing.
 vi.mock('../lib/auth/AuthProvider', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useAuth: () => ({ status: 'unauthenticated', user: null, me: null }),
 }));
 
 import { clientBrandFor } from '../lib/brand/client';

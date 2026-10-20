@@ -21,6 +21,7 @@ import type {
 } from './contracts/auth';
 import type { PublicJobCard } from './contracts/seo';
 import type { Touch } from './contracts/growth';
+import type { ViewAsSessionView } from './contracts/admin';
 
 export type {
   AuthMeAdditions,
@@ -66,6 +67,12 @@ export interface MeResponse extends Partial<AuthMeAdditions> {
     skippedAt?: string | null;
     autoOpens?: number;
   };
+  /**
+   * Present only while the signed-in admin views the app as this user
+   * (server platform/viewAs): every write is refused, and the app shows the
+   * view banner (components/v3/shell/ViewAsBanner.tsx).
+   */
+  viewAs?: ViewAsSessionView;
 }
 
 export interface AuthSessionResponse {

@@ -1,0 +1,90 @@
+/* components/v3/shell/ViewAsBanner.module.css — the admin "view as" banner.
+   The stable identity plane (--brand-plane with --brand-mark, a checked
+   contrast pair in both brands and themes) marks a mode that is not the
+   person's own app. Sticky, so it stays in view where the document scrolls
+   (phones, onboarding); its height is published as --view-as-h. */
+
+.banner {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 24px;
+  background: var(--brand-plane);
+  color: var(--brand-mark);
+  font-family: var(--font-ui);
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 2px;
+  min-width: 0;
+}
+
+.who svg { flex-shrink: 0; }
+
+.title {
+  margin: 0;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.email {
+  margin-left: 8px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.note {
+  margin: 0;
+  font-size: var(--fs-label);
+  opacity: 0.9;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.time {
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
+.exit {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--brand-mark);
+  color: var(--brand-plane);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+
+.exit:hover { opacity: 0.9; }
+.exit:focus-visible { outline: 2px solid var(--brand-mark); outline-offset: 2px; }
+.exit:disabled { opacity: 0.7; cursor: progress; }
+
+@media (max-width: 760px) {
+  .banner { flex-wrap: wrap; padding: 8px 16px; gap: 8px 12px; }
+  /* The name and the read-only line need the width more than the mark does. */
+  .who svg { display: none; }
+  .actions { width: 100%; justify-content: space-between; }
+  .exit { min-height: 44px; }
+}

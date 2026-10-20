@@ -18,7 +18,7 @@ import type { z } from 'zod';
 
 import { API_BASE } from '../../config';
 import { LOCALE_COOKIE } from '../../localeConfig';
-import { RoboApiError, devBrandHeader, request, type RequestOptions } from '../client';
+import { RoboApiError, devBrandHeader, noteViewAsResponse, request, type RequestOptions } from '../client';
 
 /** zod input type of a contract schema (`In<typeof C.PutOfferBodySchema>`). */
 export type In<S> = S extends z.ZodType ? z.input<S> : never;
@@ -239,7 +239,9 @@ export async function postStream<E extends SseEvent>(
     } catch {
       // non-JSON error body
     }
-    throw new RoboApiError(data.error ?? `HTTP ${res.status}`, { code: data.code, status: res.status, payload: data });
+    const error = new RoboApiError(data.error ?? `HTTP ${res.status}`, { code: data.code, status: res.status, payload: data });
+    noteViewAsResponse(res, error.code);
+    throw error;
   }
   if (!res.body) return;
   const reader = res.body.getReader();

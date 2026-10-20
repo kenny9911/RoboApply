@@ -11,7 +11,8 @@
 //      already substituted by loadMessages(locale, brandId)) and the time
 //      zone every `format.dateTime` call inherits: the VIEWER's (see
 //      useViewerTimeZone below), with the brand default for the server render.
-//   4. AuthProvider — exposes session state to all (auth) descendants.
+//   4. AuthProvider — exposes session state to all (auth) descendants. The
+//      admin "view as" banner sits right inside it, above every screen.
 //
 // We deliberately resolve the locale + load messages at the server layer
 // (app/layout.tsx) and pass them down so we don't ship the entire
@@ -29,6 +30,7 @@ import { AuthProvider } from '../lib/auth/AuthProvider';
 import { BrandProvider, type SeedCapabilities } from '../lib/brand/BrandProvider';
 import { clientBrandFor, type ClientBrand } from '../lib/brand/client';
 import { ThemeProvider } from '../lib/theme';
+import { ViewAsBanner } from '../components/v3/shell/ViewAsBanner';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -178,7 +180,11 @@ export function Providers({
           onError={onIntlError}
         >
           <AuthProvider>
-            <ThemeProvider>{children}</ThemeProvider>
+            <ThemeProvider>
+              {/* Admin "view as": read-only banner above every screen while viewing as someone. */}
+              <ViewAsBanner />
+              {children}
+            </ThemeProvider>
           </AuthProvider>
         </NextIntlClientProvider>
       </BrandProvider>

@@ -85,3 +85,10 @@
   .panel { padding: 16px; }
   .turn { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
+
+/* View as (ViewAsButton): the reason sits under the button when it is off or refused */
+.viewAs { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.viewAs small, .viewAsInline small { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.5; max-width: 280px; }
+.viewAsInline { display: inline-flex; flex-direction: column; gap: 2px; }
+.viewAsInline button { white-space: nowrap; }
+.viewAsInline button:disabled { color: var(--text-muted); cursor: not-allowed; }

@@ -6,13 +6,14 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../lib/auth/useAuth';
 import { useOperationsOverview, useOperationsUsers, useOperationsPayments, useOperationsActivity } from '../../../hooks/useAdminOperations';
-import { operationsCsvUrl, type OperationsFilters, type OperationsPayment, type OperationsUser, type OperationsActivity, type OperationsOverview, type NativeRevenue, type PaymentCoverage } from '../../../lib/api/adminOperations';
+import { operationsCsvUrl, type OperationsFilters, type OperationsPayment, type OperationsUser, type OperationsUserSort, type OperationsActivity, type OperationsOverview, type NativeRevenue, type PaymentCoverage } from '../../../lib/api/adminOperations';
+import { useBrand } from '../../../lib/brand/BrandProvider';
 import { PageHeader } from '../../../components/v3/primitives/PageHeader';
 import { MetricGrid } from '../../../components/v3/primitives/MetricGrid';
 import { EmptyState } from '../../../components/v3/primitives/EmptyState';
 import { Btn } from '../../../components/v3/primitives/Btn';
 import { IconRefresh, IconUpload } from '../../../components/v3/primitives/Iconset';
-import { AdminNav, DateRangePicker, DataTable, TierBadge, resolveRange, type RangeValue, type Column, fmtCurrency, fmtCount } from '../../../components/v3/admin';
+import { AdminNav, DateRangePicker, DataTable, TierBadge, ViewAsButton, resolveRange, type RangeValue, type Column, type SortState, fmtCurrency, fmtCount } from '../../../components/v3/admin';
 import { fmtNativeAmount } from '../../../components/v3/admin/format';
 import { SessionsTab, RateCardTab } from '../../../components/v3/admin/legacyTabs';
 import styles from './admin.module.css';
@@ -171,9 +172,11 @@ type FilterState = ReturnType<typeof useFilters>;
 function Filters({ state, kind, userId, clearUser }: { state: FilterState; kind: 'payments' | 'users' | 'activity'; userId?: string; clearUser?: () => void }) {
   const t = useTranslations('adminOps');
   const locale = useLocale();
+  const brand = useBrand();
   const select = (key: string, label: string, options: [string, string][]) => <label className={styles.field} key={key}>{t(label)}<select value={state.filters[key] ?? ''} onChange={e => state.change(key, e.target.value)}>{options.map(([value, text]) => <option key={value} value={value}>{t(text)}</option>)}</select></label>;
   return <div className={styles.filters}>
     <label className={`${styles.field} ${styles.searchField}`}>{t('search')}<input type="search" value={state.search} onChange={e => state.setSearch(e.target.value)} placeholder={t('search')} /></label>
+    <label className={styles.field}>{t('site')}<select value={state.filters.brand ?? ''} onChange={e => state.change('brand', e.target.value)}><option value="">{t('allSites')}</option>{[brand, brand.otherBrand].map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
     <label className={styles.field}>{t('region')}<select value={state.filters.region ?? ''} onChange={e => state.change('region', e.target.value)}><option value="">{t('allRegions')}</option>{['cn', 'us', 'tw', 'jp', 'eu', 'hk', 'kr', 'gb', 'sg', 'ca', 'au', 'other', 'unknown'].map(code => <option key={code} value={code}>{regionLabel(code, t, locale)}</option>)}</select></label>
     {kind === 'payments' && <>
       {select('provider', 'provider', [['', 'allProviders'], ['alipay', 'alipay'], ['stripe', 'stripe']])}
@@ -209,22 +212,51 @@ function paymentColumns(t: Translator, locale: string, tz: string): Column<Opera
     { key: 'provider', header: t('provider'), render: r => <>{label(r.provider, t)}<span className={styles.subtext} title={r.reference}>{r.reference}</span></> },
   ];
 }
+/** Users list order until a header is chosen: most recently active first (the server default). */
+const USERS_DEFAULT_SORT: SortState<OperationsUserSort> = { key: 'lastActive', dir: 'desc' };
+type UserColumn = OperationsUserSort | 'actions';
 function Users({ range, locale, go }: RangeProps & { go: Go }) {
   const t = useTranslations('adminOps');
+  const brand = useBrand();
   const state = useFilters(range);
-  const q = useOperationsUsers(state.params);
-  const columns: Column<OperationsUser>[] = [
-    { key: 'user', header: t('user'), render: r => <Person row={r} /> },
-    { key: 'plan', header: t('plan'), render: r => <><TierBadge tier={r.tier} /><span className={styles.subtext}>{r.subscription.amountMinor == null ? t('priceUnknown') : fmtNativeAmount(r.subscription.amountMinor, r.subscription.currency, locale)}</span></> },
-    { key: 'region', header: t('region'), render: r => regionLabel(r.region, t, locale) },
-    { key: 'logins', header: t('logins'), align: 'right', render: r => fmtCount(r.loginEvents, locale) },
-    { key: 'features', header: t('featureUses'), align: 'right', render: r => fmtCount(r.featureEvents, locale) },
-    { key: 'cost', header: t('costCurrency'), align: 'right', render: r => fmtCurrency(r.periodCostUsd, locale, 'USD') },
-    { key: 'lastLogin', header: t('lastLogin'), render: r => dateTime(r.lastLoginAt, locale, range.tz) },
-    { key: 'lastActive', header: t('lastActive'), render: r => dateTime(r.lastActiveAt, locale, range.tz) },
-    { key: 'actions', header: t('details'), render: r => <div className={styles.rowActions}><button onClick={() => go('payments', r.userId)}>{t('userPayments')}</button><button onClick={() => go('activity', r.userId)}>{t('userActivity')}</button></div> },
+  // Every column sorts both ways (a header press toggles); the server orders the whole list, then pages it.
+  const [sort, setSort] = useState<SortState<OperationsUserSort>>(USERS_DEFAULT_SORT);
+  const params: OperationsFilters = { ...state.params, sort: sort.key, dir: sort.dir };
+  const q = useOperationsUsers(params);
+  const siteName = (id: OperationsUser['brand']) => (id === brand.otherBrand.id ? brand.otherBrand.name : id === brand.id ? brand.name : '—');
+  const columns: Column<OperationsUser, UserColumn>[] = [
+    { key: 'user', header: t('user'), sortable: true, render: r => <Person row={r} /> },
+    { key: 'brand', header: t('site'), sortable: true, render: r => siteName(r.brand) },
+    { key: 'plan', header: t('plan'), sortable: true, render: r => <><TierBadge tier={r.tier} /><span className={styles.subtext}>{r.subscription.amountMinor == null ? t('priceUnknown') : fmtNativeAmount(r.subscription.amountMinor, r.subscription.currency, locale)}</span></> },
+    { key: 'region', header: t('region'), sortable: true, render: r => regionLabel(r.region, t, locale) },
+    { key: 'onboarding', header: t('onboarding'), sortable: true, render: r => <OnboardingCell row={r} /> },
+    { key: 'resumes', header: t('resumes'), align: 'right', sortable: true, render: r => !r.hasProfile ? '—' : r.resumes > 0 ? fmtCount(r.resumes, locale) : <span className={styles.badge} data-tone="pending">{t('noResume')}</span> },
+    { key: 'logins', header: t('logins'), align: 'right', sortable: true, render: r => fmtCount(r.loginEvents, locale) },
+    { key: 'features', header: t('featureUses'), align: 'right', sortable: true, render: r => fmtCount(r.featureEvents, locale) },
+    { key: 'cost', header: t('costCurrency'), align: 'right', sortable: true, render: r => fmtCurrency(r.periodCostUsd, locale, 'USD') },
+    { key: 'createdAt', header: t('joined'), sortable: true, render: r => dateTime(r.createdAt, locale, range.tz) },
+    { key: 'lastLogin', header: t('lastLogin'), sortable: true, render: r => dateTime(r.lastLoginAt, locale, range.tz) },
+    { key: 'lastActive', header: t('lastActive'), sortable: true, render: r => dateTime(r.lastActiveAt, locale, range.tz) },
+    { key: 'actions', header: t('details'), render: r => <div className={styles.rowActions}>
+      <ViewAsButton target={{ userId: r.userId, name: r.name, email: r.email, brand: r.brand, isAdmin: r.isAdmin, hasProfile: r.hasProfile, deleted: r.deleted }} />
+      <button onClick={() => go('payments', r.userId)}>{t('userPayments')}</button><button onClick={() => go('activity', r.userId)}>{t('userActivity')}</button>
+    </div> },
   ];
-  return <><Filters state={state} kind="users" /><TableTitle title={t('users')} kind="operations/users" params={state.params} /><div className={styles.tableWrap}><DataTable columns={columns} rows={q.data?.rows ?? []} rowKey={r => r.userId} loading={q.isLoading} error={q.isError} {...pagination(state, q.data?.total ?? 0, t)} {...tableMessages(t, () => void q.refetch())} /></div></>;
+  const onSortChange = (next: SortState<UserColumn>) => {
+    if (next.key === 'actions') return;
+    setSort({ key: next.key, dir: next.dir });
+    state.setPage(1);
+  };
+  return <><Filters state={state} kind="users" /><TableTitle title={t('users')} kind="operations/users" params={params} /><div className={styles.tableWrap}><DataTable columns={columns} rows={q.data?.rows ?? []} rowKey={r => r.userId} sort={sort} onSortChange={onSortChange} loading={q.isLoading} error={q.isError} {...pagination(state, q.data?.total ?? 0, t)} {...tableMessages(t, () => void q.refetch())} /></div></>;
+}
+/** Where the person is in onboarding: finished, or the stage they are at (none without a profile). */
+function OnboardingCell({ row }: { row: OperationsUser }) {
+  const t = useTranslations('adminOps');
+  if (!row.hasProfile || !row.onboardingStep) return <>—</>;
+  if (row.onboardingStep === 'done') return <span className={styles.badge} data-tone="positive">{t('onboardingDone')}</span>;
+  if (row.onboardingStep === 'account') return <span className={styles.badge} data-tone="pending">{t('onboardingNotStarted')}</span>;
+  const key = `onboardingStage.${row.onboardingStep}`;
+  return <span className={styles.badge} data-tone="pending">{t('onboardingAt', { step: t.has(key) ? t(key) : row.onboardingStep })}</span>;
 }
 function Activity({ range, locale, userId, clearUser }: RangeProps & { userId: string; clearUser: () => void }) {
   const t = useTranslations('adminOps');
