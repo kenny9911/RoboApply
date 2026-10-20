@@ -633,6 +633,87 @@ describe('written practice (GoApply without voice)', () => {
   });
 });
 
+describe('legacy mock sessions use practice metering', () => {
+  const legacy = { creditExempt: false };
+  const turn = { userId: 'u1', sessionId: 'legacy', answer: 'An answer', questionIndex: 0, legacy };
+  beforeEach(() => {
+    textRows.set('legacy', { id: 'legacy', userId: 'u1', blueprint: { interviewerBrief: 'keep' }, transcript: [], plannedDurationMinutes: 30, status: 'in_progress' });
+  });
+
+  it('blocks an unfinished legacy session before a turn or score when its duration is unaffordable', async () => {
+    deps.gatePractice.mockResolvedValue({ ok: false, balance: 1, required: 1.5, tier: 'free' });
+    await expect(svc.textPracticeTurn(turn)).rejects.toBeInstanceOf(mod.InterviewInsufficientCreditsError);
+    await expect(svc.scoreTextPractice(turn)).rejects.toBeInstanceOf(mod.InterviewInsufficientCreditsError);
+    expect(deps.gatePractice).toHaveBeenCalledWith('u1', 30);
+    expect(deps.textTurn).not.toHaveBeenCalled();
+    expect(deps.textScore).not.toHaveBeenCalled();
+    expect(readTextPracticeMeta(textRows.get('legacy')!.blueprint)).toBeNull();
+  });
+
+  it('adopts an affordable session and uses the existing completion debit without gating again', async () => {
+    await svc.textPracticeTurn(turn);
+    expect(deps.gatePractice).toHaveBeenCalledWith('u1', 30);
+    expect(textRows.get('legacy')!.blueprint).toMatchObject({ interviewerBrief: 'keep', practice: { kind: 'text', creditExempt: false } });
+    const result = await svc.scoreTextPractice(turn);
+    expect(result.practiceCounted).toBe(true);
+    expect(deps.gatePractice).toHaveBeenCalledTimes(1);
+    expect(deps.debitPractice).toHaveBeenCalledWith({ userId: 'u1', sessionId: 'legacy', durationSec: 360, plannedDurationMinutes: 30 });
+  });
+
+  it('also charges an answered legacy session scored without another turn', async () => {
+    textRows.get('legacy')!.transcript = [{ who: 'you', text: 'Existing answer' }];
+    await svc.scoreTextPractice(turn);
+    expect(deps.gatePractice).toHaveBeenCalledWith('u1', 30);
+    expect(deps.debitPractice).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the same default duration for the gate and charge on older rows without a planned length', async () => {
+    textRows.get('legacy')!.plannedDurationMinutes = null;
+    textRows.get('legacy')!.transcript = [{ who: 'you', text: 'Existing answer' }];
+    await svc.scoreTextPractice(turn);
+    expect(deps.gatePractice).toHaveBeenCalledWith('u1', 20);
+    expect(deps.debitPractice).toHaveBeenCalledWith(expect.objectContaining({ plannedDurationMinutes: 20 }));
+  });
+
+  it('does not continue when the metering tag cannot be saved', async () => {
+    deps.merge.mockResolvedValueOnce(false);
+    await expect(svc.textPracticeTurn(turn)).rejects.toBeInstanceOf(mod.InterviewNotReadyError);
+    expect(deps.textTurn).not.toHaveBeenCalled();
+  });
+
+  it('does not retroactively charge completed legacy reports, and refuses further turns', async () => {
+    textRows.get('legacy')!.status = 'complete';
+    textRows.get('legacy')!.transcript = [{ who: 'you', text: 'Existing answer' }];
+    await expect(svc.scoreTextPractice(turn)).resolves.toMatchObject({ overall: 60, practiceCounted: false });
+    await expect(svc.textPracticeTurn(turn)).rejects.toBeInstanceOf(mod.InterviewSessionEndedError);
+    expect(deps.gatePractice).not.toHaveBeenCalled();
+    expect(deps.debitPractice).not.toHaveBeenCalled();
+    expect(deps.textTurn).not.toHaveBeenCalled();
+  });
+
+  it('rejects another user before any quota lookup or session mutation', async () => {
+    await expect(svc.textPracticeTurn({ ...turn, userId: 'other' })).rejects.toBeInstanceOf(mod.InterviewNotFoundError);
+    expect(deps.gatePractice).not.toHaveBeenCalled();
+    expect(deps.merge).not.toHaveBeenCalled();
+  });
+
+  it('cannot resume a newly metered practice after it was scored', async () => {
+    await svc.textPracticeTurn(turn);
+    await svc.scoreTextPractice(turn);
+    deps.textTurn.mockClear();
+    await expect(svc.textPracticeTurn(turn)).rejects.toBeInstanceOf(mod.InterviewSessionEndedError);
+    expect(deps.textTurn).not.toHaveBeenCalled();
+  });
+
+  it('preserves an existing session exemption and only grants new exemptions from server input', async () => {
+    await svc.textPracticeTurn({ ...turn, legacy: { creditExempt: true } });
+    await svc.scoreTextPractice(turn);
+    expect(deps.gatePractice).not.toHaveBeenCalled();
+    expect(deps.debitPractice).not.toHaveBeenCalled();
+    expect(readTextPracticeMeta(textRows.get('legacy')!.blueprint)?.creditExempt).toBe(true);
+  });
+});
+
 describe('first free practice (C42)', () => {
   it('RoboApply: grants once the email was verified, with the WP-10 key', async () => {
     deps.findUser.mockResolvedValueOnce({

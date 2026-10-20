@@ -26,9 +26,10 @@
 // engine's deterministic text-check scorer (interview-engine/scoring/interviewScorer:
 // localized to the session language, CJK-aware) — robust, free, and never 500s. It is
 // told how many questions went unanswered, so a skipped question is counted and named. Mock is
-// NOT a billed SKU yet (no quota gating / no UsageDeductionLog row); if it
-// becomes one, gate `start`/`nextTurn` through `lib/matchBilling`-style
-// primitives and note it here.
+// metered by InterviewSessionService's written-practice wrappers (both the
+// current practice API and legacy /v2/mock use them). This low-level service
+// generates and scores; callers must use those wrappers for credit checks
+// and the idempotent, pro-rated completion debit.
 //
 // Graceful degradation: when the LLM is unconfigured / errors / returns an
 // empty parse, `start` falls back to a deterministic per-type question bank and
