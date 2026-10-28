@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Build helpers: Clarity tokens copied into the shadow root / popup, icons, locale messages.
+// Build helpers: the app's design tokens copied into the shadow root / popup, icons, locale messages.
 
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -11,15 +11,15 @@ import { readClarity, tokenCss } from '../scripts/tokens.mjs';
 
 const REPO = resolve(__dirname, '../..');
 
-describe('Clarity tokens', () => {
+describe('Paper tokens', () => {
   const t = readClarity(REPO);
 
   it('reads the light, dark and GoApply blocks from the app stylesheets', () => {
-    expect(t.light).toMatch(/--action: #4F3DCA;/);
+    expect(t.light).toMatch(/--action: #121313;/);
     expect(t.light).toMatch(/--fs-body:/);
-    expect(t.dark).toMatch(/--bg: #171622;/);
-    expect(t.goLight).toMatch(/--action: #1F57C8;/);
-    expect(t.goDark).toMatch(/--action: #A9C3FF;/);
+    expect(t.dark).toMatch(/--bg: #121313;/);
+    expect(t.goLight).toMatch(/--action: #0E4A3E;/);
+    expect(t.goDark).toMatch(/--action: #A6F2CC;/);
   });
 
   it('scopes them to the shadow host, with dark mode and both brands', () => {
