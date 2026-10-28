@@ -307,6 +307,9 @@
 
 /* ── Quick bar ────────────────────────────────────────────────────────── */
 .quickBar {
+  /* The containing block for the hidden count (.hidden is absolute): without
+   * it the span escapes this scroller's clipping and widens the page on phones. */
+  position: relative;
   display: flex;
   gap: 8px;
   max-width: 100%;
