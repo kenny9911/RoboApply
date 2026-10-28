@@ -300,6 +300,10 @@ a {
 :focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
+}
+/* The ring gets soft corners only where the element has none of its own:
+ * :where() adds no specificity, so pills, cards and fields keep their shape. */
+:where(:focus-visible) {
   border-radius: var(--r-sm);
 }
 

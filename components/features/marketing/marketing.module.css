@@ -166,6 +166,10 @@
   cursor: progress;
   transform: none;
 }
+/* Its drop shadow would otherwise replace the focus ring. */
+.ctaPrimary:focus-visible {
+  box-shadow: var(--focus-ring);
+}
 
 .ctaSecondary {
   background: var(--surface-glass);
@@ -817,6 +821,9 @@ a.card:hover {
 }
 .ctaBand .ctaPrimary:hover {
   background: var(--brand-plane);
+}
+.ctaBand .ctaPrimary:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 .ctaBand .textLink {
   color: var(--brand-plane);
