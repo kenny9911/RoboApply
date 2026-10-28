@@ -39,7 +39,7 @@ Three roles, never confused:
 | `--rule` | `#DCD8CF` | `#343636` | Hairlines (most borders mix `--text` at 8–16 % instead) |
 | `--text` | `#121313` | `#F4F1E9` | Titles and primary copy |
 | `--text-2` | `#3D3F3B` | `#CFCCC3` | Supporting copy |
-| `--text-muted` | `#62655E` | `#A7AAA4` | Metadata (≥ 4.58:1 on every paper surface) |
+| `--text-muted` | `#5F625B` | `#A7AAA4` | Metadata (≥ 4.58:1 on every paper surface) |
 | `--action` | `#121313` | `#F4FF71` | Primary buttons, links, focus, selected segments |
 | `--action-ink` | `#FFFFFF` | `#121313` | Content on action fills |
 | `--action-subtle` | `#E6E2D7` | `#2A2C22` | Neutral selection tint |
