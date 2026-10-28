@@ -122,4 +122,4 @@ Run the smallest affected test first, then `npm test`, `npm run check`, and the 
 
 Run `node scripts/design-preview.mjs` to inspect the actual authenticated components with isolated fixture data at `http://localhost:3612/jobs`. The loopback-only harness blocks live API requests and visibly labels example data; it is not a substitute for end-to-end integration tests.
 
-[The visual style guide](design-system.html) still shows the Clarity palette; treat this document and `app/globals.css` as authoritative until it is regenerated.
+[The visual style guide](design-system.html) shows this system in light and dark, for both brands: tokens, type, controls, cards and the inset workspace. It is a standalone page served at `/design-system` by the design preview, so its token blocks are copies of `app/globals.css` and `styles/brands/goapply.css`; update them together. This document and `app/globals.css` remain authoritative.
