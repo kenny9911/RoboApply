@@ -144,7 +144,7 @@ export function GoApplyHome({ ticker = null }: GoApplyHomeProps = {}) {
   const pillars = PILLARS.filter((key) => key !== 'interview' || ai);
   return (
     <SitePage from="home">
-      <section className={styles.hero} aria-labelledby="cn-home-title">
+      <section className={`${styles.hero} ${styles.heroCenter}`} aria-labelledby="cn-home-title">
         <div className={`${styles.wrap} ${styles.narrow}`}>
           <p className={styles.eyebrow}>{t('hero.eyebrow')}</p>
           <h1 className={styles.heroTitle} id="cn-home-title">
@@ -212,7 +212,7 @@ export function GoApplyHome({ ticker = null }: GoApplyHomeProps = {}) {
 
       <Faq id="faq" title={t('faq.title')} items={cnHomeFaqKeys(!feedOff).map((k) => ({ q: t(`faq.${k}.q`), a: t(`faq.${k}.a`) }))} />
 
-      <section className={styles.sectionAlt} aria-labelledby="cn-final-title">
+      <section className={styles.ctaBand} aria-labelledby="cn-final-title">
         <div className={`${styles.wrap} ${styles.narrow}`}>
           <h2 className={styles.h2} id="cn-final-title">
             {t('final.title')}

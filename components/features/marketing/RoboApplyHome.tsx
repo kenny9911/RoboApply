@@ -52,7 +52,7 @@ export function RoboApplyHome({ ticker = null }: RoboApplyHomeProps = {}) {
   const brand = useBrand();
   return (
     <SitePage from="home" localeLinks>
-      <section className={styles.hero} aria-labelledby="home-title">
+      <section className={`${styles.hero} ${styles.heroCenter}`} aria-labelledby="home-title">
         <div className={`${styles.wrap} ${styles.heroGrid}`}>
           <div>
             <p className={styles.eyebrow}>{t('hero.eyebrow')}</p>
@@ -100,7 +100,7 @@ export function RoboApplyHome({ ticker = null }: RoboApplyHomeProps = {}) {
       <PricingSummary from="home:pricing" />
       <Faq id="faq" title={t('faq.title')} items={HOME_FAQ_KEYS.map((k) => ({ q: t(`faq.${k}.q`), a: t(`faq.${k}.a`) }))} />
 
-      <section className={styles.sectionAlt} aria-labelledby="home-final-title">
+      <section className={styles.ctaBand} aria-labelledby="home-final-title">
         <div className={`${styles.wrap} ${styles.narrow}`}>
           <h2 className={styles.h2} id="home-final-title">
             {t('final.title')}

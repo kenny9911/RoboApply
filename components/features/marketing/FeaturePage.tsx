@@ -68,7 +68,7 @@ function FeatureBody({ def }: { def: FeatureDef }) {
         </div>
       </section>
       <Faq id="feature-faq" title={tc('faqTitle')} items={FEATURE_FAQ_KEYS.map((k) => ({ q: t(`${k}.q`), a: t(`${k}.a`) }))} />
-      <section className={styles.sectionAlt} aria-labelledby="feature-cta-title">
+      <section className={styles.ctaBand} aria-labelledby="feature-cta-title">
         <div className={`${styles.wrap} ${styles.narrow}`}>
           <h2 className={styles.h2} id="feature-cta-title">
             {tc('ctaTitle')}
