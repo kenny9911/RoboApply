@@ -1,6 +1,6 @@
 /* components/features/feed/feed.module.css — the /jobs workspace, job cards,
  * the split detail, Explore and the in-feed calibration cards (WP-33).
- * Clarity tokens only; light and dark come from the tokens; both brands share
+ * Paper tokens only; light and dark come from the tokens; both brands share
  * it (brand stylesheets retint the action tokens). Controls are 40px on wide
  * screens and 44px on phones. */
 
@@ -15,16 +15,15 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  padding: var(--sp-5);
-  border-radius: var(--r-md);
-  background: var(--grad-soft);
-  border: 1px solid var(--rule);
+  padding: 0 0 var(--sp-2);
 }
 .title {
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--fs-display);
+  font-weight: 600;
   line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
   color: var(--text);
 }
 .intro {
@@ -32,7 +31,7 @@
   max-width: 64ch;
   font-size: var(--fs-body);
   line-height: var(--lh-body);
-  color: var(--text-2);
+  color: var(--text-muted);
 }
 .headLinks {
   display: flex;
@@ -179,15 +178,25 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-  padding: var(--sp-5) var(--sp-4) var(--sp-4);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--r-lg);
   background: var(--surface);
   overflow: hidden;
   min-width: 0;
+  transition:
+    box-shadow var(--dur-hover) var(--ease-out),
+    border-color var(--dur-hover) var(--ease-out);
 }
-.cardActive {
+.card:hover {
+  border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  box-shadow: var(--e-float);
+}
+/* The open job: an ink outline (two hairlines), not a tint. */
+.cardActive,
+.cardActive:hover {
   border-color: var(--action);
+  box-shadow: 0 0 0 1px var(--action);
 }
 .strip {
   position: absolute;
@@ -273,8 +282,8 @@
   width: 40px;
   height: 40px;
   flex-shrink: 0;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--rule);
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   background: var(--surface-2);
   color: var(--text-2);
   display: inline-flex;
@@ -350,17 +359,20 @@
   display: inline-flex;
   align-items: center;
   min-height: 24px;
-  padding: 0 var(--sp-2);
+  padding: 0 10px;
   border-radius: var(--r-pill);
-  border: 1px solid var(--rule);
-  background: var(--surface-2);
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text-2);
   font-size: var(--fs-label);
+  font-weight: 500;
 }
+/* Momentum gets the highlighter (ink on lime, both themes). */
 .badgeDirect {
-  border-color: transparent;
-  background: var(--action-subtle);
-  color: var(--action);
+  border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  background: var(--brand-mark);
+  color: var(--brand-plane);
+  font-weight: 600;
 }
 .quote {
   display: block;
@@ -392,15 +404,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: var(--r-pill);
+  background: var(--surface-glass);
   color: var(--text);
   font: inherit;
   cursor: pointer;
 }
 .iconBtn:hover {
-  background: var(--surface-2);
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--text) 28%, transparent);
 }
 .menuWrap {
   position: relative;
@@ -416,10 +429,10 @@
   margin: 0;
   padding: var(--sp-1);
   list-style: none;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: var(--e2);
+  box-shadow: var(--e-float);
 }
 .menuItem {
   width: 100%;
