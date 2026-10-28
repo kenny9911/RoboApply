@@ -66,11 +66,13 @@
   font-size: var(--fs-meta);
   color: var(--text-2);
 }
+/* Fields (sort, the sheets' reasons and notes, Explore's question) follow
+ * Paper's input recipe: 16px corners, a 16% ink hairline. */
 .select {
   min-height: 40px;
   padding: 0 var(--sp-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: var(--r-md);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -86,10 +88,12 @@
   outline: none;
   box-shadow: var(--focus-ring);
 }
+/* Panels in the list column (filters, the split detail, prompts) share the
+ * job card's 22px corners and 10% ink hairline. */
 .filters {
   padding: var(--sp-4);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--r-lg);
   background: var(--surface);
 }
 
@@ -117,8 +121,8 @@
   top: var(--sp-4);
   max-height: calc(100vh - var(--sp-6));
   overflow-y: auto;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--r-lg);
   background: var(--surface);
   padding: var(--sp-4);
   min-width: 0;
@@ -162,6 +166,10 @@
   background-size: 200% 100%;
   animation: shimmer 1.4s var(--ease-out) infinite;
 }
+/* In the list it stands in for a job card: the same corners. */
+.list > .skeleton {
+  border-radius: var(--r-lg);
+}
 @keyframes shimmer {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
@@ -186,11 +194,14 @@
   min-width: 0;
   transition:
     box-shadow var(--dur-hover) var(--ease-out),
-    border-color var(--dur-hover) var(--ease-out);
+    border-color var(--dur-hover) var(--ease-out),
+    transform var(--dur-hover) var(--ease-out);
 }
+/* Cards lift on hover. Its sheets are portalled, so the transform traps no fixed layer. */
 .card:hover {
   border-color: color-mix(in srgb, var(--text) 18%, transparent);
   box-shadow: var(--e-float);
+  transform: translateY(-2px);
 }
 /* The open job: an ink outline (two hairlines), not a tint. */
 .cardActive,
@@ -380,14 +391,34 @@
   font-size: var(--fs-meta);
   color: var(--text-2);
 }
+/* The action is ink in light, the same as the text, so the disclosure carries
+ * a chevron to read as a control: right when closed, down when open. */
 .why summary {
   min-height: 40px;
   display: inline-flex;
   align-items: center;
+  gap: var(--sp-2);
+  list-style: none;
   cursor: pointer;
   font-size: var(--fs-meta);
   font-weight: 600;
   color: var(--action);
+}
+.why summary::-webkit-details-marker {
+  display: none;
+}
+.why summary::after {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-hover) var(--ease-out);
+}
+.why[open] summary::after {
+  transform: translateY(-2px) rotate(45deg);
 }
 .actions {
   display: flex;
@@ -515,12 +546,15 @@
   gap: var(--sp-3);
   min-height: 44px;
   padding: 0 var(--sp-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: var(--r-md);
   background: var(--surface);
   font-size: var(--fs-body);
   color: var(--text);
   cursor: pointer;
+}
+.reason input {
+  accent-color: var(--action);
 }
 .reason:has(input:checked) {
   border-color: var(--action);
@@ -530,8 +564,8 @@
   width: 100%;
   min-height: 88px;
   padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: var(--r-md);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -561,8 +595,8 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--sp-4);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--r-lg);
   background: var(--grad-panel);
 }
 .promptTitle {
@@ -720,8 +754,8 @@
 .input {
   min-height: 40px;
   padding: 0 var(--sp-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: var(--r-md);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -735,9 +769,6 @@
 
 /* ── Phones ────────────────────────────────────────────────────────────── */
 @media (max-width: 760px) {
-  .head {
-    padding: var(--sp-4);
-  }
   .card {
     padding: var(--sp-5) var(--sp-3) var(--sp-3);
   }
