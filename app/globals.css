@@ -30,40 +30,67 @@
   }
 }
 
-/* RoboApply — Clarity design system.
- * The September 2026 redesign is defined in docs/design-system.md.
- * Ashby-inspired violet gradients, neutral surfaces, evidence before scores.
+/* RoboApply — Paper design system.
+ * The October 2026 redesign is defined in docs/design-system.md, after the
+ * skillry.dev study in docs/skillry-style-reference.md: warm paper canvas,
+ * near-black ink for every action, one highlighter (lime) for momentum, one
+ * grotesque (Bricolage), pill controls and soft 16–22px corners.
  * All legacy aliases below resolve to this source of truth.
+ *
+ * Colour roles:
+ *   ink       --text / --action        every label and every primary action
+ *   paper     --bg / --surface / -2/-3 canvas, cards, recessed rails
+ *   highlight --brand-mark on which --brand-plane is the ink: the active
+ *             nav item, plan/free badges, text selection, the great-fit
+ *             meter, the closing CTA band. Never a text colour itself
+ *             (lime on paper is 1.04:1).
+ * Every ratio below is computed sRGB-linearised (__tests__/brand).
  */
 :root {
-  --bg: #FCFCFE;
-  --surface: #FFFFFF;
-  --surface-2: #F5F4FA;
-  --surface-3: #ECEAF4;
-  --rule: #E2DFED;
-  --rule-strong: #C3BDD7;
-  --text: #20202B;
-  --text-2: #525162;
-  --text-muted: #656274;
-  --disabled: #918B9F;
-  --action: #4F3DCA;
-  --action-hover: #4031AF;
+  --bg: #F4F1E9;
+  --surface: #FBFAF6;
+  --surface-2: #EBE7DE;
+  --surface-3: #E2DDD1;
+  --rule: #DCD8CF;
+  --rule-strong: #BDB8AD;
+  --text: #121313;
+  --text-2: #3D3F3B;
+  --text-muted: #62655E;
+  --disabled: #80837C;
+  --action: #121313;
+  --action-hover: #2B2D2C;
   --action-ink: #FFFFFF;
-  --action-subtle: #EFEDFC;
-  --brand-mark: #F0ECFF;
-  --brand-plane: #30266B;
-  --ok: #315CB3;
-  --ok-subtle: #EAF0FC;
-  --warn: #85551C;
-  --warn-subtle: #FAEFDC;
-  --danger: #AF3547;
-  --danger-subtle: #FBECEF;
-  --font-ui: var(--font-instrument-sans), -apple-system, BlinkMacSystemFont,
+  --action-subtle: #E6E2D7;
+  --brand-mark: #F4FF71;
+  --brand-plane: #121313;
+  --ok: #2E6A47;
+  --ok-subtle: #E2EDE3;
+  --warn: #8A5512;
+  --warn-subtle: #F6E9D2;
+  --danger: #B03A2E;
+  --danger-subtle: #F9E4DF;
+  /* Translucent paper: secondary buttons, unselected stat cards, segmented
+   * tracks. Reads as a lighter sheet on any of the three paper surfaces. */
+  --surface-glass: rgba(255, 255, 255, 0.55);
+  /* Illustration tiles (icon squares on feature cards, empty states, create
+   * cards). Ink line icons sit on them in both themes — they are stickers,
+   * not surfaces, so they do not flip. Ink on each is ≥ 6:1. */
+  --tile-sage: #B7C49A;
+  --tile-clay: #E58E6D;
+  --tile-sky: #A9C3DC;
+  --tile-blush: #EECFCB;
+  --tile-mint: #C2D9CB;
+  --tile-lilac: #D4D0E6;
+  --tile-camel: #DDBB98;
+  --tile-ink: #121313;
+  /* The hero headline's offset "print" shadow (a second, misregistered ink). */
+  --print-ink: #E9A78B;
+  --font-ui: var(--font-bricolage), -apple-system, BlinkMacSystemFont,
     'Segoe UI', system-ui, 'Hiragino Sans', 'Yu Gothic', 'PingFang SC',
     'PingFang TC', 'Microsoft YaHei', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-  --font-display: var(--font-instrument-sans), var(--font-ui);
+  --font-display: var(--font-bricolage), var(--font-ui);
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
-  --fs-hero: clamp(40px, 5.5vw, 72px);
+  --fs-hero: clamp(44px, 6.4vw, 88px);
   --fs-display: clamp(28px, 3vw, 40px);
   --fs-stat: 28px;
   --fs-title: 20px;
@@ -71,81 +98,94 @@
   --fs-body: 15px;
   --fs-meta: 13px;
   --fs-label: 12px;
-  --lh-hero: 1.04;
-  --lh-display: 1.12;
-  --lh-title: 1.25;
+  --lh-hero: 0.94;
+  --lh-display: 1.06;
+  --lh-title: 1.2;
   --lh-subtitle: 1.4;
   --lh-body: 1.6;
   --lh-meta: 1.5;
-  --ls-hero: -0.045em;
-  --ls-display: -0.035em;
-  --ls-title: -0.02em;
-  --ls-subtitle: -0.012em;
-  --ls-body: -0.006em;
+  --ls-hero: -0.055em;
+  --ls-display: -0.04em;
+  --ls-title: -0.025em;
+  --ls-subtitle: -0.015em;
+  --ls-body: -0.003em;
   --ls-meta: 0;
-  --ls-label: 0.01em;
+  --ls-label: 0.005em;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
   --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 20px;
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
   --r-pill: 999px;
   --control-sm: 36px;
   --control-md: 40px;
   --control-lg: 44px;
   --page-max: 1280px;
   --prose-max: 68ch;
-  --e1: 0 2px 3px rgba(27, 22, 49, 0.055);
-  --e2: 0 8px 24px -12px rgba(27, 22, 49, 0.16);
-  --e3: 0 28px 80px -24px rgba(27, 22, 49, 0.24);
+  --e1: 0 1px 2px rgba(18, 19, 19, 0.06);
+  --e2: 0 10px 30px -12px rgba(18, 19, 19, 0.22);
+  --e3: 0 24px 64px -16px rgba(18, 19, 19, 0.24);
+  /* A floating sheet (sticky panels, menus): wide, faint, neutral. */
+  --e-float: 0 16px 48px rgba(17, 18, 18, 0.08);
+  /* Hard offset block behind a showcase panel — print, not glow. */
+  --e-print: 8px 10px 0 rgba(18, 19, 19, 0.08);
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--action);
-  --scrim: rgba(24, 21, 40, 0.44);
+  --scrim: rgba(18, 19, 19, 0.36);
   --dur-hover: 120ms;
   --dur-enter: 180ms;
   --dur-exit: 140ms;
   --dur-modal: 240ms;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --grad-brand: linear-gradient(180deg, #6857DB, #473BCE);
-  --grad-brand-hover: linear-gradient(180deg, #5B48CB, #3E30B6);
-  --grad-soft: linear-gradient(135deg, #F6F5FF, #ECEAFF 58%, #F1F5FF);
-  --grad-panel: linear-gradient(140deg, #EFECFF, #E4DFFF 48%, #E9F0FF);
+  /* Ink with a faint top highlight; the hover is one step lighter. */
+  --grad-brand: linear-gradient(180deg, #2B2D2C, #121313);
+  --grad-brand-hover: linear-gradient(180deg, #3A3D3B, #1D1F1E);
+  /* Paper washes: a warm peach bloom for introductions, a panel tint that
+   * drifts toward the highlighter. Dense work stays on solid surfaces. */
+  --grad-soft: linear-gradient(135deg, #FBF8F1, #F6EEE3 58%, #F2F2E4);
+  --grad-panel: linear-gradient(140deg, #F7EFE2, #F3E6D7 48%, #EEF0D8);
   color-scheme: light;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * DARK — first-class, not an afterthought. Ink and surfaces flip;
- * identity stays violet with lavender highlights and neutral ink.
- * Every ratio below is computed sRGB-linearised, not eyeballed.
+ * DARK — the canvas inverts to ink and the highlighter is promoted to the
+ * action colour (lime buttons, lime links, lime focus). Surfaces are tonal
+ * steps of the ink, not an inverted paper.
  * ═══════════════════════════════════════════════════════════════════ */
 html[data-theme='dark'] {
-  --bg: #171622;
-  --surface: #201E2D;
-  --surface-2: #292638;
-  --surface-3: #343046;
-  --rule: #403A55;
-  --rule-strong: #756B91;
-  --text: #F5F3FC;
-  --text-2: #CFCADC;
-  --text-muted: #B8B1C8;
-  --disabled: #857C97;
-  --action: #B9ADFF;
-  --action-hover: #D0C7FF;
-  --action-ink: #211A49;
-  --action-subtle: #332C50;
-  --ok: #A8C4FF;
-  --ok-subtle: #26344E;
-  --warn: #EAC18A;
-  --warn-subtle: #423629;
-  --danger: #FFA2AD;
-  --danger-subtle: #482D33;
-  --e1: none;
-  --e2: none;
+  --bg: #121313;
+  --surface: #1B1C1C;
+  --surface-2: #232525;
+  --surface-3: #2C2E2E;
+  --rule: #343636;
+  --rule-strong: #4E514F;
+  --text: #F4F1E9;
+  --text-2: #CFCCC3;
+  --text-muted: #A7AAA4;
+  --disabled: #7C7F79;
+  --action: #F4FF71;
+  --action-hover: #F8FFA6;
+  --action-ink: #121313;
+  --action-subtle: #2A2C22;
+  --brand-mark: #F4FF71;
+  --brand-plane: #26281E;
+  --ok: #8FD3A8;
+  --ok-subtle: #1E2C24;
+  --warn: #E7C27D;
+  --warn-subtle: #3A3022;
+  --danger: #FF9C8F;
+  --danger-subtle: #3D2420;
+  --surface-glass: rgba(255, 255, 255, 0.04);
+  --print-ink: #6B3A2A;
+  --e1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --e2: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
   --e3: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
-  --grad-brand: linear-gradient(180deg, #C7BCFF, #A99BFF);
-  --grad-brand-hover: linear-gradient(180deg, #DDD5FF, #C0B4FF);
-  --grad-soft: linear-gradient(135deg, #262239, #302949 58%, #252E47);
-  --grad-panel: linear-gradient(140deg, #31264F, #3C3060 48%, #273856);
+  --e-float: 0 16px 48px rgba(0, 0, 0, 0.36);
+  --e-print: 8px 10px 0 rgba(0, 0, 0, 0.32);
+  --grad-brand: linear-gradient(180deg, #F7FF94, #F4FF71);
+  --grad-brand-hover: linear-gradient(180deg, #FAFFB8, #F7FF94);
+  --grad-soft: linear-gradient(135deg, #1B1C1C, #201F1A 58%, #1C1E19);
+  --grad-panel: linear-gradient(140deg, #23231E, #282720 48%, #23261C);
   --scrim: rgba(0, 0, 0, 0.62);
   color-scheme: dark;
 }
@@ -241,6 +281,12 @@ body {
   /* Gradient accents belong to deliberate panels and controls. */
 }
 
+/* The highlighter: a dragged selection reads as a lime marker stroke. */
+::selection {
+  background: var(--brand-mark);
+  color: var(--brand-plane);
+}
+
 button {
   cursor: pointer;
   font-family: inherit;
@@ -257,9 +303,9 @@ a {
   border-radius: var(--r-sm);
 }
 
-/* Headlines use the display face, applied to the WHOLE headline — never to a
- * word inside one. h1/h2 only: below --fs-display the display face has no
- * advantage over Inter and mixing them mid-page is what "random" looked like. */
+/* Headlines use the display token, applied to the WHOLE headline — never to a
+ * word inside one. One family (Bricolage); h1/h2 differ from body text only
+ * by weight and tighter tracking, and its optical sizes do the rest. */
 h1,
 h2 {
   font-family: var(--font-display);
@@ -282,9 +328,9 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
-/* CJK — loosen the tight latin tracking. Inter's fallback tail (--font-ui)
- * declares a real CJK face per platform; these four locales previously
- * rendered in whatever the OS happened to pick. */
+/* CJK — loosen the tight latin tracking. The UI face's fallback tail
+ * (--font-ui) declares a real CJK face per platform; these four locales
+ * previously rendered in whatever the OS happened to pick. */
 html[lang='zh'] body,
 html[lang='zh-TW'] body,
 html[lang='ja'] body,
@@ -303,8 +349,8 @@ html[lang='ko'] :is(h1, h2, h3) {
 /* Source Han Sans (思源黑體) — self-hosted CJK faces (app/layout.tsx). Han
  * glyphs now resolve to the same face on every OS instead of whatever the
  * platform tail ('PingFang', 'Microsoft YaHei', …) happens to supply; that
- * tail stays as the emergency fallback. Latin still renders in Inter — it
- * sits first in the stack and Source Han only catches what Inter lacks.
+ * tail stays as the emergency fallback. Latin still renders in Bricolage — it
+ * sits first in the stack and Source Han only catches what Bricolage lacks.
  * --font-han is undefined outside these two locales, so no other locale ever
  * downloads the woff2 (display:swap + no preload in layout.tsx). */
 html[lang='zh'] {
@@ -317,7 +363,7 @@ html[lang='zh'],
 html[lang='zh-TW'] {
   /* --font-display needs no override: it ends in var(--font-ui). */
   --font-ui:
-    var(--font-instrument-sans), var(--font-han), -apple-system, BlinkMacSystemFont,
+    var(--font-bricolage), var(--font-han), -apple-system, BlinkMacSystemFont,
     'Segoe UI', system-ui, 'PingFang SC', 'PingFang TC', 'Microsoft YaHei',
     sans-serif;
 }

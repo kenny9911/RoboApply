@@ -24,6 +24,8 @@ FAMILIES = [
     ("space-grotesk",    "Space+Grotesk:wght@400;500;600;700"),
     ("instrument-serif", "Instrument+Serif:ital@0;1"),
     ("jetbrains-mono",   "JetBrains+Mono:wght@400;500;600"),
+    # The UI face (docs/design-system.md, Paper): weight + optical-size axes.
+    ("bricolage-grotesque", "Bricolage+Grotesque:opsz,wght@12..96,200..800"),
 ]
 
 FACE_RE = re.compile(r"@font-face\s*\{([^}]*)\}", re.S)

@@ -107,6 +107,9 @@ const PAIRS: Array<[string, string, number, string]> = [
   ['--text', '--grad-panel', TEXT, 'text on the panel gradient'],
   ['--text-2', '--grad-soft', TEXT, 'secondary text on the soft gradient (nudge banner)'],
   ['--brand-mark', '--brand-plane', UI, 'brand glyph on the identity plane'],
+  // Paper: the highlighter is a FILL (active nav item, plan badge, selection)
+  // and --brand-plane is the ink written on it, in both themes.
+  ['--brand-plane', '--brand-mark', TEXT, 'ink label on a highlighter fill'],
   ['--action', '--bg', UI, 'focus ring / control outline'],
 ];
 

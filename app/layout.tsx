@@ -38,8 +38,10 @@ import { Providers } from './providers';
 // never covered by these latin fonts (subsets:['latin']) — they fall back to
 // system fonts as before.
 
-// The interface uses the self-hosted Instrument Sans variable font throughout.
-// Inter remains available only for the user's resume document templates.
+// The interface uses the self-hosted Bricolage Grotesque variable font
+// (weights 200–800, optical sizes 12–96) throughout — the Paper system,
+// docs/design-system.md. Inter remains available only for the user's resume
+// document templates.
 const inter = localFont({
   src: './fonts/inter-100-900.woff2',
   weight: '100 900',
@@ -48,11 +50,11 @@ const inter = localFont({
   preload: false,
 });
 
-const instrumentSans = localFont({
-  src: './fonts/instrument-sans-400-700.woff2',
-  weight: '400 700',
+const bricolage = localFont({
+  src: './fonts/bricolage-grotesque-200-800.woff2',
+  weight: '200 800',
   display: 'swap',
-  variable: '--font-instrument-sans',
+  variable: '--font-bricolage',
 });
 
 // ── Résumé document type ──────────────────────────────────────────────────
@@ -136,7 +138,7 @@ export default async function RootLayout({
       // warning about that pre-hydration mutation of the <html> attributes.
       data-theme="light"
       suppressHydrationWarning
-      className={`${inter.variable} ${instrumentSans.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable} ${sourceHanSC.variable} ${sourceHanTW.variable}`}
+      className={`${inter.variable} ${bricolage.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable} ${sourceHanSC.variable} ${sourceHanTW.variable}`}
     >
       <head>
         {/* No-flash theme bootstrap — must run render-blocking before paint.

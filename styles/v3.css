@@ -44,8 +44,8 @@
    design system. Both are drawn from the palette so a dragged selection or a
    blinking cursor reads as part of the product rather than as the OS. */
 .v3-root ::selection {
-  background: var(--action-subtle);
-  color: var(--text);
+  background: var(--brand-mark);
+  color: var(--brand-plane);
 }
 .v3-root input,
 .v3-root textarea,
