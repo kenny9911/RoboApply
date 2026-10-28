@@ -12,6 +12,8 @@ live services. The preview server accepts loopback hosts only.
 Available routes:
 
 - `/jobs`, `/resume`, `/resume/cm_rv_base`, `/applications`, `/practice`
+- `/jobs?job=job_preview_1` opens the split detail beside the example feed
+  (wide screens; `job_preview_1` to `job_preview_6`)
 - `/settings`, `/settings#billing`, `/settings#account`
 - `/design-system` serves the standalone internal style guide.
 - `/responsive` embeds the actual pages at fixed phone/tablet dimensions with

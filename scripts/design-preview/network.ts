@@ -1,5 +1,12 @@
 // No request ever reaches native fetch. CSP also rejects connections, media,
 // external images, frames, and form submissions as a second local boundary.
+import type { PublicBrand } from '../../lib/api/contracts/brand';
+import type { MatchExplanation } from '../../lib/api/contracts/compliance';
+import type { FeedItem, FeedQueryResponse, FitTier, NewCountResponse } from '../../lib/api/contracts/feed';
+import type { JobDetailResponse, ScoreJobResponse } from '../../lib/api/contracts/jobs/detail';
+import type { SearchProfileListWire } from '../../lib/api/contracts/search';
+import type { ResolvedFlags } from '../../lib/flags';
+
 const base = '/api/v1/roboapply';
 const credits = { balance: 120, periodAllotment: 180, tier: 'starter', currentPeriodEnd: '2026-10-01T00:00:00.000Z', creditMinutes: 1 };
 
@@ -115,6 +122,171 @@ const practiceReport = {
   transcriptUrl: null,
 };
 
+// Jobs feed fixtures. /jobs lists jobs only when `jobs.feed` is on, so the
+// public brand switches on that one capability; every other flag stays off
+// as before (a key the payload leaves out reads as off). The first page holds
+// six fictional postings that cover the card's states: each fit tier, a quick
+// estimate, the direct-posting badge, pay not listed, a logo fallback, a saved
+// job and quoted badges. Sources are named "Example …" and every link points
+// at the reserved .example domain.
+const brand = {
+  id: 'roboapply', market: 'intl', name: 'RoboApply', canonicalOrigin: 'https://www.roboapply.io',
+  locales: ['en', 'zh', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'pt', 'de'], defaultLocale: 'en',
+  currency: 'USD', defaultCountry: 'US', authMethods: ['email_password'], paymentRails: [],
+  flags: { hiringContacts: 'off', 'jobs.feed': true },
+  otherBrand: { id: 'goapply', name: 'GoApply', canonicalOrigin: 'https://www.goapply.top' },
+} satisfies Omit<PublicBrand, 'flags'> & { flags: Partial<ResolvedFlags> };
+
+const searchProfiles: SearchProfileListWire = {
+  profiles: [{
+    id: 'sp_preview', name: 'Example search', isDefault: true, isActive: true, version: 1, schemaVersion: 1,
+    filters: { titles: ['Product designer'], workModels: ['remote', 'hybrid'], seniority: ['mid', 'senior'], postedWithinDays: 30 },
+    alertInstantMax: 0, alertDigest: null, createdAt: ago(40), updatedAt: ago(3),
+  }],
+  maxProfiles: 1, maxInstantAlerts: 1, proMaxProfiles: null, upgradable: false,
+};
+
+// Fictional marks drawn inline: the preview loads no remote image.
+const mark = (tile: string, shape: string) =>
+  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="${tile}"/>${shape}</svg>`)}`;
+const pay = (min: number | null, max: number | null, currency: string, period: 'year' | 'hour') => ({
+  pay: { min, max, currency, period, text: null },
+  salary: { text: null, min, max, currency, period, months: null },
+});
+const why = (tier: FitTier, aligned: string, missing: string): MatchExplanation => ({
+  mode: 'personalized',
+  headline: { key: 'legal.explain.headline.personalized', params: { tier } },
+  reasons: [{ key: 'legal.explain.reason.title_level' }, { key: 'legal.explain.reason.skillsAligned', params: { skills: aligned } }],
+  gaps: [{ key: 'legal.explain.gap.skillsMissing', params: { skills: missing } }],
+  notices: [{ key: 'legal.explain.notice.notHiringChance' }, { key: 'legal.explain.notice.factors' }, { key: 'legal.explain.notice.turnOff' }],
+});
+const unflagged = { postedAtEstimated: false, isNew: false, fromRecruiterBank: false, employerVerified: false, isAgency: false, tracker: null };
+
+const feedJobs: FeedItem[] = [
+  {
+    ...unflagged, jobId: 'job_preview_1', position: 0, isNew: true,
+    title: 'Senior Product Designer, Design Systems',
+    company: { id: 'co_preview_1', name: 'Paperline Studio', logoUrl: mark('#B7C49A', '<circle cx="20" cy="20" r="9" fill="#121313"/>') },
+    location: 'Remote, United States', workModel: 'remote', employmentType: 'full_time', seniority: 'senior',
+    ...pay(150000, 180000, 'USD', 'year'),
+    postedAt: ago(1), firstSeenAt: ago(1), lastSeenAt: ago(0),
+    // Direct from employer: a verified employer's own post in the recruiter bank.
+    source: { name: 'Example recruiter bank', kind: 'bank', original: 'Paperline Studio', url: 'https://jobs.example/paperline/senior-product-designer', lastVerifiedAt: ago(0), via: 'bank' },
+    apply: { url: 'https://jobs.example/paperline/senior-product-designer', target: null },
+    fromRecruiterBank: true, employerVerified: true,
+    badges: [{ kind: 'direct_from_employer', label: 'direct_from_employer' }, { kind: 'remote', label: 'remote' }],
+    fit: { tier: 'great', score: 91, kind: 'ai', topGap: 'They ask for motion design; your resume shows little of it.', topOverlap: 'You built and ran a design system used by four product teams.', confidence: 'high', confidenceReason: null },
+    explanation: why('great', 'Figma, design systems, accessibility', 'motion design'),
+  },
+  {
+    ...unflagged, jobId: 'job_preview_2', position: 1,
+    title: 'Product Designer, Growth',
+    company: { id: 'co_preview_2', name: 'Harbor & Finch', logoUrl: mark('#A9C3DC', '<path d="M11 28 20 11 29 28Z" fill="#121313"/>') },
+    location: 'London, United Kingdom', workModel: 'hybrid', employmentType: 'full_time', seniority: 'mid',
+    ...pay(70000, 85000, 'GBP', 'year'),
+    postedAt: ago(4), firstSeenAt: ago(3), lastSeenAt: ago(1),
+    source: { name: 'Example job board', kind: 'provider', original: null, url: 'https://jobs.example/harbor-finch/product-designer-growth', lastVerifiedAt: ago(1) },
+    apply: { url: 'https://jobs.example/harbor-finch/product-designer-growth', target: null },
+    badges: [{ kind: 'sponsorship', label: 'sponsorship', quote: 'We can sponsor a Skilled Worker visa for this role.' }],
+    fit: { tier: 'good', score: 78, kind: 'ai', topGap: 'They want experiment design; your resume names A/B tests but not how you ran them.', topOverlap: 'Your onboarding redesign lifted activation, which is the work this team owns.', confidence: 'high', confidenceReason: null },
+    explanation: why('good', 'user research, prototyping', 'experiment design'),
+  },
+  {
+    ...unflagged, jobId: 'job_preview_3', position: 2,
+    title: 'UX Researcher',
+    company: { id: 'co_preview_3', name: 'Lakeside Health Cooperative', logoUrl: mark('#C2D9CB', '<rect x="11" y="11" width="18" height="18" rx="4" fill="#121313"/>') },
+    location: 'Toronto, Canada', workModel: 'onsite', employmentType: 'full_time', seniority: 'mid',
+    // Pay not listed: the posting states none, so both fields are null (never 0).
+    pay: null, salary: null,
+    // The posting states no date: the card says when it was first seen instead.
+    postedAt: ago(9), postedAtEstimated: true, firstSeenAt: ago(9), lastSeenAt: ago(2),
+    source: { name: 'Example careers page', kind: 'ats_public', original: 'Lakeside Health Cooperative', url: 'https://jobs.example/lakeside/ux-researcher', lastVerifiedAt: ago(2), via: 'ats' },
+    apply: { url: 'https://jobs.example/lakeside/ux-researcher', target: 'employer' },
+    badges: [],
+    fit: { tier: 'possible', score: 58, kind: 'pre', topGap: 'They ask for clinical research experience.', topOverlap: 'Your interview studies line up with the post.', confidence: 'medium', confidenceReason: null },
+    explanation: why('possible', 'usability testing', 'clinical research'),
+  },
+  {
+    ...unflagged, jobId: 'job_preview_4', position: 3,
+    title: 'Staff Interaction Designer, Payments Platform and Risk Tooling',
+    // No logo: the card shows the company initial.
+    company: { id: 'co_preview_4', name: 'Kestrel Mobility Group', logoUrl: null },
+    location: 'Austin, Texas, United States', workModel: 'onsite', employmentType: 'contract', seniority: 'lead_staff',
+    ...pay(85, 110, 'USD', 'hour'),
+    postedAt: ago(12), firstSeenAt: ago(12), lastSeenAt: ago(5),
+    source: { name: 'Example job board', kind: 'provider', original: null, url: 'https://jobs.example/kestrel/staff-interaction-designer', lastVerifiedAt: ago(5) },
+    apply: { url: 'https://jobs.example/kestrel/staff-interaction-designer', target: null },
+    isAgency: true,
+    badges: [{ kind: 'clearance_required', label: 'clearance_required', quote: 'Candidates must hold an active security clearance.' }],
+    fit: { tier: 'unlikely', score: 34, kind: 'pre', topGap: 'They ask for eight years at staff level; your resume shows four.', topOverlap: null, confidence: 'low', confidenceReason: 'no_level_stated' },
+    explanation: why('unlikely', 'interaction design', 'payments, risk tooling'),
+  },
+  {
+    ...unflagged, jobId: 'job_preview_5', position: 4,
+    title: 'Design Engineer',
+    company: { id: 'co_preview_5', name: 'Tidewater Robotics', logoUrl: mark('#E58E6D', '<path d="M10 25h20M10 18h20" stroke="#121313" stroke-width="4" stroke-linecap="round"/>') },
+    location: 'Remote, United States', workModel: 'remote', employmentType: 'full_time', seniority: 'mid',
+    ...pay(130000, 155000, 'USD', 'year'),
+    postedAt: ago(6), firstSeenAt: ago(6), lastSeenAt: ago(1),
+    source: { name: 'Example job board', kind: 'provider', original: null, url: 'https://jobs.example/tidewater/design-engineer', lastVerifiedAt: ago(1) },
+    apply: { url: 'https://jobs.example/tidewater/design-engineer', target: null },
+    tracker: { status: 'saved' },
+    badges: [],
+    fit: { tier: 'good', score: 72, kind: 'ai', topGap: 'They want production React; your resume shows prototypes only.', topOverlap: 'Your component library work is the core of this role.', confidence: 'high', confidenceReason: null },
+    explanation: why('good', 'TypeScript, component libraries', 'production React'),
+  },
+  {
+    ...unflagged, jobId: 'job_preview_6', position: 5,
+    title: 'Lead Product Designer',
+    company: { id: 'co_preview_6', name: 'Orchard Ledger', logoUrl: mark('#D4D0E6', '<path d="M12 28V12h7a6 6 0 0 1 0 12h-7" fill="none" stroke="#121313" stroke-width="4"/>') },
+    location: 'New York, New York, United States', workModel: 'hybrid', employmentType: 'full_time', seniority: 'lead_staff',
+    ...pay(175000, null, 'USD', 'year'),
+    postedAt: ago(2), firstSeenAt: ago(2), lastSeenAt: ago(0),
+    source: { name: 'Example careers page', kind: 'ats_public', original: 'Orchard Ledger', url: 'https://jobs.example/orchard-ledger/lead-product-designer', lastVerifiedAt: ago(0), via: 'ats' },
+    apply: { url: 'https://jobs.example/orchard-ledger/lead-product-designer', target: 'employer' },
+    badges: [{ kind: 'sponsorship', label: 'sponsorship', quote: 'H-1B transfers and new sponsorship considered.' }],
+    fit: { tier: 'great', score: 86, kind: 'ai', topGap: 'They ask for people management; you have led projects, not reports.', topOverlap: 'Eight years of fintech product design, the domain this team works in.', confidence: 'high', confidenceReason: null },
+    explanation: why('great', 'fintech, design leadership', 'people management'),
+  },
+];
+
+const feedPage: FeedQueryResponse = { items: feedJobs, cursor: null, endOfFeed: true, hiddenByTier: 0, sessionId: 'fs_preview', order: 'personalized', sort: 'recommended', thin: false };
+
+// The split detail (`/jobs?job=<id>` on a wide screen) reads the job and its fit.
+const fitView = (job: FeedItem): ScoreJobResponse['fit'] => ({
+  jobId: job.jobId, score: job.fit?.score ?? null, tier: job.fit?.tier ?? null, kind: job.fit?.kind ?? 'pre', dimensions: [],
+  summary: job.fit?.topOverlap ?? null, strengths: job.fit?.topOverlap ? [job.fit.topOverlap] : [], gaps: job.fit?.topGap ? [job.fit.topGap] : [],
+  keywordsMatched: [], keywordsMissing: [], skills: { aligned: [], missing: [], listed: 0 },
+  topOverlap: job.fit?.topOverlap ?? null, topGap: job.fit?.topGap ?? null, scoredAt: ago(1), resumeVariantId: null,
+  estimateReason: null, summaryLocaleStale: false, cached: true, confidence: job.fit?.confidence,
+});
+const jobDetail = (job: FeedItem): JobDetailResponse => ({
+  job: {
+    id: job.jobId, title: job.title, companyName: job.company.name, location: job.location, workModel: job.workModel,
+    employmentType: job.employmentType, seniority: job.seniority, pay: job.pay, payText: null,
+    summary: { text: `${job.company.name} is hiring a ${job.title} to work with its product and engineering teams. This posting is fictional example data.`, aiWritten: true },
+    sections: [
+      { kind: 'responsibilities', body: 'Shape the product from early research to shipped detail.\nWork with engineers on every release.\nShare work early and often.' },
+      { kind: 'qualifications', body: 'A portfolio of shipped product work.\nComfort presenting decisions and the evidence behind them.' },
+    ],
+    skills: [{ skill: 'Figma', kind: 'hard', required: true }, { skill: 'Prototyping', kind: 'hard', required: false }, { skill: 'Communication', kind: 'soft', required: true }],
+    sponsorship: { status: 'not_stated', quote: null }, requirements: [],
+    applyUrl: job.apply?.url ?? null, apply: job.apply, salary: job.salary,
+    postedAt: job.postedAt, postedAtEstimated: job.postedAtEstimated ?? false, firstSeenAt: job.firstSeenAt, lastSeenAt: job.lastSeenAt, isNew: job.isNew,
+    closedAt: null, status: 'open',
+    source: { ...job.source, originalName: job.source.original ?? null },
+    fromRecruiterBank: job.fromRecruiterBank, employerVerified: job.employerVerified, isAgency: job.isAgency,
+    visibility: 'public', badges: job.badges,
+  },
+  company: { id: job.company.id, name: job.company.name, slug: null, logoUrl: job.company.logoUrl, domain: null, facts: {}, openJobs: null },
+  fit: job.fit ? fitView(job) : null,
+  explanation: (job.explanation as MatchExplanation | undefined) ?? null,
+  tracker: job.tracker ? { id: `tr_${job.jobId}`, status: job.tracker.status, dateApplied: null } : null,
+  checklist: { saved: job.tracker?.status === 'saved', tailoredResumeId: null, coverLetterId: null, practiced: null, applied: false },
+  similarIds: [], autofill: { supported: false, atsType: null }, people: { mode: 'off', searchLinks: [] }, marketMeta: {},
+});
+const newCount: NewCountResponse = { count: 0, since: null };
+
 const fixtures: Record<string, unknown> = {
   [`${base}/account`]: {
     id: 'design-preview-avery', email: 'avery@example.test', name: 'Avery Chen',
@@ -134,10 +306,16 @@ const fixtures: Record<string, unknown> = {
   '/api/v1/interview-engine/sessions/ie_preview': {
     session: { ...practiceReport.session, status: 'live', startedAt: new Date(Date.now() - 214_000).toISOString(), endedAt: null },
   },
+  '/api/v1/public/brand': brand,
+  [`${base}/search-profiles`]: searchProfiles,
+  [`${base}/feed/new-count`]: newCount,
+  ...Object.fromEntries(feedJobs.map((job) => [`${base}/jobs/${job.jobId}`, jobDetail(job)])),
 };
 
-// The live room is the only preview surface that POSTs before it can render.
+// The live room and the jobs feed are the preview surfaces that POST before they can render.
 const postFixtures: Record<string, unknown> = {
+  [`${base}/feed/query`]: feedPage,
+  ...Object.fromEntries(feedJobs.map((job) => [`${base}/jobs/${job.jobId}/score`, { fit: fitView(job) } satisfies ScoreJobResponse])),
   '/api/v1/interview-engine/sessions/ie_preview/connection': {
     connection: {
       sessionId: 'ie_preview', url: 'wss://preview.invalid', token: 'preview', roomName: 'preview',
