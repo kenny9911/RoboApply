@@ -101,7 +101,7 @@
     "web-push": "3.6.7",
     "word-extractor": "^1.0.4",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
