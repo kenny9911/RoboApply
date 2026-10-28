@@ -1,5 +1,8 @@
-/* A considered first impression: a lavender brand panel, a quiet form,
- * and consistent, accessible controls shared by login and signup. */
+/* A considered first impression (Paper): the brand panel is an illustration
+ * tile — terracotta paper with ink type and the hand-drawn path — beside a
+ * quiet form of pill controls, shared by login and signup. Tiles are
+ * stickers: they keep their colour in both themes, so everything written on
+ * the panel uses --tile-ink (≥ 7:1 on --tile-clay) rather than --text. */
 .auth-split {
   display: grid;
   grid-template-columns: 1fr;
@@ -15,16 +18,16 @@
   justify-content: space-between;
   overflow: hidden;
   padding: 42px 52px;
-  background: var(--grad-soft);
-  color: var(--text);
-  border-radius: 0 24px 24px 0;
+  background: var(--tile-clay);
+  color: var(--tile-ink);
+  border-radius: 0 var(--r-lg) var(--r-lg) 0;
 }
 .auth-brand__path {
   position: absolute;
   inset: 0;
   z-index: -1;
-  opacity: 0.18;
-  color: var(--action);
+  opacity: 0.32;
+  color: var(--tile-ink);
   pointer-events: none;
 }
 .auth-brand__path svg {
@@ -40,30 +43,30 @@
   font-family: var(--font-ui);
   font-size: var(--fs-subtitle);
   font-weight: 600;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.03em;
   text-decoration: none;
 }
 .auth-brand .auth-wordmark {
-  color: var(--text);
+  color: var(--tile-ink);
 }
 .auth-brand-mark {
   display: grid;
   place-items: center;
   width: 38px;
-  height: 40px;
-  border-radius: 11px 11px 11px 2px;
-  color: var(--action-ink);
-  background: var(--grad-brand);
+  height: 38px;
+  border-radius: var(--r-sm);
+  color: var(--brand-mark);
+  background: var(--brand-plane);
 }
 .auth-brand .auth-brand-mark {
-  color: var(--action-ink);
-  background: var(--grad-brand);
+  color: var(--brand-mark);
+  background: var(--brand-plane);
 }
 .auth-wordmark-period {
-  color: var(--action);
+  color: var(--text);
 }
 .auth-brand .auth-wordmark-period {
-  color: var(--action);
+  color: var(--tile-ink);
 }
 .auth-wordmark:focus-visible {
   outline: 2px solid currentColor;
@@ -78,29 +81,31 @@
   padding-block: 65px;
 }
 .auth-eyebrow {
-  font-size: var(--fs-label);
+  font-size: var(--fs-meta);
+  font-weight: 500;
   line-height: 1.5;
-  color: var(--text-muted);
+  color: var(--tile-ink);
   margin: 0 0 25px;
   max-width: 36ch;
 }
 .auth-eyebrow::before {
   content: '';
   display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--action);
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--tile-ink);
+  border-radius: 3px;
+  background: var(--brand-mark);
   margin-right: 9px;
-  vertical-align: middle;
+  vertical-align: -1px;
 }
 .auth-headline {
   font-family: var(--font-display);
   font-size: var(--fs-hero);
-  font-weight: 500;
-  line-height: 1.02;
-  letter-spacing: -0.055em;
-  color: var(--text);
+  font-weight: 600;
+  line-height: var(--lh-hero);
+  letter-spacing: var(--ls-hero);
+  color: var(--tile-ink);
   margin: 0;
   max-width: 9ch;
   text-wrap: balance;
@@ -121,7 +126,7 @@
   max-width: 44ch;
   font-size: var(--fs-body);
   line-height: 1.8;
-  color: var(--text-2);
+  color: var(--tile-ink);
 }
 .auth-features {
   display: flex;
@@ -137,8 +142,8 @@
   padding: 17px 0;
   font-size: var(--fs-meta);
   line-height: 1.5;
-  color: var(--text-2);
-  border-top: 1px solid var(--rule);
+  color: var(--tile-ink);
+  border-top: 1px solid color-mix(in srgb, var(--tile-ink) 22%, transparent);
 }
 .auth-feature__dot {
   display: grid;
@@ -147,8 +152,9 @@
   height: 24px;
   flex: none;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--action) 28%, transparent);
-  color: var(--action);
+  border: 1px solid var(--tile-ink);
+  background: var(--brand-mark);
+  color: var(--tile-ink);
 }
 .auth-feature__dot svg {
   width: 11px;
@@ -158,7 +164,7 @@
 .auth-brand__foot {
   position: relative;
   z-index: 1;
-  color: var(--text-muted);
+  color: var(--tile-ink);
   font-size: var(--fs-label);
   margin: 0;
 }
@@ -212,14 +218,14 @@
 }
 .auth-field__input {
   width: 100%;
-  height: 52px;
-  padding: 0 15px;
+  height: 50px;
+  padding: 0 18px;
   font-family: var(--font-ui);
   font-size: var(--fs-body);
   color: var(--text);
   background: var(--surface);
-  border: 1px solid var(--rule-strong);
-  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: var(--r-md);
   outline: none;
   transition:
     border-color var(--dur-hover) var(--ease-out),
@@ -264,7 +270,7 @@
   color: var(--text-muted);
   background: none;
   border: 0;
-  border-radius: 6px;
+  border-radius: 50%;
   cursor: pointer;
   transition: color var(--dur-hover) var(--ease-out);
 }
@@ -280,8 +286,8 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 13px;
-  border-radius: 8px;
+  padding: 13px 16px;
+  border-radius: var(--r-md);
   background: var(--danger-subtle);
   border: 1px solid var(--danger);
   color: var(--danger);
@@ -297,12 +303,17 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 52px;
+  height: 50px;
   margin-top: 4px;
   font-size: var(--fs-body);
-  border-radius: 8px;
-  background: var(--grad-brand);
+  border-radius: var(--r-pill);
+  background: var(--action);
+  border-color: var(--action);
   color: var(--action-ink);
+}
+.btn.auth-submit:hover:not(:disabled) {
+  background: var(--action-hover);
+  border-color: var(--action-hover);
 }
 .btn.auth-submit:disabled {
   opacity: 0.55;
@@ -320,7 +331,9 @@
 }
 .auth-switch a {
   color: var(--action);
-  font-weight: 500;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
   text-underline-offset: 4px;
 }
 .auth-switch a:hover {
@@ -349,7 +362,7 @@
   }
   .auth-brand {
     display: flex;
-    border-radius: 16px;
+    border-radius: var(--r-lg);
   }
   .auth-card__brand {
     display: none;
@@ -394,10 +407,10 @@
 .auth-utilities select {
   max-width: 114px;
   min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: var(--surface);
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: var(--r-pill);
+  background: var(--surface-glass);
   color: var(--text-2);
   font-family: var(--font-ui);
   font-size: var(--fs-label);
