@@ -161,7 +161,7 @@ const PROVIDER_BASE_URL_ENV: Record<string, string[]> = {
   doubao: ['ARK_BASE_URL'],
   ark: ['ARK_BASE_URL'],
   openai: ['OPENAI_BASE_URL'],
-  openrouter: ['OPENROUTER_API_BASE_URL'],
+  openrouter: ['OPENROUTER_BASE_URL', 'OPENROUTER_API_BASE_URL'],
   anthropic: ['ANTHROPIC_BASE_URL'],
   google: ['GEMINI_BASE_URL'],
   gemini: ['GEMINI_BASE_URL'],

@@ -5,6 +5,7 @@ import { openAIJsonResponseFormat } from './jsonMode.js';
 import { modelSupportsReasoningEffort, OPENROUTER_EFFORTS, resolveReasoningEffort } from './reasoningEffort.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import { openRouterProviderPreferences } from '../../platform/llm/egressPolicy.js';
+import { OPENROUTER_DEFAULT_BASE_URL, openRouterBaseUrlFromEnv } from '../../platform/llm/openRouterBaseUrl.js';
 
 /**
  * OpenRouter app-attribution headers for the brand of the current unit of
@@ -32,7 +33,7 @@ export class OpenRouterProvider implements LLMProvider {
     // A DB/system-configured base URL wins; else env; else the public default.
     // NB: OpenRouter intentionally has NO X-Proxy-Key header (it never did) — the
     // proxy key stays with custom-proxy providers only. Preserves env behaviour.
-    const baseURL = extra?.baseUrl || process.env.OPENROUTER_API_BASE_URL || 'https://openrouter.ai/api/v1';
+    const baseURL = extra?.baseUrl || openRouterBaseUrlFromEnv() || OPENROUTER_DEFAULT_BASE_URL;
     this.client = new OpenAI({
       apiKey,
       baseURL,

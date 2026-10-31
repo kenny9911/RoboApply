@@ -22,12 +22,30 @@ describe('effectiveLlmBaseUrl', () => {
     expect(effectiveLlmBaseUrl('newapi', undefined, {})).toBeNull();
     expect(effectiveLlmBaseUrl('unknown', undefined, {})).toBeNull();
   });
+
+  it('OpenRouter: OPENROUTER_BASE_URL (an API root) wins over OPENROUTER_API_BASE_URL, else the default', () => {
+    expect(effectiveLlmBaseUrl('openrouter', undefined, {})).toBe('https://openrouter.ai/api/v1');
+    expect(effectiveLlmBaseUrl('openrouter', undefined, { OPENROUTER_BASE_URL: 'https://openrouter.ai/api' })).toBe('https://openrouter.ai/api/v1');
+    expect(effectiveLlmBaseUrl('openrouter', undefined, { OPENROUTER_API_BASE_URL: 'https://proxy.example.com/or' })).toBe('https://proxy.example.com/or');
+    expect(effectiveLlmBaseUrl('openrouter', undefined, {
+      OPENROUTER_BASE_URL: 'https://api.together.xyz',
+      OPENROUTER_API_BASE_URL: 'https://proxy.example.com/or',
+    })).toBe('https://api.together.xyz/v1');
+    expect(effectiveLlmBaseUrl('openrouter', 'https://cred.example.com/v1', { OPENROUTER_BASE_URL: 'https://api.together.xyz' })).toBe('https://cred.example.com/v1');
+  });
 });
 
 describe('checkLlmEgress', () => {
   it('RoboApply: refuses a provider whose env override points at a mainland host', () => {
     const d = checkLlmEgress({ brand: 'roboapply', provider: 'openai', env: { OPENAI_BASE_URL: 'https://gw.volces.com/v1' } });
     expect(d).toMatchObject({ allowed: false, code: 'mainland_endpoint_for_intl', host: 'gw.volces.com' });
+  });
+
+  it('checks the host OPENROUTER_BASE_URL points at, not openrouter.ai', () => {
+    expect(checkLlmEgress({ brand: 'roboapply', provider: 'openrouter', env: { OPENROUTER_BASE_URL: 'https://api.together.xyz' } }))
+      .toMatchObject({ allowed: true, host: 'api.together.xyz', baseUrl: 'https://api.together.xyz/v1' });
+    expect(checkLlmEgress({ brand: 'roboapply', provider: 'openrouter', env: { OPENROUTER_BASE_URL: 'https://api.deepseek.com' } }))
+      .toMatchObject({ allowed: false, code: 'mainland_endpoint_for_intl', host: 'api.deepseek.com' });
   });
 
   it('RoboApply: allows DeepSeek behind an international proxy, and prompts without user data', () => {
