@@ -1,59 +1,88 @@
-/* Clarity: shared workspace composition. Tokens live in app/globals.css.
- * Feature-specific evidence styles live in discovery.css. */
+/* Paper: shared workspace composition (docs/design-system.md). Tokens live in
+ * app/globals.css. Feature-specific evidence styles live in discovery.css. */
 .app {
   grid-template-columns: 236px minmax(0, 1fr);
   /* Less the admin "view as" banner above the shell (--view-as-h; 0 otherwise). */
   grid-template-rows: calc(100dvh - var(--view-as-h, 0px));
   max-width: none;
 }
-.side {
-  padding: 32px 18px 24px;
-  gap: 30px;
-  overflow-y: auto;
-  background: var(--surface);
+/* The frame. The rail sits on the recessed paper and the workspace is an inset
+ * sheet with soft corners, 8px off the window edge (docs/skillry-style-
+ * reference.md §5, "App shell"). In dark the rail is the lighter tonal step
+ * and the sheet is the ink. Below 760px the frame dissolves (see the end). */
+.app { background: var(--surface-2); }
+html[data-theme='dark'] .app { background: var(--surface); }
+.main {
+  margin: 8px 8px 8px 0;
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
 }
-.brand { gap: 11px; padding: 0 10px; }
-.brand-name { font-size: var(--fs-title); font-weight: 700; letter-spacing: -0.035em; }
-.brand-mark { width: 34px; height: 34px; border-radius: 10px; background: var(--grad-brand); }
-.brand-mark svg { stroke: var(--action-ink); }
+.side {
+  padding: 20px 14px 16px;
+  gap: 22px;
+  overflow-y: auto;
+  background: transparent;
+  border-right: 0;
+}
+.brand { gap: 10px; padding: 2px 8px 0; }
+.brand-name { font-size: var(--fs-subtitle); font-weight: 600; letter-spacing: -0.03em; }
+/* The identity tile: the highlighter glyph on the ink plane. */
+.brand-mark { width: 32px; height: 32px; border-radius: var(--r-sm); background: var(--brand-plane); }
+.brand-mark svg { stroke: var(--brand-mark); }
 .workspace-identity {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
-  margin: 2px 4px 0;
-  padding-bottom: 26px;
-  border-bottom: 1px solid var(--rule);
+  margin: 0 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface-glass);
 }
 .workspace-avatar {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--rule);
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: var(--grad-soft);
-  color: var(--action);
+  background: var(--tile-clay);
+  color: var(--tile-ink);
   font-size: var(--fs-meta);
   font-weight: 600;
 }
 .workspace-identity strong { display: block; font-size: var(--fs-meta); font-weight: 600; }
 .workspace-identity span:not(.workspace-avatar) {
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: var(--fs-label);
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1.45;
 }
-.nav { gap: 7px; }
-.nav-item { min-height: 46px; padding: 11px 13px; font-size: var(--fs-meta); }
-.nav-item svg { width: 18px; height: 18px; }
-.nav-item[aria-current="page"] {
-  background: var(--action-subtle);
-  color: var(--action);
+.nav { gap: 2px; }
+.nav-item {
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--text-2);
+}
+.nav-item svg { width: 17px; height: 17px; }
+.nav-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); }
+/* Where you are: the highlighter. Weight and the trailing dot carry the state
+ * too, so it never rests on colour alone (lime on the rail is a hue cue, not
+ * a contrast one). */
+.nav-item[aria-current="page"],
+.nav-item[aria-current="page"]:hover {
+  background: var(--brand-mark);
+  color: var(--brand-plane);
   box-shadow: none;
-  font-weight: 650;
+  font-weight: 600;
 }
+/* The rule above clears v3's inset bar; keyboard focus still gets the ring. */
+.nav-item[aria-current="page"]:focus-visible { box-shadow: var(--focus-ring); }
 .nav-item[aria-current="page"]::after {
   content: '';
   width: 6px;
@@ -63,28 +92,48 @@
   background: currentColor;
 }
 .nav-item:has(.count)::after { display: none; }
+.nav-item[aria-current="page"] .count { background: var(--brand-plane); color: var(--brand-mark); }
+.nav-group { border-top-color: color-mix(in srgb, var(--text) 10%, transparent); }
 .workspace-guide {
-  margin: auto 4px 0;
-  padding: 22px 16px;
+  margin: auto 2px 0;
+  padding: 16px;
+  border: 1px solid var(--rule);
   border-radius: var(--r-md);
-  background: var(--grad-soft);
+  background: var(--surface-glass);
 }
-.workspace-guide-path { display: flex; align-items: center; color: var(--action); margin-bottom: 23px; }
+.workspace-guide-path { display: flex; align-items: center; color: var(--text); margin-bottom: 14px; }
 .workspace-guide-path i { height: 1px; flex: 1; margin: 0 8px; background: var(--rule-strong); }
 .workspace-guide strong { font-size: var(--fs-meta); font-weight: 600; }
-.workspace-guide p { margin: 5px 0 0; font-size: var(--fs-label); color: var(--text-muted); }
-.main-inner { max-width: 1440px; margin: 0 auto; padding: 42px 44px 80px; }
+.workspace-guide p { margin: 4px 0 0; font-size: var(--fs-label); color: var(--text-muted); }
+.main-inner { max-width: 1440px; margin: 0 auto; padding: 36px 44px 80px; }
+/* The sheet's own header row: translucent paper over the scrolling page. */
 .topbar {
-  min-height: 78px;
-  padding: 18px 44px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--rule);
+  min-height: 64px;
+  padding: 12px 44px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: saturate(1.2) blur(16px);
+  backdrop-filter: saturate(1.2) blur(16px);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
 .crumbs { font-size: var(--fs-meta); }
-.crumbs .now { display: inline-flex; align-items: center; gap: 10px; }
-.crumbs .now::before { content: ''; width: 7px; height: 7px; border: 1px solid var(--action); border-radius: 2px; }
-.search { background: var(--surface); width: 255px; border-radius: var(--r-pill); }
-.search kbd { border-radius: 5px; background: var(--bg); }
+.crumbs .now { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
+.crumbs .now::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
+  border-radius: 3px;
+  background: var(--brand-mark);
+}
+.search {
+  height: var(--control-md);
+  width: 255px;
+  background: var(--surface-glass);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: var(--r-pill);
+}
+.search:hover { border-color: color-mix(in srgb, var(--text) 24%, transparent); }
+.search kbd { border-radius: 6px; background: var(--surface-2); border-color: transparent; }
 /* The app topbar (.main > .topbar) never grows wider than its column. The
  * page name and the buttons keep their size; the search pill is the one
  * flexible thing in the row, so it narrows (its label ends in an ellipsis)
@@ -102,19 +151,64 @@
 .main > .topbar > .top-actions > .search { flex-shrink: 1; min-width: 0; }
 .search .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-btn { background: transparent; border-color: transparent; border-radius: 50%; }
-.icon-btn:hover { background: var(--surface); }
-.top-actions { gap: 10px; }
-.avatar { background: var(--grad-brand); }
-.page-h { align-items: center; gap: 24px; margin-bottom: 32px; }
+.icon-btn:hover { background: var(--surface-glass); border-color: color-mix(in srgb, var(--text) 12%, transparent); }
+.top-actions { gap: 8px; }
+.avatar { background: var(--tile-clay); color: var(--tile-ink); }
+.page-h { align-items: flex-end; gap: 24px; margin-bottom: 28px; }
 .page-h-copy { flex: 1; min-width: min(100%, 240px); }
-.page-h h1 { max-width: 24ch; font-size: var(--fs-display); font-weight: 600; line-height: 1.15; margin: 0; text-wrap: balance; }
-.page-h .eyebrow { margin-bottom: 14px; padding: 0; border: 0; background: transparent; color: var(--action); }
-.page-h .sub { text-align: left; max-width: 64ch; margin: 13px 0 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-2); }
-.btn { min-height: var(--control-md); padding: 9px 17px; font-weight: 600; box-shadow: none; }
-.btn.primary { background: var(--grad-brand); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), var(--e1); }
-.btn.primary:hover { background: var(--grad-brand-hover); }
-.btn.ghost { border-color: transparent; }
-.tag { border-radius: 6px; }
+.page-h h1 { max-width: 24ch; font-size: var(--fs-display); font-weight: 600; line-height: var(--lh-display); margin: 0; text-wrap: balance; }
+/* Eyebrow: sentence case, muted, led by a highlighter swatch. */
+.page-h .eyebrow {
+  margin-bottom: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+.page-h .eyebrow::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
+  border-radius: 3px;
+  background: var(--brand-mark);
+}
+.page-h .eyebrow:has(.dot)::before { display: none; }
+.page-h .sub { text-align: left; max-width: 64ch; margin: 10px 0 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-muted); }
+/* Buttons are pills. Primary is solid ink (lime in dark); secondary is a
+ * translucent sheet with a hairline; `violet` — the stronger of two adjacent
+ * CTAs — is the highlighter. */
+.btn {
+  min-height: var(--control-md);
+  padding: 8px 18px;
+  justify-content: center;
+  border-radius: var(--r-pill);
+  border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+  background: var(--surface-glass);
+  font-weight: 600;
+  box-shadow: none;
+}
+.btn:hover { background: var(--surface); border-color: color-mix(in srgb, var(--text) 28%, transparent); }
+.btn.primary {
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--action-ink);
+  box-shadow: 0 8px 20px -10px rgba(18, 19, 19, 0.55);
+}
+.btn.primary:hover { background: var(--action-hover); border-color: var(--action-hover); transform: translateY(-1px); }
+/* Its drop shadow would otherwise replace the focus ring. */
+.btn.primary:focus-visible { box-shadow: var(--focus-ring); }
+.btn.violet { background: var(--brand-mark); border-color: var(--brand-mark); color: var(--brand-plane); }
+.btn.violet:hover {
+  background: color-mix(in srgb, var(--brand-mark) 88%, var(--brand-plane));
+  border-color: color-mix(in srgb, var(--brand-mark) 88%, var(--brand-plane));
+}
+.btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+.btn.ghost:hover { background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); }
+.btn:active { transform: scale(0.98); }
+.tag { border-radius: var(--r-pill); }
 .workspace-skip {
   position: fixed;
   z-index: 100;
@@ -124,61 +218,79 @@
   background: var(--action);
   color: var(--action-ink);
   padding: 12px 20px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-pill);
 }
 .workspace-skip:focus { transform: translateY(0); }
+/* Empty states are invitations: a sticker tile, one line, one action. */
 .workspace-empty { min-height: 260px; }
-.workspace-empty-icon { display: grid; place-items: center; width: 64px; height: 64px; background: var(--surface-2); color: var(--action); border-radius: 22px; margin-bottom: 8px; }
-.workspace-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0 0 32px; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
-.workspace-metric { min-width: 0; padding: 22px 24px; border-right: 1px solid var(--rule); }
-.workspace-metric:last-child { border-right: 0; }
+.workspace-empty-icon { display: grid; place-items: center; width: 60px; height: 60px; background: var(--tile-mint); color: var(--tile-ink); border-radius: 20px; margin-bottom: 8px; }
+/* Metrics: separate glass cards rather than one divided box. */
+.workspace-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 32px; }
+.workspace-metric { min-width: 0; padding: 18px 20px; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--surface-glass); }
 .workspace-metric dt { color: var(--text-muted); font-size: var(--fs-meta); }
-.workspace-metric dd { margin: 8px 0 0; font-size: var(--fs-stat); letter-spacing: -0.035em; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.workspace-metric dd { margin: 8px 0 0; font-size: var(--fs-stat); letter-spacing: -0.04em; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .workspace-metric p { margin: 6px 0 0; font-size: var(--fs-label); color: var(--text-muted); }
+.stat { border-radius: var(--r-md); background: var(--surface-glass); }
+.stat.hero { box-shadow: 0 16px 40px -18px rgba(17, 18, 18, 0.5); }
 
-/* Applications: legible stages, quiet containers, clear card hierarchy. */
-.pipeline-grid { gap: 16px; align-items: start; }
-.pipe-col { background: var(--surface-2); border: 1px solid var(--rule); border-radius: var(--r-md); min-height: 300px; padding: 12px; }
-.pipe-head { margin: 0 0 14px; padding: 8px 3px 16px; border-bottom-width: 1px; }
-.pipe-head .name { margin: 0; font-size: var(--fs-meta); font-weight: 650; }
-.pipe-head .count { background: var(--surface); border: 1px solid var(--rule); color: var(--text-2); border-radius: var(--r-pill); min-width: 25px; text-align: center; padding: 2px 6px; }
-.pipe-card { padding: 18px 15px; border-radius: 9px; box-shadow: var(--e1); }
-.pipe-card .co { font-size: var(--fs-meta); font-weight: 650; }
+/* Applications: recessed stage columns, paper cards that lift. */
+.pipeline-grid { gap: 14px; align-items: start; }
+.pipe-col { background: var(--surface-2); border: 0; border-radius: var(--r-lg); min-height: 300px; padding: 10px; }
+html[data-theme='dark'] .pipe-col { background: var(--surface); }
+.pipe-head { margin: 0 0 10px; padding: 8px 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent); }
+.pipe-head .name { margin: 0; font-size: var(--fs-meta); font-weight: 600; }
+.pipe-head .count { background: var(--surface); border: 1px solid var(--rule); color: var(--text-2); border-radius: var(--r-pill); min-width: 26px; text-align: center; padding: 2px 8px; }
+.pipe-card { padding: 16px; border-radius: var(--r-md); border-color: color-mix(in srgb, var(--text) 8%, transparent); box-shadow: var(--e1); }
+.pipe-card:hover { box-shadow: var(--e2); }
+.pipe-card .co { font-size: var(--fs-meta); font-weight: 600; }
 .pipe-card .role { margin-top: 6px; line-height: 1.5; }
 .pipe-card .when { padding-top: 12px; border-top: 1px solid var(--rule); }
 .pipe-empty { padding: 28px 10px; line-height: 1.6; }
 
-/* Resume library and editing tools; resume paper remains document typography. */
-.rb-create { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-.rb-create-card { flex-direction: column; padding: 28px; min-height: 225px; background: var(--surface); border-radius: var(--r-md); }
-.rb-create-card.primary { background: var(--grad-soft); border-color: var(--rule-strong); }
+/* Resume library: create cards carry sticker tiles; the recommended path gets
+ * the ink border skillry.dev gives its "most popular" plan. The resume paper
+ * itself remains document typography. */
+.rb-create { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.rb-create-card { flex-direction: column; padding: 24px; min-height: 220px; background: var(--surface); border-radius: var(--r-lg); }
+.rb-create-card:hover { box-shadow: var(--e-float); }
+.rb-create-card.primary { background: var(--surface); border: 2px solid var(--text); box-shadow: none; }
+.rb-create-card.primary:focus-visible { box-shadow: var(--focus-ring); }
 .rb-create-card.primary::before { display: none; }
-.rb-create-card .rb-create-arrow { position: absolute; right: 24px; top: 28px; }
-.rb-create-ic { width: 44px; height: 44px; border-radius: 13px; }
+.rb-create-card .rb-create-arrow { position: absolute; right: 22px; top: 24px; }
+.rb-create-ic { width: 46px; height: 46px; border-radius: 15px; }
+.rb-create-ic.ic-pen { background: var(--tile-clay); color: var(--tile-ink); }
+.rb-create-ic.ic-file { background: var(--tile-sky); color: var(--tile-ink); }
+.rb-create-ic.ic-link { background: var(--tile-sage); color: var(--tile-ink); }
 .rb-create-desc { max-width: 34ch; margin-top: 9px; }
 .rb-section-head { margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--rule); }
-.rb-card { border-radius: var(--r-md); box-shadow: none; }
-.rb-toolbar { border-radius: var(--r-md); background: var(--surface); }
+.rb-card { border-radius: var(--r-lg); box-shadow: none; }
+.rb-toolbar { border-radius: var(--r-pill); background: var(--surface-glass); }
 
 /* Settings, billing, admin, interview history share the same surface rhythm. */
-.pref-panel { border-radius: var(--r-md); box-shadow: none; }
+.pref-panel { border-radius: var(--r-lg); box-shadow: none; }
 .pref-section { scroll-margin-top: 105px; }
-.pref-input, .pref-textarea, .pref-select, .ra-account-input { background: var(--surface); }
-.iv-recent-card { padding: 22px; border-radius: var(--r-md); }
+.pref-input, .pref-textarea, .pref-select, .ra-account-input {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: var(--r-md);
+}
+.iv-recent-card { padding: 22px; border-radius: var(--r-lg); }
 .iv-recent-title { margin-top: 12px; font-size: var(--fs-subtitle); }
-.iv-step { border-radius: var(--r-md); }
+.iv-step { border-radius: var(--r-lg); }
 .ra-plan-grid { gap: 20px; }
 .ra-usage-grid { gap: 24px; }
+.chip { background: var(--surface-glass); border-color: color-mix(in srgb, var(--text) 14%, transparent); }
+.chip:hover { background: var(--surface); }
 .v3-root table { font-size: var(--fs-meta); }
 .v3-root th { font-weight: 600; }
 
 @media (min-width: 1600px) { .main-inner { padding-left: 64px; padding-right: 64px; } }
 @media (max-width: 1100px) {
   .app { grid-template-columns: 212px minmax(0, 1fr); }
-  .side { padding-left: 12px; padding-right: 12px; }
+  .side { padding-left: 10px; padding-right: 10px; }
   .main-inner { padding: 32px 26px 72px; }
-  .topbar { padding: 16px 26px; }
-  .workspace-metric { padding: 18px; }
+  .topbar { padding: 12px 26px; }
+  .workspace-metric { padding: 16px; }
   .rb-create-card { padding: 22px; }
 }
 @media (min-width: 761px) and (max-width: 1000px) {
@@ -189,11 +301,12 @@
   .rb-create-card .rb-create-arrow { position: static; }
 }
 @media (max-width: 760px) {
-  .app { display: block; }
+  .app { display: block; background: var(--bg); }
   .app > .side { display: none; }
-  .main { overflow: visible; }
+  /* No frame on a phone: the sheet is the screen. */
+  .main { overflow: visible; margin: 0; border-radius: 0; box-shadow: none; }
   .main-inner { padding: 28px 20px calc(100px + env(safe-area-inset-bottom)); }
-  .topbar { min-height: 68px; padding: 12px 20px; }
+  .topbar { min-height: 64px; padding: 12px 20px; }
   /* Six controls (search, Ask, inbox, theme, language, account) are 248px
    * before any gap, so on a phone the page name gets what is left: about 80px
    * at 375–393px wide, 66px at 360px. The buttons keep their size and the
@@ -223,18 +336,16 @@
     line-height: 1.25;
   }
   .main > .topbar > .crumbs .now::before { display: none; }
-  .page-h { margin-bottom: 26px; gap: 20px; }
+  .page-h { margin-bottom: 24px; gap: 20px; }
   .page-h .sub { max-width: none; }
-  .workspace-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .workspace-metric:nth-child(2) { border-right: 0; }
-  .workspace-metric:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
-  .workspace-metric { padding: 18px 20px; }
+  .workspace-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .workspace-metric { padding: 16px; }
   .rb-create { grid-template-columns: 1fr; }
-  .rb-create-card { min-height: 0; flex-direction: row; gap: 16px; padding: 22px; }
+  .rb-create-card { min-height: 0; flex-direction: row; gap: 16px; padding: 20px; }
   .rb-create-card .rb-create-arrow { position: static; }
-  .v3-mobile-nav { background: var(--surface); box-shadow: var(--e2); }
+  .v3-mobile-nav { box-shadow: 0 -8px 24px -16px rgba(18, 19, 19, 0.3); }
   .pipeline-grid { gap: 12px; }
-  .btn { min-height: var(--control-lg); }
+  .btn { min-height: 44px; }
 }
 @media (max-width: 380px) {
   .main-inner, .topbar { padding-left: 14px; padding-right: 14px; }

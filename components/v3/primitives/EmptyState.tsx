@@ -24,8 +24,8 @@ export function EmptyState({ icon, title, sub, action, className }: Props) {
     <div
       className={cn('workspace-empty flex flex-col items-center justify-center text-center', className)}
       style={{
-        border: '1px solid var(--rule)',
-        background: 'var(--surface)',
+        border: '1px dashed color-mix(in srgb, var(--text) 18%, transparent)',
+        background: 'var(--surface-glass)',
         borderRadius: 'var(--r-lg)',
         padding: 'var(--sp-7) var(--sp-6)',
         gap: 'var(--sp-3)',

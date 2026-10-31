@@ -1,43 +1,59 @@
 /* components/features/resume/ResumeHub.module.css — resume hub, layout panel
- * and export dialog pieces (WP-36b). Clarity tokens only; light and dark come
+ * and export dialog pieces (WP-36b). Paper tokens only; light and dark come
  * from the tokens; 44 px touch targets on mobile. */
 
 /* ── Hub tabs ─────────────────────────────────────────────────────────── */
+/* The same segmented control as the Tabs primitive (Paper): a translucent
+ * pill track with the current page as a solid action pill. */
 .tabs {
   display: flex;
-  gap: var(--sp-1);
-  border-bottom: 1px solid var(--rule);
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
   margin: 0 0 var(--sp-5);
+  padding: 4px;
   overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--r-pill);
+  background: var(--surface-glass);
+  scrollbar-width: none;
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: 36px;
   padding: 0 var(--sp-4);
-  font-size: var(--fs-body);
-  line-height: var(--lh-body);
-  font-weight: 500;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  font-weight: 600;
   color: var(--text-2);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  white-space: nowrap;
+  transition:
+    background var(--dur-hover) var(--ease-out),
+    color var(--dur-hover) var(--ease-out);
 }
 
 .tab:hover {
   color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .tab[aria-current='page'] {
-  color: var(--action);
-  border-bottom-color: var(--action);
-  font-weight: 600;
+  color: var(--action-ink);
+  background: var(--action);
+  box-shadow: 0 4px 12px -4px rgba(18, 19, 19, 0.4);
 }
 
 .tab:focus-visible {
   outline: 2px solid var(--action);
   outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .tab { min-height: 44px; }
 }
 
 /* ── Slots ─────────────────────────────────────────────────────────── */

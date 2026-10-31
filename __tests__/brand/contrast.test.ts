@@ -106,7 +106,15 @@ const PAIRS: Array<[string, string, number, string]> = [
   ['--text', '--grad-soft', TEXT, 'text on the soft gradient'],
   ['--text', '--grad-panel', TEXT, 'text on the panel gradient'],
   ['--text-2', '--grad-soft', TEXT, 'secondary text on the soft gradient (nudge banner)'],
+  // Metadata sits on every paper surface, the pressed --surface-3 fill included.
+  ['--text-muted', '--bg', TEXT, 'metadata on the page'],
+  ['--text-muted', '--surface', TEXT, 'metadata on a card'],
+  ['--text-muted', '--surface-2', TEXT, 'metadata on a muted surface'],
+  ['--text-muted', '--surface-3', TEXT, 'metadata on a pressed fill'],
   ['--brand-mark', '--brand-plane', UI, 'brand glyph on the identity plane'],
+  // Paper: the highlighter is a FILL (active nav item, plan badge, selection)
+  // and --brand-plane is the ink written on it, in both themes.
+  ['--brand-plane', '--brand-mark', TEXT, 'ink label on a highlighter fill'],
   ['--action', '--bg', UI, 'focus ring / control outline'],
 ];
 

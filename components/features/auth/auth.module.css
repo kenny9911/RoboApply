@@ -47,7 +47,9 @@
 /* More than one form on the card (GoApply with an SMS provider: email,
    phone): tabs over the open form. Each tab takes an equal share, so two
    short Chinese labels do not sit in a corner of a 390px card. */
-.methodTabs {
+.methodTabs,
+.methodTabs[role='tablist'] {
+  width: 100%;
   margin-top: var(--sp-6);
 }
 .methodTabs > [role='tab'] {
