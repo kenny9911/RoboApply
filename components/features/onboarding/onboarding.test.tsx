@@ -1,5 +1,6 @@
 // WP-30 web: onboarding screens O1–O7 at 375 px, through the real lib/api
-// wrappers against a fetch double (no network). Fictional data only.
+// wrappers against a fetch double (no network), and the add-resume tip the
+// /jobs dock shows to someone who skipped the resume. Fictional data only.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -19,17 +20,21 @@ vi.mock('../../../lib/analytics', async (orig) => {
   const real = await orig<typeof import('../../../lib/analytics')>();
   return { ...real, track: (name: string, props?: Record<string, unknown>) => tracked.push([name, props]) };
 });
-const resumes = vi.hoisted(() => ({ list: [] as Array<{ id: string; name: string }>, upload: vi.fn() }));
+// `query` overrides the list's query state (stale cache, failed load) for the add-resume tip.
+const resumes = vi.hoisted(() => ({ list: [] as Array<{ id: string; name: string }>, upload: vi.fn(), query: {} as Record<string, unknown> }));
 vi.mock('../../../hooks/useResumes', () => ({
-  useResumeList: () => ({ data: { resumes: resumes.list } }),
+  useResumeList: () => ({ data: { resumes: resumes.list }, ...resumes.query }),
   useUploadResumeMutation: () => ({ isPending: false, mutateAsync: resumes.upload }),
 }));
+vi.mock('../growth', () => ({ GettingStartedChecklist: () => <p>Checklist card</p> }));
 vi.mock('../../../lib/auth/AuthProvider', () => ({
   AuthProvider: ({ children }: { children: unknown }) => children,
   useAuth: () => ({ status: 'authenticated', refresh: async () => null, me: null }),
 }));
 
 import { fail, installFetch, ok, renderWith, type RecordedCall } from '../filters/filters.testkit';
+import { __setPopupGate, createPopupGate } from '../../../lib/ui/popupGate';
+import { FINISH_BANNER_POPUP_KEY, OnboardingPromptDock } from './FirstVisitPrompts';
 import { OnboardingStepPage } from './OnboardingStepPage';
 import { confirmCountOf } from './steps/ConfirmStep';
 import { resumeErrorKeyOf } from './steps/ResumeStep';
@@ -61,6 +66,7 @@ beforeEach(() => {
   nav.replace.mockReset();
   tracked.length = 0;
   resumes.list = [];
+  resumes.query = {};
   resumes.upload.mockReset();
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
   window.dispatchEvent(new Event('resize'));
@@ -751,5 +757,172 @@ describe('O5 upload door', () => {
     fireEvent.change(input, { target: { files: [new File(['x'], 'cv.pdf', { type: 'application/pdf' })] } });
     expect(await screen.findByText(/Ready: cv\.pdf/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Find my jobs' })).toBeEnabled();
+  });
+});
+
+describe('O8 add-resume tip (/jobs dock, no resume)', () => {
+  const UI = '/api/v1/roboapply/ui-state';
+  /** The page view usePathname reports in this file. */
+  const VIEW = '/onboarding/situation';
+  const finished = state({ stage: 'done', nextRoute: null, completed: true, progress: { total: 5, stepsLeft: 0, leftEarly: null } });
+  // Skipped the resume, then closed onboarding at the last screen: "Finish setting up" leads back to confirm, not the resume.
+  const leftAtConfirm = state({
+    stage: 'confirm',
+    nextRoute: '/onboarding/confirm',
+    answers: { skipped: ['resume'] },
+    progress: { total: 5, stepsLeft: 1, leftEarly: { at: '2026-10-20T08:00:00.000Z', stage: 'confirm' } },
+  });
+  type Row = { tours: Record<string, string>; dismissals: Record<string, { count: number; at: string }> };
+
+  /** Fetch routes; GET ui-state returns what PATCH last stored, as the server would. The score tip is seen unless `tours` says otherwise. */
+  function dockRoutes(onboarding: unknown, over: Partial<Row> = {}) {
+    let row: Row = { tours: { 'onboarding.scoreTip': 'x' }, dismissals: {}, ...over };
+    const body = () => ({ state: { ...row, popupLastShownAt: null, announcementsSeen: [], values: {} }, lastFeedVisitAt: null, updatedAt: null });
+    return {
+      [`GET ${P}/state`]: () => ok(onboarding),
+      [`GET ${UI}`]: () => ok(body()),
+      [`PATCH ${UI}`]: (c: RecordedCall) => {
+        for (const key of (c.body as { dismiss?: string[] }).dismiss ?? []) {
+          row = { ...row, dismissals: { ...row.dismissals, [key]: { count: (row.dismissals[key]?.count ?? 0) + 1, at: 'x' } } };
+        }
+        return ok(body());
+      },
+      'GET /api/v1/roboapply/feed/skills-check': () => ok({ skills: [] }),
+    };
+  }
+
+  /** A real popup gate for a new page view (no 24 h stamp yet) that records every key that asks. */
+  function freshGate() {
+    const persist = vi.fn();
+    const gate = createPopupGate({ now: () => Date.now(), loadLocal: () => null, saveLocal: () => undefined, persist, schedule: (fn, ms) => void setTimeout(fn, ms), arbitrationMs: 0 });
+    const asked: string[] = [];
+    const request = gate.request;
+    gate.request = (key, priority, options) => {
+      asked.push(key);
+      return request(key, priority, options);
+    };
+    __setPopupGate(gate);
+    return { gate, asked, persist };
+  }
+
+  /** Let pending fetches and gate decisions land before asserting that something did NOT show. */
+  const settle = () => act(() => new Promise<void>((r) => setTimeout(r, 30)));
+
+  afterEach(() => __setPopupGate(null));
+
+  it('a finished user with no resume gets one plain tip that links to the resume page; "No thanks" is kept server-side', async () => {
+    const { persist } = freshGate();
+    const net = installFetch(dockRoutes(finished));
+    const first = renderWith(<OnboardingPromptDock />);
+    const tip = await screen.findByTestId('tip-add-resume');
+    expect(within(tip).getByText('Add your resume')).toBeInTheDocument();
+    expect(within(tip).getByText('We compare it with each job and use it to write tailored resumes and cover letters.')).toBeInTheDocument();
+    expect(within(tip).getByRole('link', { name: 'Add a resume' })).toHaveAttribute('href', '/resume');
+    // Like every tip, it spends the shared 24 h popup budget: at most one unprompted prompt a day.
+    expect(persist).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(tip).getByRole('button', { name: 'No thanks' }));
+    await waitFor(() => expect(net.to('PATCH', UI).map((c) => c.body)).toEqual([{ dismiss: ['onboarding.addResumeTip'] }]));
+    expect(screen.queryByTestId('tip-add-resume')).toBeNull();
+    first.unmount();
+
+    // A later visit (any device): the dismissal comes back from the server and the tips go on without it.
+    freshGate();
+    renderWith(<OnboardingPromptDock />);
+    expect(await screen.findByText('Checklist card')).toBeInTheDocument();
+    expect(screen.queryByTestId('tip-add-resume')).toBeNull();
+  });
+
+  it('comes after the score tip', async () => {
+    freshGate();
+    installFetch(dockRoutes(finished, { tours: {} }));
+    renderWith(<OnboardingPromptDock />);
+    expect(await screen.findByTestId('tip-score')).toBeInTheDocument();
+    expect(screen.queryByTestId('tip-add-resume')).toBeNull();
+  });
+
+  it('never shows to someone with a resume', async () => {
+    resumes.list = [{ id: 'rv1', name: 'Main' }];
+    const { asked } = freshGate();
+    installFetch(dockRoutes(finished));
+    renderWith(<OnboardingPromptDock />);
+    expect(await screen.findByText('Checklist card')).toBeInTheDocument();
+    expect(asked).not.toContain('onboarding:addResume');
+  });
+
+  it('goes away as soon as a resume exists, without recording a "no"', async () => {
+    freshGate();
+    const net = installFetch(dockRoutes(finished));
+    const view = renderWith(<OnboardingPromptDock />);
+    expect(await screen.findByTestId('tip-add-resume')).toBeInTheDocument();
+    // Added meanwhile (the upload mutations refresh the shared list).
+    resumes.list = [{ id: 'rv1', name: 'Main' }];
+    view.rerender(<OnboardingPromptDock />);
+    await waitFor(() => expect(screen.queryByTestId('tip-add-resume')).toBeNull());
+    expect(net.to('PATCH', UI)).toEqual([]);
+  });
+
+  it('trusts a cached list only once this page view has fetched it; meanwhile no later tip takes its turn', async () => {
+    // A stale cached list from before a resume was added somewhere else.
+    resumes.query = { isStale: true, isFetchedAfterMount: false };
+    const { asked } = freshGate();
+    const net = installFetch(dockRoutes(finished));
+    const view = renderWith(<OnboardingPromptDock />);
+    await waitFor(() => expect(net.to('GET', UI)).toHaveLength(1));
+    await settle();
+    expect(asked).toEqual([]);
+    expect(screen.queryByTestId('tip-add-resume')).toBeNull();
+    // This view's fetch lands: there is a resume after all.
+    resumes.list = [{ id: 'rv1', name: 'Main' }];
+    resumes.query = { isStale: false, isFetchedAfterMount: true };
+    view.rerender(<OnboardingPromptDock />);
+    expect(await screen.findByText('Checklist card')).toBeInTheDocument();
+    expect(asked).toEqual(['onboarding:checklist']);
+  });
+
+  it('a resume list that cannot be loaded shows no tip, and the tips after it go on', async () => {
+    resumes.query = { data: undefined, isError: true };
+    freshGate();
+    installFetch(dockRoutes(finished));
+    renderWith(<OnboardingPromptDock />);
+    expect(await screen.findByText('Checklist card')).toBeInTheDocument();
+    expect(screen.queryByTestId('tip-add-resume')).toBeNull();
+  });
+
+  it('never two prompts at once: while another prompt has this page view, it waits for the next one', async () => {
+    const { gate, asked } = freshGate();
+    gate.notePageView(VIEW);
+    expect(await gate.request('announcement:1', 'announcement')).toBe(true);
+    installFetch(dockRoutes(finished));
+    renderWith(<OnboardingPromptDock />);
+    await waitFor(() => expect(asked).toContain('onboarding:addResume'));
+    await settle();
+    expect(screen.queryByTestId('tip-add-resume')).toBeNull();
+    expect(gate.snapshot().shownThisView).toBe('announcement:1');
+  });
+
+  it('a user who left early gets "Finish setting up" first; the tip comes only once the banner is no longer due', async () => {
+    const { asked } = freshGate();
+    const net = installFetch(dockRoutes(leftAtConfirm));
+    const first = renderWith(<OnboardingPromptDock />);
+    expect(await screen.findByText('Finish setting up — 1 step left')).toBeInTheDocument();
+    expect(screen.queryByTestId('tip-add-resume')).toBeNull();
+    expect(asked).toEqual([FINISH_BANNER_POPUP_KEY]);
+    // Hidden for now: the banner had this page view, so the tip does not replace it.
+    fireEvent.click(screen.getByRole('button', { name: 'Hide for now' }));
+    await waitFor(() => expect(net.to('PATCH', UI).map((c) => c.body)).toEqual([{ dismiss: ['onboarding.finishBanner'] }]));
+    await settle();
+    expect(screen.queryByTestId('finish-banner')).toBeNull();
+    expect(screen.queryByTestId('tip-add-resume')).toBeNull();
+    first.unmount();
+
+    // Dismissed twice, the banner is a line in Settings: now the tip shows, and its close button is the same "no".
+    freshGate();
+    const later = installFetch(dockRoutes(leftAtConfirm, { dismissals: { 'onboarding.finishBanner': { count: 2, at: 'x' } } }));
+    renderWith(<OnboardingPromptDock />);
+    const tip = await screen.findByTestId('tip-add-resume');
+    expect(screen.queryByTestId('finish-banner')).toBeNull();
+    fireEvent.click(within(tip).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(later.to('PATCH', UI).map((c) => c.body)).toEqual([{ dismiss: ['onboarding.addResumeTip'] }]));
   });
 });

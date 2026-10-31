@@ -12,9 +12,14 @@
 //      sit under it (PRODUCT O8, never two prompts at once).
 //   2. Otherwise, inline tips in order, each through lib/ui/popupGate.ts (one
 //      per page view, 24 h budget; the checklist too) and each shown once:
-//        score tip → resume-check banner (only with a finished check) →
+//        score tip → add-resume tip (only with no resume) →
+//        resume-check banner (only with a finished check) →
 //        skills check (only when the feed has skills to ask about) →
 //        getting-started checklist (WP-23's card).
+//      The add-resume tip is for anyone who skipped the resume (or deleted
+//      every one): it hides as soon as a resume exists, a dismissal hides it
+//      for good, and a user who left early gets it too once the finish banner
+//      is no longer due (the banner always comes first).
 //      The feed-rating card after 10 cards is the feed's (WP-33).
 //
 // Nothing here invents numbers: "k things to fix" is the finished check's
@@ -26,6 +31,7 @@ import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useOnboardingState } from '../../../hooks/onboarding/useOnboarding';
+import { useResumeList } from '../../../hooks/useResumes';
 import { getSkillsCheck } from '../../../lib/api/feed';
 import { getProfile, putSkills } from '../../../lib/api/profile';
 import { getLatestGrade } from '../../../lib/api/resumes';
@@ -106,7 +112,7 @@ function TipCard({ title, children, onClose, testId }: { title?: string; childre
   );
 }
 
-type TipKind = 'score' | 'resume' | 'skills' | 'checklist';
+type TipKind = 'score' | 'addResume' | 'resume' | 'skills' | 'checklist';
 
 /** The finish banner's key at the popup gate. */
 export const FINISH_BANNER_POPUP_KEY = 'onboarding:finishBanner';
@@ -117,6 +123,9 @@ export function OnboardingPromptDock() {
   const onboarding = useOnboardingState();
   const ui = useUiState(true);
   const write = useUiWrite();
+  const resumeList = useResumeList();
+  // A cached list counts only if it was still fresh when the page opened; otherwise this view's fetch decides.
+  const [resumesFreshAtMount] = useState(() => !!resumeList.data && !resumeList.isStale);
   const [closed, setClosed] = useState<Set<string>>(new Set());
 
   const state = onboarding.data;
@@ -147,14 +156,27 @@ export function OnboardingPromptDock() {
   const uiSettled = !!ui.data || ui.isError;
   const showBanner = uiSettled && !!leftEarly && state!.progress.stepsLeft > 0 && bannerCount < FINISH_BANNER_MAX_DISMISSALS && !closed.has('banner');
 
+  // GET /v2/resumes lists live variants only. A list that failed to load never shows the tip:
+  // a cached one may predate a resume added since.
+  const addResumeDismissed = !!dismissals[UI_KEYS.addResumeTip];
+  const resumesKnown = !!resumeList.data && !resumeList.isError && (resumesFreshAtMount || resumeList.isFetchedAfterMount);
+  const addResumeDue = !addResumeDismissed && resumesKnown && resumeList.data?.resumes.length === 0;
+  const resumesPending = !addResumeDismissed && !resumesKnown && !resumeList.isError;
+
   const doneGrade = grade.data?.grade && grade.data.grade.status === 'done' ? grade.data.grade : null;
   const skillRows = skills.data?.skills ?? [];
   let tip: TipKind | null = null;
   if (state?.completed && ui.data) {
     if (!tours[UI_KEYS.scoreTip]) tip = 'score';
+    // While the resume list loads nothing later asks: the add-resume tip must not lose its turn.
+    else if (resumesPending) tip = null;
+    else if (addResumeDue) tip = 'addResume';
     else if (doneGrade && !tours[UI_KEYS.resumeCheckBanner]) tip = 'resume';
     else if (skillRows.length && !tours[UI_KEYS.skillsCheck]) tip = 'skills';
     else tip = 'checklist';
+  } else if (leftEarly && ui.data && addResumeDue) {
+    // Left early: while the finish banner is due it has the page view and no tip asks; after it, this is the only tip.
+    tip = 'addResume';
   }
   if (tip && closed.has(tip)) tip = null;
 
@@ -195,6 +217,26 @@ export function OnboardingPromptDock() {
         <div className={styles.dockActions}>
           <Btn type="button" onClick={() => close(UI_KEYS.scoreTip)} className={styles.touch}>
             {t('dismiss')}
+          </Btn>
+        </div>
+      </TipCard>
+    );
+  }
+  if (tip === 'addResume') {
+    // Closing it is a dismissal (the user said no), kept server-side: it never comes back, on any device.
+    const dismissAddResume = () => {
+      setClosed(new Set([...closed, 'addResume']));
+      write.mutate({ dismissed: UI_KEYS.addResumeTip });
+    };
+    return (
+      <TipCard title={t('addResumeTitle')} onClose={dismissAddResume} testId="tip-add-resume">
+        <p className={styles.dockText}>{t('addResumeBody')}</p>
+        <div className={styles.dockActions}>
+          <Link className={`btn primary ${styles.touch}`} href="/resume">
+            {t('addResumeAction')}
+          </Link>
+          <Btn type="button" variant="ghost" onClick={dismissAddResume} className={styles.touch}>
+            {t('addResumeDismiss')}
           </Btn>
         </div>
       </TipCard>

@@ -10438,6 +10438,10 @@
       "title": "当前在招职位"
     },
     "tips": {
+      "addResumeAction": "添加简历",
+      "addResumeBody": "我们会把它和每个职位比对，也会用它来写定制简历和求职信。",
+      "addResumeDismiss": "不用了",
+      "addResumeTitle": "添加你的简历",
       "close": "关闭",
       "dismiss": "知道了",
       "resumeCheck": "{count, plural, =0 {你的简历体检已完成。} other {你的简历体检已完成：有 # 处需要修改。}}",

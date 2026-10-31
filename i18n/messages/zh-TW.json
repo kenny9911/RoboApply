@@ -8643,6 +8643,10 @@
       "title": "目前招募中的職缺"
     },
     "tips": {
+      "addResumeAction": "新增履歷",
+      "addResumeBody": "我們會拿它和每個職缺比對，也會用它來寫為職缺調整的履歷和求職信。",
+      "addResumeDismiss": "不用了",
+      "addResumeTitle": "新增你的履歷",
       "close": "關閉",
       "dismiss": "知道了",
       "resumeCheck": "{count, plural, =0 {你的履歷檢查結果出來了。} one {你的履歷檢查結果出來了：有 # 處需要修改。} other {你的履歷檢查結果出來了：有 # 處需要修改。}}",

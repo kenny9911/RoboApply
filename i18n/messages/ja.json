@@ -8643,6 +8643,10 @@
       "title": "現在募集中の求人"
     },
     "tips": {
+      "addResumeAction": "履歴書を追加",
+      "addResumeBody": "追加した履歴書を各求人と比較し、求人ごとに合わせた履歴書やカバーレターの作成にも使います。",
+      "addResumeDismiss": "いいえ、結構です",
+      "addResumeTitle": "履歴書を追加してください",
       "close": "閉じる",
       "dismiss": "わかりました",
       "resumeCheck": "{count, plural, =0 {履歴書の点検結果が出ました。} other {履歴書の点検結果が出ました：直すところが#件あります。}}",

@@ -9791,6 +9791,10 @@
       "title": "지금 채용 중인 공고"
     },
     "tips": {
+      "addResumeAction": "이력서 추가",
+      "addResumeBody": "이력서를 공고마다 비교하고, 공고에 맞춘 이력서와 자기소개서를 쓰는 데도 사용해요.",
+      "addResumeDismiss": "괜찮아요",
+      "addResumeTitle": "이력서를 추가해 주세요",
       "close": "닫기",
       "dismiss": "확인",
       "resumeCheck": "{count, plural, =0 {이력서 점검 결과가 준비됐어요.} other {이력서 점검 결과가 준비됐어요. 고칠 곳이 #곳 있어요.}}",
