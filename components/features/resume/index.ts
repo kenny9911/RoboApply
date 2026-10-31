@@ -1,5 +1,6 @@
 // components/features/resume — resume check UI (WP-22), the keyword check,
-// hub/layout (WP-36b) and the builder, editor tools and tour (WP-65).
+// hub/layout (WP-36b) and the builder, editor tools and tour (WP-65). The
+// /resume hub's cards, AI tailoring and "Up next" are in ./hub.
 // Cross-area imports go through this file (TASK_PLAN.md §2.1 rule 4).
 
 export { ResumeCheckReport, Comparison, editorHrefFor, type ResumeCheckReportProps } from './ResumeCheckReport';
@@ -13,15 +14,34 @@ export { LayoutPanel, type LayoutPanelProps } from './LayoutPanel';
 export {
   ResumeHubTabs,
   BaseSlots,
-  ResumeHubMeta,
   TailoredVersions,
   groupTailored,
   isBaseSlot,
+  verifyDetailsHref,
   type HubTab,
-  type ResumeHubMetaProps,
   type TailoredGroup,
   type TailoredVersionsProps,
 } from './ResumeHub';
+// The /resume hub: AI tailoring, "Up next", the library cards, ways to start.
+export {
+  AskAssistant,
+  LibraryCard,
+  NewResumeTile,
+  NextSteps,
+  ResumeStart,
+  ResumeThumb,
+  TailorPanel,
+  TargetTitleField,
+  CheckStatus,
+  checkStateOf,
+  mainResumeOf,
+  nextSteps,
+  sortBases,
+  untailoredJobs,
+  type CheckState,
+  type NextStep,
+  type StartMethod,
+} from './hub';
 export {
   TEMPLATES,
   RECOMMENDED_TEMPLATE,

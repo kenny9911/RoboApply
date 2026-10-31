@@ -3,7 +3,9 @@
 // `getVariantFit` (MARKET_STRATEGY §2.2; MKT-2F item 3). The Resumes hub, the
 // Settings resume picker and the editor's quick-score meter used to print the
 // stored copy (`matchScoreCached`): no label, no kind, no date, frozen at the
-// last model call. The editor even fell back to the literal 72 (D3).
+// last model call. The editor even fell back to the literal 72 (D3). The hub
+// now lists tailored versions per job and base resumes as library cards;
+// neither prints it.
 
 import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
@@ -13,8 +15,22 @@ import type { RAResumeVariantSummary } from '../../../lib/api/v2/types';
 import type { RAPreferences } from '../../../lib/api/v2';
 
 vi.mock('../../features/resume', () => ({ ResumeCheckEntry: () => null }));
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+// No check yet and the preview still loading: the card shows only what the list row holds.
+vi.mock('../../../hooks/resume/useResumeCheck', () => ({ useLatestResumeCheck: () => ({ data: undefined, isLoading: true, isError: false }) }));
+vi.mock('../../../hooks/useResumes', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../hooks/useResumes')>()),
+  useResume: () => ({ data: undefined, isLoading: true, isError: false }),
+}));
 
-import { ResumeCard } from './ResumeCard';
+import { TailoredVersions } from '../../features/resume/ResumeHub';
+import { LibraryCard } from '../../features/resume/hub/LibraryCard';
 import { ResumeSection } from '../preferences/sections/ResumeSection';
 import { EditorToolbar } from '../resume-editor/EditorToolbar';
 
@@ -36,12 +52,21 @@ const tailored = (over: Partial<RAResumeVariantSummary> = {}): RAResumeVariantSu
   }) as RAResumeVariantSummary;
 
 describe('a stored variant fit is not printed outside tailoring', () => {
-  it('the Resumes hub card of a tailored version names the job and the edit time, and no number', () => {
-    const { container } = renderWithProviders(<ResumeCard resume={tailored()} version="v2" editedLabel="Edited today" baseLabel="Main" onOpen={() => {}} />);
-    expect(screen.getByText(/Acme · Platform Engineer/)).toBeInTheDocument();
-    expect(screen.getByText('Edited today')).toBeInTheDocument();
+  it('the Resumes hub lists a tailored version by its job and edit time, and no number', () => {
+    const { container } = renderWithProviders(<TailoredVersions resumes={[tailored()]} baseNames={new Map()} formatDate={() => 'Oct 1, 2026'} />);
+    expect(screen.getByRole('heading', { name: 'Acme · Platform Engineer' })).toBeInTheDocument();
+    expect(screen.getByText(/Edited Oct 1, 2026/)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/91|\/100/);
-    expect(container.querySelector('.rb-card-score')).toBeNull();
+  });
+
+  it('a library card of a base resume prints no stored fit either', () => {
+    const base = tailored({ id: 'rv_b', name: 'Main', kind: 'base', targetJobId: null, targetJobCompany: null, targetJobTitle: null, matchScoreCached: 77 });
+    const { container } = renderWithProviders(
+      <LibraryCard resume={base} editedLabel="Edited today" sourceLabel={null} tailoredCount={0} onMakePrimary={() => {}} onSaveTargetTitle={async () => {}} onDelete={() => {}} />,
+    );
+    expect(screen.getByRole('link', { name: 'Main' })).toHaveAttribute('href', '/resume/rv_b');
+    expect(screen.getByText('Edited today')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/77|\/100/);
   });
 
   it('the Settings resume picker names the target company and no number', () => {

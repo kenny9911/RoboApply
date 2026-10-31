@@ -41,7 +41,7 @@ This applies Ashby's operational structure without letting its enterprise inform
 | Authentication | `components/auth/AuthShell.tsx`, `/login`, `/signup` | Brand continuity, readable inputs, single clear form action, compact supporting story. |
 | Product shell | `components/v3/shell/*` | Navigation rhythm, active state, readable utility controls, desktop/mobile consistency. |
 | Jobs | `/jobs`, `MatchFeed`, `MatchCard`, `JobDetailModal` | Company and role first, compensation/work/location facts together, evidence in a distinct area, reliable loading and empty states. |
-| Resume library | `/resume`, `ResumeCard`, `CreateCard` | One primary creation route, recognizable document previews, clear version and edit state. |
+| Resume library | `/resume`, `components/features/resume/hub` (`TailorPanel`, `NextSteps`, `LibraryCard`, `NewResumeTile`, `ResumeStart`) | AI tailoring and what needs attention first, the resume itself as each preview with its latest check, clear version and edit state. |
 | Resume editor | `/resume/[id]`, `components/v3/resume-editor/*` | Document remains primary; tools and evaluation have clear hierarchy; issues navigate to the relevant content. |
 | Applications | `/applications`, `components/v3/pipeline/*` | Stage and upcoming action readable at a glance; prioritize actual follow-ups and deadlines over decorative metrics. |
 | Interview preparation | `/practice`, `/practice/[id]`, `/practice/[id]/report`, `components/v3/mock/*` | Clear setup sequence, confident live session controls, results that connect evidence to practice actions. |

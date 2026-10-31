@@ -40,24 +40,7 @@
   outline-offset: 2px;
 }
 
-/* ── Section heads, slots ─────────────────────────────────────────────── */
-.sectionHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-2);
-  margin: var(--sp-6) 0 var(--sp-3);
-}
-
-.sectionTitle {
-  margin: 0;
-  font-size: var(--fs-subtitle);
-  line-height: var(--lh-subtitle);
-  font-weight: 600;
-  color: var(--text);
-}
-
+/* ── Slots ─────────────────────────────────────────────────────────── */
 .slots {
   margin: 0;
   font-size: var(--fs-meta);
@@ -70,17 +53,6 @@
   font-weight: 600;
 }
 
-.notice {
-  margin: 0 0 var(--sp-4);
-  padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  font-size: var(--fs-meta);
-  line-height: var(--lh-meta);
-  color: var(--text-2);
-}
-
 .muted {
   margin: 0;
   font-size: var(--fs-meta);
@@ -88,88 +60,9 @@
   color: var(--text-muted);
 }
 
-/* ── Card meta: primary + target title ────────────────────────────────── */
-.cardStack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-
-.meta {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  padding: var(--sp-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-
-.metaRow {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-height: 32px;
-}
-
-.primaryBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--sp-1) var(--sp-2);
-  border-radius: var(--r-pill);
-  background: var(--action-subtle);
-  color: var(--action);
-  font-size: var(--fs-label);
-  font-weight: 600;
-}
-
-.linkButton {
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--action);
-  font: inherit;
-  font-size: var(--fs-meta);
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-}
-
-.linkButton:disabled {
-  color: var(--text-muted);
-  cursor: default;
-}
-
-.linkButton:focus-visible,
-.targetInput:focus-visible,
 .select:focus-visible {
   outline: 2px solid var(--action);
   outline-offset: 2px;
-}
-
-.targetLabel {
-  font-size: var(--fs-label);
-  font-weight: 600;
-  color: var(--text-2);
-}
-
-.targetInput {
-  min-height: 44px;
-  padding: 0 var(--sp-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--fs-meta);
-}
-
-.targetStatus {
-  min-height: 16px;
-  font-size: var(--fs-label);
-  color: var(--text-muted);
 }
 
 /* ── Tailored versions ────────────────────────────────────────────────── */
@@ -181,47 +74,56 @@
 }
 
 .tailoredList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
   gap: var(--sp-3);
 }
 
 .tailoredGroup {
-  padding: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
   border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-md);
   background: var(--surface);
 }
 
 .tailoredJob {
-  margin: 0 0 var(--sp-2);
+  margin: 0 0 var(--sp-1);
   font-size: var(--fs-body);
-  line-height: var(--lh-body);
+  line-height: var(--lh-meta);
   font-weight: 600;
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .versionRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: var(--sp-1) var(--sp-3);
   padding: var(--sp-2) 0;
-  border-top: 1px solid var(--rule-soft);
+  border-top: 1px solid var(--rule);
 }
 
 .versionRow:first-child {
   border-top: 0;
 }
 
+.versionMain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .versionLink {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: 32px;
   color: var(--action);
-  font-size: var(--fs-body);
-  font-weight: 500;
+  font-size: var(--fs-meta);
+  font-weight: 600;
   text-decoration: none;
+  overflow-wrap: anywhere;
 }
 
 .versionLink:hover {
@@ -247,18 +149,30 @@
 .verifyLink {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
-  padding: 0 var(--sp-1);
-  color: var(--action);
+  min-height: 36px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--action);
+  color: var(--action-ink);
   font-size: var(--fs-meta);
   font-weight: 600;
-  text-decoration: underline;
+  text-decoration: none;
+}
+
+.verifyLink:hover {
+  background: var(--action-hover);
 }
 
 .verifyLink:focus-visible {
   outline: none;
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-focus);
+  box-shadow: var(--focus-ring);
+}
+
+@media (max-width: 760px) {
+  .versionLink,
+  .verifyLink {
+    min-height: 44px;
+  }
 }
 
 /* ── Layout panel ─────────────────────────────────────────────────────── */

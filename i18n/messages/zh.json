@@ -425,27 +425,12 @@
     "title_lead": "写出",
     "title_accent": "你自己也想录用",
     "title_after": "的简历。",
-    "subtitle": "从空白开始写、上传你现有的那份，或者从 LinkedIn 导入。然后为每一个想要的职位定制一份专用的。",
+    "subtitle": "留一份过硬的主简历，先做检查，再为每个想申请的职位定制一个版本。",
     "common": {
       "cancel": "取消",
       "close": "关闭"
     },
     "create": {
-      "scratch": {
-        "title": "从空白开始",
-        "desc": "干净的模板，每一行都有提示。刚开始工作的人最适合。",
-        "meta": "大约 10 分钟"
-      },
-      "file": {
-        "title": "上传简历",
-        "desc": "拖一个 PDF 或 DOCX 进来。系统会读取、整理，并标出写得弱的地方。",
-        "meta": "PDF · DOCX · Apple Pages"
-      },
-      "linkedin": {
-        "title": "从 LinkedIn 导入",
-        "desc": "把 LinkedIn 个人主页存成 PDF 再拖进来。同样会读取和标注。",
-        "meta": "先存成 PDF，再上传"
-      },
       "default_name": {
         "scratch": "未命名草稿",
         "file": "上传的简历",
@@ -456,15 +441,7 @@
       "title": "你的简历"
     },
     "card": {
-      "base": "主简历 —— 没有为某个职位定制",
-      "edited": "修改于 {when}",
-      "delete": "删除简历",
-      "versions_used": "已用 {used} / {cap} 个版本",
-      "tailored_stamp": "已定制"
-    },
-    "tip": {
-      "label": "如果你刚开始工作",
-      "body": "工作经验少不是问题。课程作业、黑客松、接过的私活和个人项目都能写成真正的经历。每一行都可以用“改写校园和实习经历”。"
+      "edited": "修改于 {when}"
     },
     "empty": {
       "title_lead": "还没有",
@@ -766,7 +743,8 @@
       "cancel": "取消",
       "confirm": "删除简历",
       "confirming": "删除中…",
-      "error": "这份简历没有删除成功。请重试。"
+      "error": "这份简历没有删除成功。请重试。",
+      "in_use": "你有已保存的职位时，不能删除唯一的一份简历。请先添加另一份简历，再删除这一份。"
     },
     "extra": {
       "hint": "从你原来的简历里保留下来的 —— 可以当作纯文本编辑",
@@ -835,7 +813,8 @@
       },
       "primary": {
         "badge": "主简历",
-        "make": "设为主简历"
+        "make": "设为主简历",
+        "make_aria": "把 {name} 设为主简历"
       },
       "slots": {
         "full": "简历数量已满",
@@ -864,7 +843,100 @@
         "label": "你的目标职位名称",
         "placeholder": "例如：产品经理",
         "saved": "已保存",
-        "saving": "保存中…"
+        "saving": "保存中…",
+        "add": "添加你的目标职位名称",
+        "edit_aria": "修改你的目标职位名称：{title}"
+      },
+      "card": {
+        "open": "编辑",
+        "open_aria": "编辑 {name}",
+        "tailor": "定制",
+        "tailor_aria": "为某个职位定制 {name}",
+        "delete_aria": "删除 {name}",
+        "tailored_count": "{count, plural, other {# 个针对具体职位的版本}}",
+        "source": {
+          "upload": "上传的文件",
+          "linkedin": "来自 LinkedIn",
+          "template": "来自模板",
+          "scratch": "在这里创建"
+        }
+      },
+      "check": {
+        "none": "还没检查过",
+        "run": "开始检查",
+        "run_aria": "检查 {name}",
+        "open": "查看检查结果",
+        "open_aria": "查看 {name} 的检查结果",
+        "again_aria": "重新检查 {name}",
+        "running": "正在检查…"
+      },
+      "studio": {
+        "eyebrow": "AI 定制",
+        "title": "为你想申请的下一个职位定制一个版本",
+        "body": "选一个已保存的职位，或粘贴职位描述。AI 会改写一份简历副本来贴合它，你的原简历保持不变。",
+        "honesty": "每个新增的关键词、数字或表述，都要等你确认后才能下载这份副本。",
+        "base": "基于",
+        "base_one": "基于 <b>{name}</b>",
+        "saved": "还没有定制版本的已保存职位",
+        "job_aria": "为 {title} 定制一个版本",
+        "job_aria_company": "为 {company} 的 {title} 定制一个版本",
+        "more": "{count, plural, other {还有 # 个已保存的职位}}",
+        "ask": "问问求职助手",
+        "prompts": {
+          "fix_first": "我的简历最应该先改哪里？",
+          "summary": "把我的个人简介改得更有说服力，贴合我想要的职位。",
+          "lead": "我的简历应该把哪段经历放在最前面？"
+        }
+      },
+      "next": {
+        "title": "接下来",
+        "empty": "眼下没有需要你处理的事。",
+        "loading": "正在加载接下来要做的事",
+        "verify_detail": "{name} · 每一处都核对完后才能下载",
+        "check_none": "检查你的主简历",
+        "check_none_detail": "{name} · 看看先改哪里，每一条都附有原因",
+        "check_stale_detail": "{name} · 上次检查之后你又改过",
+        "check_failed_detail": "{name} · 到检查页面重新开始",
+        "check_running_detail": "{name} · 最多需要 45 秒",
+        "fix_urgent": "{count, plural, other {# 个问题需要先改}}",
+        "fix_critical": "{count, plural, other {# 个重要问题}}",
+        "fix_detail": "{name} · 每一个都附有修改方法"
+      },
+      "new": {
+        "title": "新建简历",
+        "hint": "选一种方式开始，或者把简历文件拖到这里。",
+        "upload": {
+          "title": "上传文件",
+          "desc": "PDF 或 Word。AI 会把它读成可以编辑的板块。"
+        },
+        "builder": {
+          "title": "引导式填写",
+          "desc": "一次一个板块，回答几个简短问题。适合写第一份简历。"
+        },
+        "template": {
+          "title": "从模板开始",
+          "desc": "简洁的版式，直接填写。"
+        },
+        "linkedin": {
+          "title": "LinkedIn PDF",
+          "desc": "你从 LinkedIn 保存为 PDF 的个人资料。"
+        },
+        "ai_help": "AI 帮写"
+      },
+      "start": {
+        "title": "从你现有的简历开始",
+        "body": "上传它，AI 会把它读成可以编辑的板块。还没有简历？引导式填写会问你几个简短问题，和你一起写出一份。",
+        "drop_title": "上传你的简历",
+        "drop_body": "把文件拖到这里，或者选择一个文件。AI 会把它读成各个板块，并标出写得弱的地方。",
+        "or": "其他开始方式",
+        "how": {
+          "read_title": "读取",
+          "read_body": "你的文件会变成可以编辑的板块。",
+          "check_title": "检查",
+          "check_body": "一份清单告诉你先改哪里、怎么改。",
+          "tailor_title": "定制",
+          "tailor_body": "每个职位一个版本。新增的关键词、数字和表述都要等你确认。"
+        }
       }
     },
     "layout": {

@@ -425,27 +425,12 @@
     "title_lead": "Write the resume ",
     "title_accent": "you would hire",
     "title_after": ".",
-    "subtitle": "Start from a blank page, upload the one you have, or import from LinkedIn. Then tailor a copy for each job you want.",
+    "subtitle": "Keep one strong main resume, check it, and tailor a version for each job you want.",
     "common": {
       "cancel": "Cancel",
       "close": "Close"
     },
     "create": {
-      "scratch": {
-        "title": "Start from scratch",
-        "desc": "A clean template with help on every line. Best if you are early in your career.",
-        "meta": "About 10 minutes"
-      },
-      "file": {
-        "title": "Upload a resume",
-        "desc": "Drop a PDF or DOCX. It gets read, structured, and the weak lines get flagged.",
-        "meta": "PDF · DOCX · Apple Pages"
-      },
-      "linkedin": {
-        "title": "Import from LinkedIn",
-        "desc": "Save your LinkedIn profile as a PDF and drop it in. Same read, same flags.",
-        "meta": "Save to PDF, then upload"
-      },
       "default_name": {
         "scratch": "Untitled draft",
         "file": "Uploaded resume",
@@ -456,15 +441,7 @@
       "title": "Your resumes"
     },
     "card": {
-      "base": "Main resume — not tailored to a job",
-      "edited": "Edited {when}",
-      "delete": "Delete resume",
-      "versions_used": "{used} of {cap} versions used",
-      "tailored_stamp": "Tailored"
-    },
-    "tip": {
-      "label": "If you are early in your career",
-      "body": "Little work experience is not a problem. Class projects, hackathons, freelance work, and side projects all turn into real bullets. Use Rewrite for school and intern work on every line."
+      "edited": "Edited {when}"
     },
     "empty": {
       "title_lead": "No resumes ",
@@ -766,7 +743,8 @@
       "cancel": "Cancel",
       "confirm": "Delete resume",
       "confirming": "Deleting…",
-      "error": "That resume could not be deleted. Try again."
+      "error": "That resume could not be deleted. Try again.",
+      "in_use": "You can't delete your only resume while you have saved jobs. Add another resume first, then delete this one."
     },
     "extra": {
       "hint": "Kept from your original resume — edit as plain text",
@@ -825,7 +803,8 @@
       },
       "primary": {
         "badge": "Primary",
-        "make": "Make primary"
+        "make": "Make primary",
+        "make_aria": "Make {name} your primary resume"
       },
       "target": {
         "label": "Job title you're aiming for",
@@ -833,7 +812,9 @@
         "saving": "Saving…",
         "saved": "Saved",
         "error": "Not saved. Try again.",
-        "for": "Aimed at {title}"
+        "for": "Aimed at {title}",
+        "add": "Add the job title you're aiming for",
+        "edit_aria": "Change the job title you're aiming for: {title}"
       },
       "tailored": {
         "title": "Versions for specific jobs",
@@ -850,6 +831,97 @@
         "storage_unavailable": "File storage isn't available right now. Try again later.",
         "upload_daily_limit": "You have uploaded {limit} resume files today, which is the daily limit. Try again tomorrow.",
         "ai_off": "Reading a resume file uses AI, which is off for your account. Turn on AI processing in Settings, or build your resume step by step instead."
+      },
+      "card": {
+        "open": "Edit",
+        "open_aria": "Edit {name}",
+        "tailor": "Tailor",
+        "tailor_aria": "Tailor {name} for a job",
+        "delete_aria": "Delete {name}",
+        "tailored_count": "{count, plural, one {1 version for a specific job} other {# versions for specific jobs}}",
+        "source": {
+          "upload": "Uploaded file",
+          "linkedin": "From LinkedIn",
+          "template": "From a template",
+          "scratch": "Built here"
+        }
+      },
+      "check": {
+        "none": "Not checked yet",
+        "run": "Run a check",
+        "run_aria": "Run a check on {name}",
+        "open": "See the check",
+        "open_aria": "See the check for {name}",
+        "again_aria": "Check {name} again",
+        "running": "Checking now…"
+      },
+      "studio": {
+        "eyebrow": "AI tailoring",
+        "title": "Make a version for the next job you want",
+        "body": "Pick a saved job or paste the posting. AI rewrites a copy of your resume to fit it; your original stays as it is.",
+        "honesty": "Every new keyword, number or claim waits for your OK before you can download the copy.",
+        "base": "Start from",
+        "base_one": "Starts from <b>{name}</b>",
+        "saved": "Saved jobs without a tailored version",
+        "job_aria": "Tailor a version for {title}",
+        "job_aria_company": "Tailor a version for {title} at {company}",
+        "more": "{count, plural, one {1 more saved job} other {# more saved jobs}}",
+        "ask": "Ask the Assistant",
+        "prompts": {
+          "fix_first": "What should I fix first in my resume?",
+          "summary": "Make my summary stronger for the job I want.",
+          "lead": "Which experience should my resume lead with?"
+        }
+      },
+      "next": {
+        "title": "Up next",
+        "empty": "Nothing needs your attention right now.",
+        "loading": "Loading what's next",
+        "verify_detail": "{name} · you can download it once each one is checked",
+        "check_none": "Check your main resume",
+        "check_none_detail": "{name} · see what to fix first, with a reason for each",
+        "check_stale_detail": "{name} · you changed it after the last check",
+        "check_failed_detail": "{name} · start it again from the check page",
+        "check_running_detail": "{name} · this can take up to 45 seconds",
+        "fix_urgent": "{count, plural, one {1 issue to fix first} other {# issues to fix first}}",
+        "fix_critical": "{count, plural, one {1 important issue} other {# important issues}}",
+        "fix_detail": "{name} · each one comes with a way to fix it"
+      },
+      "new": {
+        "title": "New resume",
+        "hint": "Pick a way to start, or drop a resume file here.",
+        "upload": {
+          "title": "Upload a file",
+          "desc": "PDF or Word. AI reads it into sections you can edit."
+        },
+        "builder": {
+          "title": "Guided builder",
+          "desc": "Short questions, one section at a time. Good for a first resume."
+        },
+        "template": {
+          "title": "Start from a template",
+          "desc": "A clean layout to fill in."
+        },
+        "linkedin": {
+          "title": "LinkedIn PDF",
+          "desc": "Your profile, saved as a PDF from LinkedIn."
+        },
+        "ai_help": "AI writing help"
+      },
+      "start": {
+        "title": "Start with the resume you have",
+        "body": "Upload it and AI reads it into sections you can edit. No resume yet? The guided builder asks short questions and builds one with you.",
+        "drop_title": "Upload your resume",
+        "drop_body": "Drop a file here or choose one. AI reads it into sections and flags the weak lines.",
+        "or": "Other ways to start",
+        "how": {
+          "read_title": "Read",
+          "read_body": "Your file becomes sections you can edit.",
+          "check_title": "Check",
+          "check_body": "A checklist shows what to fix first, and how.",
+          "tailor_title": "Tailor",
+          "tailor_body": "A version for each job. New keywords, numbers and claims wait for your OK."
+        }
       }
     },
     "layout": {

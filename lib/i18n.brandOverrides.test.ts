@@ -54,9 +54,10 @@ describe('GoApply brand copy overrides: loaded per brand × locale', () => {
     const robo = loadMessages('zh', 'roboapply');
     expect(at(go, 'onboarding.resume.linkedin.title')).toBe('导入已有的简历');
     expect(at(go, 'onboarding.resume.linkedin.choose')).toBe('上传简历 PDF');
+    // The resume hub's subtitle names no way in, so both brands share it.
     expect(at(go, 'resume.subtitle')).not.toMatch(/LinkedIn/);
+    expect(at(go, 'resume.subtitle')).toBe(at(read('i18n/messages/zh.json'), 'resume.subtitle'));
     expect(at(robo, 'onboarding.resume.linkedin.title')).toBe(at(read('i18n/messages/zh.json'), 'onboarding.resume.linkedin.title'));
-    expect(at(robo, 'resume.subtitle')).toMatch(/LinkedIn/);
   });
 
   it('GoApply: passes never renew, so no "cancelling takes one click", no "cancel a subscription", no visa or work-permit wording', () => {

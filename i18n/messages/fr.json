@@ -425,27 +425,12 @@
     "title_lead": "Écris le CV ",
     "title_accent": "que tu recruterais",
     "title_after": ".",
-    "subtitle": "Pars d’une page blanche, envoie celui que tu as, ou importe-le depuis LinkedIn. Ensuite, adapte une copie pour chaque offre qui t’intéresse.",
+    "subtitle": "Garde un CV principal solide, vérifie-le et adapte une version pour chaque offre qui t’intéresse.",
     "common": {
       "cancel": "Annuler",
       "close": "Fermer"
     },
     "create": {
-      "scratch": {
-        "title": "Partir de zéro",
-        "desc": "Un modèle net, avec de l’aide sur chaque ligne. Idéal si tu débutes ta carrière.",
-        "meta": "Environ 10 minutes"
-      },
-      "file": {
-        "title": "Envoyer un CV",
-        "desc": "Dépose un PDF ou un DOCX. Il est lu, structuré, et les lignes faibles sont signalées.",
-        "meta": "PDF · DOCX · Apple Pages"
-      },
-      "linkedin": {
-        "title": "Importer depuis LinkedIn",
-        "desc": "Enregistre ton profil LinkedIn en PDF et dépose-le ici. Même lecture, mêmes signalements.",
-        "meta": "Enregistrer en PDF, puis envoyer"
-      },
       "default_name": {
         "scratch": "Brouillon sans titre",
         "file": "CV envoyé",
@@ -456,15 +441,7 @@
       "title": "Tes CV"
     },
     "card": {
-      "base": "CV principal — non adapté à une offre",
-      "edited": "Modifié le {when}",
-      "delete": "Supprimer le CV",
-      "versions_used": "{used} versions sur {cap} utilisées",
-      "tailored_stamp": "Adapté"
-    },
-    "tip": {
-      "label": "Si tu débutes ta carrière",
-      "body": "Peu d’expérience professionnelle n’est pas un problème. Les projets de cours, les hackathons, les missions freelance et les projets personnels deviennent de vraies lignes. Utilise « Réécrire les études et les stages » sur chaque ligne."
+      "edited": "Modifié le {when}"
     },
     "empty": {
       "title_lead": "Pas encore de ",
@@ -766,7 +743,8 @@
       "cancel": "Annuler",
       "confirm": "Supprimer le CV",
       "confirming": "Suppression…",
-      "error": "Ce CV n’a pas pu être supprimé. Réessaie."
+      "error": "Ce CV n’a pas pu être supprimé. Réessaie.",
+      "in_use": "Tu ne peux pas supprimer ton seul CV tant que tu as des offres gardées. Ajoute d’abord un autre CV, puis supprime celui-ci."
     },
     "extra": {
       "hint": "Conservé de ton CV d’origine — modifiable en texte brut",
@@ -835,7 +813,8 @@
       },
       "primary": {
         "badge": "Principal",
-        "make": "Définir comme principal"
+        "make": "Définir comme principal",
+        "make_aria": "Définir {name} comme CV principal"
       },
       "slots": {
         "full": "Tous les emplacements sont utilisés",
@@ -864,7 +843,100 @@
         "label": "Intitulé du poste que tu vises",
         "placeholder": "Par exemple, Chef de produit",
         "saved": "Enregistré",
-        "saving": "Enregistrement…"
+        "saving": "Enregistrement…",
+        "add": "Ajoute l’intitulé du poste que tu vises",
+        "edit_aria": "Modifier l’intitulé du poste visé : {title}"
+      },
+      "card": {
+        "open": "Modifier",
+        "open_aria": "Modifier {name}",
+        "tailor": "Adapter",
+        "tailor_aria": "Adapter {name} à une offre",
+        "delete_aria": "Supprimer {name}",
+        "tailored_count": "{count, plural, one {1 version pour une offre précise} other {# versions pour des offres précises}}",
+        "source": {
+          "upload": "Fichier importé",
+          "linkedin": "Depuis LinkedIn",
+          "template": "Depuis un modèle",
+          "scratch": "Créé ici"
+        }
+      },
+      "check": {
+        "none": "Pas encore vérifié",
+        "run": "Lancer une vérification",
+        "run_aria": "Lancer une vérification de {name}",
+        "open": "Voir la vérification",
+        "open_aria": "Voir la vérification de {name}",
+        "again_aria": "Vérifier {name} à nouveau",
+        "running": "Vérification en cours…"
+      },
+      "studio": {
+        "eyebrow": "Adaptation par IA",
+        "title": "Crée une version pour la prochaine offre qui t’intéresse",
+        "body": "Choisis une offre gardée ou colle l’annonce. L’IA réécrit une copie de ton CV pour qu’elle corresponde ; ton original reste tel quel.",
+        "honesty": "Chaque mot-clé, chiffre ou affirmation ajouté attend ton accord avant que tu puisses télécharger la copie.",
+        "base": "Partir de",
+        "base_one": "À partir de <b>{name}</b>",
+        "saved": "Offres gardées sans version adaptée",
+        "job_aria": "Adapter une version pour {title}",
+        "job_aria_company": "Adapter une version pour {title} chez {company}",
+        "more": "{count, plural, one {1 autre offre gardée} other {# autres offres gardées}}",
+        "ask": "Poser une question à l’Assistant",
+        "prompts": {
+          "fix_first": "Que dois-je corriger en premier dans mon CV ?",
+          "summary": "Rends mon résumé plus percutant pour le poste que je vise.",
+          "lead": "Par quelle expérience mon CV devrait-il commencer ?"
+        }
+      },
+      "next": {
+        "title": "À faire ensuite",
+        "empty": "Rien ne demande ton attention pour l’instant.",
+        "loading": "Chargement de la suite",
+        "verify_detail": "{name} · tu pourras le télécharger une fois chaque détail vérifié",
+        "check_none": "Vérifie ton CV principal",
+        "check_none_detail": "{name} · vois quoi corriger en premier, avec la raison à chaque fois",
+        "check_stale_detail": "{name} · tu l’as modifié après la dernière vérification",
+        "check_failed_detail": "{name} · relance-la depuis la page de vérification",
+        "check_running_detail": "{name} · cela peut prendre jusqu’à 45 secondes",
+        "fix_urgent": "{count, plural, one {1 problème à corriger en premier} other {# problèmes à corriger en premier}}",
+        "fix_critical": "{count, plural, one {1 problème important} other {# problèmes importants}}",
+        "fix_detail": "{name} · chacun est accompagné d’une façon de le corriger"
+      },
+      "new": {
+        "title": "Nouveau CV",
+        "hint": "Choisis comment commencer, ou dépose un fichier de CV ici.",
+        "upload": {
+          "title": "Importer un fichier",
+          "desc": "PDF ou Word. L’IA le lit et le découpe en sections modifiables."
+        },
+        "builder": {
+          "title": "Création guidée",
+          "desc": "Des questions courtes, une section à la fois. Idéal pour un premier CV."
+        },
+        "template": {
+          "title": "Partir d’un modèle",
+          "desc": "Une mise en page sobre à remplir."
+        },
+        "linkedin": {
+          "title": "PDF LinkedIn",
+          "desc": "Ton profil, enregistré en PDF depuis LinkedIn."
+        },
+        "ai_help": "Aide à la rédaction par IA"
+      },
+      "start": {
+        "title": "Commence avec le CV que tu as",
+        "body": "Importe-le : l’IA le lit et le découpe en sections modifiables. Pas encore de CV ? La création guidée te pose des questions courtes et le construit avec toi.",
+        "drop_title": "Importe ton CV",
+        "drop_body": "Dépose un fichier ici ou choisis-en un. L’IA le lit par sections et signale les lignes faibles.",
+        "or": "Autres façons de commencer",
+        "how": {
+          "read_title": "Lire",
+          "read_body": "Ton fichier devient des sections modifiables.",
+          "check_title": "Vérifier",
+          "check_body": "Une liste montre quoi corriger en premier, et comment.",
+          "tailor_title": "Adapter",
+          "tailor_body": "Une version par offre. Les mots-clés, chiffres et affirmations ajoutés attendent ton accord."
+        }
       }
     },
     "layout": {

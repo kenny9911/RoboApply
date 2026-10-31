@@ -425,27 +425,12 @@
     "title_lead": "채용하고 싶어지는",
     "title_accent": "이력서",
     "title_after": "를 만들어요.",
-    "subtitle": "빈 문서에서 시작하거나, 지금 쓰는 이력서를 올리거나, LinkedIn에서 가져오세요. 그다음 공고마다 맞춘 사본을 만들 수 있어요.",
+    "subtitle": "탄탄한 기본 이력서를 하나 두고, 점검한 뒤 원하는 공고마다 맞춘 버전을 만들어요.",
     "common": {
       "cancel": "취소",
       "close": "닫기"
     },
     "create": {
-      "scratch": {
-        "title": "처음부터 쓰기",
-        "desc": "줄마다 도움말이 붙는 깔끔한 서식이에요. 경력이 짧을 때 좋아요.",
-        "meta": "약 10분"
-      },
-      "file": {
-        "title": "이력서 올리기",
-        "desc": "PDF나 DOCX를 놓아주세요. 읽어서 항목으로 정리하고 약한 줄에 표시해요.",
-        "meta": "PDF · DOCX · Apple Pages"
-      },
-      "linkedin": {
-        "title": "LinkedIn에서 가져오기",
-        "desc": "LinkedIn 프로필을 PDF로 저장해서 놓아주세요. 똑같이 읽고 표시해요.",
-        "meta": "PDF로 저장한 뒤 올리기"
-      },
       "default_name": {
         "scratch": "제목 없는 초안",
         "file": "올린 이력서",
@@ -456,15 +441,7 @@
       "title": "내 이력서"
     },
     "card": {
-      "base": "기본 이력서 — 특정 공고에 맞추지 않음",
-      "edited": "{when}에 수정",
-      "delete": "이력서 삭제",
-      "versions_used": "버전 {used} / {cap} 사용 중",
-      "tailored_stamp": "맞춤"
-    },
-    "tip": {
-      "label": "경력이 짧다면",
-      "body": "경력이 적어도 괜찮아요. 수업 과제, 해커톤, 프리랜스 작업, 개인 프로젝트 모두 실제 성과 줄이 돼요. 학교와 인턴 경험은 줄마다 ‘학교와 인턴 경험 다시 쓰기’를 써보세요."
+      "edited": "{when}에 수정"
     },
     "empty": {
       "title_lead": "아직 등록된",
@@ -766,7 +743,8 @@
       "cancel": "취소",
       "confirm": "이력서 삭제",
       "confirming": "삭제하는 중…",
-      "error": "이 이력서를 삭제하지 못했어요. 다시 시도해 주세요."
+      "error": "이 이력서를 삭제하지 못했어요. 다시 시도해 주세요.",
+      "in_use": "저장한 공고가 있는 동안에는 하나뿐인 이력서를 삭제할 수 없어요. 다른 이력서를 먼저 추가한 뒤 이 이력서를 삭제해 주세요."
     },
     "extra": {
       "hint": "원래 이력서에서 그대로 가져온 내용이에요 — 글로 고칠 수 있어요",
@@ -835,7 +813,8 @@
       },
       "primary": {
         "badge": "기본",
-        "make": "기본으로 설정"
+        "make": "기본으로 설정",
+        "make_aria": "{name}을(를) 기본 이력서로 설정"
       },
       "slots": {
         "full": "한도를 모두 사용했어요",
@@ -864,7 +843,100 @@
         "label": "목표로 하는 직무 이름",
         "placeholder": "예: 프로덕트 매니저",
         "saved": "저장됨",
-        "saving": "저장 중…"
+        "saving": "저장 중…",
+        "add": "목표로 하는 직무 이름 추가",
+        "edit_aria": "목표 직무 이름 바꾸기: {title}"
+      },
+      "card": {
+        "open": "편집",
+        "open_aria": "{name} 편집",
+        "tailor": "맞추기",
+        "tailor_aria": "{name}을(를) 공고에 맞추기",
+        "delete_aria": "{name} 삭제",
+        "tailored_count": "{count, plural, other {특정 공고용 버전 #개}}",
+        "source": {
+          "upload": "업로드한 파일",
+          "linkedin": "LinkedIn에서 가져옴",
+          "template": "템플릿에서 시작",
+          "scratch": "여기서 만듦"
+        }
+      },
+      "check": {
+        "none": "아직 점검하지 않았어요",
+        "run": "점검하기",
+        "run_aria": "{name} 점검하기",
+        "open": "점검 결과 보기",
+        "open_aria": "{name} 점검 결과 보기",
+        "again_aria": "{name} 다시 점검하기",
+        "running": "점검하는 중…"
+      },
+      "studio": {
+        "eyebrow": "AI 맞춤",
+        "title": "다음에 지원할 공고에 맞춘 버전 만들기",
+        "body": "저장한 공고를 고르거나 공고 내용을 붙여 넣으세요. AI가 이력서 사본을 공고에 맞게 다시 써요. 원본은 그대로예요.",
+        "honesty": "새로 들어간 키워드, 숫자, 내용은 모두 내가 확인해야 사본을 내려받을 수 있어요.",
+        "base": "기준 이력서",
+        "base_one": "기준 이력서: <b>{name}</b>",
+        "saved": "아직 맞춘 버전이 없는 저장한 공고",
+        "job_aria": "{title}에 맞춘 버전 만들기",
+        "job_aria_company": "{company} {title}에 맞춘 버전 만들기",
+        "more": "{count, plural, other {저장한 공고 #개 더}}",
+        "ask": "어시스턴트에게 물어보기",
+        "prompts": {
+          "fix_first": "내 이력서에서 가장 먼저 고칠 부분은 뭐예요?",
+          "summary": "원하는 직무에 맞게 요약을 더 설득력 있게 다듬어 주세요.",
+          "lead": "내 이력서는 어떤 경험을 맨 앞에 두는 게 좋을까요?"
+        }
+      },
+      "next": {
+        "title": "다음 할 일",
+        "empty": "지금 처리할 일은 없어요.",
+        "loading": "다음 할 일을 불러오는 중",
+        "verify_detail": "{name} · 모두 확인하면 내려받을 수 있어요",
+        "check_none": "기본 이력서 점검하기",
+        "check_none_detail": "{name} · 먼저 고칠 점을 이유와 함께 알려 줘요",
+        "check_stale_detail": "{name} · 마지막 점검 뒤에 수정했어요",
+        "check_failed_detail": "{name} · 점검 페이지에서 다시 시작해 주세요",
+        "check_running_detail": "{name} · 최대 45초 걸릴 수 있어요",
+        "fix_urgent": "{count, plural, other {먼저 고칠 문제 #개}}",
+        "fix_critical": "{count, plural, other {중요한 문제 #개}}",
+        "fix_detail": "{name} · 각각 고치는 방법이 함께 있어요"
+      },
+      "new": {
+        "title": "새 이력서",
+        "hint": "시작 방법을 고르거나, 이력서 파일을 여기에 놓아 주세요.",
+        "upload": {
+          "title": "파일 업로드",
+          "desc": "PDF 또는 Word. AI가 읽어서 편집할 수 있는 항목으로 나눠요."
+        },
+        "builder": {
+          "title": "단계별 작성",
+          "desc": "항목마다 짧은 질문에 답해요. 첫 이력서에 좋아요."
+        },
+        "template": {
+          "title": "템플릿으로 시작",
+          "desc": "깔끔한 레이아웃에 채워 넣기만 하면 돼요."
+        },
+        "linkedin": {
+          "title": "LinkedIn PDF",
+          "desc": "LinkedIn에서 PDF로 저장한 내 프로필."
+        },
+        "ai_help": "AI 작성 도움"
+      },
+      "start": {
+        "title": "지금 있는 이력서로 시작하기",
+        "body": "업로드하면 AI가 읽어서 편집할 수 있는 항목으로 나눠요. 아직 이력서가 없나요? 단계별 작성에서 짧은 질문에 답하며 함께 만들어요.",
+        "drop_title": "이력서 업로드",
+        "drop_body": "파일을 여기에 놓거나 선택하세요. AI가 항목별로 읽고 약한 줄에 표시해요.",
+        "or": "다른 시작 방법",
+        "how": {
+          "read_title": "읽기",
+          "read_body": "파일이 편집할 수 있는 항목이 돼요.",
+          "check_title": "점검",
+          "check_body": "무엇을 먼저, 어떻게 고칠지 체크리스트로 보여 줘요.",
+          "tailor_title": "맞추기",
+          "tailor_body": "공고마다 버전을 하나씩 만들어요. 새 키워드, 숫자, 내용은 내 확인을 기다려요."
+        }
       }
     },
     "layout": {

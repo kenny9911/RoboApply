@@ -9,6 +9,7 @@
 //   - Required input shows the resume name as placeholder.
 //   - "Delete" button is disabled until the user types the name exactly.
 //   - On confirm, calls `onConfirm()` and the parent closes / clears state.
+//   - A refused delete stays open with the parent's `error` under the field.
 //   - ESC and backdrop close just like any `Modal`.
 
 import { useEffect, useState } from 'react';
@@ -34,6 +35,8 @@ interface Props {
     confirming: string;
   };
   onConfirm: () => Promise<void> | void;
+  /** Why the last delete was refused, shown under the field; null hides it. */
+  error?: string | null;
 }
 
 export function DeleteResumeConfirm({
@@ -42,6 +45,7 @@ export function DeleteResumeConfirm({
   resumeName,
   labels,
   onConfirm,
+  error = null,
 }: Props) {
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -102,6 +106,11 @@ export function DeleteResumeConfirm({
           autoFocus
           error={showMismatchHint ? labels.mismatchHint : undefined}
         />
+        {error ? (
+          <p className="text-sm text-danger" role="alert">
+            {error}
+          </p>
+        ) : null}
       </div>
     </Modal>
   );
