@@ -21,7 +21,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/admin');
   vi.mocked(operationsApi.overview).mockResolvedValue({ range: { from: '2026-09-10', to: '2026-10-10', tz: 'UTC' }, users: { total: 3, new: 1, active: 2, loginUsers: 2, loginEvents: 4, featureEvents: 12, payingUsers: 2 }, payments: { currencies, total: 2, paid: 2, pending: 0, failed: 0, coverage }, costUsd: 0.13, activitySeries: [], featureUsage: [], regions: [], trackingSince: null });
   vi.mocked(operationsApi.payments).mockResolvedValue({ rows: [payment], total: 30, page: 1, pageSize: 25, currencies, coverage });
-  vi.mocked(operationsApi.users).mockResolvedValue({ rows: [{ userId: 'user-1', email: 'chen@example.test', name: 'Chen', role: 'candidate', isActive: true, region: 'cn', tier: 'premium', status: 'active', createdAt: payment.createdAt, subscription: { currency: 'CNY', amountMinor: 12900 }, loginEvents: 3, featureEvents: 8, usageUnits: 1, periodCostUsd: 0.13, lastLoginAt: payment.createdAt, lastActiveAt: payment.createdAt }], total: 1, page: 1, pageSize: 25 });
+  vi.mocked(operationsApi.users).mockResolvedValue({ rows: [{ userId: 'user-1', email: 'chen@example.test', name: 'Chen', role: 'candidate', isActive: true, region: 'cn', tier: 'premium', status: 'active', createdAt: payment.createdAt, brand: 'roboapply', isAdmin: false, hasProfile: true, onboardingStep: 'done', deleted: false, resumes: 1, subscription: { currency: 'CNY', amountMinor: 12900 }, loginEvents: 3, featureEvents: 8, usageUnits: 1, periodCostUsd: 0.13, lastLoginAt: payment.createdAt, lastActiveAt: payment.createdAt }], total: 1, page: 1, pageSize: 25 });
   vi.mocked(operationsApi.activity).mockResolvedValue({ rows: [], total: 0, page: 1, pageSize: 25 });
 });
 
@@ -70,6 +70,22 @@ describe('admin operations console', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Payments' }));
     await waitFor(() => expect(operationsApi.payments).toHaveBeenLastCalledWith(expect.objectContaining({ userId: 'user-1' })));
     expect(screen.getByText('User: user-1')).toBeInTheDocument();
+  });
+  it('sorts the users list by any column both ways, filters by site, and offers View as', async () => {
+    renderWithProviders(<AdminPage />, { authValue: adminAuth });
+    fireEvent.click(screen.getByRole('tab', { name: 'Users' }));
+    const panel = screen.getByRole('tabpanel');
+    await within(panel).findByText('Chen');
+    expect(operationsApi.users).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'lastActive', dir: 'desc' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Resumes' }));
+    await waitFor(() => expect(operationsApi.users).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'resumes', dir: 'asc', page: 1 })));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Resumes' }));
+    await waitFor(() => expect(operationsApi.users).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'resumes', dir: 'desc' })));
+    expect(within(panel).getByRole('columnheader', { name: 'Resumes' })).toHaveAttribute('aria-sort', 'descending');
+    fireEvent.change(within(panel).getByLabelText('Site'), { target: { value: 'goapply' } });
+    await waitFor(() => expect(operationsApi.users).toHaveBeenLastCalledWith(expect.objectContaining({ brand: 'goapply', page: 1 })));
+    expect(within(panel).getByText('Finished')).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'View the app as Chen, read-only' })).toBeEnabled();
   });
 });
 

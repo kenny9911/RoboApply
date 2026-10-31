@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
 import { HttpError } from '../../platform/http.js';
+import { setCurrentViewAs, withRequestContext } from '../../lib/requestContext.js';
 import { logger } from '../../services/LoggerService.js';
 import { toTsQuery } from '../retrieval/index.js';
 import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, buildMatchUser } from '../match/index.js';
@@ -2461,6 +2462,33 @@ describe('a thin list for a saved search queues one targeted ingest', () => {
   it('with no requestIngest dependency nothing is asked', async () => {
     seed(3);
     await expect(service().query(ctx(), { sort: 'recommended' })).resolves.toMatchObject({ endOfFeed: true });
+  });
+});
+
+// ── An admin viewing as the person (platform/viewAs) reads the list, and it is not their visit ──
+
+describe('an admin viewing as the person', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('gets the same list, without stamping the visit (the New badge) or asking for an ingest', async () => {
+    seed(25);
+    const before = new Date(NOW.getTime() - 5 * 3_600_000);
+    repo.visits.set('u1', before);
+    const asked: string[] = [];
+    const s = service({ requestIngest: async (id) => void asked.push(id) });
+    const res = await withRequestContext({ requestId: 'r1' }, async () => {
+      setCurrentViewAs({ adminId: 'admin1', subjectUserId: 'u1' });
+      return s.query(ctx(), { sort: 'recommended' });
+    });
+    await settle();
+    expect(res.items).toHaveLength(20);
+    expect(repo.visits.get('u1')).toEqual(before);
+    expect(asked).toEqual([]);
+    // The person's own visit still counts.
+    await s.query(ctx(), { sort: 'recommended' });
+    await settle();
+    expect(repo.visits.get('u1')).toEqual(NOW);
+    expect(asked).toEqual(['sp1']);
   });
 });
 

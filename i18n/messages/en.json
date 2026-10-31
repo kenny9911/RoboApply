@@ -4222,7 +4222,7 @@
       },
       "audit": {
         "title": "Admin actions",
-        "sub": "Changes admins made: per-person limits, decisions on reported jobs, referral-code checks and retried background work. Newest first. Each row is written when the action happens and is kept even if an account is deleted.",
+        "sub": "Changes admins made: per-person limits, decisions on reported jobs, referral-code checks, retried background work, and read-only views of someone's app. Newest first. Each row is written when the action happens and is kept even if an account is deleted.",
         "filter": "Show",
         "all": "All actions",
         "loading": "Loading…",
@@ -4242,7 +4242,9 @@
           "admin_report_resolved": "Decided on a reported job",
           "admin_work_item_retried": "Retried background work",
           "admin_referral_moderated": "Checked a shared referral code",
-          "admin_invite_reward_reviewed": "Approved or rejected a held invite reward"
+          "admin_invite_reward_reviewed": "Approved or rejected a held invite reward",
+          "admin_view_as_started": "Viewed the app as one person (read-only)",
+          "admin_view_as_ended": "Ended a read-only view of one person's app"
         }
       },
       "inviteRewards": {
@@ -4817,7 +4819,55 @@
     "open": "Awaiting payment",
     "draft": "Draft",
     "void": "Voided",
-    "uncollectible": "Uncollectible"
+    "uncollectible": "Uncollectible",
+    "site": "Site",
+    "allSites": "All sites",
+    "onboarding": "Onboarding",
+    "onboardingDone": "Finished",
+    "onboardingNotStarted": "Not started",
+    "onboardingAt": "Step: {step}",
+    "onboardingStage": {
+      "situation": "Situation",
+      "consent": "Consent",
+      "identity": "Identity",
+      "education": "Education",
+      "basics": "Basics",
+      "intent": "Job intent",
+      "tags": "Tags",
+      "goal": "Goal",
+      "preferences": "Preferences",
+      "resume": "Resume",
+      "matching": "Matching",
+      "confirm": "Confirm",
+      "tour": "Tour"
+    },
+    "resumes": "Resumes",
+    "noResume": "None",
+    "viewAs": {
+      "action": "View as",
+      "aria": "View the app as {name}, read-only",
+      "button": "View as {name}",
+      "opening": "Opening…",
+      "hint": "Opens the app as this person sees it. Read-only: nothing is saved.",
+      "failed": "This view could not be opened. Try again.",
+      "blocked": {
+        "self": "This is your own account.",
+        "admin_account": "Admin accounts cannot be viewed.",
+        "not_seeker": "This account has never used the app.",
+        "deleted": "This account was deleted.",
+        "other_brand": "This account uses %OTHER_BRAND%. View it from that site's admin.",
+        "needs_session": "Sign in again in this browser to view as someone."
+      }
+    }
+  },
+  "viewAs": {
+    "label": "Admin view of someone else's account",
+    "title": "Viewing as {name}",
+    "readOnly": "Read-only. Nothing you do here is saved or sent.",
+    "blocked": "Not saved: this view is read-only.",
+    "endsIn": "Ends in {minutes, plural, one {# minute} other {# minutes}}",
+    "exit": "Exit view",
+    "exiting": "Exiting…"
   },
   "accountV2": {
     "common": {

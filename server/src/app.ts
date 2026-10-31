@@ -98,6 +98,8 @@ app.use(
   cors({
     origin: corsOrigins(),
     credentials: true,
+    // Admin "view as" ended (platform/viewAs): the page reloads as the admin.
+    exposedHeaders: ['X-RA-View-As'],
   }),
 );
 

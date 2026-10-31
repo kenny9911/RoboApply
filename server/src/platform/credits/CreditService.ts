@@ -35,7 +35,8 @@
 //               reservation is released by `jobs-maintain`).
 
 import { logger } from '../../services/LoggerService.js';
-import { getCurrentRequestId } from '../../lib/requestContext.js';
+import { getCurrentRequestId, getCurrentViewAs } from '../../lib/requestContext.js';
+import { ViewAsReadOnlyError } from '../viewAs/index.js';
 import type { BrandId } from '../brand/registry.js';
 import { isWindowBucket, WINDOW_BUCKETS, type WindowBucket } from './catalog.js';
 import { entitlementService as defaultEntitlements, type EntitlementService, type ResolvedEntitlements } from './EntitlementService.js';
@@ -197,6 +198,8 @@ export function createCreditService(deps: CreditServiceDeps = {}): CreditService
   const settleRetry = { budgetMs: deps.settleBudgetMs ?? SETTLE_BUDGET_MS, ...(deps.clock ? { clock: deps.clock } : {}) };
 
   async function reserve(opts: ReserveOptions): Promise<Reservation> {
+    // An admin viewing as this person (platform/viewAs) never spends their credits.
+    if (getCurrentViewAs()) throw new ViewAsReadOnlyError();
     if (!isWindowBucket(opts.bucket)) throw new UnknownBucketError(String(opts.bucket));
     const key = typeof opts.idempotencyKey === 'string' ? opts.idempotencyKey.trim() : '';
     if (!key || key.length > MAX_IDEMPOTENCY_KEY) throw new InvalidIdempotencyKeyError();

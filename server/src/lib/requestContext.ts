@@ -27,6 +27,11 @@ export interface RequestStore {
   // AgentAlexQuotaService at commit time and by requestAudit when rolling
   // up the per-request log. See docs/prd-byok.md.
   byokInRequest?: boolean;
+  // Admin "view as" (platform/viewAs): set by the auth middleware when the
+  // signed-in admin is reading as another user. `userId` is then the viewed
+  // user. Code that records the user's own activity or spends their credits
+  // checks it and stays out of the way.
+  viewAs?: { adminId: string; subjectUserId: string };
 }
 
 const requestContext = new AsyncLocalStorage<RequestStore>();
@@ -131,4 +136,17 @@ export function setByokInRequest(): void {
 /** True if any LLM call in the current request used a BYOK key. */
 export function wasByokInRequest(): boolean {
   return requestContext.getStore()?.byokInRequest === true;
+}
+
+/** Mark the current request as an admin viewing as another user (auth middleware only). */
+export function setCurrentViewAs(viewAs: { adminId: string; subjectUserId: string } | null): void {
+  const store = requestContext.getStore();
+  if (!store) return;
+  if (viewAs) store.viewAs = { ...viewAs };
+  else delete store.viewAs;
+}
+
+/** The admin "view as" grant the current request runs under, if any. */
+export function getCurrentViewAs(): { adminId: string; subjectUserId: string } | undefined {
+  return requestContext.getStore()?.viewAs;
 }

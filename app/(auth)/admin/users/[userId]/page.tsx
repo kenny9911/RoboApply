@@ -6,7 +6,8 @@
 // revenue → margin) + three-up cost cards + a daily-cost sparkline + a
 // cost-by-feature ledger + an interview-sessions ledger. The admin "Set plan"
 // action opens SetPlanModal (tier + optional custom price + REQUIRED reason)
-// → useSetPlan mutation → success banner + refetch.
+// → useSetPlan mutation → success banner + refetch. "View as" opens the app as
+// this person sees it, read-only (ViewAsButton; server platform/viewAs).
 //
 // Full route (linkable / shareable), own PageHeader, renders inner content
 // only (the (auth) shell provides the chrome; no first-run gate precedes /admin/*).
@@ -39,6 +40,7 @@ import {
   fmtShortDate,
   UserOverridesPanel,
   RefundQuotePanel,
+  ViewAsButton,
 } from '../../../../../components/v3/admin';
 import type {
   AdminCostByFeature,
@@ -87,11 +89,19 @@ export default function AdminUserDetailPage({
     );
   }
 
+  // Read-only "view as" this person (the god's-eye view): opens the app as they see it.
+  const viewAsBtn = q.data ? (
+    <ViewAsButton
+      variant="button"
+      target={{ userId, name: q.data.user.name, email: q.data.user.email, isAdmin: q.data.user.role === 'admin' }}
+    />
+  ) : null;
+
   const header = (
     <PageHeader
       eyebrow={t('detail.eyebrow', { email: q.data?.user.email ?? '…' })}
       title={q.data?.user.name || q.data?.user.email || ops('user')}
-      actions={backBtn}
+      actions={<>{viewAsBtn}{backBtn}</>}
     />
   );
 

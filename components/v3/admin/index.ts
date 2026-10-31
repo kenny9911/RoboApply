@@ -45,5 +45,7 @@ export { ReportsConsole } from './ReportsConsole';
 // Held invite rewards (INT-08; WP-60's review routes).
 export { InviteRewardsConsole, HOLD_REASONS, reviewOutcome, type ReviewOutcome } from './InviteRewardsConsole';
 export { UserOverridesPanel, RefundQuotePanel, parseOverrideValue } from './UserAdminPanels';
+// Read-only "view as" one person (the god's-eye view; server platform/viewAs).
+export { ViewAsButton, viewAsBlockedReasonFor, viewAsRefusalReason, type ViewAsTarget } from './ViewAsButton';
 // Job sources per brand (PAR-7): the shared sources panel and GoApply's company job boards.
 export { SourcesConsole, JobSourcesPanel, CareerBoardsPanel, BOARD_SYSTEMS, boardProblemKey, tallyLines } from './SourcesConsole';

@@ -47,6 +47,9 @@ export type RoboErrorCode =
   // (server/src/platform/http.ts). Kept apart from `server_error`, where the
   // request may have been processed. The message is `credits.busy`.
   | 'credits_busy'
+  // 403: an admin is viewing the app as this user (server platform/viewAs);
+  // every write is refused and nothing was changed.
+  | 'view_as_read_only'
   | 'server_error'
   | 'network_error'
   | 'unknown';
@@ -119,6 +122,8 @@ function normalizeCode(
       return 'account_deleted';
     case 'credits_busy':
       return 'credits_busy';
+    case 'view_as_read_only':
+      return 'view_as_read_only';
     // Transport codes this module sets on itself (a fetch that threw, a 5xx).
     // Without these they fall through to 'unknown' and a caller cannot tell a
     // connection that died mid-flight — where the request may well have been
@@ -202,6 +207,40 @@ export async function runSessionCleanups(timeoutMs: number = SESSION_CLEANUP_TIM
   });
   await Promise.race([work.then(() => undefined), timeout]);
   if (timer) clearTimeout(timer);
+}
+
+// ─── Admin "view as" ────────────────────────────────────────────────────────
+//
+// While an admin views the app as another user (server platform/viewAs), the
+// server refuses every write with 403 `view_as_read_only`, and an answer
+// carries `X-RA-View-As: ended` once it dropped the view (expired, signed
+// out). The view banner (components/v3/shell/ViewAsBanner.tsx) registers what
+// to do about each, since `lib` must not import feature code: say that
+// nothing was saved, and reload as the admin.
+
+export interface ViewAsHandlers {
+  onReadOnly?: () => void;
+  onEnded?: () => void;
+}
+
+let viewAsHandlers: ViewAsHandlers = {};
+
+/** Register the view-as reactions; returns the function that removes them again. */
+export function registerViewAsHandlers(handlers: ViewAsHandlers): () => void {
+  viewAsHandlers = handlers;
+  return () => {
+    if (viewAsHandlers === handlers) viewAsHandlers = {};
+  };
+}
+
+/** Tell the registered view-as reactions about one answer. Never throws. */
+export function noteViewAsResponse(res: Pick<Response, 'headers'>, code: RoboErrorCode | null): void {
+  try {
+    if (res.headers.get('x-ra-view-as') === 'ended') viewAsHandlers.onEnded?.();
+    if (code === 'view_as_read_only') viewAsHandlers.onReadOnly?.();
+  } catch {
+    // A reaction never changes the request's own outcome.
+  }
 }
 
 function recoverFromExpiredSession(): void {
@@ -399,6 +438,7 @@ export async function request<T>(
         payload: data,
       },
     );
+    noteViewAsResponse(res, error.code);
     // Dead/absent session on a page that requires one → force re-login.
     // Public pages (landing, /login itself) just see the rejection: their
     // logged-out rendering is the correct outcome there.
@@ -413,6 +453,7 @@ export async function request<T>(
     }
     throw error;
   }
+  noteViewAsResponse(res, null);
   return unwrapEnvelope(data) as T;
 }
 

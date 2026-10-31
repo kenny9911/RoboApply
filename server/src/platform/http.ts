@@ -68,6 +68,8 @@ export const ERROR_STATUS = {
    * sent again: 503 with a `Retry-After` header; details `{ retryAfterSec }`.
    */
   credits_busy: 503,
+  /** An admin is viewing as this user (platform/viewAs): nothing may be changed or spent. */
+  view_as_read_only: 403,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_STATUS;
@@ -100,6 +102,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   brand_context_missing: 'Something went wrong.',
   gone: 'This is no longer available.',
   credits_busy: 'We could not start this right now. Try again in a moment.',
+  view_as_read_only: 'You are viewing this account as an admin. View mode is read-only, so nothing was changed.',
 };
 
 export class HttpError extends Error {

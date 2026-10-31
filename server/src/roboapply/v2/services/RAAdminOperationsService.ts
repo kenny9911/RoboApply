@@ -1,12 +1,18 @@
 import prisma from '../../../lib/prisma.js';
 import { getStripe } from '../../../platform/billing/stripeClient.js';
 import { formatDateKey, sqlLocalTime } from '../../../lib/timeBuckets.js';
+import { ONBOARDING_STAGE_ORDER } from '../../../features/onboarding/contract.js';
 import { featureForSku, SHARED_COST_USER_ID } from '../lib/raFeatureCatalog.js';
 import type { Range } from './RAAdminAnalyticsService.js';
 
 export interface OperationsQuery {
   range: Range; q?: string; userId?: string; region?: string; provider?: string;
   type?: string; status?: string; currency?: string; page?: number; pageSize?: number;
+  /** Users list only: the account's product brand (`User.brand`). */
+  brand?: string;
+  /** Users list only: a key of OPERATIONS_USER_SORTS (default lastActive, desc). */
+  sort?: string;
+  dir?: 'asc' | 'desc';
 }
 interface PaymentRow {
   id: string; userId: string; email: string; name: string | null; provider: 'alipay' | 'stripe';
@@ -32,11 +38,51 @@ function userCte(opts: OperationsQuery, params: unknown[]) {
   };
   add(opts.userId, (p) => `u."id" = ${p}`);
   add(opts.region, (p) => `${REGION} = ${p}`);
+  add(opts.brand, (p) => `u."brand" = ${p}`);
   add(opts.q, (p) => `(u."id" ILIKE '%' || ${p} || '%' OR u."email" ILIKE '%' || ${p} || '%' OR COALESCE(u."name", '') ILIKE '%' || ${p} || '%')`);
-  return `scoped_users AS (SELECT u."id", u."email", u."name", u."role", u."isActive", u."createdAt",
+  return `scoped_users AS (SELECT u."id", u."email", u."name", u."role", u."roles", u."isActive", u."createdAt", u."brand",
     ${REGION} AS region, COALESCE(ss."tier"::text, 'free') AS tier, COALESCE(ss."status", 'active') AS status,
-    UPPER(ss."currency") AS currency, ss."amountMinor", ss."stripeCustomerId"
+    UPPER(ss."currency") AS currency, ss."amountMinor", ss."stripeCustomerId",
+    sp."id" AS "seekerProfileId", sp."onboardingStep", sp."deletedAt"
     ${USER_JOINS} WHERE ${where.join(' AND ')})`;
+}
+
+/** Onboarding progress as a number (the stage order; done last), for sorting. Unknown stages sort as done. */
+const ONBOARDING_PROGRESS = `CASE ${Object.entries(ONBOARDING_STAGE_ORDER)
+  .map(([stage, order]) => `WHEN u."onboardingStep" = '${stage}' THEN ${order}`)
+  .join(' ')} WHEN u."onboardingStep" IS NULL THEN NULL ELSE ${ONBOARDING_STAGE_ORDER.done} END`;
+
+/**
+ * Sortable columns of the users list: key → SQL over the final SELECT
+ * (scoped_users u, events e, usage l, last_login, resumes r). Only these
+ * fixed expressions ever reach ORDER BY. Both directions keep empty values last.
+ */
+export const OPERATIONS_USER_SORTS = {
+  user: `LOWER(COALESCE(NULLIF(u."name", ''), u."email"))`,
+  email: `LOWER(u."email")`,
+  brand: `u."brand"`,
+  plan: `u."tier"`,
+  region: `u."region"`,
+  onboarding: ONBOARDING_PROGRESS,
+  resumes: `COALESCE(r.n, 0)`,
+  logins: `COALESCE(e.logins, 0)`,
+  features: `COALESCE(e.features, 0)`,
+  cost: `COALESCE(l.cost, 0)`,
+  lastLogin: `last_login.last`,
+  lastActive: `GREATEST(e.last, l.last)`,
+  createdAt: `u."createdAt"`,
+} as const;
+export type OperationsUserSort = keyof typeof OPERATIONS_USER_SORTS;
+
+export function isOperationsUserSort(value: unknown): value is OperationsUserSort {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(OPERATIONS_USER_SORTS, value);
+}
+
+/** ORDER BY for the users list; unknown keys fall back to the default (most recently active first). */
+export function operationsUserOrder(sort: string | undefined, dir: 'asc' | 'desc' | undefined): string {
+  const key: OperationsUserSort = isOperationsUserSort(sort) ? sort : 'lastActive';
+  const direction = (dir ?? (isOperationsUserSort(sort) ? 'asc' : 'desc')) === 'asc' ? 'ASC' : 'DESC';
+  return `${OPERATIONS_USER_SORTS[key]} ${direction} NULLS LAST, u."createdAt" DESC, u.id`;
 }
 
 function pageOpts(opts: OperationsQuery, exporting = false) {
@@ -135,7 +181,7 @@ async function loadPaymentRows(opts: OperationsQuery) {
 async function filteredPayments(opts: OperationsQuery) {
   // Region applies to the payment's recorded billing region, not today's user region.
   const scope = { ...opts, region: undefined };
-  const key = JSON.stringify([scope.range.from, scope.range.to, scope.userId, scope.q]);
+  const key = JSON.stringify([scope.range.from, scope.range.to, scope.userId, scope.q, scope.brand]);
   const cached = paymentCache.get(key);
   let data = cached && cached.expires > Date.now() ? cached.data : undefined;
   if (!data) {
@@ -174,15 +220,21 @@ export async function getOperationsUsers(opts: OperationsQuery, exporting = fals
       WHERE a."eventType" = 'login' GROUP BY a."userId"),
     usage AS (SELECT l."userId", SUM(l.units) AS units, SUM(l."platformCostUsd") AS cost, MAX(l."createdAt") AS last
       FROM "UsageDeductionLog" l JOIN scoped_users u ON u.id = l."userId"
-      WHERE l."createdAt" >= $1 AND l."createdAt" < $2 GROUP BY l."userId")
+      WHERE l."createdAt" >= $1 AND l."createdAt" < $2 GROUP BY l."userId"),
+    resumes AS (SELECT v."userId", COUNT(*) AS n FROM "RAResumeVariant" v JOIN scoped_users u ON u.id = v."userId"
+      WHERE v."deletedAt" IS NULL GROUP BY v."userId")
     SELECT u.*, COALESCE(e.logins,0) AS logins, COALESCE(e.features,0) AS features,
-      COALESCE(l.units,0) AS units, COALESCE(l.cost,0) AS cost, last_login.last AS "lastLoginAt", GREATEST(e.last,l.last) AS "lastActiveAt"
+      COALESCE(l.units,0) AS units, COALESCE(l.cost,0) AS cost, last_login.last AS "lastLoginAt", GREATEST(e.last,l.last) AS "lastActiveAt",
+      COALESCE(r.n,0) AS resumes
     FROM scoped_users u LEFT JOIN events e ON e."userId"=u.id LEFT JOIN usage l ON l."userId"=u.id
-    LEFT JOIN last_login ON last_login."userId"=u.id ${statusClause}
-    ORDER BY "lastActiveAt" DESC NULLS LAST, u."createdAt" DESC, u.id
+    LEFT JOIN last_login ON last_login."userId"=u.id LEFT JOIN resumes r ON r."userId"=u.id ${statusClause}
+    ORDER BY ${operationsUserOrder(opts.sort, opts.dir)}
     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, ...params, pageSize, (page - 1) * pageSize);
   return { rows: rows.map((r) => ({ userId: r.id, email: r.email, name: r.name, role: r.role, isActive: r.isActive,
     region: r.region, tier: r.tier, status: r.status, createdAt: iso(r.createdAt),
+    brand: r.brand ?? null, isAdmin: r.role === 'admin' || (Array.isArray(r.roles) && r.roles.includes('admin')),
+    onboardingStep: r.seekerProfileId ? (r.onboardingStep ?? 'done') : null, deleted: Boolean(r.deletedAt),
+    hasProfile: Boolean(r.seekerProfileId), resumes: num(r.resumes),
     subscription: { currency: r.currency, amountMinor: r.amountMinor }, loginEvents: num(r.logins), featureEvents: num(r.features),
     usageUnits: num(r.units), periodCostUsd: roundCost(r.cost), lastLoginAt: iso(r.lastLoginAt), lastActiveAt: iso(r.lastActiveAt) })),
     total: num(totals[0]?.total), page, pageSize };

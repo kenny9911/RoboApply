@@ -1,6 +1,7 @@
 // Auth-related type definitions
 
 import type { SubscriptionGateResult } from '../lib/subscriptionGate.js';
+import type { ViewAsOnRequest } from '../platform/viewAs/index.js';
 
 // User type for authenticated requests (public, no password hash)
 export interface AuthUser {
@@ -95,6 +96,13 @@ declare global {
       user?: User;
       requestId?: string;
       sessionToken?: string;
+      /**
+       * Set when the signed-in admin is viewing as another user
+       * (platform/viewAs): `user` is then that user, read-only.
+       */
+      viewAs?: ViewAsOnRequest;
+      /** Set by `ignoreViewAs` (middleware/auth.ts): authenticate as the signed-in admin, whatever grant the browser holds. */
+      ignoreViewAs?: boolean;
       apiKeyId?: string;
       apiKeyScopes?: ApiKeyScope[];
       payloadCapture?: {

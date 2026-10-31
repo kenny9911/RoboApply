@@ -385,6 +385,8 @@ export function adminCsvUrl(
 //   GET    /api/v1/roboapply/admin/cn/referrals/queue
 //   POST   /api/v1/roboapply/admin/referrals/:id/moderate   (WP-54 service + audit row)
 //   GET    /api/v1/roboapply/admin/credits/refund-quote
+//   POST   /api/v1/roboapply/admin/view-as        (read-only "view as" one user; sets its cookie)
+//   POST   /api/v1/roboapply/admin/view-as/stop
 // Held invite rewards (WP-60) use lib/api/growth.ts (listHeldReferrals / reviewReferral).
 
 
@@ -416,6 +418,10 @@ export type {
   SafetyEventView,
   SafetyResponse,
   SystemStatusResponse,
+  ViewAsBlockedReason,
+  ViewAsSessionView,
+  ViewAsStartResponse,
+  ViewAsStopResponse,
   WorkItemView,
   WorkItemsResponse,
 } from './contracts/admin';
@@ -506,6 +512,20 @@ export function getRefundQuote(userId: string, opts?: CallOptions): Promise<Refu
   return call<RefundQuoteResponse>('GET', withQuery(`${CONSOLE}/credits/refund-quote`, { userId }), opts);
 }
 
+/**
+ * `admin.viewAs.start` — POST /api/v1/roboapply/admin/view-as. Sets the
+ * read-only view cookie; the caller then reloads into `landing` so nothing
+ * cached from the admin's own account is shown as the person's.
+ */
+export function startViewAs(userId: string, opts?: CallOptions): Promise<AD.ViewAsStartResponse> {
+  return call<AD.ViewAsStartResponse>('POST', `${CONSOLE}/view-as`, { ...opts, body: { userId } });
+}
+
+/** `admin.viewAs.stop` — POST /api/v1/roboapply/admin/view-as/stop (works from inside a view). */
+export function stopViewAs(opts?: CallOptions): Promise<AD.ViewAsStopResponse> {
+  return call<AD.ViewAsStopResponse>('POST', `${CONSOLE}/view-as/stop`, opts);
+}
+
 export const adminConsoleApi = {
   getSystemStatus,
   listWorkItems,
@@ -523,4 +543,6 @@ export const adminConsoleApi = {
   listReferralQueue,
   moderateReferralCode,
   getRefundQuote,
+  startViewAs,
+  stopViewAs,
 };

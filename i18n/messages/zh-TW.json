@@ -3718,7 +3718,9 @@
           "admin_override_deleted": "移除了單一使用者的上限或功能",
           "admin_referral_moderated": "審核了一組分享的內部推薦碼",
           "admin_report_resolved": "對一則被檢舉的職缺做了決定",
-          "admin_work_item_retried": "重試了背景工作"
+          "admin_work_item_retried": "重試了背景工作",
+          "admin_view_as_started": "以唯讀方式檢視了一位使用者的應用程式",
+          "admin_view_as_ended": "結束了對一位使用者應用程式的唯讀檢視"
         },
         "admin": "管理員",
         "adminPage": "開啟帳號 {id} 的管理頁面",
@@ -3729,7 +3731,7 @@
         "first": "回到開頭",
         "loading": "載入中…",
         "more": "顯示更多",
-        "sub": "管理員做過的變更：個別使用者的上限、對被檢舉職缺的決定、內部推薦碼的審核，以及重試的背景工作。最新的排在最前面。每一列都在操作發生時寫入，即使帳號被刪除也會保留。",
+        "sub": "管理員做過的變更：個別使用者的上限、對被檢舉職缺的決定、內部推薦碼的審核、重試的背景工作，以及以唯讀方式檢視他人的應用程式。最新的排在最前面。每一列都在操作發生時寫入，即使帳號被刪除也會保留。",
         "title": "管理員操作",
         "what": "操作",
         "when": "時間"
@@ -4726,7 +4728,55 @@
     "open": "待付款",
     "draft": "草稿",
     "void": "已作廢",
-    "uncollectible": "無法收款"
+    "uncollectible": "無法收款",
+    "site": "網站",
+    "allSites": "所有網站",
+    "onboarding": "初始設定",
+    "onboardingDone": "已完成",
+    "onboardingNotStarted": "尚未開始",
+    "onboardingAt": "步驟：{step}",
+    "onboardingStage": {
+      "situation": "求職狀況",
+      "consent": "同意事項",
+      "identity": "身分",
+      "education": "學歷",
+      "basics": "基本資料",
+      "intent": "求職意向",
+      "tags": "標籤",
+      "goal": "目標",
+      "preferences": "偏好",
+      "resume": "履歷",
+      "matching": "配對",
+      "confirm": "確認",
+      "tour": "導覽"
+    },
+    "resumes": "履歷",
+    "noResume": "無",
+    "viewAs": {
+      "action": "以其身分檢視",
+      "aria": "以唯讀方式檢視 {name} 看到的應用程式",
+      "button": "以 {name} 的身分檢視",
+      "opening": "正在開啟…",
+      "hint": "以這個人看到的樣子開啟應用程式。唯讀：不會儲存任何內容。",
+      "failed": "無法開啟這個檢視，請再試一次。",
+      "blocked": {
+        "self": "這是你自己的帳號。",
+        "admin_account": "無法檢視管理員帳號。",
+        "not_seeker": "這個帳號從未使用過本應用程式。",
+        "deleted": "這個帳號已被刪除。",
+        "other_brand": "這個帳號使用的是 %OTHER_BRAND%，請到該網站的管理後台檢視。",
+        "needs_session": "請在這個瀏覽器重新登入，才能以他人身分檢視。"
+      }
+    }
+  },
+  "viewAs": {
+    "label": "管理員正在檢視他人的帳號",
+    "title": "正在以 {name} 的身分檢視",
+    "readOnly": "唯讀模式。你在這裡的任何操作都不會儲存或送出。",
+    "blocked": "未儲存：這個檢視是唯讀的。",
+    "endsIn": "{minutes, plural, other {# 分鐘後結束}}",
+    "exit": "結束檢視",
+    "exiting": "正在結束…"
   },
   "accountV2": {
     "challenge": {

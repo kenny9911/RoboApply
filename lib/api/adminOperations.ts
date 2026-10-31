@@ -10,9 +10,18 @@ export interface OperationsFilters extends AdminRange {
   type?: string;
   status?: string;
   currency?: string;
+  /** The account's product brand. */
+  brand?: 'roboapply' | 'goapply';
+  /** Users list: the column to sort by, both directions (server OPERATIONS_USER_SORTS). */
+  sort?: OperationsUserSort;
+  dir?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
 }
+/** Sortable columns of the users list (server RAAdminOperationsService OPERATIONS_USER_SORTS). */
+export type OperationsUserSort =
+  | 'user' | 'email' | 'brand' | 'plan' | 'region' | 'onboarding' | 'resumes'
+  | 'logins' | 'features' | 'cost' | 'lastLogin' | 'lastActive' | 'createdAt';
 export interface NativeRevenue {
   currency: string;
   paidMinor: number;
@@ -36,6 +45,18 @@ export interface OperationsOverview {
 export interface OperationsUser {
   userId: string; email: string; name: string | null; role: string; isActive: boolean;
   region: string; tier: string; status: string; createdAt: string;
+  /** The product brand the account signed up on. */
+  brand: 'roboapply' | 'goapply' | null;
+  /** Admin by role or roles (never viewable as). */
+  isAdmin: boolean;
+  /** The RoboApply/GoApply profile exists (else the account never used the app). */
+  hasProfile: boolean;
+  /** Stage code of the onboarding stage machine ('done' when finished); null without a profile. */
+  onboardingStep: string | null;
+  /** The profile was deleted. */
+  deleted: boolean;
+  /** Live résumés. */
+  resumes: number;
   subscription: { currency: string | null; amountMinor: number | null };
   loginEvents: number; featureEvents: number; usageUnits: number; periodCostUsd: number;
   lastLoginAt: string | null; lastActiveAt: string | null;

@@ -28,6 +28,7 @@ import {
   getAnonId,
   getAttribution,
   isAnalyticsConsentRequired,
+  pauseAnalytics,
   pendingEventCount,
   requestAnalyticsConsentReview,
   safePath,
@@ -108,6 +109,22 @@ describe('analytics client', () => {
     expect(second!.events).toHaveLength(10);
     expect(first!.events[0]).toMatchObject({ name: 'job_opened', props: { jobId: 'j0' }, at: expect.any(String) });
     expect(pendingEventCount()).toBe(0);
+  });
+
+  it('records nothing while an admin views the app as someone (pauseAnalytics)', async () => {
+    configureAnalytics({ consentRequired: false });
+    track('job_opened', { jobId: 'before' });
+    pauseAnalytics(true);
+    expect(pendingEventCount()).toBe(0);
+    track('job_opened', { jobId: 'during' });
+    await flush();
+    expect(pendingEventCount()).toBe(0);
+    expect(sendEvents).not.toHaveBeenCalled();
+    pauseAnalytics(false);
+    track('job_opened', { jobId: 'after' });
+    await flush();
+    expect(sendEvents).toHaveBeenCalledTimes(1);
+    expect(sendEvents.mock.calls[0]![0].events.map((e: { props?: { jobId?: string } }) => e.props?.jobId)).toEqual(['after']);
   });
 
   it(`flushes on its own at ${FLUSH_AT} events and after a short delay`, async () => {

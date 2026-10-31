@@ -2,7 +2,8 @@
  * Feature-specific evidence styles live in discovery.css. */
 .app {
   grid-template-columns: 236px minmax(0, 1fr);
-  grid-template-rows: 100dvh;
+  /* Less the admin "view as" banner above the shell (--view-as-h; 0 otherwise). */
+  grid-template-rows: calc(100dvh - var(--view-as-h, 0px));
   max-width: none;
 }
 .side {

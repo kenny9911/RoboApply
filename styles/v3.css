@@ -59,7 +59,9 @@
 .app {
   display: grid;
   grid-template-columns: 248px 1fr;
-  grid-template-rows: 100vh;
+  /* --view-as-h: the admin "view as" banner above the shell (0 otherwise;
+     components/v3/shell/ViewAsBanner.tsx). */
+  grid-template-rows: calc(100vh - var(--view-as-h, 0px));
   max-width: 1500px;
   margin: 0 auto;
 }
@@ -192,8 +194,11 @@
   padding: var(--sp-3) var(--sp-6);
   border-bottom: 1px solid var(--rule);
   background: var(--surface);
-  position: sticky; top: 0; z-index: 5;
+  /* Sticks below the admin "view as" banner where the document scrolls (onboarding, phones). */
+  position: sticky; top: var(--view-as-h, 0px); z-index: 5;
 }
+/* On desktop the shell's topbar sticks inside .main, which already starts below the banner. */
+.main > .topbar { top: 0; }
 
 .crumbs {
   font-size: var(--fs-meta);
@@ -2933,6 +2938,8 @@ details.qb-item[open] .qb-chevron { transform: rotate(180deg); }
    * `visible` removes the dead scrollport so both resolve against the
    * viewport, which is what they were written for. */
   .main { overflow-y: visible; }
+  /* …and so does the topbar, below the admin "view as" banner when there is one. */
+  .main > .topbar { top: var(--view-as-h, 0px); }
 
   .main-inner, .topbar { padding-left: var(--sp-5); padding-right: var(--sp-5); }
   /* Search: the pill does not fit beside the other topbar buttons on a phone. */

@@ -10,7 +10,7 @@
 // the same cached response through the same key.
 
 import { useCallback, useSyncExternalStore } from 'react';
-import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { notifyManager, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 
 import { feedKeys, type FeedListKeyInput } from '../../../hooks/feed/keys';
 import type { FeedQueryResponse } from '../../../lib/api/contracts/feed';
@@ -22,6 +22,11 @@ export function useFeedFirstPage(input: FeedListKeyInput): FeedQueryResponse | n
     () => client.getQueryData<InfiniteData<FeedQueryResponse>>(JSON.parse(key) as readonly unknown[])?.pages?.[0] ?? null,
     [client, key],
   );
-  const subscribe = useCallback((onChange: () => void) => client.getQueryCache().subscribe(onChange), [client]);
+  // Child queries can emit cache events during render. Schedule notifications
+  // like TanStack's React hooks so they never update this reader mid-render.
+  const subscribe = useCallback(
+    (onChange: () => void) => client.getQueryCache().subscribe(notifyManager.batchCalls(onChange)),
+    [client],
+  );
   return useSyncExternalStore(subscribe, read, () => null);
 }

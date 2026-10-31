@@ -16,6 +16,8 @@ export const users: OperationsUser[] = Array.from({ length: 34 }, (_, index) => 
   role: 'seeker', isActive: index !== 11, region: regions[index % regions.length],
   tier: index % 5 === 0 ? 'premium_plus' : index % 3 === 0 ? 'free' : 'premium',
   status: index === 11 ? 'past_due' : 'active', createdAt: ago(index < 7 ? index + 1 : index + 35),
+  brand: 'roboapply', isAdmin: false, hasProfile: true, deleted: false,
+  onboardingStep: index % 4 === 0 ? 'resume' : 'done', resumes: index % 4 === 0 ? 0 : 1,
   subscription: { currency: currencyFor(regions[index % regions.length]), amountMinor: index % 3 === 0 && index % 5 !== 0 ? 0 : priceFor(currencyFor(regions[index % regions.length]), index % 5 === 0) },
   loginEvents: 0, featureEvents: 0, usageUnits: 0, periodCostUsd: 0,
   lastLoginAt: null, lastActiveAt: null,

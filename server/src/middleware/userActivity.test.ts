@@ -21,6 +21,9 @@ describe('server-recorded functional activity', () => {
         req.user = { id: 'user1', email: 'u@example.test', createdAt: new Date(), updatedAt: new Date() };
         req.sessionToken = 'private-session-token';
       }
+      if (req.get('x-test-auth') === 'view-as') {
+        req.viewAs = { admin: { id: 'admin1', email: 'a@example.test', name: null }, subjectUserId: 'user1', startedAt: new Date(), expiresAt: new Date() };
+      }
       req.requestId = 'request1';
       next();
     });
@@ -77,6 +80,8 @@ describe('server-recorded functional activity', () => {
     ['POST', '/api/v1/roboapply/v2/jobs/job1/score', { 'x-test-status': '500' }],
     ['POST', '/api/v1/interview-engine/sessions/session1/coach', { 'x-test-result': 'coach-unavailable' }],
     ['POST', '/api/v1/roboapply/v2/jobs/job1/score', { 'x-test-auth': 'anonymous' }],
+    // An admin viewing as the user (platform/viewAs) is not the user's own activity.
+    ['POST', '/api/v1/roboapply/v2/jobs/job1/score', { 'x-test-auth': 'view-as' }],
     ['GET', '/api/v1/roboapply/auth/me', {}],
     ['GET', '/api/v1/roboapply/v2/activity/orb-stats', {}],
     ['POST', '/api/v1/roboapply/v2/admin/rates', {}],
