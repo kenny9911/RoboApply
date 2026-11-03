@@ -5,13 +5,13 @@ AI candidate-facing job-application app — **extracted from the RoboHire monore
 - **Frontend** — Next.js 16 (App Router) at the repo root → deploys to Vercel (`roboapply.io`).
 - **API** — the Express (TypeScript, ESM) backend under [`server/`](server/), served on Vercel as a single Serverless Function via [`api/index.ts`](api/index.ts) (`export default app`).
 - **Voice worker** — [`interview-agent/`](interview-agent/) LiveKit voice worker for mock interviews (a separate always-on process; **cannot** run on Vercel serverless — host it on Render/Railway/Fly).
-- **Database** — Prisma + Neon Postgres, **currently shared with RoboHire** (see [`docs/ENGINEERING_PLAN.md`](docs/ENGINEERING_PLAN.md) for the DB-split path).
+- **Database** — Prisma + Neon Postgres. RoboApply has its own Neon project (split from RoboHire's database in July 2026).
 
-See [`docs/ENGINEERING_PLAN.md`](docs/ENGINEERING_PLAN.md) for architecture & rationale and [`docs/TASK_PLAN.md`](docs/TASK_PLAN.md) for the phased execution checklist.
+**New to the project? Start with the engineering handbook: [`docs/handbook/README.md`](docs/handbook/README.md)** (product, architecture, local setup, data model, AI stack, features, testing, deployment, status and roadmap). [`docs/ENGINEERING_PLAN.md`](docs/ENGINEERING_PLAN.md) and [`docs/TASK_PLAN.md`](docs/TASK_PLAN.md) are the July 2026 extraction record.
 
 ## Two brands, one shared stack
 
-On the `feat/jobright-clone` branch this codebase serves two product brands, resolved per request from the Host header: **RoboApply** (`roboapply.io`, the international market including Taiwan) and **GoApply** (`goapply.top`, mainland China). Both have the same functions and run on the same shared stack: one set of credentials for models, email, voice, storage and web push serves both. A China-specific provider (`CN_<NAME>` in `.env.example`) is an optional override of `<NAME>`, never a prerequisite, so GoApply works with no variable of its own. What differs is what follows from the market: job sources and job-search providers, language, currency and prices, the payment rail (Alipay for GoApply, Stripe for RoboApply), extra sign-in methods and legal lines. Neither brand ever submits a job application for the user. A deployment serves both brands unless `ALLOWED_BRANDS` narrows it (`ALLOWED_BRANDS=roboapply` keeps GoApply closed). The plans are indexed in [`docs/jobright-clone/README.md`](docs/jobright-clone/README.md); the parity rules are in [`docs/jobright-clone/GOAPPLY_PARITY_PLAN.md`](docs/jobright-clone/GOAPPLY_PARITY_PLAN.md). Locally, `./scripts/dev-clone.sh` starts both brands at `http://localhost:3621` and `http://goapply.localhost:3621`.
+This codebase serves two product brands, resolved per request from the Host header: **RoboApply** (`roboapply.io`, the international market including Taiwan) and **GoApply** (`goapply.top`, mainland China). Both have the same functions and run on the same shared stack: one set of credentials for models, email, voice, storage and web push serves both. A China-specific provider (`CN_<NAME>` in `.env.example`) is an optional override of `<NAME>`, never a prerequisite, so GoApply works with no variable of its own. What differs is what follows from the market: job sources and job-search providers, language, currency and prices, the payment rail (Alipay for GoApply, Stripe for RoboApply), extra sign-in methods and legal lines. Neither brand ever submits a job application for the user. A deployment serves both brands unless `ALLOWED_BRANDS` narrows it (`ALLOWED_BRANDS=roboapply` keeps GoApply closed). The plans are indexed in [`docs/jobright-clone/README.md`](docs/jobright-clone/README.md); the parity rules are in [`docs/jobright-clone/GOAPPLY_PARITY_PLAN.md`](docs/jobright-clone/GOAPPLY_PARITY_PLAN.md). Locally, `./scripts/dev-clone.sh` starts both brands at `http://localhost:3621` and `http://goapply.localhost:3621`.
 
 ## Quick start
 
@@ -41,7 +41,7 @@ npm install && npm run dev
 | `npm run build:server` | Compile the Express backend to `server/dist` |
 | `npm run typecheck:server` | Type-check the backend (no emit) |
 | `npm run db:push` | Push the Prisma schema (uses `DIRECT_DATABASE_URL`) |
-| `npm run test` | Frontend vitest |
+| `npm test` | The root Vitest suite (web and server); `npx vitest run <file>` runs one file |
 
 ## Layout
 
@@ -54,7 +54,7 @@ npm install && npm run dev
 │  ├─ src/interview-engine/  Mock-interview control plane
 │  ├─ src/cron/handlers.ts   Vercel-Cron HTTP endpoints (CRON_SECRET-gated)
 │  ├─ src/{lib,services,agents,middleware,types,brands,utils}/  shared closure
-│  └─ prisma/schema.prisma    (generates client to server/src/generated/prisma)
+│  └─ prisma/schema/*.prisma  multi-file schema (generates client to server/src/generated/prisma)
 ├─ interview-agent/     LiveKit voice worker (deploy separately)
 ├─ prisma.config.ts     Points prisma at server/prisma/schema.prisma
 └─ vercel.json          rewrites (/api/v1/* → the function) + crons + function config
@@ -65,7 +65,7 @@ npm install && npm run dev
 1. Import the repo into Vercel (framework auto-detected as **Next.js**).
 2. Enable **Fluid Compute** (Project → Settings → Functions) and be on **Pro** (needed for 5+ sub-daily crons and the 300s function duration).
 3. Set env vars (see `.env.example`) — leave `NEXT_PUBLIC_API_URL` **empty** in production so the browser calls same-origin `/api/v1/*`. Set `CRON_SECRET`, `DATABASE_URL` (pooled), `DIRECT_DATABASE_URL`, `JWT_SECRET`, `COOKIE_DOMAIN=.roboapply.io`, LLM/Stripe/LiveKit/S3 keys.
-4. Deploy. `vercel.json` already wires the rewrite, the function (`maxDuration: 300`), and the 7 cron jobs.
+4. Deploy. `vercel.json` already wires the rewrite, the function (`maxDuration: 300`), and the cron jobs (16; they answer 401 until `CRON_SECRET` is set).
 5. Host `interview-agent/` on an always-on Node host and give it the LiveKit creds + `NEXT_PUBLIC_API_URL` → the deployed API.
 
-Full deploy runbook + known follow-ups: [`docs/ENGINEERING_PLAN.md`](docs/ENGINEERING_PLAN.md).
+Release, rollback and operations: [`docs/handbook/09-deployment-and-operations.md`](docs/handbook/09-deployment-and-operations.md).
