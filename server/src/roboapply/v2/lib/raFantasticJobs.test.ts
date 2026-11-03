@@ -903,7 +903,8 @@ describe('the two transports on the wire (fetch mocked): search and feedRequest'
     mockReplies({
       status: 200,
       body: [atsRow()],
-      headers: { 'x-api-jobs-this-request': '1', 'x-api-jobs-remaining': '9450', 'x-api-jobs-limit': '10000', 'x-api-requests-remaining': '4823', 'x-api-requests-limit': '5000', 'x-api-next-billing-date': '2026-11-01T00:00:00.000Z' },
+      headers: { 'x-api-jobs-this-request': '1', 'x-api-jobs-remaining': '9450', 'x-api-jobs-limit': '10000', 'x-api-requests-remaining': '4823', 'x-api-requests-limit': '5000', // A billing date in the future, whenever the suite runs (a fixed date expired on 2026-11-01).
+      'x-api-next-billing-date': new Date(Date.now() + 7 * 86_400_000).toISOString() },
     });
     await feedRequest('active', FEED_PARAMS);
     expect(seen).toHaveLength(2);
