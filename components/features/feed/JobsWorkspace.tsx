@@ -8,12 +8,21 @@
 //   tabs          For you · Explore · Added by you
 //   prompts       "Looks better / Not quite" (after an Assistant change),
 //                 the skills check, the getting-started checklist
-//   filters       FilterBar (WP-20) with the "Hiding {n} weaker fits" number
-//   sort          Recommended · Newest · Your best fits · Highest pay
-//                 (+ GoApply deadline) and "How ranking works". `?sort=<key>`
-//                 opens the list in that order (the Assistant's "Show jobs
-//                 sorted this way" link); a key this market does not offer is
-//                 ignored. Picking a sort keeps the address in step.
+//   search        FilterBar (WP-20), collapsed to one line: the active search
+//                 in words + "Change search" (docs/agent-driven/REDESIGN.md
+//                 §6). The search box, saved searches, filter buttons and
+//                 chips open in place on demand. They open by themselves for
+//                 `?edit=search` (a link that sends the user here to change
+//                 the search) and after the Assistant changed the search, and
+//                 stay open until the user closes them. Closed on each visit
+//                 otherwise: nothing is remembered between visits.
+//   view + sort   one row that stays visible: the fit view with its "Hiding
+//                 {n} weaker fits" number, and Recommended · Newest · Your
+//                 best fits · Highest pay (+ GoApply deadline) with "How
+//                 ranking works". `?sort=<key>` opens the list in that order
+//                 (the Assistant's "Show jobs sorted this way" link); a key
+//                 this market does not offer is ignored. Picking a sort keeps
+//                 the address in step.
 //   ranked by     the words a plain-language search left over (Explore →
 //                 "Apply"): the list is ordered by closeness to them until the
 //                 search changes or the person clears them. They are never a
@@ -56,7 +65,7 @@ import { useFeed } from '../../../hooks/feed/useFeed';
 import { sortUsesRelevance, useListRelevance } from '../../../hooks/feed/useExplore';
 import { feedKeys } from '../../../hooks/feed/keys';
 import { SPLIT_VIEW_QUERY, useIsDesktop } from '../../../hooks/feed/useIsDesktop';
-import { RATING_AFTER_CARDS, useCalibration, useSeenCounter, useSkillsCheckData } from '../../../hooks/feed/useCalibration';
+import { RATING_AFTER_CARDS, useAssistantFilterChange, useCalibration, useSeenCounter, useSkillsCheckData } from '../../../hooks/feed/useCalibration';
 import type { FeedSort, NewCountResponse } from '../../../lib/api/contracts/feed';
 import { AfterChangeCheck } from './AfterChangeCheck';
 import { FeedList } from './FeedList';
@@ -66,6 +75,12 @@ import { SkillsCheck } from './SkillsCheck';
 import { SortMenu, sortFromQuery, sortsFor } from './SortMenu';
 import { ZeroResults } from './ZeroResults';
 import styles from './feed.module.css';
+
+/** `/jobs?edit=search` opens the list with the search controls showing. */
+export const SEARCH_EDIT_PARAM = 'edit';
+export const SEARCH_EDIT_VALUE = 'search';
+/** Where "Change" on a search shown elsewhere (Today's goal line) sends the user. */
+export const JOBS_SEARCH_EDIT_HREF = `/jobs?${SEARCH_EDIT_PARAM}=${SEARCH_EDIT_VALUE}`;
 
 export function JobsWorkspace() {
   const t = useTranslations('jobs.workspace');
@@ -99,6 +114,35 @@ export function JobsWorkspace() {
       const query = new URLSearchParams(params?.toString() ?? '');
       if (next === 'recommended') query.delete('sort');
       else query.set('sort', next);
+      const qs = query.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [params, pathname, router],
+  );
+  // The search controls are closed until asked for, so the first job sits near the top. Two things open them
+  // without a click: a link that sends the user here to change the search, and a change the Assistant just made
+  // (the chips then show what it changed, beside "Looks better / Not quite"). Both are followed when they arrive
+  // while the page is already open, and neither closes the controls again: only the user does.
+  const editAsked = params?.get(SEARCH_EDIT_PARAM) === SEARCH_EDIT_VALUE;
+  const assistantChangeAt = useAssistantFilterChange()?.at ?? null;
+  const [searchOpen, setSearchOpenState] = useState(editAsked || assistantChangeAt !== null);
+  const [seenEditAsked, setSeenEditAsked] = useState(editAsked);
+  if (editAsked !== seenEditAsked) {
+    setSeenEditAsked(editAsked);
+    if (editAsked) setSearchOpenState(true);
+  }
+  const [seenChangeAt, setSeenChangeAt] = useState(assistantChangeAt);
+  if (assistantChangeAt !== seenChangeAt) {
+    setSeenChangeAt(assistantChangeAt);
+    if (assistantChangeAt !== null) setSearchOpenState(true);
+  }
+  const setSearchOpen = useCallback(
+    (next: boolean) => {
+      setSearchOpenState(next);
+      // Closing ends the edit the link asked for: the address stops asking, so a reload opens the list closed.
+      if (next || params?.get(SEARCH_EDIT_PARAM) !== SEARCH_EDIT_VALUE) return;
+      const query = new URLSearchParams(params?.toString() ?? '');
+      query.delete(SEARCH_EDIT_PARAM);
       const qs = query.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
@@ -230,12 +274,14 @@ export function JobsWorkspace() {
             {calibration.skills.show && skillsData.data ? <SkillsCheck data={skillsData.data} onClose={calibration.skills.close} /> : null}
             <GettingStartedChecklist variant="card" />
 
-            <div className={styles.filters}>
-              <FilterBar hiddenWeakerFits={feed.hiddenByTier} />
-            </div>
-            <div className={styles.toolbar}>
-              <SortMenu value={sort} market={market} onChange={setSort} />
-            </div>
+            <section className={styles.filters} aria-label={t('searchLabel')}>
+              <FilterBar
+                hiddenWeakerFits={feed.hiddenByTier}
+                open={searchOpen}
+                onOpenChange={setSearchOpen}
+                trailing={<SortMenu value={sort} market={market} onChange={setSort} />}
+              />
+            </section>
             {rankedByWords && feed.relevanceApplied !== false ? (
               // Left out when the first page says the words took no part in the order (no posting matched them, or
               // hybrid retrieval is off): the page never says "ranked by" for a list that was not (MKT-5C O-7).

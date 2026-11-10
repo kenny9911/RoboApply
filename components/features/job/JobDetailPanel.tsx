@@ -66,6 +66,8 @@ import { apiErrorCode, apiErrorDetails } from '../../../lib/api/contracts/wire';
 import { RoboApiError } from '../../../lib/api/client';
 import { cn } from '../../../lib/utils';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
+// The file, not the `agent` barrel: that barrel imports this area (jobDetailHref).
+import { PrepareApplicationButton } from '../agent/PrepareApplicationButton';
 import { ApplyInterceptSheet } from './ApplyInterceptSheet';
 import { GetReadyChecklist } from './GetReadyChecklist';
 import { JobHeader, JobHeaderActions } from './JobHeader';
@@ -283,13 +285,16 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   const headerActions = (
     <>
       <JobHeaderActions>
+        {/* Agent-driven order (docs/agent-driven/REDESIGN.md §6): preparing the application is the
+            primary action; going to the company site now stays second. One primary button either way. */}
+        {agent && open && !applied ? <PrepareApplicationButton jobId={job.id} variant="primary" addedVia="feed" /> : null}
         {open && job.applyUrl && !applied ? (
-          <Btn variant="primary" onClick={apply} disabled={actions.pending === 'apply'} data-testid="apply-button">
+          <Btn variant={agent ? 'default' : 'primary'} onClick={apply} disabled={actions.pending === 'apply'} data-testid="apply-button">
             {applyCopy ? tCn(applyCopy.labelKey, { name: applyCopy.name }) : t('actions.apply')}
           </Btn>
         ) : null}
         {noApplyLink && !applied ? (
-          <Btn variant="primary" onClick={iApplied} disabled={actions.pending === 'markApplied'} data-testid="i-applied-button">
+          <Btn variant={agent ? 'default' : 'primary'} onClick={iApplied} disabled={actions.pending === 'markApplied'} data-testid="i-applied-button">
             {t('actions.iApplied')}
           </Btn>
         ) : null}

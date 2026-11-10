@@ -3,7 +3,7 @@
 //   WP-35 (/jobs/added): FeedTabs + feedTabPanelProps for the same tab strip
 //   WP-34 (similar jobs), WP-77, WP-78: JobCard for a FeedItem list
 
-export { JobsWorkspace } from './JobsWorkspace';
+export { JobsWorkspace, JOBS_SEARCH_EDIT_HREF, SEARCH_EDIT_PARAM, SEARCH_EDIT_VALUE } from './JobsWorkspace';
 export { Explore } from './Explore';
 export { FeedTabs, feedTabPanelProps, FEED_TAB_HREF, FEED_TABS_ID, type FeedTabId, type FeedTabsProps } from './FeedTabs';
 export { FeedList, type FeedListProps } from './FeedList';

@@ -75,6 +75,27 @@ export function activeChips(
   return chips;
 }
 
+/**
+ * The chips of a saved search as the user just left it (a change still being
+ * saved included), in the UI language. One source for the chips themselves and
+ * for the search summary line, so the two always name the same values.
+ */
+export function useActiveChips<P extends Pick<SearchProfile, 'id' | 'filters'> | null>(saved: P): { profile: P; chips: ActiveChip[] } {
+  const t = useTranslations('filters');
+  const ctx = useEditorContext();
+  const labels = useFilterLabels();
+  // A chip disappears as soon as it is removed; the write behind it is queued (useApplyFilters).
+  const { profile } = useOptimisticFilters(saved);
+  const chips = profile
+    ? activeChips(profile.filters, hiddenFieldsFor(ctx.market), labels, {
+        excluded: (v) => t('chips.excluded', { value: v }),
+        only: (v) => t('chips.only', { value: v }),
+        quoted: (v) => `“${v}”`,
+      })
+    : [];
+  return { profile, chips };
+}
+
 export interface ActiveFilterChipsProps {
   profile: SearchProfile | null;
   onApplied?: (profile: SearchProfile) => void;
@@ -83,17 +104,9 @@ export interface ActiveFilterChipsProps {
 export function ActiveFilterChips({ profile: saved, onApplied }: ActiveFilterChipsProps) {
   const t = useTranslations('filters');
   const ctx = useEditorContext();
-  const labels = useFilterLabels();
   const { apply } = useApplyFilters();
-  // A chip disappears as soon as it is removed; the write behind it is queued (useApplyFilters).
-  const { profile } = useOptimisticFilters(saved);
+  const { profile, chips } = useActiveChips(saved);
   if (!profile) return null;
-
-  const chips = activeChips(profile.filters, hiddenFieldsFor(ctx.market), labels, {
-    excluded: (v) => t('chips.excluded', { value: v }),
-    only: (v) => t('chips.only', { value: v }),
-    quoted: (v) => `“${v}”`,
-  });
   if (!chips.length) return null;
 
   const run = async (patch: FilterSetPatch) => {

@@ -12,6 +12,15 @@
 //   posted (or first seen) · last checked · source line · New · ≤3 badges · market slot
 //   Save for later · Apply on company site · Tailor resume · Ask about this job · …
 //
+// With the `agent` flag on (docs/agent-driven/REDESIGN.md §6) the row is
+//   Prepare application · Apply on company site · Save for later · …
+// "Prepare application" (PrepareApplicationButton) is the card's one primary
+// button; "Apply on company site" keeps everything it does and is the second
+// action, for a user who wants to go now. "Tailor resume" and "Ask about this
+// job" keep what they do and sit in the "…" menu. A job the user applied to,
+// or whose posting is gone, offers neither apply nor prepare. Flag off: the
+// row above, unchanged.
+//
 // GoApply: the market slot (JobMetaCn) prints the pay as the post states it,
 // the post's own date, "Last checked" and the source. When it does, the card
 // leaves its own pay and posted / last checked / source lines out, so each
@@ -49,9 +58,13 @@ import { normalizeScore, type FitTierKey } from '../common';
 import { MarketJobMeta, cnApplyCopy, marketMetaCoversBasics, withListing, withOwnImport } from '../market';
 import { listingApply, listingSource } from '../../../lib/api/feed';
 import { lowConfidenceReason } from '../match/FitScore';
+import { PrepareApplicationButton } from '../agent';
 import { TailorButton } from '../tailor';
 import { WhyThisJob } from '../compliance';
 import { useJobActions } from '../../../hooks/shared/useJobActions';
+import { useLaunchTailor } from '../../../hooks/shared/useLaunchTailor';
+import { useTailorAvailability } from '../../../hooks/tailor';
+import { useResumeList } from '../../../hooks/useResumes';
 import { useFlag } from '../../../lib/flags';
 import { track } from '../../../lib/analytics';
 import { apiErrorDetails } from '../../../lib/api/contracts/wire';
@@ -127,6 +140,36 @@ function BadgeView({ badge, locale }: { badge: CardBadge; locale: string }) {
   }
 }
 
+/**
+ * "Tailor resume" in the card's menu (flag `agent`). The same gate and the same
+ * launch as <TailorButton from="feed">: no item when AI tailoring is off for
+ * this user or brand (R-04), and `/resume?tailor=<jobId>` when picked. It
+ * mounts with the open menu, so a card asks nothing until then.
+ */
+function TailorMenuItem({ jobId, onPick }: { jobId: string; onPick: () => void }) {
+  const t = useTranslations('tailor.entry');
+  const launch = useLaunchTailor();
+  const list = useResumeList();
+  const primary = list.data?.resumes.find((r) => r.isPrimary)?.id ?? list.data?.resumes[0]?.id ?? null;
+  const { available } = useTailorAvailability(primary);
+  if (!available) return null;
+  return (
+    <li role="none">
+      <button
+        type="button"
+        role="menuitem"
+        className={styles.menuItem}
+        onClick={() => {
+          onPick();
+          launch({ jobId, from: 'feed' });
+        }}
+      >
+        {t('button')}
+      </button>
+    </li>
+  );
+}
+
 export function JobCard({ item, position, market, active = false, onOpen, onHidden, observe }: JobCardProps) {
   const t = useTranslations('jobs.card');
   const tScore = useTranslations('jobs.score');
@@ -137,6 +180,8 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
   const tBadge = useTranslations('jobs.card.badge');
   const tClosed = useTranslations('jobDetail.closed');
   const copilotOn = useFlag('copilot');
+  // Agent-driven cards: "Prepare application" leads, Tailor and Ask move into the menu.
+  const agentOn = useFlag('agent');
   // The posting's own source and apply link (the contract's `source` / `apply`;
   // null where the server sent none, and the card then behaves as before).
   const listing = { source: listingSource(item), apply: listingApply(item) };
@@ -152,7 +197,9 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
   const [menuOpen, setMenuOpen] = useState(false);
   const [sheet, setSheet] = useState<'hide' | 'report' | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+  const menuBtnId = useId();
 
   const score = normalizeScore(item.fit?.score);
   const tier = (item.fit?.tier ?? null) as FitTierKey | null;
@@ -182,7 +229,11 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
   useEffect(() => {
     if (!menuOpen) return undefined;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuOpen(false);
+      if (e.key !== 'Escape') return;
+      // Focus was on an item that is about to go: the button that opened the menu takes it back.
+      const inside = menuRef.current?.contains(document.activeElement) ?? false;
+      setMenuOpen(false);
+      if (inside) menuBtnRef.current?.focus();
     };
     const onClick = (e: globalThis.MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
@@ -307,6 +358,20 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
 
   // Optimistic while "Already applied" is being recorded; otherwise the hook's state.
   const showApplied = lastApplied !== null || actions.pending === 'markApplied';
+  // Neither apply nor prepare is offered for a job already applied to, or whose posting is gone.
+  const canApply = !showApplied && !alreadyApplied && !closed;
+
+  const saveButton = (
+    <Btn className={styles.actionBtn} onClick={() => void toggleSave()} aria-pressed={saved} disabled={actions.pending === 'save' || actions.pending === 'unsave'}>
+      {saved ? t('actions.saved') : t('actions.save')}
+    </Btn>
+  );
+  // The card's one primary button, unless "Prepare application" is (flag `agent`).
+  const applyButton = canApply ? (
+    <Btn variant={agentOn ? 'default' : 'primary'} className={styles.actionBtn} onClick={() => void apply()} disabled={actions.pending === 'apply'}>
+      {actions.pending === 'apply' ? t('actions.applyPending') : applyCopy ? tCn(applyCopy.labelKey, { name: applyCopy.name }) : t('actions.apply')}
+    </Btn>
+  ) : null;
 
   return (
     <article
@@ -457,23 +522,29 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
       ) : null}
 
       <div className={styles.actions} role="group" aria-label={t('actions.label', { title: item.title })}>
-        <Btn className={styles.actionBtn} onClick={() => void toggleSave()} aria-pressed={saved} disabled={actions.pending === 'save' || actions.pending === 'unsave'}>
-          {saved ? t('actions.saved') : t('actions.save')}
-        </Btn>
-        {!showApplied && !alreadyApplied && !closed ? (
-          <Btn variant="primary" className={styles.actionBtn} onClick={() => void apply()} disabled={actions.pending === 'apply'}>
-            {actions.pending === 'apply' ? t('actions.applyPending') : applyCopy ? tCn(applyCopy.labelKey, { name: applyCopy.name }) : t('actions.apply')}
-          </Btn>
-        ) : null}
-        <TailorButton jobId={item.jobId} from="feed" jobTitle={item.title} variant="ghost" className={styles.actionBtn} />
-        {copilotOn ? (
-          <Btn variant="ghost" className={styles.actionBtn} onClick={() => actions.askAboutJob()}>
-            {t('actions.ask')}
-          </Btn>
-        ) : null}
+        {agentOn ? (
+          <>
+            {canApply ? <PrepareApplicationButton jobId={item.jobId} variant="primary" addedVia="feed" className={styles.actionBtn} /> : null}
+            {applyButton}
+            {saveButton}
+          </>
+        ) : (
+          <>
+            {saveButton}
+            {applyButton}
+            <TailorButton jobId={item.jobId} from="feed" jobTitle={item.title} variant="ghost" className={styles.actionBtn} />
+            {copilotOn ? (
+              <Btn variant="ghost" className={styles.actionBtn} onClick={() => actions.askAboutJob()}>
+                {t('actions.ask')}
+              </Btn>
+            ) : null}
+          </>
+        )}
         <div className={styles.menuWrap} ref={menuRef}>
           <button
             type="button"
+            ref={menuBtnRef}
+            id={menuBtnId}
             className={styles.iconBtn}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
@@ -483,7 +554,23 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
             <span aria-hidden="true">…</span>
           </button>
           {menuOpen ? (
-            <ul className={styles.menu} role="menu">
+            <ul className={styles.menu} role="menu" aria-labelledby={menuBtnId}>
+              {agentOn ? <TailorMenuItem jobId={item.jobId} onPick={() => setMenuOpen(false)} /> : null}
+              {agentOn && copilotOn ? (
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuItem}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      actions.askAboutJob();
+                    }}
+                  >
+                    {t('actions.ask')}
+                  </button>
+                </li>
+              ) : null}
               <li role="none">
                 <button type="button" role="menuitem" className={styles.menuItem} onClick={() => { setMenuOpen(false); setSheet('hide'); }}>
                   {t('actions.notInterested')}
