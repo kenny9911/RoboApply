@@ -95,25 +95,35 @@
   color: var(--action);
   font-weight: 600;
 }
+/* Segmented radios read like the page's tabs: a glass track, and the chosen
+ * option is the ink (action) pill. The track takes the card radius rather than
+ * a pill so it still reads as one control when its options wrap. */
 .segmented {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
   padding: 4px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--r-lg);
+  background: var(--surface-glass);
 }
 .segment {
   position: relative;
   display: inline-flex;
   align-items: center;
   min-height: 36px;
-  padding: 0 12px;
-  border-radius: var(--r-sm);
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-pill);
   font-size: var(--fs-meta);
   color: var(--text-2);
   cursor: pointer;
+  transition:
+    background var(--dur-hover) var(--ease-out),
+    color var(--dur-hover) var(--ease-out);
+}
+.segment:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 .segment input {
   position: absolute;
@@ -125,11 +135,12 @@
 .segment:has(input:focus-visible) {
   box-shadow: var(--focus-ring);
 }
-.segmentOn {
-  background: var(--surface);
-  color: var(--text);
+.segmentOn,
+.segmentOn:hover {
+  background: var(--action);
+  color: var(--action-ink);
   font-weight: 600;
-  box-shadow: var(--e1);
+  box-shadow: 0 4px 12px -4px rgba(18, 19, 19, 0.4);
 }
 
 /* ── Checkbox rows ────────────────────────────────────────────────────── */
