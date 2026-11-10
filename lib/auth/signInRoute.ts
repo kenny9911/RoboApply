@@ -4,7 +4,9 @@
 //      to keep a result there, and the page is public, so it wins;
 //   2. onboarding not finished → its screen (`/auth/me.onboarding.nextRoute`);
 //   3. else a same-site `next` the visitor arrived with;
-//   4. else /jobs (the AuthGate sends GoApply users to their first-value page).
+//   4. else /today, the signed-in home (docs/agent-driven/REDESIGN.md §3). The
+//      server's own sign-in answer (`next`) wins where a flow carries one, so
+//      GoApply keeps its first-value page (R-14) there.
 
 import type { MeResponse } from '../api/auth';
 import { priorityNext, safeNext } from './entry';
@@ -14,5 +16,5 @@ export function signInRoute(me: Pick<MeResponse, 'onboarding'> | null | undefine
   if (priority) return priority;
   const onboarding = me?.onboarding;
   if (onboarding && !onboarding.completed && onboarding.nextRoute) return onboarding.nextRoute;
-  return safeNext(rawNext) ?? '/jobs';
+  return safeNext(rawNext) ?? '/today';
 }

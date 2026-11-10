@@ -49,6 +49,8 @@
 // APP_PATHS in app/robots.ts (a test keeps the two equal).
 
 export const PROTECTED_PREFIXES = [
+  // The signed-in home (docs/agent-driven/REDESIGN.md §5).
+  '/today',
   // The four destinations (+ /job-search for /job-search/developers).
   '/jobs',
   '/job-search',

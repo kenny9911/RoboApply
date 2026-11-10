@@ -66,8 +66,8 @@ describe('sign-in routing', () => {
     expect(signInRoute(unfinished, '/jobs/cm1')).toBe('/onboarding/resume');
     const done = { onboarding: { step: 'done' as const, path: null, completed: true, nextRoute: null } };
     expect(signInRoute(done, '/jobs/cm1')).toBe('/jobs/cm1');
-    expect(signInRoute(done, 'https://evil.example')).toBe('/jobs');
-    expect(signInRoute(null, null)).toBe('/jobs');
+    expect(signInRoute(done, 'https://evil.example')).toBe('/today');
+    expect(signInRoute(null, null)).toBe('/today');
   });
 });
 
@@ -138,12 +138,12 @@ describe('`next` to a free tool page (WP-57 → INT-01)', () => {
     expect(signInRoute(unfinished, '/tools/something-else')).toBe('/onboarding/situation');
     // Never off-site, whatever the path looks like.
     expect(signInRoute(unfinished, '//evil.example/tools/resume-check')).toBe('/onboarding/situation');
-    expect(signInRoute(done, 'https://evil.example/tools/resume-check')).toBe('/jobs');
+    expect(signInRoute(done, 'https://evil.example/tools/resume-check')).toBe('/today');
     expect(priorityNext('/\\evil/tools/resume-check')).toBeNull();
     expect(priorityNext(null)).toBeNull();
     // Onboarding done: any same-site next, else /jobs.
     expect(signInRoute(done, '/jobs/cm1')).toBe('/jobs/cm1');
-    expect(signInRoute(done, null)).toBe('/jobs');
+    expect(signInRoute(done, null)).toBe('/today');
   });
 
   it('from=resume-job-match picks its own contextual variant', () => {

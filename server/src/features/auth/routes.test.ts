@@ -164,7 +164,7 @@ describe('password reset', () => {
     expect([weak.status, weak.body.code]).toEqual([422, 'invalid_request']);
     const ok = await on.request<{ data: { next: string } }>('POST', `${A}/password/reset`, { host: ROBO, body: { token, password: 'abcdefg1' } });
     expect(ok.status).toBe(200);
-    expect(ok.body.data.next).toBe('/jobs');
+    expect(ok.body.data.next).toBe('/today');
     expect(cookieOf(ok.headers)).toContain(`${SESSION_COOKIE_NAME}=sess-1`);
     const again = await on.request<{ code: string }>('POST', `${A}/password/reset`, { host: ROBO, body: { token, password: 'abcdefg1' } });
     expect([again.status, again.body.code]).toEqual([400, 'token_invalid']);

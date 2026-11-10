@@ -42,7 +42,7 @@ import { summarizeEntitlementsForMe, type EntitlementSummary } from '../../platf
 import { createSeekerSession } from '../../roboapply/engine/lib/seekerSession.js';
 import { retentionDaysFor } from '../../roboapply/services/accountPurgeHelpers.js';
 import { SEEKER_CONSENT_TYPES } from '../../roboapply/engine/lib/seekerConsentTypes.js';
-import { buildOnboardingMe, firstValueRoute, nextStage, routeForStage, type OnboardingMe } from '../onboarding/contract.js';
+import { buildOnboardingMe, firstValueRoute, homeRoute, nextStage, routeForStage, type OnboardingMe } from '../onboarding/contract.js';
 import { growthService, normalizeReferralCode, touchesFromClient, type RawSignals, type Touch } from '../growth/index.js';
 import type { ConsentCatalogItem, RecordConsentResponse } from '../compliance/contract.js';
 import {
@@ -247,7 +247,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     });
   }
 
-  /** Where a signed-in user goes: their onboarding screen when unfinished, else `next` or the first-value route. */
+  /** Where a signed-in user goes: their onboarding screen when unfinished, else `next` or the home route. */
   async function signInRoute(brand: ProductBrand, userId: string, next: string | null): Promise<string> {
     // A free-tool page the visitor asked to come back to wins over onboarding
     // (it is public; onboarding resumes when they enter the app).
@@ -256,7 +256,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     const onboarding = onboardingFor(brand, profile, flagContext(brand));
     if (!onboarding.completed && onboarding.nextRoute) return onboarding.nextRoute;
     if (next && isSafeNext(next)) return next;
-    return firstValueRoute(brand.id, flagContext(brand));
+    return homeRoute(brand.id, flagContext(brand));
   }
 
   /** Soft: never fails the auth action that triggered it. */

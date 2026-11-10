@@ -174,7 +174,7 @@ describe('password reset (2fa-gate:password-reset)', () => {
 
   it('two-step sign-in on: the new password is saved, but the answer is the challenge and no session', async () => {
     const res = await reset();
-    expectChallenge(res, 'u1', '/login/2fa?next=%2Fjobs');
+    expectChallenge(res, 'u1', '/login/2fa?next=%2Ftoday');
     expect(db.$rows('user')[0]!.passwordHash).toBe('hashed:abcdefg1');
   });
 
@@ -182,7 +182,7 @@ describe('password reset (2fa-gate:password-reset)', () => {
     twoStep = 'off';
     const res = await reset();
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ next: '/jobs' });
+    expect(res.body.data).toEqual({ next: '/today' });
     expect(cookies(res.headers)).toContain(`${SESSION_COOKIE_NAME}=sess-`);
     expect(cookies(res.headers)).not.toContain(`${CHALLENGE_COOKIE}=`);
   });

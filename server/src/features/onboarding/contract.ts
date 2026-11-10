@@ -178,6 +178,17 @@ export function firstValueRoute(brand: BrandId, ctx: FirstValueContext = {}): st
   return '/resume';
 }
 
+/**
+ * Where a signed-in user with setup finished lands when they asked for no page
+ * in particular (docs/agent-driven/REDESIGN.md §3): Today on RoboApply. GoApply
+ * keeps its first-value page (R-14: `/campus` → `/jobs` → `/resume`), which is
+ * a market rule, not a navigation default. The `tour` stage is NOT this route:
+ * the classic flow's tour cards show on `/jobs` (`firstValueRoute`).
+ */
+export function homeRoute(brand: BrandId, ctx: FirstValueContext = {}): string {
+  return brand === 'roboapply' ? '/today' : firstValueRoute(brand, ctx);
+}
+
 /** Route for a stage; `tour` resolves through `firstValueRoute`, `done` → null. */
 export function routeForStage(brand: BrandId, stage: string, ctx: FirstValueContext = {}): string | null {
   if (!isStageOfBrand(brand, stage)) return null;

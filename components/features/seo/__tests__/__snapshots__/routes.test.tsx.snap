@@ -35,6 +35,7 @@ exports[`crawl files on the goapply host > robots.txt 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/today",
         "/jobs",
         "/job-search",
         "/resume",
@@ -60,6 +61,7 @@ exports[`crawl files on the goapply host > robots.txt 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/today",
         "/jobs",
         "/job-search",
         "/resume",
@@ -101,6 +103,7 @@ exports[`crawl files on the goapply host > robots.txt 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/today",
         "/jobs",
         "/job-search",
         "/resume",
@@ -233,6 +236,7 @@ exports[`crawl files on the roboapply host > robots.txt 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/today",
         "/jobs",
         "/job-search",
         "/resume",
@@ -258,6 +262,7 @@ exports[`crawl files on the roboapply host > robots.txt 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/today",
         "/jobs",
         "/job-search",
         "/resume",

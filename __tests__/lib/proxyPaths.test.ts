@@ -89,8 +89,9 @@ describe('proxyPaths.isProtectedPath', () => {
     }
   });
 
-  it('lists exactly the fifteen protected prefixes', () => {
+  it('lists exactly the sixteen protected prefixes', () => {
     expect([...PROTECTED_PREFIXES]).toEqual([
+      '/today',
       '/jobs',
       '/job-search',
       '/resume',

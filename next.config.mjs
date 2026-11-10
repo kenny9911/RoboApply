@@ -145,7 +145,8 @@ const nextConfig = {
     // them, and a 404 on the first click after signup is not recoverable.
     //
     // Destination rules, so a future addition lands in the right column:
-    //   • a renamed screen goes to its rename (/home → /jobs);
+    //   • a renamed screen goes to its rename (/home → /today, the signed-in
+    //     home since the agent-driven IA; docs/agent-driven/REDESIGN.md §3);
     //   • a DELETED screen goes to the destination that answers the same
     //     question (/queue was a list of jobs → /jobs; /activity and /insights
     //     were both "what happened to my applications" → /applications);
@@ -154,7 +155,7 @@ const nextConfig = {
     const permanent = true;
     return [
       // Renamed destinations. `:id` and `:path*` carry the deep links.
-      { source: '/home', destination: '/jobs', permanent },
+      { source: '/home', destination: '/today', permanent },
       { source: '/tracker', destination: '/applications', permanent },
       { source: '/resumes', destination: '/resume', permanent },
       { source: '/resumes/:id', destination: '/resume/:id', permanent },

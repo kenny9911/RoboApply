@@ -1,9 +1,9 @@
 // MobileNav — the fixed bottom bar below 760px, where the 248px rail is
 // hidden.
 //
-// The bar is the registry's mobile slots (components/v3/shell/destinations.ts,
-// PRODUCT_PLAN.md §3.3): RoboApply `Jobs · Applications · Resume · Interview
-// prep · More`. The four destination tabs are links; the fifth opens the More
+// The bar is the registry's mobile slots (components/v3/shell/destinations.ts;
+// docs/agent-driven/REDESIGN.md §3): RoboApply `Today · Jobs · Applications ·
+// Resume · More`. The four destination tabs are links; the fifth opens the More
 // sheet. The tests below are mostly about what must NOT be possible — a fifth
 // destination link, a label the rail does not use, or a tap target under
 // 44px. Per-brand slots and the More sheet are covered in
@@ -38,10 +38,10 @@ import { MobileNav } from '../../components/v3/shell/MobileNav';
 import { DESTINATIONS } from '../../components/v3/shell/Sidebar';
 
 const IA: [string, string][] = [
+  ['/today', 'Today'],
   ['/jobs', 'Jobs'],
   ['/applications', 'Applications'],
   ['/resume', 'Resume'],
-  ['/practice', 'Interview prep'],
 ];
 
 describe('MobileNav', () => {
@@ -50,7 +50,7 @@ describe('MobileNav', () => {
     mockAuthState.value = buildAuthValue();
   });
 
-  it('renders exactly the four destination links, in the PRODUCT §3.3 order', () => {
+  it('renders exactly the four destination links, in the registry order', () => {
     renderWithProviders(<MobileNav />);
     const links = screen.getAllByRole('link');
     expect(links.map((l) => l.getAttribute('href'))).toEqual(IA.map(([h]) => h));
@@ -81,7 +81,8 @@ describe('MobileNav', () => {
 
   it('carries none of the deleted tabs', () => {
     renderWithProviders(<MobileNav />);
-    for (const gone of [/Today/, /Review queue/, /Pipeline/, /Mock interview/]) {
+    // "Today" is back on purpose (the desk; REDESIGN.md §3), so it is no longer in this list.
+    for (const gone of [/Ready to apply/, /Review queue/, /Pipeline/, /Mock interview/]) {
       expect(screen.queryByRole('link', { name: gone })).not.toBeInTheDocument();
     }
   });
@@ -114,9 +115,10 @@ describe('MobileNav', () => {
     ).not.toHaveAttribute('aria-current');
     unmount();
 
-    pathnameRef.current = '/practice/cm_session_xyz';
+    // /ready is the "Getting ready" view of Applications: the Applications tab is current there.
+    pathnameRef.current = '/ready/cm_job_xyz';
     renderWithProviders(<MobileNav />);
-    expect(screen.getByRole('link', { name: /Interview prep/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Applications/ })).toHaveAttribute(
       'aria-current',
       'page',
     );
