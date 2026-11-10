@@ -247,6 +247,15 @@ describe('retention rows', () => {
     expect(firstWhere(calls, 'rAProductEvent')).toEqual({ brand: 'goapply', createdAt: { lt: new Date('2025-09-10T05:00:00.000Z') } });
   });
 
+  it('product_events: the visit records go 13 months after the last visit, per brand', async () => {
+    const { db, calls } = recorder({ rAVisitor: [{ id: 'v1' }, { id: 'v2' }] });
+    const out = await rule('product_events').run!(ctx(db));
+    expect(rule('product_events').covers).toContain('RAVisitor');
+    expect(firstWhere(calls, 'rAVisitor')).toEqual({ brand: 'goapply', lastSeenAt: { lt: new Date('2025-09-10T05:00:00.000Z') } });
+    expect(calls.find((c) => c.model === 'rAVisitor' && c.method === 'deleteMany')!.args).toEqual({ where: { id: { in: ['v1', 'v2'] } } });
+    expect(out).toEqual({ deleted: 2 });
+  });
+
   it('closed_accounts: enforced by account-purge (no run here)', () => {
     expect(rule('closed_accounts').run).toBeUndefined();
     expect(rule('closed_accounts').enforcedBy).toBe('account-purge');

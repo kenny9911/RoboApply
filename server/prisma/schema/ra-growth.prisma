@@ -79,3 +79,63 @@ model RAReferralSignal {
   @@index([userId, createdAt])
   @@index([createdAt])
 }
+
+/// One row per visitor: where they came from and how far they got toward an
+/// account (visitor conversion; the admin "Visitors and sign-ups" report).
+/// Written only by the events ingest (features/growth/visitors.ts), never by
+/// the client directly. SCHEMA-9.
+///
+/// `anonId` is the first-party `ra_anon` id, so a row exists only where
+/// analytics linking is allowed (everywhere consent is not required, and after
+/// "Allow" in the EEA, the UK and Switzerland). A visitor who was not asked yet
+/// or said no has no row: their page views are counted and linked to nothing
+/// (RAProductEvent rows without an anonId). Kept at most 13 months after the
+/// last visit (retention rule `product_events`); a row linked to an account is
+/// deleted with it (cascade, and growth.deleteEventsForUser for the wipe).
+model RAVisitor {
+  id              String    @id @default(cuid())
+  brand           String
+  anonId          String
+  firstSeenAt     DateTime
+  lastSeenAt      DateTime
+  /// First-touch fields: set when the row is created, never overwritten.
+  /// Path of the first page viewed (token routes and invite codes redacted).
+  landingPath     String?
+  referrerHost    String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  /// 'direct' | 'search' | 'ai' | 'social' | 'email' | 'paid' | 'campaign' | 'invite' | 'referral'
+  /// (growth/visitors.ts VISITOR_CHANNELS).
+  channel         String    @default("direct")
+  /// ISO-3166 alpha-2 from the edge headers.
+  country         String?
+  /// 'desktop' | 'mobile' | 'tablet' (from the User-Agent; the string itself is not stored).
+  device          String?
+  locale          String?
+  pageViews       Int       @default(0)
+  /// Page loads (a new in-memory visit id) seen for this visitor.
+  visits          Int       @default(1)
+  lastVisitId     String?
+  /// Funnel stamps. The first time wins.
+  /// First view of the sign-up or sign-in page.
+  signupViewedAt  DateTime?
+  /// The `from` parameter of that view (which page's button sent them).
+  signupFrom      String?
+  /// First `signup_started` event (form submitted or a provider chosen).
+  signupStartedAt DateTime?
+  /// 'email' | 'google' | 'line' | 'phone' | 'wechat'
+  signupMethod    String?
+  /// The account's creation time, when it was created after this visitor was first seen.
+  signedUpAt      DateTime?
+  /// The visitor already had an account when first seen here (a new device or
+  /// cleared cookies): not a conversion, left out of conversion rates.
+  knownUser       Boolean   @default(false)
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([brand, anonId])
+  @@index([brand, firstSeenAt])
+  @@index([brand, lastSeenAt])
+  @@index([userId])
+}
