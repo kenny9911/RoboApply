@@ -2801,6 +2801,7 @@ Each work package runs the smallest affected tests first, then `npm test`, `npm 
   - tailor and cover letter starts and completions
   - extension paired and autofill runs
   - upgrade modal shown and clicked
+  - visitor conversion: `RAVisitor` (one row per linked visitor, built from those events by `features/growth/visitors.ts`) and the admin report `/admin/visitors`; HANDOFF.md section 8
   - Events go to our own database only; no third-party pixels on either brand (CN-E-02; RoboApply would need a consent banner first).
 - **Alerting:** `jobs-maintain` emails the admin list (`ADMIN_ALERT_EMAILS`) a daily health summary when thresholds trip: ingest new jobs < 50% of the 7-day average, dead queue items > 100, LLM cost > budget × 0.9.
 
