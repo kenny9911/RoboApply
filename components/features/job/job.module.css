@@ -1,6 +1,7 @@
-/* components/features/job — job detail (WP-34). Clarity tokens only; both
-   themes and both brands come from the token layer. The page introduction
-   uses the soft gradient; dense posting text sits on solid surfaces. */
+/* components/features/job — job detail (WP-34). Paper tokens only; both
+   themes and both brands come from the token layer. The posting is dense, so
+   the header and sections sit on solid surfaces with ink hairlines; only the
+   campus callout keeps a wash. */
 
 .panel {
   display: flex;
@@ -59,9 +60,9 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--sp-5);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: var(--r-lg);
-  background: var(--grad-soft);
+  background: var(--surface);
   min-width: 0;
 }
 
@@ -81,8 +82,8 @@
   width: 48px;
   height: 48px;
   border-radius: var(--r-md);
-  border: 1px solid var(--rule);
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  background: var(--surface-2);
   object-fit: contain;
   display: inline-flex;
   align-items: center;
@@ -125,13 +126,19 @@
   flex: none;
   min-width: 44px;
   min-height: 44px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+  border-radius: var(--r-pill);
+  background: var(--surface-glass);
   color: var(--text);
   cursor: pointer;
   font-size: var(--fs-meta);
-  padding: 0 var(--sp-3);
+  font-weight: 600;
+  padding: 0 var(--sp-4);
+}
+
+.closeBtn:hover {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--text) 28%, transparent);
 }
 
 .fullPageLink {
@@ -169,8 +176,7 @@
   align-items: center;
   padding: 2px var(--sp-2);
   border-radius: var(--r-pill);
-  background: var(--surface);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   font-size: var(--fs-meta);
   color: var(--text-2);
 }
@@ -207,19 +213,26 @@
   list-style: none;
 }
 
+/* Badges match the job card: a quiet ink tint, and the highlighter for a
+   posting that comes straight from the employer. */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px var(--sp-2);
+  min-height: 24px;
+  padding: 0 10px;
   border-radius: var(--r-pill);
-  background: var(--action-subtle);
-  color: var(--text);
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-2);
   font-size: var(--fs-label);
-  font-weight: 600;
+  font-weight: 500;
 }
 
-.badgeOk {
-  background: var(--ok-subtle);
+.badgeDirect {
+  border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  background: var(--brand-mark);
+  color: var(--brand-plane);
+  font-weight: 600;
 }
 
 .actions {
@@ -248,7 +261,7 @@
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-md);
   background: var(--surface);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   font-size: var(--fs-meta);
 }
 
@@ -284,7 +297,7 @@
   min-width: 0;
   min-height: 44px;
   padding: 0 var(--sp-3);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
   border-radius: var(--r-md);
   background: var(--surface);
   color: var(--text);
@@ -297,7 +310,7 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--sp-4);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: var(--r-lg);
   background: var(--surface);
   min-width: 0;
@@ -388,7 +401,7 @@
   align-items: center;
   padding: 2px var(--sp-2);
   border-radius: var(--r-pill);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   font-size: var(--fs-meta);
 }
 
@@ -466,7 +479,7 @@
   align-items: center;
   min-height: 44px;
   padding: 0 var(--sp-3);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
   border-radius: var(--r-md);
   background: var(--surface);
   color: var(--text);
@@ -494,7 +507,7 @@
   gap: var(--sp-2);
   padding: var(--sp-4);
   border-radius: var(--r-lg);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   background: var(--grad-panel);
 }
 
@@ -513,16 +526,20 @@
   gap: var(--sp-1);
   min-height: 44px;
   padding: var(--sp-3);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: var(--r-md);
   background: var(--surface);
   color: var(--text);
   text-decoration: none;
   min-width: 0;
+  transition:
+    box-shadow var(--dur-hover) var(--ease-out),
+    border-color var(--dur-hover) var(--ease-out);
 }
 
 .card:hover {
-  border-color: var(--action);
+  border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  box-shadow: var(--e-float);
 }
 
 .card:focus-visible {
@@ -549,7 +566,7 @@
   min-height: 44px;
   justify-content: center;
   padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: var(--r-md);
   color: var(--text);
   text-decoration: none;
