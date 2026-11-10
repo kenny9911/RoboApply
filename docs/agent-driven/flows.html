@@ -1,0 +1,528 @@
+<title>RoboApply Agent Flows</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&display=swap">
+<style>
+  /* Layout: one reading column of numbered-by-nature flows; diagrams and wireframes break out to the full measure. */
+  :root {
+    --bg: #F4F1E9; --surface: #FBFAF6; --surface-2: #EBE7DE; --surface-3: #E2DDD1;
+    --text: #121313; --text-2: #3D3F3B; --muted: #5F625B;
+    --line: rgba(18,19,19,.14); --line-soft: rgba(18,19,19,.08);
+    --mark: #F4FF71; --mark-ink: #121313;
+    --ink: #121313; --ink-on: #FFFFFF;
+    --ok: #2E6A47; --ok-soft: #DDEBDD; --warn: #8A5512; --warn-soft: #F1E3C8; --danger: #B03A2E; --danger-soft: #F3D9D4;
+    --font: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121313; --surface: #1B1C1C; --surface-2: #232525; --surface-3: #2C2E2E;
+      --text: #F4F1E9; --text-2: #CFCCC3; --muted: #A7AAA4;
+      --line: rgba(244,241,233,.18); --line-soft: rgba(244,241,233,.09);
+      --mark: #F4FF71; --mark-ink: #121313;
+      --ink: #F4F1E9; --ink-on: #121313;
+      --ok: #8FD3A8; --ok-soft: #1F3328; --warn: #E7C27D; --warn-soft: #3A3020; --danger: #FF9C8F; --danger-soft: #3D2422;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121313; --surface: #1B1C1C; --surface-2: #232525; --surface-3: #2C2E2E;
+    --text: #F4F1E9; --text-2: #CFCCC3; --muted: #A7AAA4;
+    --line: rgba(244,241,233,.18); --line-soft: rgba(244,241,233,.09);
+    --mark: #F4FF71; --mark-ink: #121313;
+    --ink: #F4F1E9; --ink-on: #121313;
+    --ok: #8FD3A8; --ok-soft: #1F3328; --warn: #E7C27D; --warn-soft: #3A3020; --danger: #FF9C8F; --danger-soft: #3D2422;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.55; margin: 0; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 40px 96px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 64px; }
+  h1, h2, h3, h4, p, ul, ol, figure { margin: 0; }
+  h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1; letter-spacing: -.04em; font-weight: 600; text-wrap: balance; }
+  h2 { font-size: 28px; line-height: 1.1; letter-spacing: -.03em; font-weight: 600; text-wrap: balance; }
+  h3 { font-size: 20px; line-height: 1.2; letter-spacing: -.02em; font-weight: 600; }
+  h4 { font-size: 15px; font-weight: 600; }
+  p { max-width: 68ch; color: var(--text-2); }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 6px; }
+  code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .eyebrow::before { content: ""; width: 14px; height: 8px; border-radius: 3px; background: var(--mark); border: 1px solid var(--line); }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .stack-lg { display: flex; flex-direction: column; gap: 28px; }
+  header.top { display: flex; flex-direction: column; gap: 20px; }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+  nav.toc a { text-decoration: none; font-size: 13px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); min-height: 36px; display: inline-flex; align-items: center; }
+  nav.toc a:hover { background: var(--surface-2); }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+  .fact { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+  .fact .label { font-size: 13px; color: var(--muted); }
+  .fact .shift { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; }
+  .fact .from { font-size: 20px; color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .fact .to { font-size: 32px; font-weight: 600; letter-spacing: -.03em; line-height: 1; }
+  .fact .to mark { background: var(--mark); color: var(--mark-ink); padding: 0 6px; border-radius: 6px; }
+  .fact .src { font-size: 12px; color: var(--muted); }
+
+  figure { display: flex; flex-direction: column; gap: 10px; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 22px; background: var(--surface); padding: 16px; }
+  .scroll svg { display: block; min-width: 880px; width: 100%; height: auto; }
+  .scroll svg.narrow { min-width: 620px; }
+  figcaption { font-size: 13px; color: var(--muted); max-width: 80ch; }
+  svg text { font-family: var(--font); fill: currentColor; }
+  svg .lane { stroke: var(--line-soft); stroke-width: 1; }
+  svg .node { fill: var(--surface-2); stroke: var(--line); stroke-width: 1; }
+  svg .node-you { fill: var(--ink); stroke: var(--ink); }
+  svg .t-you { fill: var(--ink-on); }
+  svg .node-mark { fill: var(--mark); stroke: var(--mark-ink); stroke-width: 1.5; }
+  svg .t-mark { fill: var(--mark-ink); font-weight: 600; }
+  svg .node-ghost { fill: none; stroke: var(--line); stroke-dasharray: 4 3; }
+  svg .wire { fill: none; stroke: currentColor; stroke-width: 1.4; }
+  svg .wire-soft { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  svg .muted { fill: var(--muted); }
+  svg .head { font-weight: 600; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+  .chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 500; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+  .chip.you { background: var(--ink); color: var(--ink-on); border-color: var(--ink); }
+  .chip.agent { background: var(--mark); color: var(--mark-ink); border-color: var(--mark-ink); }
+  .chip.sys { background: var(--surface-2); color: var(--text-2); }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .chip.danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+
+  .scenario { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 22px; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+  .scenario > header { display: flex; flex-direction: column; gap: 6px; }
+  .who { font-size: 13px; color: var(--muted); }
+  ol.steps { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; counter-reset: step; }
+  ol.steps > li { counter-increment: step; background: var(--bg); border: 1px solid var(--line-soft); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  ol.steps > li .n { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  ol.steps > li .n::before { content: counter(step, decimal-leading-zero); }
+  ol.steps > li strong { font-weight: 600; font-size: 15px; line-height: 1.25; }
+  ol.steps > li span.d { font-size: 13px; color: var(--text-2); }
+  ol.steps > li.d1 { border-color: var(--mark-ink); background: var(--mark); color: var(--mark-ink); }
+  ol.steps > li.d1 span.d, ol.steps > li.d1 .n { color: var(--mark-ink); }
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+  .note { font-size: 13px; color: var(--text-2); border-left: 2px solid var(--line); padding-left: 12px; }
+  .note b { color: var(--text); font-weight: 600; }
+
+  .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .panel { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 22px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pill { font-size: 13px; padding: 6px 12px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line-soft); }
+  .pill.cut { color: var(--muted); text-decoration: line-through; }
+  .pill.new { background: var(--mark); color: var(--mark-ink); border-color: var(--mark-ink); font-weight: 600; }
+  .arrow { color: var(--muted); font-size: 13px; }
+  .calls { font-family: var(--mono); font-size: 12px; color: var(--text-2); background: var(--bg); border: 1px solid var(--line-soft); border-radius: 12px; padding: 12px 14px; overflow-x: auto; white-space: pre; line-height: 1.7; }
+
+  /* Wireframes */
+  .frames { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .frames { grid-template-columns: 1fr; } .frames .phone { max-width: 320px; } }
+  .wf { background: var(--bg); border: 1px solid var(--line); border-radius: 22px; padding: 14px; display: flex; flex-direction: column; gap: 10px; font-size: 12px; color: var(--text-2); min-width: 0; }
+  .wf .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); }
+  .wf .cols { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 10px; }
+  .wf.phone .cols { grid-template-columns: 1fr; }
+  .wf .blk { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .wf .blk h5 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .wf .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--line-soft); border-radius: 10px; padding: 6px 8px; background: var(--bg); }
+  .wf .row > span { min-width: 0; }
+  .wf .btn { font-size: 11px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; background: var(--surface); color: var(--text); }
+  .wf .btn.pri { background: var(--ink); color: var(--ink-on); border-color: var(--ink); }
+  .wf .title { font-size: 17px; font-weight: 600; letter-spacing: -.02em; color: var(--text); }
+  .wf .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; border-top: 1px solid var(--line-soft); padding-top: 8px; text-align: center; font-size: 11px; }
+  .wf .tabs b { background: var(--mark); color: var(--mark-ink); border-radius: 999px; padding: 2px 0; font-weight: 600; }
+  .wf .src { font-family: var(--mono); font-size: 10.5px; color: var(--muted); overflow-wrap: anywhere; }
+
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+  .shots figure { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 22px; padding: 12px; min-width: 0; }
+  .shots img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line-soft); }
+  .shots figure.tall img { max-width: 280px; margin: 0 auto; }
+  .shots figcaption b { color: var(--text); font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 22px; background: var(--surface); }
+  th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); }
+  th { font-weight: 600; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { white-space: nowrap; }
+  td p { max-width: 62ch; font-size: 13px; }
+  .decision { border: 1.5px solid var(--mark-ink); background: var(--mark); color: var(--mark-ink); border-radius: 22px; padding: 22px 24px; display: flex; flex-direction: column; gap: 10px; }
+  .decision p { color: var(--mark-ink); }
+  .decision h3 { color: var(--mark-ink); }
+  footer { font-size: 13px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <span class="eyebrow">RoboApply · agent-driven redesign · November 2026</span>
+  <h1>Say what you want once. Three agents do the work. You decide and you submit.</h1>
+  <p>This page draws every use case end to end so the experience can be checked as a whole: who acts at each step, which screen it happens on, and where the user still has to stop. The findings from walking the flows are at the end.</p>
+  <nav class="toc" aria-label="On this page">
+    <a href="#model">The model</a>
+    <a href="#map">Navigation</a>
+    <a href="#onboarding">Onboarding</a>
+    <a href="#today">Today</a>
+    <a href="#built">As built</a>
+    <a href="#scenarios">Seven use cases</a>
+    <a href="#review">Review findings</a>
+    <a href="#decisions">Open decisions</a>
+  </nav>
+  <div class="facts" aria-label="What changes, measured in the code">
+    <div class="fact"><span class="label">Places in the main navigation</span><span class="shift"><span class="from">8–11</span><span class="to"><mark>5</mark></span></span><span class="src">destinations.ts, both brands</span></div>
+    <div class="fact"><span class="label">Screens before the first job</span><span class="shift"><span class="from">6–8</span><span class="to"><mark>2</mark></span></span><span class="src">onboarding flow.ts → /onboarding/start</span></div>
+    <div class="fact"><span class="label">Taps from a job to a prepared application</span><span class="shift"><span class="from">8+</span><span class="to"><mark>2</mark></span></span><span class="src">three pages → one button and the cost confirmation</span></div>
+    <div class="fact"><span class="label">Applications the product submits</span><span class="shift"><span class="to">0</span></span><span class="src">unchanged: ruling D1, confirmed July and October</span></div>
+  </div>
+</header>
+
+<section id="model" class="stack-lg">
+  <div class="stack">
+    <span class="eyebrow">The model</span>
+    <h2>One job moves along one line. Each step has one owner.</h2>
+    <p>Before, the user carried a job by hand from Jobs to Resume to Ready to apply to Applications. Now a job is picked once and the agents carry it. The user is asked only where a decision is really theirs: which job, whether the new details in the resume are true, and the final Submit.</p>
+  </div>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 1120 410" role="img" aria-label="Swimlane of one application: the job search agent finds a job, the user picks it, the resume and applications agents prepare it, the user verifies the details, the kit becomes ready, the user opens it, the extension fills the form, the user clicks Submit, and the applications agent tracks the reply.">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g font-size="12" text-anchor="middle" class="head">
+          <text x="210" y="30">Found</text><text x="330" y="30">Picked</text><text x="450" y="30">Being prepared</text><text x="570" y="30">Waiting for your OK</text>
+          <text x="690" y="30">Ready to open</text><text x="810" y="30">Opened</text><text x="930" y="30">Applied</text><text x="1050" y="30">Reply</text>
+        </g>
+        <g class="lane"><line x1="0" y1="55" x2="1120" y2="55"/><line x1="0" y1="125" x2="1120" y2="125"/><line x1="0" y1="195" x2="1120" y2="195"/><line x1="0" y1="265" x2="1120" y2="265"/><line x1="0" y1="335" x2="1120" y2="335"/><line x1="0" y1="405" x2="1120" y2="405"/></g>
+        <g font-size="12.5" class="head"><text x="8" y="94">You</text><text x="8" y="164">Job search agent</text><text x="8" y="234">Resume agent</text><text x="8" y="304">Applications agent</text><text x="8" y="374">Browser extension</text></g>
+
+        <g class="wire">
+          <path d="M262,160 H270 V90 H276" marker-end="url(#ah)"/>
+          <path d="M382,90 H390 V230 H396" marker-end="url(#ah)"/>
+          <path d="M390,230 V300 H396" marker-end="url(#ah)"/>
+          <path d="M502,230 H510 V90 H516" marker-end="url(#ah)"/>
+          <path d="M502,300 H510 V230"/>
+          <path d="M622,90 H630 V300 H636" marker-end="url(#ah)"/>
+          <path d="M742,300 H750 V90 H756" marker-end="url(#ah)"/>
+          <path d="M810,108 V350" marker-end="url(#ah)"/>
+          <path d="M862,370 H870 V90 H876" marker-end="url(#ah)"/>
+          <path d="M982,90 H990 V300 H996" marker-end="url(#ah)"/>
+        </g>
+        <path class="wire-soft" d="M262,160 H276" marker-end="url(#ah)"/>
+        <path class="wire-soft" d="M382,160 H390"/>
+
+        <g font-size="12" text-anchor="middle">
+          <rect class="node" x="158" y="142" width="104" height="36" rx="10"/><text x="210" y="157">Reads, scores,</text><text x="210" y="171">names the gap</text>
+          <rect class="node-you" x="278" y="72" width="104" height="36" rx="10"/><text class="t-you" x="330" y="94">Prepare application</text>
+          <rect class="node-ghost" x="278" y="142" width="104" height="36" rx="10"/><text class="muted" x="330" y="164">Weekly list</text>
+          <rect class="node" x="398" y="212" width="104" height="36" rx="10"/><text x="450" y="234">Tailors the resume</text>
+          <rect class="node" x="398" y="282" width="104" height="36" rx="10"/><text x="450" y="297">Letter, answers,</text><text x="450" y="311">files</text>
+          <rect class="node-you" x="518" y="72" width="104" height="36" rx="10"/><text class="t-you" x="570" y="94">Verify details</text>
+          <rect class="node" x="638" y="282" width="104" height="36" rx="10"/><text x="690" y="304">Kit is ready</text>
+          <rect class="node-you" x="758" y="72" width="104" height="36" rx="10"/><text class="t-you" x="810" y="94">Open application</text>
+          <rect class="node" x="758" y="352" width="104" height="36" rx="10"/><text x="810" y="374">Fills the form</text>
+          <rect class="node-mark" x="878" y="72" width="104" height="36" rx="10"/><text class="t-mark" x="930" y="94">You click Submit</text>
+          <rect class="node" x="998" y="282" width="104" height="36" rx="10"/><text x="1050" y="297">Tracks, drafts</text><text x="1050" y="311">follow-ups</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption>The dark steps are the user's. The highlighted step, Submit, is the one the product never takes: the extension stops at a filled form. The dashed path is the weekly list, where the job search agent picks and the user only confirms the cost.</figcaption>
+  </figure>
+  <div class="legend"><span><span class="chip you">You</span> a decision that is the user's</span><span><span class="chip agent">Agent</span> work done without being asked</span><span><span class="chip sys">Screen</span> where it happens</span></div>
+</section>
+
+<section id="map" class="stack-lg">
+  <div class="stack">
+    <span class="eyebrow">Navigation</span>
+    <h2>From a row of tools to five places</h2>
+    <p>No page is deleted. "Ready to apply" becomes the Getting ready view of Applications, Profile moves beside Settings, and Today is new: it is the home and the place where the agents report.</p>
+  </div>
+  <figure>
+    <div class="scroll">
+      <svg class="narrow" viewBox="0 0 720 320" role="img" aria-label="Before and after navigation. Jobs, Applications, Resume and Interview prep stay. Ready to apply merges into Applications. Profile moves to the lower group. Today is new and first.">
+        <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g font-size="13" class="head"><text x="40" y="24">Before</text><text x="460" y="24">After</text></g>
+        <g class="wire">
+          <path d="M260,60 L452,94" marker-end="url(#ah2)"/>
+          <path d="M260,94 L452,126" marker-end="url(#ah2)"/>
+          <path d="M260,128 L452,130" marker-end="url(#ah2)"/>
+          <path d="M260,162 L452,162" marker-end="url(#ah2)"/>
+          <path d="M260,196 L452,196" marker-end="url(#ah2)"/>
+          <path d="M260,230 L452,262" marker-end="url(#ah2)"/>
+          <path d="M260,276 L452,270" marker-end="url(#ah2)"/>
+        </g>
+        <g font-size="12" class="muted"><text x="330" y="100" text-anchor="middle">merged</text><text x="342" y="236" text-anchor="middle">moved down</text></g>
+        <g font-size="13">
+          <rect class="node" x="40" y="44" width="220" height="30" rx="15"/><text x="56" y="64">Jobs</text>
+          <rect class="node" x="40" y="78" width="220" height="30" rx="15"/><text x="56" y="98">Ready to apply</text>
+          <rect class="node" x="40" y="112" width="220" height="30" rx="15"/><text x="56" y="132">Applications</text>
+          <rect class="node" x="40" y="146" width="220" height="30" rx="15"/><text x="56" y="166">Resume</text>
+          <rect class="node" x="40" y="180" width="220" height="30" rx="15"/><text x="56" y="200">Interview prep</text>
+          <rect class="node" x="40" y="214" width="220" height="30" rx="15"/><text x="56" y="234">Profile</text>
+          <rect class="node-ghost" x="40" y="260" width="220" height="30" rx="15"/><text class="muted" x="56" y="280">Settings and 1–4 more</text>
+
+          <rect class="node-mark" x="460" y="44" width="220" height="30" rx="15"/><text class="t-mark" x="476" y="64">Today · new, the home</text>
+          <rect class="node" x="460" y="78" width="220" height="30" rx="15"/><text x="476" y="98">Jobs</text>
+          <rect class="node" x="460" y="112" width="220" height="30" rx="15"/><text x="476" y="132">Applications · two views</text>
+          <rect class="node" x="460" y="146" width="220" height="30" rx="15"/><text x="476" y="166">Resume</text>
+          <rect class="node" x="460" y="180" width="220" height="30" rx="15"/><text x="476" y="200">Interview prep</text>
+          <rect class="node-ghost" x="460" y="250" width="220" height="30" rx="15"/><text class="muted" x="476" y="270">Profile · Settings · more</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption>Phone: Today · Jobs · Applications · Resume · More. GoApply gets the same change and keeps its campus calendar and referral entries.</figcaption>
+  </figure>
+</section>
+
+<section id="onboarding" class="stack-lg">
+  <div class="stack">
+    <span class="eyebrow">Onboarding</span>
+    <h2>Resume first. The form fills itself.</h2>
+    <p>The server already reads a resume before any other answer and returns suggested titles, level and skills. So the questions become a confirmation, and the long form is no longer the price of the first result.</p>
+  </div>
+  <div class="compare">
+    <div class="panel">
+      <h3>Before</h3>
+      <div class="pills"><span class="pill">Situation</span><span class="arrow">→</span><span class="pill">Basics</span><span class="arrow">→</span><span class="pill cut">Goal</span><span class="arrow">→</span><span class="pill cut">Preferences</span><span class="arrow">→</span><span class="pill">Resume</span><span class="arrow">→</span><span class="pill">Matching</span><span class="arrow">→</span><span class="pill">Confirm</span><span class="arrow">→</span><span class="pill cut">Tour</span></div>
+      <p>Six to eight screens. The resume, which answers most of the questions, is asked for fifth. The first job card appears after the tour.</p>
+    </div>
+    <div class="panel">
+      <h3>After</h3>
+      <div class="pills"><span class="pill new">1 · Your resume</span><span class="arrow">→</span><span class="pill new">2 · Is this what you're looking for?</span><span class="arrow">→</span><span class="pill">Matching, on the same screen</span><span class="arrow">→</span><span class="pill">Today</span></div>
+      <p>The second screen arrives filled in: titles, level, where, kind of work, how soon. One button, "Find my jobs". Without a resume the same screen starts empty.</p>
+      <div class="calls" aria-label="What the web saves, in the server's order">POST /v2/resumes/upload        the file, parsed in the request
+POST /onboarding/resume        → suggested titles, level, skills
+PUT  /onboarding/steps/situation
+PUT  /onboarding/steps/basics
+PUT  /onboarding/steps/resume
+POST /onboarding/match         real phases, streamed
+POST /onboarding/confirm
+POST /onboarding/complete      → /today</div>
+    </div>
+  </div>
+  <div class="notes">
+    <p class="note"><b>The server is unchanged.</b> The stage machine stays the authority; the web saves the same steps in the same order with fewer screens.</p>
+    <p class="note"><b>Nothing is lost.</b> Career goal, industries, company size, pay floor and the LinkedIn URL are asked later, where they are used: the search panel and the profile.</p>
+    <p class="note"><b>Who keeps the long flow.</b> A user who left early and comes back mid-way, and GoApply, whose consent and identity steps are legal requirements.</p>
+  </div>
+</section>
+
+<section id="today" class="stack-lg">
+  <div class="stack">
+    <span class="eyebrow">Today</span>
+    <h2>The desk: what waits for you, then what was done</h2>
+    <p>Every number is a real count from an existing endpoint. A count that has not loaded shows a dash, never a zero. Exactly one button on the screen is primary: the first thing that waits for the user.</p>
+  </div>
+  <div class="frames">
+    <div class="wf" aria-label="Today, desktop layout">
+      <div class="bar"><span>Tue 11 Nov</span><span>Ask · Inbox · Account</span></div>
+      <div class="title">3 things are waiting for you</div>
+      <div>Looking for Product designer · Senior · Remote or London <span class="btn">Change</span></div>
+      <div class="cols">
+        <div class="stack" style="gap:10px">
+          <div class="blk"><h5>Waiting for you <span class="chip you">You</span></h5>
+            <div class="row"><span>Application for Product Designer at Linear is ready to check.</span><span class="btn pri">Check and open</span></div>
+            <div class="row"><span>2 new details in your resume for Stripe need your OK.</span><span class="btn">Verify details</span></div>
+            <div class="row"><span>3 applications have had no reply in 10 days.</span><span class="btn">See them</span></div>
+            <span class="src">agent queue states · tracker follow-ups · profile gaps</span>
+          </div>
+          <div class="blk"><h5>Job search <span class="chip agent">Agent</span></h5>
+            <div>Read 240 new postings since Tuesday. 6 fit you.</div>
+            <div class="row"><span>They ask for Figma variables twice. Your resume never mentions it. · Good fit</span><span class="btn">Prepare application</span></div>
+            <div class="row"><span>Your onboarding redesign matches what this team owns. · Great fit</span><span class="btn">Prepare application</span></div>
+            <div class="row"><span>They ask for B2B payments experience. · Possible</span><span class="btn">Prepare application</span></div>
+            <div>This is not your chance of getting hired. · See all jobs</div>
+            <span class="src">GET /agent/suggestions · feed new-count</span>
+          </div>
+        </div>
+        <div class="stack" style="gap:10px">
+          <div class="blk"><h5>Applications <span class="chip agent">Agent</span></h5>
+            <div>1 being prepared · 2 waiting for you · 4 sent this week</div>
+            <div>2 of 3 kits left this week</div>
+            <div>You submit each application yourself.</div>
+            <span class="src">GET /agent/queue · credits</span>
+          </div>
+          <div class="blk"><h5>Resume <span class="chip agent">Agent</span></h5>
+            <div>Main resume · last check: 3 things to fix</div>
+            <div>They ask for these and your resume doesn't mention them: design systems, SQL</div>
+            <span class="btn" style="align-self:flex-start">Improve my resume</span>
+            <span class="src">resume check · skills check</span>
+          </div>
+          <div class="blk"><h5>Ask</h5><div class="row"><span>What should I do first today?</span><span class="btn">Ask</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="wf phone" aria-label="Today, phone layout">
+      <div class="title">3 things are waiting for you</div>
+      <div class="cols">
+        <div class="blk"><h5>Waiting for you</h5><div class="row"><span>Linear is ready to check.</span><span class="btn pri">Check and open</span></div><div class="row"><span>2 details need your OK.</span><span class="btn">Verify</span></div></div>
+        <div class="blk"><h5>Job search</h5><div>6 new jobs fit you.</div><div class="row"><span>Good fit · Figma variables missing</span><span class="btn">Prepare</span></div></div>
+        <div class="blk"><h5>Applications</h5><div>1 being prepared · 2 waiting · 4 sent</div></div>
+        <div class="blk"><h5>Resume</h5><div>3 things to fix</div></div>
+      </div>
+      <div class="tabs"><b>Today</b><span>Jobs</span><span>Applications</span><span>Resume</span><span>More</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="built" class="stack-lg">
+  <div class="stack">
+    <span class="eyebrow">As built</span>
+    <h2>The screens, from the branch</h2>
+    <p>Screenshots of the running components with example data (the fixture preview, which blocks live requests). Each was checked on desktop, at 375 px and in dark: one primary button per screen, no sideways scroll, every sampled text pair at 7:1 or better in dark.</p>
+  </div>
+  <div class="shots">
+    <figure><img src="screens/today-desktop.jpg" alt="Today on desktop: the title says 4 things are waiting for you, the goal line with Change, four waiting cards with one primary button, and the Applications and Resume lanes beside them." width="560" height="394"><figcaption><b>Today.</b> The title is the count. The first card holds the only primary button.</figcaption></figure>
+    <figure><img src="screens/today-picks.jpg" alt="The Job search lane: Found 12 new jobs that fit since Nov 9, then three picks, each leading with what is missing, then what lines up, the fit tier, and a Prepare application button." width="640" height="450"><figcaption><b>Job search lane.</b> A past-tense line with a real count, then picks that lead with the gap.</figcaption></figure>
+    <figure><img src="screens/prepare-cost.jpg" alt="The cost sheet opened from a pick: Prepare 1 kit. Uses 1 kit; you have 2 left this week. Uses 1 tailoring credit; you have 2 left today. You submit each application yourself." width="640" height="450"><figcaption><b>One tap, then the cost.</b> Nothing is spent before the user confirms.</figcaption></figure>
+    <figure><img src="screens/jobs-before.jpg" alt="Jobs before: tabs, a search box, saved searches, seven filter buttons, six chips and a tier switch fill the first screen; no job is visible." width="480" height="360"><figcaption><b>Jobs, before.</b> The first screen is all controls.</figcaption></figure>
+    <figure><img src="screens/jobs-after.jpg" alt="Jobs after: one line states the search with a Change search button, and the first job card is on the first screen with Prepare application as its primary action." width="640" height="450"><figcaption><b>Jobs, after.</b> One search line; the first job is on the first screen and leads with Prepare application.</figcaption></figure>
+    <figure><img src="screens/onboarding-goal.jpg" alt="Onboarding step 2 of 2: Is this what you're looking for? Job titles and experience level are already filled in and labelled Suggested from your resume." width="640" height="450"><figcaption><b>Onboarding, screen 2.</b> Titles and level arrive filled in from the resume.</figcaption></figure>
+    <figure><img src="screens/applications-switch.jpg" alt="Applications with a switch at the top: Getting ready with a count of 2, and Sent, which is current." width="560" height="394"><figcaption><b>Applications.</b> One destination, two views: Getting ready and Sent.</figcaption></figure>
+    <figure><img src="screens/today-dark.jpg" alt="Today in the dark theme." width="640" height="450"><figcaption><b>Dark.</b> The action colour becomes the highlighter, as the design system specifies.</figcaption></figure>
+    <figure class="tall"><img src="screens/today-phone.jpg" alt="Today on a phone: the count, the goal line, the waiting cards in one column, and a bottom bar with Today, Jobs, Applications, Resume and More." width="450" height="974"><figcaption><b>Phone.</b> One column; Today · Jobs · Applications · Resume · More.</figcaption></figure>
+  </div>
+</section>
+
+<section id="scenarios" class="stack-lg">
+  <div class="stack">
+    <span class="eyebrow">Seven use cases</span>
+    <h2>Each flow, step by step</h2>
+    <p>Steps are numbered because the order is the point. Each step shows who acts. The highlighted step is always the user's own Submit.</p>
+  </div>
+
+  <article class="scenario">
+    <header><h3>1. New, has a resume, needs a job now</h3><span class="who">Maya was laid off last week. She has a resume and no patience for a form.</span></header>
+    <ol class="steps">
+      <li><span class="n"><span class="chip you">You</span></span><strong>Sign up</strong><span class="d">Email or Google.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Drop the resume</strong><span class="d">Upload, paste, or a LinkedIn PDF.</span></li>
+      <li><span class="n"><span class="chip agent">Agent</span></span><strong>Reads it</strong><span class="d">Suggests titles, level and skills.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Confirm the goal</strong><span class="d">Change any chip. "Find my jobs".</span></li>
+      <li><span class="n"><span class="chip agent">Agent</span></span><strong>Searches and compares</strong><span class="d">The real phases show while it runs.</span></li>
+      <li><span class="n"><span class="chip sys">Today</span></span><strong>Three best fits</strong><span class="d">The gap leads each one.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Prepare application</strong><span class="d">One tap, the cost is shown, confirm.</span></li>
+      <li><span class="n"><span class="chip agent">Agent</span></span><strong>Tailors and writes</strong><span class="d">Resume, letter if asked, answers.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Verify details</strong><span class="d">Keep, remove or rewrite each new claim.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Open application</strong><span class="d">The extension fills the form.</span></li>
+      <li class="d1"><span class="n"><span class="chip you">You</span></span><strong>Click Submit</strong><span class="d">On the employer's site. Always the user.</span></li>
+      <li><span class="n"><span class="chip agent">Agent</span></span><strong>Tracks it</strong><span class="d">Applied, then a follow-up after 10 days.</span></li>
+    </ol>
+    <div class="notes">
+      <p class="note"><b>Checked:</b> the user types nothing between the resume and the first job unless a suggestion is wrong.</p>
+      <p class="note"><b>Still slow:</b> step 5 has a server target of 45 seconds and a cap of two minutes. See finding 2.</p>
+    </div>
+  </article>
+
+  <article class="scenario">
+    <header><h3>2. New, no resume yet</h3><span class="who">Jun is a final-year student with nothing written down.</span></header>
+    <ol class="steps">
+      <li><span class="n"><span class="chip you">You</span></span><strong>"I don't have one yet"</strong><span class="d">The goal screen opens empty.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Pick titles and where</strong><span class="d">The same chips, typed by hand.</span></li>
+      <li><span class="n"><span class="chip agent">Agent</span></span><strong>Searches from the answers</strong><span class="d">No fit score: there is no resume to compare.</span></li>
+      <li><span class="n"><span class="chip sys">Today</span></span><strong>"Add a resume" waits</strong><span class="d">It is the primary button.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Build or upload</strong><span class="d">The guided builder in Resume.</span></li>
+      <li><span class="n"><span class="chip agent">Agent</span></span><strong>Scores appear</strong><span class="d">Picks now carry gap lines.</span></li>
+    </ol>
+    <div class="notes"><p class="note"><b>Checked:</b> jobs without a resume never show a number called a fit.</p></div>
+  </article>
+
+  <article class="scenario">
+    <header><h3>3. The daily two minutes</h3><span class="who">Maya, day six. She opens the app on the train.</span></header>
+    <ol class="steps">
+      <li><span class="n"><span class="chip sys">Today</span></span><strong>"3 things are waiting"</strong><span class="d">The home says it before anything else.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Check and open</strong><span class="d">The kit that finished overnight.</span></li>
+      <li class="d1"><span class="n"><span class="chip you">You</span></span><strong>Click Submit</strong><span class="d">After the extension fills the form.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>See the quiet ones</strong><span class="d">3 with no reply in 10 days; a follow-up is drafted.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Prepare one more</strong><span class="d">From the picks, without leaving Today.</span></li>
+      <li><span class="n"><span class="chip sys">Today</span></span><strong>"Nothing is waiting"</strong><span class="d">A clear end to the session.</span></li>
+    </ol>
+    <div class="notes"><p class="note"><b>Checked:</b> every step starts on one screen. Before, this was Ready to apply, then Applications, then Jobs.</p></div>
+  </article>
+
+  <article class="scenario">
+    <header><h3>4. "I want these companies"</h3><span class="who">Dev wants Stripe, Linear or Figma and nothing else.</span></header>
+    <ol class="steps">
+      <li><span class="n"><span class="chip you">You</span></span><strong>Change the goal</strong><span class="d">From the goal line on Today.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Name the companies</strong><span class="d">Only these, or prefer these.</span></li>
+      <li><span class="n"><span class="chip agent">Agent</span></span><strong>Ranks them first</strong><span class="d">The saved search already supports it.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Prepare application</strong><span class="d">The resume is tailored to that posting.</span></li>
+    </ol>
+    <div class="notes"><p class="note"><b>Gap found:</b> a company with no open posting cannot be targeted, and tailoring is per job, not per company. See finding 7.</p></div>
+  </article>
+
+  <article class="scenario">
+    <header><h3>5. "Why am I not getting interviews?"</h3><span class="who">Priya has applied to forty jobs with one resume.</span></header>
+    <ol class="steps">
+      <li><span class="n"><span class="chip sys">Today</span></span><strong>Resume lane</strong><span class="d">What postings ask for that the resume never mentions.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Improve my resume</strong><span class="d">Opens the resume hub on AI tailoring.</span></li>
+      <li><span class="n"><span class="chip agent">Agent</span></span><strong>Tailors a version</strong><span class="d">Fit before and after, side by side.</span></li>
+      <li><span class="n"><span class="chip you">You</span></span><strong>Verify details</strong><span class="d">Nothing new is kept without an OK.</span></li>
+      <li><span class="n"><span class="chip agent">Agent</span></span><strong>Uses it</strong><span class="d">Attached when that job is prepared.</span></li>
+    </ol>
+    <div class="notes"><p class="note"><b>Checked:</b> the gap is stated as evidence ("it is not on your resume"), never as a verdict on the person.</p></div>
+  </article>
+
+  <article class="scenario">
+    <header><h3>6. When something goes wrong</h3><span class="who">Each state says what happened, what was spent, and what to do next.</span></header>
+    <ol class="steps">
+      <li><span class="n"><span class="chip warn">Credits</span></span><strong>Out of kits</strong><span class="d">The cost sheet says how many can be prepared now; nothing starts.</span></li>
+      <li><span class="n"><span class="chip warn">AI off</span></span><strong>No AI for the account</strong><span class="d">Kits use the resume as it is, and say so.</span></li>
+      <li><span class="n"><span class="chip danger">Closed</span></span><strong>The posting is gone</strong><span class="d">"Nothing was prepared." No credit is used.</span></li>
+      <li><span class="n"><span class="chip sys">Empty</span></span><strong>Nothing fits</strong><span class="d">The lane says how many were read, then offers Change.</span></li>
+      <li><span class="n"><span class="chip danger">Failed</span></span><strong>A lane does not load</strong><span class="d">That lane offers Retry; the others keep working.</span></li>
+    </ol>
+  </article>
+
+  <article class="scenario">
+    <header><h3>7. On a phone</h3><span class="who">The same order in one column.</span></header>
+    <ol class="steps">
+      <li><span class="n"><span class="chip sys">Bar</span></span><strong>Five slots</strong><span class="d">Today · Jobs · Applications · Resume · More.</span></li>
+      <li><span class="n"><span class="chip sys">Today</span></span><strong>Waiting first</strong><span class="d">The primary button is the first thing under the title.</span></li>
+      <li><span class="n"><span class="chip sys">Jobs</span></span><strong>One search line</strong><span class="d">The first job card is on the first screen.</span></li>
+      <li><span class="n"><span class="chip sys">Targets</span></span><strong>44 px and up</strong><span class="d">Every control; no sideways scroll at 375 px.</span></li>
+    </ol>
+    <div class="notes"><p class="note"><b>Trade-off:</b> Interview prep moves into More on phones to make room for Today. See finding 9.</p></div>
+  </article>
+</section>
+
+<section id="review" class="stack-lg">
+  <div class="stack">
+    <span class="eyebrow">Review findings</span>
+    <h2>What walking the flows turned up</h2>
+    <p>Each flow was walked against the code. Some gaps are closed in this build. The rest are named here so they are decisions, not surprises.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>#</th><th>Finding</th><th>What was done</th><th>State</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><p>A brand-new user's Today had no primary button: nothing waits yet, so the page had three equal "Prepare application" buttons and no clear first move.</p></td><td><p>When nothing waits, the first pick's button becomes the primary one.</p></td><td><span class="chip ok">In this build</span></td></tr>
+        <tr><td>2</td><td><p>The first result takes about 45 seconds. The server will not save the last onboarding step until matching has finished, so the wait cannot be moved behind Today from the web.</p></td><td><p>The real phases are shown and the user lands on Today as soon as the stream ends. Removing the wait needs a small server change: accept the confirm step while matching continues.</p></td><td><span class="chip warn">Open · server</span></td></tr>
+        <tr><td>3</td><td><p>Two ways to apply remain on a job: "Prepare application" and "Apply on company site". They mark a job applied by different signals.</p></td><td><p>Prepare is the primary action; Apply on company site stays second for a user who wants to go now. One signal for "applied" is a follow-up.</p></td><td><span class="chip warn">Partly</span></td></tr>
+        <tr><td>4</td><td><p>The Assistant cannot run the loop. It can search, propose filter changes, tailor and write, but it has no tool to add a job to the list or prepare it.</p></td><td><p>Today's Ask box opens the Assistant as it is. Two new tools (add to list, prepare) would let a sentence do what the button does.</p></td><td><span class="chip warn">Open · server</span></td></tr>
+        <tr><td>5</td><td><p>The cost confirmation adds a tap to every preparation.</p></td><td><p>Kept on purpose: the existing rule is that a cost is on screen before anything is spent.</p></td><td><span class="chip sys">By design</span></td></tr>
+        <tr><td>6</td><td><p>The five-step Ready to apply setup is no longer on the main path. A user can prepare an application without ever seeing it.</p></td><td><p>Checked in the server: adding to the list and preparing do not require the setup. Missing profile details surface as a card under "Waiting for you"; the answers and weekly settings stay reachable from Getting ready.</p></td><td><span class="chip ok">In this build</span></td></tr>
+        <tr><td>7</td><td><p>"Target companies" is a list inside the saved search, not a thing of its own. A company with no open posting cannot be followed, and a resume cannot be tailored to a company without a posting.</p></td><td><p>The goal line links to the existing search panel, where companies can be set. A first-class company target is a separate piece of work.</p></td><td><span class="chip warn">Open</span></td></tr>
+        <tr><td>8</td><td><p>The search can still be edited in four places (onboarding, Jobs, Settings, the Getting ready list).</p></td><td><p>Today and Jobs now point at the same panel. Folding the other two in is a follow-up.</p></td><td><span class="chip warn">Partly</span></td></tr>
+        <tr><td>9</td><td><p>Interview prep is the part competitors do not have, and on phones it moved into More.</p></td><td><p>Accepted for the bottom bar's five-slot limit. A card on Today when an application reaches an interview stage would bring it back at the right moment.</p></td><td><span class="chip warn">Open</span></td></tr>
+        <tr><td>10</td><td><p>Words drift: Today says "application", the Getting ready pages still say "kit" and "Ready to apply" in 350 translated strings.</p></td><td><p>New screens use "application" throughout. The older pages keep their strings until one copy pass renames them in all nine languages.</p></td><td><span class="chip warn">Open</span></td></tr>
+        <tr><td>11</td><td><p>GoApply keeps its long onboarding.</p></td><td><p>Its consent and identity steps are legal requirements. It gets Today, the new navigation, and the same Jobs and Applications changes.</p></td><td><span class="chip sys">By design</span></td></tr>
+        <tr><td>12</td><td><p>The weekly list could be prepared with no tap at all.</p></td><td><p>Not built: it spends credits without a confirmation. It needs a setting the user turns on and an owner decision on the wording.</p></td><td><span class="chip warn">Open</span></td></tr>
+        <tr><td>13</td><td><p>If the job search stream fails during onboarding, the same server rule as finding 2 means setup cannot be finished from the web.</p></td><td><p>The user is not stranded: they land on Today with setup paused and a "Finish setting up" card. Their chosen levels are not saved until they finish. Same server fix as finding 2.</p></td><td><span class="chip warn">Open · server</span></td></tr>
+        <tr><td>14</td><td><p>The first onboarding screen offers four ways to add a resume as equals, and choosing one still needs a second tap on Continue.</p></td><td><p>Found on the built screen. It reuses the existing resume step unchanged. Making upload the one emphasised door and moving on as soon as a resume is in would save a tap.</p></td><td><span class="chip warn">Open</span></td></tr>
+        <tr><td>15</td><td><p>A job already on the list still shows "Prepare application" on its card until tapped: the job list does not carry the list state.</p></td><td><p>The tap is safe. The server returns the existing application, nothing is prepared twice, and the button turns into "Being prepared" or "Check and open". The right label up front needs one more field from the server.</p></td><td><span class="chip warn">Partly</span></td></tr>
+        <tr><td>16</td><td><p>For an account without Ready to apply, loading Today reads the top of the job list, and that read clears the "new jobs" badge on Jobs.</p></td><td><p>The count on Today is read first, so its own line stays right. A read that does not count as a visit needs a small server endpoint.</p></td><td><span class="chip warn">Open · server</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="decisions" class="stack-lg">
+  <div class="stack">
+    <span class="eyebrow">Open decisions</span>
+    <h2>One decision is the owner's</h2>
+  </div>
+  <div class="decision">
+    <h3>Should the product ever click Submit?</h3>
+    <p>This redesign keeps the standing ruling: the agents find, tailor, prepare and fill; the user submits. "Apply jobs for the user" was built up to that line and not past it.</p>
+    <p>Crossing it is possible but it is not a design change. It reverses a ruling confirmed in July and in October, needs server-side submission that does not exist today, changes the copy gate and the extension gate, and changes what the product may honestly say about itself.</p>
+  </div>
+  <footer>Source of truth for this page: <code>docs/agent-driven/REDESIGN.md</code> on branch <code>feat/agent-driven</code>. Every count and endpoint named here was read from the code on <code>main</code> at b89d5256.</footer>
+</section>
+
+</div>
