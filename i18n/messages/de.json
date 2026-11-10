@@ -17,7 +17,6 @@
   },
   "nav": {
     "aria_primary": "Hauptnavigation",
-    "brand_home": "%BRAND% — zu den Jobs",
     "jobs": "Jobs",
     "resume": "Lebenslauf",
     "applications": "Bewerbungen",
@@ -141,7 +140,9 @@
       },
       "source": "Quelle: {label}",
       "view": "Quelle ansehen"
-    }
+    },
+    "brand_home": "Startseite von %BRAND%",
+    "today": "Heute"
   },
   "jobs": {
     "fit": {
@@ -393,7 +394,8 @@
       },
       "tabsLabel": "Joblisten",
       "title": "Jobs",
-      "introByDate": "Jobs sind nach Veröffentlichungsdatum sortiert, die neuesten zuerst. Öffne einen, um die Details zu sehen."
+      "introByDate": "Jobs sind nach Veröffentlichungsdatum sortiert, die neuesten zuerst. Öffne einen, um die Details zu sehen.",
+      "searchLabel": "Deine Suche"
     },
     "zero": {
       "gain": "{count, plural, one {+# Job} other {+# Jobs}}",
@@ -1254,6 +1256,12 @@
       "title": "Diese Woche",
       "write": "Zusammenfassung schreiben",
       "writing": "Wird geschrieben…"
+    },
+    "switch": {
+      "label": "Deine Bewerbungen",
+      "ready": "Vorbereiten",
+      "sent": "Gesendet",
+      "waiting": "{count, plural, one {# Bewerbung ist vorbereitet und wartet auf dich} other {# Bewerbungen sind vorbereitet und warten auf dich}}"
     }
   },
   "practice": {
@@ -6940,7 +6948,16 @@
     },
     "unnamed": "Deine Hauptsuche",
     "unnamedNumbered": "Gespeicherte Suche {n}",
-    "unnamedOther": "Unbenannte gespeicherte Suche"
+    "unnamedOther": "Unbenannte gespeicherte Suche",
+    "summary": {
+      "label": "Deine Suche:",
+      "all": "Alle Jobs",
+      "loading": "Deine Suche wird geladen…",
+      "more": "{count} mehr",
+      "change": "Suche ändern",
+      "panel": "Suche und Filter",
+      "done": "Fertig"
+    }
   },
   "fit": {
     "analysis": {
@@ -8745,6 +8762,45 @@
       "prev": "Vorheriger Tipp",
       "start": "Starten",
       "title": "Was du hier tun kannst"
+    },
+    "express": {
+      "resume": {
+        "title": "Starte mit deinem Lebenslauf",
+        "continue": "Weiter",
+        "noResume": "Ich habe noch keinen Lebenslauf",
+        "working": "Einen Moment…",
+        "classic": "Stattdessen ein paar Fragen mehr beantworten"
+      },
+      "check": {
+        "title": "Ist es das, wonach du suchst?",
+        "subtitleSuggested": "Das sind Vorschläge aus deinem Lebenslauf. Ändere, was nicht stimmt.",
+        "subtitleNothingSuggested": "Aus deinem Lebenslauf ließ sich nichts vorschlagen. Füll diese Felder aus, um Jobs zu finden.",
+        "subtitleNoResume": "Kein Lebenslauf hinzugefügt, deshalb werden Jobs nur anhand dieser Antworten gefunden. Du kannst später einen hinzufügen, um zu sehen, wie gut jeder Job passt.",
+        "filling": "Wird aus deinem Lebenslauf ausgefüllt…",
+        "otherPlaces": "Weiteren Ort hinzufügen",
+        "chosenPlaces": "Nur gewählte Orte anzeigen",
+        "aboutYou": "Über dich: {value}",
+        "email": "Neue Jobs für diese Suche bekommst du einmal am Tag per E-Mail. Das kannst du in den Einstellungen ändern.",
+        "submit": "Meine Jobs finden",
+        "retry": "Erneut versuchen"
+      },
+      "progress": {
+        "saving": "Deine Antworten werden gespeichert…",
+        "searching": "Jobs werden gesucht. Das kann ein bis zwei Minuten dauern.",
+        "finishing": "Einrichtung wird abgeschlossen…"
+      },
+      "failed": {
+        "answers": "Deine Antworten konnten nicht gespeichert werden, deshalb ist die Suche nicht gestartet.",
+        "resume": "Deine Lebenslauf-Auswahl konnte nicht gespeichert werden, deshalb ist die Suche nicht gestartet.",
+        "finish": "Deine Suche ist gespeichert, aber die Einrichtung konnte nicht abgeschlossen werden."
+      },
+      "why": {
+        "rate_limited": "Es gab zu viele Versuche in kurzer Zeit. Warte eine Minute und versuch es dann erneut.",
+        "invalid": "Eine der Antworten wurde nicht angenommen. Prüf sie und versuch es dann erneut.",
+        "conflict": "Die Einrichtung ist woanders weitergegangen, vielleicht in einem anderen Tab. Lade diese Seite neu.",
+        "unavailable": "Das ist gerade nicht verfügbar. Versuch es später erneut.",
+        "unknown": "Alles, was du eingegeben hast, ist noch da. Versuch es erneut."
+      }
     }
   },
   "people": {
@@ -10070,6 +10126,20 @@
         "good": "Mindestens",
         "great": "Nur",
         "possible": "Mindestens"
+      }
+    },
+    "oneTap": {
+      "action": "Bewerbung vorbereiten",
+      "adding": "Wird hinzugefügt…",
+      "started": "Bewerbung in Vorbereitung. Sie erscheint unter „Wartet auf dich“, sobald sie dein OK braucht.",
+      "failed": "Das konnte nicht gestartet werden. Es wurde nichts verbraucht. Versuch es erneut.",
+      "full": "Deine Liste ist voll. Entfern einen Job unter „Vorbereiten“ und versuch es dann erneut.",
+      "closed": "Dieser Job ist nicht mehr ausgeschrieben, deshalb wurde nichts vorbereitet.",
+      "place": {
+        "preparing": "In Vorbereitung",
+        "review": "Prüfen und öffnen",
+        "sent": "Bewerbung ansehen",
+        "listed": "Auf deiner Liste"
       }
     }
   },
@@ -11683,6 +11753,104 @@
       "source": "Quelle: <link>{name}</link>",
       "title": "Angaben zum Visa-Sponsoring bei {company}",
       "usNote": "Ein zertifizierter Antrag ist weder eine Visumgenehmigung noch eine Einstellung. Die Zahlen zu den Petitionen sind Erstentscheidungen und umfassen neue und fortgesetzte Beschäftigung."
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, one {# Sache wartet auf dich} other {# Dinge warten auf dich}}",
+      "titleNone": "Nichts wartet auf dich",
+      "titleLoading": "Es wird geprüft, was auf dich wartet…",
+      "titlePartial": "Ein Teil der heutigen Liste wurde nicht geladen"
+    },
+    "goal": {
+      "line": "Du suchst: {what}",
+      "any": "Deine Suche ist offen für jeden Job.",
+      "more": "{list} und {count} mehr",
+      "change": "Ändern",
+      "changeLabel": "Ändern, wonach du suchst",
+      "loading": "Deine Suche wird geladen…",
+      "failed": "Deine Suche konnte nicht geladen werden.",
+      "none": "Noch keine gespeicherte Suche.",
+      "setUp": "Suche einrichten"
+    },
+    "agentTag": "Agent",
+    "retry": "Erneut versuchen",
+    "laneFailed": "Ein Teil davon konnte nicht geladen werden.",
+    "notLoaded": "Nicht geladen",
+    "waiting": {
+      "title": "Wartet auf dich",
+      "loading": "Es wird geprüft, was auf dich wartet…",
+      "empty": "Gerade braucht nichts deine Aufmerksamkeit. Die besten Treffer stehen unten.",
+      "emptyLink": "Zu den Treffern",
+      "emptyPlain": "Gerade braucht nichts deine Aufmerksamkeit.",
+      "more": "{count, plural, one {# weitere Sache wartet auf dich. Sie erscheint hier, sobald du eine davon erledigt hast.} other {# weitere Dinge warten auf dich. Sie erscheinen hier nach und nach, wenn du diese erledigst.}}",
+      "partial": "Ein Teil dieser Liste wurde nicht geladen, es kann also mehr geben.",
+      "fact": {
+        "review": "{title} bei {company}: Die Bewerbung ist bereit zum Prüfen.",
+        "reviewTitle": "{title}: Die Bewerbung ist bereit zum Prüfen.",
+        "reviewUnnamed": "Eine Bewerbung ist bereit zum Prüfen.",
+        "open": "{title} bei {company}: Die Bewerbung ist bereit zum Öffnen.",
+        "openTitle": "{title}: Die Bewerbung ist bereit zum Öffnen.",
+        "openUnnamed": "Eine Bewerbung ist bereit zum Öffnen.",
+        "verify": "{count, plural, one {# neue Angabe in {name} braucht dein OK.} other {# neue Angaben in {name} brauchen dein OK.}}",
+        "noReply": "{count, plural, one {# Bewerbung ist seit {days} Tagen ohne Antwort.} other {# Bewerbungen sind seit {days} Tagen ohne Antwort.}}",
+        "profile": "{count, plural, one {In deinem Profil fehlt # Angabe, nach der Bewerbungsformulare fragen.} other {In deinem Profil fehlen # Angaben, nach denen Bewerbungsformulare fragen.}}",
+        "noResume": "Du hast noch keinen Lebenslauf hinzugefügt.",
+        "setup": "{count, plural, one {Dir fehlt noch # Schritt der Einrichtung.} other {Dir fehlen noch # Schritte der Einrichtung.}}"
+      },
+      "action": {
+        "review": "Prüfen und öffnen",
+        "open": "Bewerbung öffnen",
+        "verify": "Angaben prüfen",
+        "noReply": "Ansehen",
+        "profile": "Angaben ergänzen",
+        "noResume": "Lebenslauf hinzufügen",
+        "setup": "Einrichtung abschließen"
+      }
+    },
+    "jobSearch": {
+      "title": "Jobsuche",
+      "found": "{count, plural, =0 {Seit dem {date} wurden keine neuen passenden Jobs gefunden.} one {Seit dem {date} wurde # neuer passender Job gefunden.} other {Seit dem {date} wurden # neue passende Jobs gefunden.}}",
+      "foundSinceVisit": "{count, plural, =0 {Seit deinem letzten Besuch wurden keine neuen passenden Jobs gefunden.} one {Seit deinem letzten Besuch wurde # neuer passender Job gefunden.} other {Seit deinem letzten Besuch wurden # neue passende Jobs gefunden.}}",
+      "foundCapped": "Seit dem {date} wurden mehr als {count} neue passende Jobs gefunden.",
+      "foundCappedSinceVisit": "Seit deinem letzten Besuch wurden mehr als {count} neue passende Jobs gefunden.",
+      "foundUnknown": "Neue passende Jobs seit deinem letzten Besuch:",
+      "picksTitle": "Beste Treffer",
+      "picksLoading": "Treffer werden geladen…",
+      "picksNone": "Gerade keine neuen Treffer.",
+      "picksFailed": "Die Treffer konnten nicht geladen werden.",
+      "viewJob": "Job ansehen",
+      "seeAll": "Alle Jobs ansehen",
+      "off": "Die Jobliste ist für dieses Konto nicht verfügbar."
+    },
+    "applications": {
+      "title": "Bewerbungen",
+      "numbersLabel": "Bewerbungen in Zahlen",
+      "preparing": "In Vorbereitung",
+      "waiting": "Wartet auf dich",
+      "sent": "Diese Woche gesendet",
+      "saved": "Gemerkt",
+      "open": "Bewerbungen öffnen",
+      "failed": "Einige dieser Zahlen konnten nicht geladen werden."
+    },
+    "resume": {
+      "title": "Lebenslauf",
+      "mainLabel": "Hauptlebenslauf",
+      "loading": "Dein Lebenslauf wird geladen…",
+      "none": "Noch kein Lebenslauf.",
+      "add": "Lebenslauf hinzufügen",
+      "improve": "Meinen Lebenslauf verbessern",
+      "open": "Lebensläufe öffnen",
+      "failed": "Deine Lebensläufe konnten nicht geladen werden.",
+      "asked": "Jobs in deiner Suche verlangen diese Fähigkeiten, und in deinem Profil stehen sie nicht:",
+      "askedIn": "in {count} von {total} Jobs verlangt"
+    },
+    "ask": {
+      "title": "Fragen",
+      "label": "Stell eine Frage zu deiner Jobsuche",
+      "placeholder": "Zum Beispiel: Welcher dieser Jobs passt am besten?",
+      "submit": "Fragen",
+      "hint": "Öffnet den Assistenten mit deiner Frage, bereit zum Senden."
     }
   }
 }

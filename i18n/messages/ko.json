@@ -17,7 +17,6 @@
   },
   "nav": {
     "aria_primary": "기본 내비게이션",
-    "brand_home": "%BRAND% — 채용공고로 이동",
     "jobs": "채용공고",
     "resume": "이력서",
     "applications": "지원 현황",
@@ -141,7 +140,9 @@
       },
       "source": "출처: {label}",
       "view": "출처 보기"
-    }
+    },
+    "brand_home": "%BRAND% 홈",
+    "today": "오늘"
   },
   "jobs": {
     "fit": {
@@ -393,7 +394,8 @@
       },
       "tabsLabel": "공고 목록",
       "title": "채용공고",
-      "introByDate": "게시일 순으로, 최신 공고부터 보여줘요. 공고를 열면 자세한 내용을 볼 수 있어요."
+      "introByDate": "게시일 순으로, 최신 공고부터 보여줘요. 공고를 열면 자세한 내용을 볼 수 있어요.",
+      "searchLabel": "내 검색 조건"
     },
     "zero": {
       "gain": "{count, plural, other {공고 +#건}}",
@@ -1254,6 +1256,12 @@
       "title": "이번 주",
       "write": "요약 쓰기",
       "writing": "쓰는 중…"
+    },
+    "switch": {
+      "label": "내 지원 현황",
+      "ready": "지원 준비",
+      "sent": "보낸 지원서",
+      "waiting": "{count, plural, other {준비가 끝난 지원서 #건이 나를 기다리고 있어요}}"
     }
   },
   "practice": {
@@ -6940,7 +6948,16 @@
     },
     "unnamed": "내 기본 검색",
     "unnamedNumbered": "저장한 검색 {n}",
-    "unnamedOther": "저장한 검색 (이름 없음)"
+    "unnamedOther": "저장한 검색 (이름 없음)",
+    "summary": {
+      "label": "내 검색 조건:",
+      "all": "모든 공고",
+      "loading": "검색 조건을 불러오는 중…",
+      "more": "{count}개 더",
+      "change": "검색 조건 바꾸기",
+      "panel": "검색 및 필터",
+      "done": "완료"
+    }
   },
   "fit": {
     "analysis": {
@@ -9510,6 +9527,20 @@
         "great": "이 등급만:",
         "possible": "이 등급 이상:"
       }
+    },
+    "oneTap": {
+      "action": "지원서 준비하기",
+      "adding": "추가하는 중…",
+      "started": "준비 중이에요. 내 확인이 필요해지면 ‘나를 기다리는 일’에 표시돼요.",
+      "failed": "시작하지 못했어요. 사용된 것은 없어요. 다시 시도해 주세요.",
+      "full": "목록이 가득 찼어요. ‘지원 준비’에서 공고를 하나 삭제한 뒤 다시 시도해 주세요.",
+      "closed": "이 공고는 게시가 종료돼서 아무것도 준비하지 않았어요.",
+      "place": {
+        "preparing": "준비 중",
+        "review": "확인하고 열기",
+        "sent": "지원 내역 보기",
+        "listed": "내 목록에 있어요"
+      }
     }
   },
   "onboarding": {
@@ -9893,6 +9924,45 @@
       "prev": "이전 팁",
       "start": "시작",
       "title": "여기서 할 수 있는 일"
+    },
+    "express": {
+      "resume": {
+        "title": "이력서로 시작하기",
+        "continue": "계속",
+        "noResume": "아직 이력서가 없어요",
+        "working": "잠시만 기다려 주세요…",
+        "classic": "대신 질문 몇 가지에 더 답하기"
+      },
+      "check": {
+        "title": "찾고 있는 일이 이게 맞나요?",
+        "subtitleSuggested": "이력서를 바탕으로 제안한 내용이에요. 맞지 않는 부분은 바꿔 주세요.",
+        "subtitleNothingSuggested": "이력서에서 제안할 수 있는 내용이 없었어요. 공고를 찾으려면 아래 항목을 채워 주세요.",
+        "subtitleNoResume": "이력서를 추가하지 않아서, 이 답변만으로 공고를 찾아요. 나중에 이력서를 추가하면 공고마다 얼마나 맞는지 볼 수 있어요.",
+        "filling": "이력서를 바탕으로 채우는 중…",
+        "otherPlaces": "다른 곳 추가",
+        "chosenPlaces": "고른 곳만 보기",
+        "aboutYou": "나에 대해: {value}",
+        "email": "이 검색에 맞는 새 공고를 하루에 한 번 이메일로 받아요. 설정에서 바꿀 수 있어요.",
+        "submit": "내 공고 찾기",
+        "retry": "다시 시도"
+      },
+      "progress": {
+        "saving": "답변을 저장하는 중…",
+        "searching": "공고를 검색하는 중이에요. 1~2분 걸릴 수 있어요.",
+        "finishing": "초기 설정을 마무리하는 중…"
+      },
+      "failed": {
+        "answers": "답변을 저장하지 못해서 검색을 시작하지 못했어요.",
+        "resume": "이력서 선택을 저장하지 못해서 검색을 시작하지 못했어요.",
+        "finish": "검색은 저장됐지만 초기 설정을 마치지 못했어요."
+      },
+      "why": {
+        "rate_limited": "짧은 시간에 너무 많이 시도했어요. 1분쯤 기다린 뒤 다시 시도해 주세요.",
+        "invalid": "답변 중 하나가 받아들여지지 않았어요. 답변을 확인한 뒤 다시 시도해 주세요.",
+        "conflict": "초기 설정이 다른 곳에서 이미 진행됐어요. 다른 탭일 수 있어요. 이 페이지를 새로고침해 주세요.",
+        "unavailable": "지금은 사용할 수 없어요. 나중에 다시 시도해 주세요.",
+        "unknown": "입력한 내용은 모두 그대로 있어요. 다시 시도해 주세요."
+      }
     }
   },
   "people": {
@@ -11683,6 +11753,104 @@
       "source": "출처: <link>{name}</link>",
       "title": "{company}의 비자 스폰서십 기록",
       "usNote": "인증된 신청서는 비자 승인이나 채용을 뜻하지 않아요. 청원 건수는 최초 결정 기준이며 신규 고용과 계속 고용을 모두 포함해요."
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, other {#건이 나를 기다리고 있어요}}",
+      "titleNone": "나를 기다리는 일이 없어요",
+      "titleLoading": "나를 기다리는 일을 확인하는 중…",
+      "titlePartial": "오늘 목록의 일부를 불러오지 못했어요"
+    },
+    "goal": {
+      "line": "내가 찾는 일: {what}",
+      "any": "모든 공고가 검색 대상이에요.",
+      "more": "{list} 외 {count}개",
+      "change": "변경",
+      "changeLabel": "내가 찾는 일 바꾸기",
+      "loading": "검색 조건을 불러오는 중…",
+      "failed": "검색 조건을 불러오지 못했어요.",
+      "none": "아직 저장한 검색이 없어요.",
+      "setUp": "검색 설정하기"
+    },
+    "agentTag": "에이전트",
+    "retry": "다시 시도",
+    "laneFailed": "일부를 불러오지 못했어요.",
+    "notLoaded": "불러오지 못함",
+    "waiting": {
+      "title": "나를 기다리는 일",
+      "loading": "나를 기다리는 일을 확인하는 중…",
+      "empty": "지금 처리할 일은 없어요. 추천 공고는 아래에 있어요.",
+      "emptyLink": "추천 공고로 이동",
+      "emptyPlain": "지금 처리할 일은 없어요.",
+      "more": "{count, plural, other {#건이 더 기다리고 있어요. 여기 있는 일을 마치면 차례로 표시돼요.}}",
+      "partial": "이 목록의 일부를 불러오지 못해서, 더 있을 수 있어요.",
+      "fact": {
+        "review": "{company}의 {title} 지원서를 확인할 준비가 됐어요.",
+        "reviewTitle": "{title} 지원서를 확인할 준비가 됐어요.",
+        "reviewUnnamed": "확인할 준비가 된 지원서가 1건 있어요.",
+        "open": "{company}의 {title} 지원 페이지를 열 준비가 됐어요.",
+        "openTitle": "{title} 지원 페이지를 열 준비가 됐어요.",
+        "openUnnamed": "지원 페이지를 열 준비가 된 지원서가 1건 있어요.",
+        "verify": "{count, plural, other {{name}에 새로 들어간 내용 #개에 내 확인이 필요해요.}}",
+        "noReply": "{count, plural, other {지원 #건이 {days}일째 답이 없어요.}}",
+        "profile": "{count, plural, other {지원서 양식에서 묻는 정보 #개가 프로필에 아직 없어요.}}",
+        "noResume": "아직 이력서를 추가하지 않았어요.",
+        "setup": "{count, plural, other {초기 설정이 #단계 남았어요.}}"
+      },
+      "action": {
+        "review": "확인하고 열기",
+        "open": "지원 페이지 열기",
+        "verify": "내용 확인하기",
+        "noReply": "지원 내역 보기",
+        "profile": "정보 추가",
+        "noResume": "이력서 추가",
+        "setup": "초기 설정 마치기"
+      }
+    },
+    "jobSearch": {
+      "title": "채용공고 검색",
+      "found": "{count, plural, =0 {{date} 이후 나와 맞는 새 공고를 찾지 못했어요.} other {{date} 이후 나와 맞는 새 공고 #건을 찾았어요.}}",
+      "foundSinceVisit": "{count, plural, =0 {지난 방문 이후 나와 맞는 새 공고를 찾지 못했어요.} other {지난 방문 이후 나와 맞는 새 공고 #건을 찾았어요.}}",
+      "foundCapped": "{date} 이후 나와 맞는 새 공고를 {count}건 넘게 찾았어요.",
+      "foundCappedSinceVisit": "지난 방문 이후 나와 맞는 새 공고를 {count}건 넘게 찾았어요.",
+      "foundUnknown": "지난 방문 이후 나와 맞는 새 공고:",
+      "picksTitle": "추천 공고",
+      "picksLoading": "추천 공고를 불러오는 중…",
+      "picksNone": "지금은 새 추천 공고가 없어요.",
+      "picksFailed": "추천 공고를 불러오지 못했어요.",
+      "viewJob": "공고 보기",
+      "seeAll": "모든 공고 보기",
+      "off": "이 계정에서는 채용공고 목록을 볼 수 없어요."
+    },
+    "applications": {
+      "title": "지원 현황",
+      "numbersLabel": "숫자로 보는 지원 현황",
+      "preparing": "준비 중",
+      "waiting": "나를 기다리는 일",
+      "sent": "이번 주에 보낸 지원서",
+      "saved": "저장함",
+      "open": "지원 현황 열기",
+      "failed": "일부 수치를 불러오지 못했어요."
+    },
+    "resume": {
+      "title": "이력서",
+      "mainLabel": "기본 이력서",
+      "loading": "이력서를 불러오는 중…",
+      "none": "아직 이력서가 없어요.",
+      "add": "이력서 추가",
+      "improve": "내 이력서 개선하기",
+      "open": "이력서 페이지 열기",
+      "failed": "이력서를 불러오지 못했어요.",
+      "asked": "검색된 공고에서 요구하는데, 내 프로필에는 없어요:",
+      "askedIn": "공고 {total}건 중 {count}건에서 요구"
+    },
+    "ask": {
+      "title": "질문하기",
+      "label": "구직에 대해 질문하기",
+      "placeholder": "예: 이 중에서 가장 잘 맞는 공고는 무엇인가요?",
+      "submit": "질문하기",
+      "hint": "질문을 바로 보낼 수 있는 상태로 어시스턴트가 열려요."
     }
   }
 }

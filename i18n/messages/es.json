@@ -17,7 +17,6 @@
   },
   "nav": {
     "aria_primary": "Navegación principal",
-    "brand_home": "%BRAND% — ir a Empleos",
     "jobs": "Empleos",
     "resume": "Currículum",
     "applications": "Candidaturas",
@@ -141,7 +140,9 @@
       },
       "source": "Fuente: {label}",
       "view": "Ver fuente"
-    }
+    },
+    "brand_home": "Inicio de %BRAND%",
+    "today": "Hoy"
   },
   "jobs": {
     "fit": {
@@ -393,7 +394,8 @@
       },
       "tabsLabel": "Listas de empleos",
       "title": "Empleos",
-      "introByDate": "Los empleos se ordenan por fecha de publicación, del más reciente al más antiguo. Abre uno para ver los detalles."
+      "introByDate": "Los empleos se ordenan por fecha de publicación, del más reciente al más antiguo. Abre uno para ver los detalles.",
+      "searchLabel": "Tu búsqueda"
     },
     "zero": {
       "gain": "{count, plural, one {+# empleo} other {+# empleos}}",
@@ -1254,6 +1256,12 @@
       "title": "Esta semana",
       "write": "Escribir un resumen",
       "writing": "Escribiendo…"
+    },
+    "switch": {
+      "label": "Tus candidaturas",
+      "ready": "Preparación",
+      "sent": "Enviadas",
+      "waiting": "{count, plural, one {# candidatura está lista y te espera} other {# candidaturas están listas y te esperan}}"
     }
   },
   "practice": {
@@ -6940,7 +6948,16 @@
     },
     "unnamed": "Tu búsqueda principal",
     "unnamedNumbered": "Búsqueda guardada {n}",
-    "unnamedOther": "Búsqueda guardada sin nombre"
+    "unnamedOther": "Búsqueda guardada sin nombre",
+    "summary": {
+      "label": "Tu búsqueda:",
+      "all": "Todos los empleos",
+      "loading": "Cargando tu búsqueda…",
+      "more": "{count} más",
+      "change": "Cambiar búsqueda",
+      "panel": "Búsqueda y filtros",
+      "done": "Listo"
+    }
   },
   "fit": {
     "analysis": {
@@ -8745,6 +8762,45 @@
       "prev": "Consejo anterior",
       "start": "Empezar",
       "title": "Qué puedes hacer aquí"
+    },
+    "express": {
+      "resume": {
+        "title": "Empieza con tu currículum",
+        "continue": "Continuar",
+        "noResume": "Todavía no tengo currículum",
+        "working": "Un momento…",
+        "classic": "Responder algunas preguntas más en su lugar"
+      },
+      "check": {
+        "title": "¿Es esto lo que buscas?",
+        "subtitleSuggested": "Esto es lo que sugiere tu currículum. Cambia lo que no esté bien.",
+        "subtitleNothingSuggested": "No se pudo sugerir nada a partir de tu currículum. Completa estos datos para buscar empleos.",
+        "subtitleNoResume": "No se añadió ningún currículum, así que los empleos se buscan solo con estas respuestas. Puedes añadir uno más adelante para ver qué tan bien encaja cada empleo.",
+        "filling": "Completando esto a partir de tu currículum…",
+        "otherPlaces": "Añadir otro lugar",
+        "chosenPlaces": "Mostrar solo los lugares elegidos",
+        "aboutYou": "Sobre ti: {value}",
+        "email": "Los empleos nuevos de esta búsqueda se te envían por correo una vez al día. Puedes cambiarlo en Ajustes.",
+        "submit": "Buscar mis empleos",
+        "retry": "Reintentar"
+      },
+      "progress": {
+        "saving": "Guardando tus respuestas…",
+        "searching": "Buscando empleos. Esto puede tardar uno o dos minutos.",
+        "finishing": "Terminando la configuración…"
+      },
+      "failed": {
+        "answers": "No se pudieron guardar tus respuestas, así que la búsqueda no empezó.",
+        "resume": "No se pudo guardar tu elección de currículum, así que la búsqueda no empezó.",
+        "finish": "Tu búsqueda está guardada, pero no se pudo terminar la configuración."
+      },
+      "why": {
+        "rate_limited": "Hubo demasiados intentos en poco tiempo. Espera un minuto e inténtalo otra vez.",
+        "invalid": "Una de las respuestas no se aceptó. Revísalas e inténtalo otra vez.",
+        "conflict": "La configuración avanzó en otro lugar, quizá en otra pestaña. Recarga esta página.",
+        "unavailable": "Esto no está disponible en este momento. Inténtalo más tarde.",
+        "unknown": "Todo lo que ingresaste sigue aquí. Inténtalo otra vez."
+      }
     }
   },
   "people": {
@@ -10070,6 +10126,20 @@
         "good": "Al menos",
         "great": "Solo",
         "possible": "Al menos"
+      }
+    },
+    "oneTap": {
+      "action": "Preparar candidatura",
+      "adding": "Añadiendo…",
+      "started": "En preparación. Aparecerá en «Te esperan» cuando necesite tu visto bueno.",
+      "failed": "Esto no se pudo empezar. No se usó nada. Inténtalo otra vez.",
+      "full": "Tu lista está llena. Quita un empleo de Preparación e inténtalo otra vez.",
+      "closed": "Este empleo ya no se publica, así que no se preparó nada.",
+      "place": {
+        "preparing": "En preparación",
+        "review": "Revisar y abrir",
+        "sent": "Ver candidatura",
+        "listed": "En tu lista"
       }
     }
   },
@@ -11683,6 +11753,104 @@
       "source": "Fuente: <link>{name}</link>",
       "title": "Registros de patrocinio de visa de {company}",
       "usNote": "Una solicitud certificada no es una aprobación de visa ni una contratación. Los recuentos de peticiones son primeras decisiones e incluyen empleo nuevo y continuado."
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, one {# cosa te espera} other {# cosas te esperan}}",
+      "titleNone": "No hay nada esperándote",
+      "titleLoading": "Comprobando qué te espera…",
+      "titlePartial": "Parte de la lista de hoy no se cargó"
+    },
+    "goal": {
+      "line": "Buscas {what}",
+      "any": "Tu búsqueda está abierta a cualquier empleo.",
+      "more": "{list}, y {count} más",
+      "change": "Cambiar",
+      "changeLabel": "Cambiar lo que buscas",
+      "loading": "Cargando tu búsqueda…",
+      "failed": "No se pudo cargar tu búsqueda.",
+      "none": "Todavía no hay ninguna búsqueda guardada.",
+      "setUp": "Configurar tu búsqueda"
+    },
+    "agentTag": "Agente",
+    "retry": "Reintentar",
+    "laneFailed": "Parte de esto no se pudo cargar.",
+    "notLoaded": "Sin cargar",
+    "waiting": {
+      "title": "Te esperan",
+      "loading": "Comprobando qué te espera…",
+      "empty": "Ahora mismo nada necesita tu atención. Las mejores opciones están abajo.",
+      "emptyLink": "Ir a las mejores opciones",
+      "emptyPlain": "Ahora mismo nada necesita tu atención.",
+      "more": "{count, plural, one {Hay # más esperando. Aparecerá aquí cuando termines una de estas.} other {Hay # más esperando. Aparecerán aquí a medida que termines estas.}}",
+      "partial": "Parte de esta lista no se cargó, así que puede haber más.",
+      "fact": {
+        "review": "La candidatura para {title} en {company} está lista para revisar.",
+        "reviewTitle": "La candidatura para {title} está lista para revisar.",
+        "reviewUnnamed": "Hay una candidatura lista para revisar.",
+        "open": "La candidatura para {title} en {company} está lista para abrir.",
+        "openTitle": "La candidatura para {title} está lista para abrir.",
+        "openUnnamed": "Hay una candidatura lista para abrir.",
+        "verify": "{count, plural, one {# dato nuevo en {name} necesita tu visto bueno.} other {# datos nuevos en {name} necesitan tu visto bueno.}}",
+        "noReply": "{count, plural, one {# candidatura lleva {days} días sin respuesta.} other {# candidaturas llevan {days} días sin respuesta.}}",
+        "profile": "{count, plural, one {A tu perfil le falta # dato que piden los formularios de candidatura.} other {A tu perfil le faltan # datos que piden los formularios de candidatura.}}",
+        "noResume": "Todavía no has añadido un currículum.",
+        "setup": "{count, plural, one {Queda # paso de la configuración.} other {Quedan # pasos de la configuración.}}"
+      },
+      "action": {
+        "review": "Revisar y abrir",
+        "open": "Abrir candidatura",
+        "verify": "Verificar datos",
+        "noReply": "Verlas",
+        "profile": "Añadir datos",
+        "noResume": "Añadir un currículum",
+        "setup": "Terminar la configuración"
+      }
+    },
+    "jobSearch": {
+      "title": "Búsqueda de empleos",
+      "found": "{count, plural, =0 {No se encontraron empleos nuevos que encajen desde el {date}.} one {Se encontró # empleo nuevo que encaja desde el {date}.} other {Se encontraron # empleos nuevos que encajan desde el {date}.}}",
+      "foundSinceVisit": "{count, plural, =0 {No se encontraron empleos nuevos que encajen desde tu última visita.} one {Se encontró # empleo nuevo que encaja desde tu última visita.} other {Se encontraron # empleos nuevos que encajan desde tu última visita.}}",
+      "foundCapped": "Se encontraron más de {count} empleos nuevos que encajan desde el {date}.",
+      "foundCappedSinceVisit": "Se encontraron más de {count} empleos nuevos que encajan desde tu última visita.",
+      "foundUnknown": "Empleos nuevos que encajan desde tu última visita:",
+      "picksTitle": "Mejores opciones",
+      "picksLoading": "Cargando las mejores opciones…",
+      "picksNone": "Ahora mismo no hay opciones nuevas.",
+      "picksFailed": "No se pudieron cargar las mejores opciones.",
+      "viewJob": "Ver empleo",
+      "seeAll": "Ver todos los empleos",
+      "off": "La lista de empleos no está disponible en esta cuenta."
+    },
+    "applications": {
+      "title": "Candidaturas",
+      "numbersLabel": "Candidaturas en cifras",
+      "preparing": "En preparación",
+      "waiting": "Te esperan",
+      "sent": "Enviadas esta semana",
+      "saved": "Guardadas",
+      "open": "Abrir Candidaturas",
+      "failed": "Algunas de estas cifras no se pudieron cargar."
+    },
+    "resume": {
+      "title": "Currículum",
+      "mainLabel": "Currículum principal",
+      "loading": "Cargando tu currículum…",
+      "none": "Todavía no hay currículum.",
+      "add": "Añadir un currículum",
+      "improve": "Mejorar mi currículum",
+      "open": "Abrir currículums",
+      "failed": "No se pudieron cargar tus currículums.",
+      "asked": "Los empleos de tu búsqueda piden estas habilidades, y tu perfil no las incluye:",
+      "askedIn": "se pide en {count} de {total} empleos"
+    },
+    "ask": {
+      "title": "Preguntar",
+      "label": "Pregunta sobre tu búsqueda de empleo",
+      "placeholder": "Por ejemplo: ¿cuál de estos empleos encaja mejor conmigo?",
+      "submit": "Preguntar",
+      "hint": "Abre el Asistente con tu pregunta lista para enviar."
     }
   }
 }

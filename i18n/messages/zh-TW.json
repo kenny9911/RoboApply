@@ -17,7 +17,6 @@
   },
   "nav": {
     "aria_primary": "主要導覽",
-    "brand_home": "%BRAND% —— 前往職缺",
     "jobs": "職缺",
     "resume": "履歷",
     "applications": "應徵紀錄",
@@ -141,7 +140,9 @@
       },
       "source": "來源：{label}",
       "view": "查看來源"
-    }
+    },
+    "brand_home": "%BRAND% 首頁",
+    "today": "今天"
   },
   "jobs": {
     "fit": {
@@ -393,7 +394,8 @@
       },
       "tabsLabel": "職缺清單",
       "title": "職缺",
-      "introByDate": "職缺依刊登日期排列，最新的在最前面。開啟任何一個就能看到詳細資訊。"
+      "introByDate": "職缺依刊登日期排列，最新的在最前面。開啟任何一個就能看到詳細資訊。",
+      "searchLabel": "你的搜尋"
     },
     "zero": {
       "gain": "{count, plural, one {+# 個職缺} other {+# 個職缺}}",
@@ -1254,6 +1256,12 @@
       "title": "本週",
       "write": "寫一份摘要",
       "writing": "撰寫中…"
+    },
+    "switch": {
+      "label": "你的應徵紀錄",
+      "ready": "準備應徵",
+      "sent": "已送出",
+      "waiting": "{count, plural, other {有 # 份應徵資料已準備好，等你處理}}"
     }
   },
   "practice": {
@@ -6940,7 +6948,16 @@
     },
     "unnamed": "你的主要搜尋",
     "unnamedNumbered": "已儲存的搜尋 {n}",
-    "unnamedOther": "已儲存的搜尋（未命名）"
+    "unnamedOther": "已儲存的搜尋（未命名）",
+    "summary": {
+      "label": "你的搜尋：",
+      "all": "所有職缺",
+      "loading": "正在載入你的搜尋…",
+      "more": "另外 {count} 項",
+      "change": "變更搜尋",
+      "panel": "搜尋與篩選條件",
+      "done": "完成"
+    }
   },
   "fit": {
     "analysis": {
@@ -8745,6 +8762,45 @@
       "prev": "上一則提示",
       "start": "開始",
       "title": "你可以在這裡做什麼"
+    },
+    "express": {
+      "resume": {
+        "title": "從你的履歷開始",
+        "continue": "繼續",
+        "noResume": "我還沒有履歷",
+        "working": "請稍候…",
+        "classic": "改為多回答幾個問題"
+      },
+      "check": {
+        "title": "這是你想找的工作嗎？",
+        "subtitleSuggested": "以下是根據你的履歷提出的建議。不對的地方都可以改。",
+        "subtitleNothingSuggested": "無法從你的履歷得出建議。請填寫以下內容來尋找職缺。",
+        "subtitleNoResume": "沒有新增履歷，所以只會根據這些回答尋找職缺。之後可以新增履歷，查看每個職缺的適合度。",
+        "filling": "正在根據你的履歷填寫…",
+        "otherPlaces": "新增其他地點",
+        "chosenPlaces": "只顯示已選的地點",
+        "aboutYou": "你的情況：{value}",
+        "email": "符合這個搜尋的新職缺，每天會用電子郵件寄給你一次。你可以到「設定」變更。",
+        "submit": "尋找我的職缺",
+        "retry": "重試"
+      },
+      "progress": {
+        "saving": "正在儲存你的回答…",
+        "searching": "正在搜尋職缺。這可能需要一到兩分鐘。",
+        "finishing": "正在完成設定…"
+      },
+      "failed": {
+        "answers": "你的回答沒有儲存成功，所以搜尋沒有開始。",
+        "resume": "你的履歷選擇沒有儲存成功，所以搜尋沒有開始。",
+        "finish": "你的搜尋已儲存，但設定沒有完成。"
+      },
+      "why": {
+        "rate_limited": "短時間內嘗試次數太多。請等一分鐘再試。",
+        "invalid": "有一項回答沒有被接受。請檢查後再試。",
+        "conflict": "設定已在其他地方繼續進行，可能是在另一個分頁。請重新整理這個頁面。",
+        "unavailable": "這項功能目前無法使用。請稍後再試。",
+        "unknown": "你填寫的內容都還在。請重試。"
+      }
     }
   },
   "people": {
@@ -10070,6 +10126,20 @@
         "good": "至少",
         "great": "只選",
         "possible": "至少"
+      }
+    },
+    "oneTap": {
+      "action": "準備應徵資料",
+      "adding": "加入中…",
+      "started": "正在準備。需要你確認時，會顯示在「等你處理」。",
+      "failed": "沒有成功開始準備。沒有扣點。請重試。",
+      "full": "你的清單已滿。請先從「準備應徵」移除一個職缺，然後再試一次。",
+      "closed": "這個職缺已不再刊登，所以沒有準備任何內容。",
+      "place": {
+        "preparing": "準備中",
+        "review": "檢查並開啟",
+        "sent": "查看應徵紀錄",
+        "listed": "已在你的清單上"
       }
     }
   },
@@ -11683,6 +11753,104 @@
       "source": "來源：<link>{name}</link>",
       "title": "{company} 的簽證贊助紀錄",
       "usNote": "獲得認證的申請不等於簽證核准或錄用。申請數量計算的是首次裁決，涵蓋新聘與續聘。"
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, other {有 # 件事在等你處理}}",
+      "titleNone": "沒有事情在等你處理",
+      "titleLoading": "正在確認有哪些事在等你處理…",
+      "titlePartial": "今天的清單有一部分沒有載入出來"
+    },
+    "goal": {
+      "line": "你想找的工作：{what}",
+      "any": "你的搜尋沒有限定條件，任何職缺都在範圍內。",
+      "more": "{list}，另外還有 {count} 項",
+      "change": "變更",
+      "changeLabel": "修改你想找的工作",
+      "loading": "正在載入你的搜尋…",
+      "failed": "你的搜尋沒有載入出來。",
+      "none": "還沒有已儲存的搜尋。",
+      "setUp": "設定你的搜尋"
+    },
+    "agentTag": "AI 代理",
+    "retry": "重試",
+    "laneFailed": "其中部分內容沒有載入出來。",
+    "notLoaded": "未載入",
+    "waiting": {
+      "title": "等你處理",
+      "loading": "正在確認有哪些事在等你處理…",
+      "empty": "目前沒有需要你處理的事。精選職缺在下方。",
+      "emptyLink": "前往精選職缺",
+      "emptyPlain": "目前沒有需要你處理的事。",
+      "more": "{count, plural, other {還有 # 件事在等你處理。處理完這幾項後，會陸續顯示在這裡。}}",
+      "partial": "這份清單有一部分沒有載入出來，所以可能還有更多。",
+      "fact": {
+        "review": "{company} 的 {title}：應徵資料已準備好，等你檢查。",
+        "reviewTitle": "{title}：應徵資料已準備好，等你檢查。",
+        "reviewUnnamed": "有一份應徵資料已準備好，等你檢查。",
+        "open": "{company} 的 {title}：可以開啟應徵頁面了。",
+        "openTitle": "{title}：可以開啟應徵頁面了。",
+        "openUnnamed": "有一筆應徵可以開啟了。",
+        "verify": "{count, plural, other {{name} 中有 # 處新增的細節需要你確認。}}",
+        "noReply": "{count, plural, other {有 # 筆應徵已 {days} 天沒有回覆。}}",
+        "profile": "{count, plural, other {你的個人檔案還缺 # 項應徵表單會問的資料。}}",
+        "noResume": "你還沒有新增履歷。",
+        "setup": "{count, plural, other {設定還剩 # 個步驟。}}"
+      },
+      "action": {
+        "review": "檢查並開啟",
+        "open": "開啟應徵頁面",
+        "verify": "核對細節",
+        "noReply": "查看這些應徵",
+        "profile": "補上資料",
+        "noResume": "新增履歷",
+        "setup": "完成設定"
+      }
+    },
+    "jobSearch": {
+      "title": "職缺搜尋",
+      "found": "{count, plural, =0 {自 {date} 以來，沒有找到適合的新職缺。} other {自 {date} 以來，找到 # 個適合的新職缺。}}",
+      "foundSinceVisit": "{count, plural, =0 {自你上次造訪後，沒有找到適合的新職缺。} other {自你上次造訪後，找到 # 個適合的新職缺。}}",
+      "foundCapped": "自 {date} 以來，找到超過 {count} 個適合的新職缺。",
+      "foundCappedSinceVisit": "自你上次造訪後，找到超過 {count} 個適合的新職缺。",
+      "foundUnknown": "自你上次造訪後適合的新職缺：",
+      "picksTitle": "精選職缺",
+      "picksLoading": "正在載入精選職缺…",
+      "picksNone": "目前沒有新的精選職缺。",
+      "picksFailed": "精選職缺沒有載入出來。",
+      "viewJob": "查看職缺",
+      "seeAll": "查看所有職缺",
+      "off": "這個帳號無法使用職缺清單。"
+    },
+    "applications": {
+      "title": "應徵",
+      "numbersLabel": "應徵的各項數字",
+      "preparing": "準備中",
+      "waiting": "等你處理",
+      "sent": "本週已送出",
+      "saved": "已儲存",
+      "open": "開啟應徵紀錄",
+      "failed": "其中部分數字沒有載入出來。"
+    },
+    "resume": {
+      "title": "履歷",
+      "mainLabel": "主履歷",
+      "loading": "正在載入你的履歷…",
+      "none": "還沒有履歷。",
+      "add": "新增履歷",
+      "improve": "改善我的履歷",
+      "open": "開啟履歷頁",
+      "failed": "你的履歷沒有載入出來。",
+      "asked": "你搜尋到的職缺要求這些技能，而你的個人檔案沒有列出：",
+      "askedIn": "{total} 個職缺中有 {count} 個要求"
+    },
+    "ask": {
+      "title": "提問",
+      "label": "問問和你求職有關的問題",
+      "placeholder": "例如：這些職缺中哪一個最適合我？",
+      "submit": "提問",
+      "hint": "會開啟助理，並填好你的問題，隨時可以送出。"
     }
   }
 }

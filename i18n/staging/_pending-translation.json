@@ -59020,5 +59020,779 @@
     "path": "extension.fit.confidence.reason.few_details",
     "en": "This post says too little to compare",
     "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "applications.switch.label",
+    "en": "Your applications",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "applications.switch.ready",
+    "en": "Getting ready",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "applications.switch.sent",
+    "en": "Sent",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "applications.switch.waiting",
+    "en": "{count, plural, one {# application is ready and waiting for you} other {# applications are ready and waiting for you}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.label",
+    "en": "Your search:",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.all",
+    "en": "All jobs",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.loading",
+    "en": "Loading your search…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.more",
+    "en": "{count} more",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.change",
+    "en": "Change search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.panel",
+    "en": "Search and filters",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.done",
+    "en": "Done",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "jobs.workspace.searchLabel",
+    "en": "Your search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "nav.today",
+    "en": "Today",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "nav.brand_home",
+    "en": "%BRAND% home",
+    "reason": "changed"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.title",
+    "en": "Start with your resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.continue",
+    "en": "Continue",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.noResume",
+    "en": "I don't have a resume yet",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.working",
+    "en": "One moment…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.classic",
+    "en": "Answer a few more questions instead",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.title",
+    "en": "Is this what you're looking for?",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.subtitleSuggested",
+    "en": "This is what your resume suggests. Change anything that isn't right.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.subtitleNothingSuggested",
+    "en": "Nothing could be suggested from your resume. Fill these in to find jobs.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.subtitleNoResume",
+    "en": "No resume added, so jobs are found from these answers only. You can add one later to see how well each job fits.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.filling",
+    "en": "Filling this in from your resume…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.otherPlaces",
+    "en": "Add another place",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.chosenPlaces",
+    "en": "Show chosen places only",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.aboutYou",
+    "en": "About you: {value}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.email",
+    "en": "New jobs for this search are emailed to you once a day. You can change that in Settings.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.submit",
+    "en": "Find my jobs",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.retry",
+    "en": "Try again",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.progress.saving",
+    "en": "Saving your answers…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.progress.searching",
+    "en": "Searching for jobs. This can take a minute or two.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.progress.finishing",
+    "en": "Finishing setup…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.failed.answers",
+    "en": "Your answers couldn't be saved, so the search didn't start.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.failed.resume",
+    "en": "Your resume choice couldn't be saved, so the search didn't start.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.failed.finish",
+    "en": "Your search is saved, but setup couldn't be finished.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.rate_limited",
+    "en": "There were too many tries in a short time. Wait a minute, then try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.invalid",
+    "en": "One of the answers wasn't accepted. Check them, then try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.conflict",
+    "en": "Setup has moved on somewhere else, maybe in another tab. Reload this page.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.unavailable",
+    "en": "This isn't available right now. Try again later.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.unknown",
+    "en": "Everything you entered is still here. Try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.action",
+    "en": "Prepare application",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.adding",
+    "en": "Adding…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.started",
+    "en": "Being prepared. It shows under Waiting for you when it needs your OK.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.failed",
+    "en": "This couldn't be started. Nothing was used. Try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.full",
+    "en": "Your list is full. Remove a job from Getting ready, then try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.closed",
+    "en": "This job is no longer listed, so nothing was prepared.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.place.preparing",
+    "en": "Being prepared",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.place.review",
+    "en": "Check and open",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.place.sent",
+    "en": "See application",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.place.listed",
+    "en": "On your list",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.header.title",
+    "en": "{count, plural, one {# thing is waiting for you} other {# things are waiting for you}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.header.titleNone",
+    "en": "Nothing is waiting for you",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.header.titleLoading",
+    "en": "Checking what is waiting for you…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.header.titlePartial",
+    "en": "Part of today's list did not load",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.line",
+    "en": "Looking for {what}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.any",
+    "en": "Your search is open to any job.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.more",
+    "en": "{list} and {count} more",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.change",
+    "en": "Change",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.changeLabel",
+    "en": "Change what you are looking for",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.loading",
+    "en": "Loading your search…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.failed",
+    "en": "Your search could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.none",
+    "en": "No saved search yet.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.setUp",
+    "en": "Set up your search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.agentTag",
+    "en": "Agent",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.retry",
+    "en": "Try again",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.laneFailed",
+    "en": "Some of this could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.notLoaded",
+    "en": "Not loaded",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.title",
+    "en": "Waiting for you",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.loading",
+    "en": "Checking what is waiting for you…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.empty",
+    "en": "Nothing needs you right now. The best picks are below.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.emptyLink",
+    "en": "Go to the picks",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.emptyPlain",
+    "en": "Nothing needs you right now.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.more",
+    "en": "{count, plural, one {# more is waiting. It shows here when you finish one of these.} other {# more are waiting. They show here as you finish these.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.partial",
+    "en": "Part of this list did not load, so there may be more.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.review",
+    "en": "{title} at {company} is ready to check.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.reviewTitle",
+    "en": "{title} is ready to check.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.reviewUnnamed",
+    "en": "An application is ready to check.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.open",
+    "en": "{title} at {company} is ready to open.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.openTitle",
+    "en": "{title} is ready to open.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.openUnnamed",
+    "en": "An application is ready to open.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.verify",
+    "en": "{count, plural, one {# new detail in {name} needs your OK.} other {# new details in {name} need your OK.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.noReply",
+    "en": "{count, plural, one {# application has had no reply in {days} days.} other {# applications have had no reply in {days} days.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.profile",
+    "en": "{count, plural, one {Your profile is missing # detail that application forms ask for.} other {Your profile is missing # details that application forms ask for.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.noResume",
+    "en": "You have not added a resume yet.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.setup",
+    "en": "{count, plural, one {Setup has # step left.} other {Setup has # steps left.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.review",
+    "en": "Check and open",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.open",
+    "en": "Open application",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.verify",
+    "en": "Verify details",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.noReply",
+    "en": "See them",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.profile",
+    "en": "Add details",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.noResume",
+    "en": "Add a resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.setup",
+    "en": "Finish setting up",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.title",
+    "en": "Job search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.found",
+    "en": "{count, plural, =0 {Found no new jobs that fit since {date}.} one {Found # new job that fits since {date}.} other {Found # new jobs that fit since {date}.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.foundSinceVisit",
+    "en": "{count, plural, =0 {Found no new jobs that fit since your last visit.} one {Found # new job that fits since your last visit.} other {Found # new jobs that fit since your last visit.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.foundCapped",
+    "en": "Found more than {count} new jobs that fit since {date}.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.foundCappedSinceVisit",
+    "en": "Found more than {count} new jobs that fit since your last visit.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.foundUnknown",
+    "en": "New jobs that fit since your last visit:",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.picksTitle",
+    "en": "Best picks",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.picksLoading",
+    "en": "Loading picks…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.picksNone",
+    "en": "No new picks right now.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.picksFailed",
+    "en": "The picks could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.viewJob",
+    "en": "View job",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.seeAll",
+    "en": "See all jobs",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.off",
+    "en": "The job list is not available on this account.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.title",
+    "en": "Applications",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.numbersLabel",
+    "en": "Applications in numbers",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.preparing",
+    "en": "Being prepared",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.waiting",
+    "en": "Waiting for you",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.sent",
+    "en": "Sent this week",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.saved",
+    "en": "Saved",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.open",
+    "en": "Open applications",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.failed",
+    "en": "Some of these numbers could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.title",
+    "en": "Resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.mainLabel",
+    "en": "Main resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.loading",
+    "en": "Loading your resume…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.none",
+    "en": "No resume yet.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.add",
+    "en": "Add a resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.improve",
+    "en": "Improve my resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.open",
+    "en": "Open resumes",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.failed",
+    "en": "Your resumes could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.asked",
+    "en": "Jobs in your search ask for these, and your profile does not list them:",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.askedIn",
+    "en": "asked in {count} of {total} jobs",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.title",
+    "en": "Ask",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.label",
+    "en": "Ask about your job search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.placeholder",
+    "en": "For example: which of these jobs is the best fit?",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.submit",
+    "en": "Ask",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.hint",
+    "en": "Opens the Assistant with your question ready to send.",
+    "reason": "new"
   }
 ]

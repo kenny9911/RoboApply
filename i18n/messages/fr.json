@@ -17,7 +17,6 @@
   },
   "nav": {
     "aria_primary": "Navigation principale",
-    "brand_home": "%BRAND% — aller aux offres",
     "jobs": "Offres",
     "resume": "CV",
     "applications": "Candidatures",
@@ -141,7 +140,9 @@
       },
       "source": "Source : {label}",
       "view": "Voir la source"
-    }
+    },
+    "brand_home": "Page d’accueil de %BRAND%",
+    "today": "Aujourd’hui"
   },
   "jobs": {
     "fit": {
@@ -393,7 +394,8 @@
       },
       "tabsLabel": "Listes d’offres",
       "title": "Offres",
-      "introByDate": "Les offres sont classées par date de publication, des plus récentes aux plus anciennes. Ouvres-en une pour voir les détails."
+      "introByDate": "Les offres sont classées par date de publication, des plus récentes aux plus anciennes. Ouvres-en une pour voir les détails.",
+      "searchLabel": "Ta recherche"
     },
     "zero": {
       "gain": "{count, plural, one {+# offre} other {+# offres}}",
@@ -1254,6 +1256,12 @@
       "title": "Cette semaine",
       "write": "Écrire un résumé",
       "writing": "Écriture…"
+    },
+    "switch": {
+      "label": "Tes candidatures",
+      "ready": "Préparation",
+      "sent": "Envoyées",
+      "waiting": "{count, plural, one {# candidature est prête et t’attend} other {# candidatures sont prêtes et t’attendent}}"
     }
   },
   "practice": {
@@ -6940,7 +6948,16 @@
     },
     "unnamed": "Ta recherche principale",
     "unnamedNumbered": "Recherche enregistrée {n}",
-    "unnamedOther": "Recherche enregistrée sans nom"
+    "unnamedOther": "Recherche enregistrée sans nom",
+    "summary": {
+      "label": "Ta recherche :",
+      "all": "Toutes les offres",
+      "loading": "Chargement de ta recherche…",
+      "more": "{count} de plus",
+      "change": "Modifier la recherche",
+      "panel": "Recherche et filtres",
+      "done": "Terminé"
+    }
   },
   "fit": {
     "analysis": {
@@ -8745,6 +8762,45 @@
       "prev": "Conseil précédent",
       "start": "Commencer",
       "title": "Ce que tu peux faire ici"
+    },
+    "express": {
+      "resume": {
+        "title": "Commence par ton CV",
+        "continue": "Continuer",
+        "noResume": "Je n’ai pas encore de CV",
+        "working": "Un instant…",
+        "classic": "Répondre plutôt à quelques questions de plus"
+      },
+      "check": {
+        "title": "Est-ce bien ce que tu recherches ?",
+        "subtitleSuggested": "Voici ce que suggère ton CV. Change ce qui ne convient pas.",
+        "subtitleNothingSuggested": "Rien n’a pu être suggéré à partir de ton CV. Remplis ces champs pour trouver des offres.",
+        "subtitleNoResume": "Aucun CV ajouté : les offres sont donc trouvées à partir de ces réponses seulement. Tu peux en ajouter un plus tard pour voir à quel point chaque offre te correspond.",
+        "filling": "Remplissage à partir de ton CV…",
+        "otherPlaces": "Ajouter un autre lieu",
+        "chosenPlaces": "Afficher seulement les lieux choisis",
+        "aboutYou": "À propos de toi : {value}",
+        "email": "Les nouvelles offres pour cette recherche te sont envoyées par e-mail une fois par jour. Tu peux modifier cela dans les Réglages.",
+        "submit": "Trouver mes offres",
+        "retry": "Réessayer"
+      },
+      "progress": {
+        "saving": "Enregistrement de tes réponses…",
+        "searching": "Recherche d’offres en cours. Cela peut prendre une minute ou deux.",
+        "finishing": "Finalisation de la configuration…"
+      },
+      "failed": {
+        "answers": "Tes réponses n’ont pas pu être enregistrées, donc la recherche n’a pas démarré.",
+        "resume": "Ton choix de CV n’a pas pu être enregistré, donc la recherche n’a pas démarré.",
+        "finish": "Ta recherche est enregistrée, mais la configuration n’a pas pu être terminée."
+      },
+      "why": {
+        "rate_limited": "Il y a eu trop de tentatives en peu de temps. Attends une minute, puis réessaie.",
+        "invalid": "Une des réponses n’a pas été acceptée. Vérifie-les, puis réessaie.",
+        "conflict": "La configuration a avancé ailleurs, peut-être dans un autre onglet. Recharge cette page.",
+        "unavailable": "Ce n’est pas disponible pour l’instant. Réessaie plus tard.",
+        "unknown": "Tout ce que tu as saisi est toujours là. Réessaie."
+      }
     }
   },
   "people": {
@@ -10070,6 +10126,20 @@
         "good": "Au moins",
         "great": "Uniquement",
         "possible": "Au moins"
+      }
+    },
+    "oneTap": {
+      "action": "Préparer la candidature",
+      "adding": "Ajout…",
+      "started": "Candidature en préparation. Elle apparaît dans « En attente de toi » quand elle a besoin de ton accord.",
+      "failed": "La préparation n’a pas pu démarrer. Rien n’a été utilisé. Réessaie.",
+      "full": "Ta liste est pleine. Retire une offre de « Préparation », puis réessaie.",
+      "closed": "Cette offre n’est plus publiée, donc rien n’a été préparé.",
+      "place": {
+        "preparing": "En préparation",
+        "review": "Vérifier et ouvrir",
+        "sent": "Voir la candidature",
+        "listed": "Dans ta liste"
       }
     }
   },
@@ -11683,6 +11753,104 @@
       "source": "Source : <link>{name}</link>",
       "title": "Dossiers de parrainage de visa pour {company}",
       "usNote": "Une demande certifiée n’est ni une approbation de visa ni une embauche. Les nombres de pétitions correspondent aux premières décisions et couvrent les nouveaux emplois et leur prolongation."
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, one {# chose t’attend} other {# choses t’attendent}}",
+      "titleNone": "Rien ne t’attend",
+      "titleLoading": "Vérification de ce qui t’attend…",
+      "titlePartial": "Une partie de la liste du jour ne s’est pas chargée"
+    },
+    "goal": {
+      "line": "Tu recherches : {what}",
+      "any": "Ta recherche est ouverte à toutes les offres.",
+      "more": "{list} et {count} de plus",
+      "change": "Modifier",
+      "changeLabel": "Modifier ce que tu recherches",
+      "loading": "Chargement de ta recherche…",
+      "failed": "Ta recherche n’a pas pu être chargée.",
+      "none": "Pas encore de recherche enregistrée.",
+      "setUp": "Configurer ta recherche"
+    },
+    "agentTag": "Agent",
+    "retry": "Réessayer",
+    "laneFailed": "Une partie n’a pas pu être chargée.",
+    "notLoaded": "Non chargé",
+    "waiting": {
+      "title": "En attente de toi",
+      "loading": "Vérification de ce qui t’attend…",
+      "empty": "Rien ne demande ton attention pour l’instant. Les meilleures offres sont ci-dessous.",
+      "emptyLink": "Aller aux meilleures offres",
+      "emptyPlain": "Rien ne demande ton attention pour l’instant.",
+      "more": "{count, plural, one {# autre chose t’attend. Elle apparaît ici quand tu en termines une.} other {# autres choses t’attendent. Elles apparaissent ici à mesure que tu termines celles-ci.}}",
+      "partial": "Une partie de cette liste ne s’est pas chargée, il peut donc y en avoir d’autres.",
+      "fact": {
+        "review": "{title} chez {company} : la candidature est prête à vérifier.",
+        "reviewTitle": "{title} : la candidature est prête à vérifier.",
+        "reviewUnnamed": "Une candidature est prête à vérifier.",
+        "open": "{title} chez {company} : la candidature est prête à ouvrir.",
+        "openTitle": "{title} : la candidature est prête à ouvrir.",
+        "openUnnamed": "Une candidature est prête à ouvrir.",
+        "verify": "{count, plural, one {# nouveau détail dans {name} attend ton accord.} other {# nouveaux détails dans {name} attendent ton accord.}}",
+        "noReply": "{count, plural, one {# candidature est sans réponse depuis {days} jours.} other {# candidatures sont sans réponse depuis {days} jours.}}",
+        "profile": "{count, plural, one {Il manque à ton profil # information que les formulaires de candidature demandent.} other {Il manque à ton profil # informations que les formulaires de candidature demandent.}}",
+        "noResume": "Tu n’as pas encore ajouté de CV.",
+        "setup": "{count, plural, one {Il te reste # étape de configuration.} other {Il te reste # étapes de configuration.}}"
+      },
+      "action": {
+        "review": "Vérifier et ouvrir",
+        "open": "Ouvrir la candidature",
+        "verify": "Vérifier les détails",
+        "noReply": "Les voir",
+        "profile": "Ajouter les informations",
+        "noResume": "Ajouter un CV",
+        "setup": "Terminer la configuration"
+      }
+    },
+    "jobSearch": {
+      "title": "Recherche d’offres",
+      "found": "{count, plural, =0 {Depuis le {date}, aucune nouvelle offre qui te correspond n’a été trouvée.} one {Depuis le {date}, # nouvelle offre qui te correspond a été trouvée.} other {Depuis le {date}, # nouvelles offres qui te correspondent ont été trouvées.}}",
+      "foundSinceVisit": "{count, plural, =0 {Depuis ta dernière visite, aucune nouvelle offre qui te correspond n’a été trouvée.} one {Depuis ta dernière visite, # nouvelle offre qui te correspond a été trouvée.} other {Depuis ta dernière visite, # nouvelles offres qui te correspondent ont été trouvées.}}",
+      "foundCapped": "Depuis le {date}, plus de {count} nouvelles offres qui te correspondent ont été trouvées.",
+      "foundCappedSinceVisit": "Depuis ta dernière visite, plus de {count} nouvelles offres qui te correspondent ont été trouvées.",
+      "foundUnknown": "Nouvelles offres qui te correspondent depuis ta dernière visite :",
+      "picksTitle": "Meilleures offres",
+      "picksLoading": "Chargement des meilleures offres…",
+      "picksNone": "Aucune nouvelle offre à mettre en avant pour l’instant.",
+      "picksFailed": "Les meilleures offres n’ont pas pu être chargées.",
+      "viewJob": "Voir l’offre",
+      "seeAll": "Voir toutes les offres",
+      "off": "La liste des offres n’est pas disponible sur ce compte."
+    },
+    "applications": {
+      "title": "Candidatures",
+      "numbersLabel": "Les candidatures en chiffres",
+      "preparing": "En préparation",
+      "waiting": "En attente de toi",
+      "sent": "Envoyées cette semaine",
+      "saved": "Gardées",
+      "open": "Ouvrir les candidatures",
+      "failed": "Certains de ces chiffres n’ont pas pu être chargés."
+    },
+    "resume": {
+      "title": "CV",
+      "mainLabel": "CV principal",
+      "loading": "Chargement de ton CV…",
+      "none": "Pas encore de CV.",
+      "add": "Ajouter un CV",
+      "improve": "Améliorer mon CV",
+      "open": "Ouvrir les CV",
+      "failed": "Tes CV n’ont pas pu être chargés.",
+      "asked": "Des offres de ta recherche demandent ces compétences, et ton profil ne les mentionne pas :",
+      "askedIn": "demandée dans {count} offres sur {total}"
+    },
+    "ask": {
+      "title": "Demander",
+      "label": "Pose une question sur ta recherche d’emploi",
+      "placeholder": "Par exemple : laquelle de ces offres est la plus adaptée ?",
+      "submit": "Demander",
+      "hint": "L’Assistant s’ouvre avec ta question, prête à être envoyée."
     }
   }
 }

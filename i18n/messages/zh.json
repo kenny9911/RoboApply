@@ -17,7 +17,6 @@
   },
   "nav": {
     "aria_primary": "主导航",
-    "brand_home": "%BRAND% —— 前往职位",
     "jobs": "职位",
     "resume": "简历",
     "applications": "申请记录",
@@ -141,7 +140,9 @@
       },
       "source": "来源：{label}",
       "view": "查看来源"
-    }
+    },
+    "brand_home": "%BRAND% 首页",
+    "today": "今天"
   },
   "jobs": {
     "fit": {
@@ -393,7 +394,8 @@
       },
       "tabsLabel": "职位列表",
       "title": "职位",
-      "introByDate": "职位按发布时间排序，最新的在前。打开一个职位查看详情。"
+      "introByDate": "职位按发布时间排序，最新的在前。打开一个职位查看详情。",
+      "searchLabel": "你的搜索"
     },
     "zero": {
       "gain": "{count, plural, other {+# 个职位}}",
@@ -1254,6 +1256,12 @@
       "title": "本周",
       "write": "生成总结",
       "writing": "生成中…"
+    },
+    "switch": {
+      "label": "你的申请",
+      "ready": "待投递",
+      "sent": "已提交",
+      "waiting": "{count, plural, other {有 # 份申请材料已备好，等你处理}}"
     }
   },
   "practice": {
@@ -9350,7 +9358,16 @@
     },
     "unnamed": "你的主搜索",
     "unnamedNumbered": "订阅搜索 {n}",
-    "unnamedOther": "未命名的订阅搜索"
+    "unnamedOther": "未命名的订阅搜索",
+    "summary": {
+      "label": "你的搜索：",
+      "all": "全部职位",
+      "loading": "正在加载你的搜索…",
+      "more": "另有 {count} 项",
+      "change": "修改搜索",
+      "panel": "搜索和筛选",
+      "done": "完成"
+    }
   },
   "fit": {
     "analysis": {
@@ -10540,6 +10557,45 @@
       "prev": "上一条",
       "start": "开始",
       "title": "你可以在这里做什么"
+    },
+    "express": {
+      "resume": {
+        "title": "从你的简历开始",
+        "continue": "继续",
+        "noResume": "我还没有简历",
+        "working": "请稍候…",
+        "classic": "改为多回答几个问题"
+      },
+      "check": {
+        "title": "这是你想找的工作吗？",
+        "subtitleSuggested": "以下是根据你的简历给出的建议。不对的地方都可以改。",
+        "subtitleNothingSuggested": "没能从你的简历中得出建议。请填写以下内容来查找职位。",
+        "subtitleNoResume": "没有添加简历，所以只根据这些回答查找职位。之后可以添加简历，查看每个职位的匹配度。",
+        "filling": "正在根据你的简历填写…",
+        "otherPlaces": "添加其他地点",
+        "chosenPlaces": "只显示已选地点",
+        "aboutYou": "你的情况：{value}",
+        "email": "符合这个搜索的新职位，每天会通过邮件发给你一次。你可以在“设置”中修改。",
+        "submit": "为我查找职位",
+        "retry": "重试"
+      },
+      "progress": {
+        "saving": "正在保存你的回答…",
+        "searching": "正在搜索职位。这可能需要一两分钟。",
+        "finishing": "正在完成初始设置…"
+      },
+      "failed": {
+        "answers": "你的回答没有保存成功，所以搜索没有开始。",
+        "resume": "你的简历选择没有保存成功，所以搜索没有开始。",
+        "finish": "你的搜索已保存，但初始设置没有完成。"
+      },
+      "why": {
+        "rate_limited": "短时间内尝试次数太多。请等一分钟再试。",
+        "invalid": "有一项回答没有通过。请检查后再试。",
+        "conflict": "初始设置已在别处继续进行，可能是在另一个标签页。请刷新这个页面。",
+        "unavailable": "这项功能暂时不可用。请稍后再试。",
+        "unknown": "你填写的内容都还在。请重试。"
+      }
     }
   },
   "practiceQuestions": {
@@ -11688,6 +11744,20 @@
         "great": "仅限",
         "possible": "至少"
       }
+    },
+    "oneTap": {
+      "action": "准备申请材料",
+      "adding": "添加中…",
+      "started": "正在准备。需要你确认时，会显示在“等你处理”中。",
+      "failed": "没能开始准备。没有扣除任何额度。请重试。",
+      "full": "你的列表已满。请先从“待投递”移除一个职位，然后重试。",
+      "closed": "这个职位已下架，所以没有准备任何内容。",
+      "place": {
+        "preparing": "准备中",
+        "review": "检查并打开",
+        "sent": "查看申请",
+        "listed": "已在你的列表中"
+      }
     }
   },
   "resumeCheck": {
@@ -12802,6 +12872,104 @@
       "source": "来源：<link>{name}</link>",
       "title": "{company} 的签证担保记录",
       "usNote": "获得认证的申请不等于签证获批，也不等于已被录用。请愿数量统计的是首次裁决，包含新聘用和续聘。"
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, other {有 # 项在等你处理}}",
+      "titleNone": "没有等你处理的事项",
+      "titleLoading": "正在查看有哪些事项在等你处理…",
+      "titlePartial": "今天的列表有一部分没有加载出来"
+    },
+    "goal": {
+      "line": "求职期望：{what}",
+      "any": "你的搜索没有限定条件，任何职位都在范围内。",
+      "more": "{list}，另有 {count} 项",
+      "change": "修改",
+      "changeLabel": "修改求职期望",
+      "loading": "正在加载你的搜索…",
+      "failed": "你的搜索没有加载出来。",
+      "none": "还没有订阅搜索。",
+      "setUp": "设置搜索"
+    },
+    "agentTag": "智能体",
+    "retry": "重试",
+    "laneFailed": "其中部分内容没有加载出来。",
+    "notLoaded": "未加载",
+    "waiting": {
+      "title": "等你处理",
+      "loading": "正在查看有哪些事项在等你处理…",
+      "empty": "现在没有需要你处理的事项。精选职位在下方。",
+      "emptyLink": "前往精选职位",
+      "emptyPlain": "现在没有需要你处理的事项。",
+      "more": "{count, plural, other {还有 # 项在等你处理。处理完这几项后，会陆续显示在这里。}}",
+      "partial": "这个列表有一部分没有加载出来，所以可能还有更多。",
+      "fact": {
+        "review": "{company} 的 {title}：申请材料已备好，等你检查。",
+        "reviewTitle": "{title}：申请材料已备好，等你检查。",
+        "reviewUnnamed": "有一份申请材料已备好，等你检查。",
+        "open": "{company} 的 {title}：可以打开申请页面了。",
+        "openTitle": "{title}：可以打开申请页面了。",
+        "openUnnamed": "有一份申请可以打开了。",
+        "verify": "{count, plural, other {{name} 中有 # 处新增细节需要你确认。}}",
+        "noReply": "{count, plural, other {有 # 份申请已 {days} 天没有回复。}}",
+        "profile": "{count, plural, other {你的个人资料还缺 # 项申请表会问到的信息。}}",
+        "noResume": "你还没有添加简历。",
+        "setup": "{count, plural, other {初始设置还剩 # 步。}}"
+      },
+      "action": {
+        "review": "检查并打开",
+        "open": "打开申请页面",
+        "verify": "核对细节",
+        "noReply": "查看这些申请",
+        "profile": "补充信息",
+        "noResume": "添加简历",
+        "setup": "完成初始设置"
+      }
+    },
+    "jobSearch": {
+      "title": "职位搜索",
+      "found": "{count, plural, =0 {自 {date} 以来，没有找到合适的新职位。} other {自 {date} 以来，找到了 # 个合适的新职位。}}",
+      "foundSinceVisit": "{count, plural, =0 {自你上次访问以来，没有找到合适的新职位。} other {自你上次访问以来，找到了 # 个合适的新职位。}}",
+      "foundCapped": "自 {date} 以来，找到了超过 {count} 个合适的新职位。",
+      "foundCappedSinceVisit": "自你上次访问以来，找到了超过 {count} 个合适的新职位。",
+      "foundUnknown": "自你上次访问以来合适的新职位：",
+      "picksTitle": "精选职位",
+      "picksLoading": "正在加载精选职位…",
+      "picksNone": "暂时没有新的精选职位。",
+      "picksFailed": "精选职位没有加载出来。",
+      "viewJob": "查看职位",
+      "seeAll": "查看全部职位",
+      "off": "这个账号无法使用职位列表。"
+    },
+    "applications": {
+      "title": "申请",
+      "numbersLabel": "申请的各项数字",
+      "preparing": "准备中",
+      "waiting": "等你处理",
+      "sent": "本周已提交",
+      "saved": "已保存",
+      "open": "打开申请记录",
+      "failed": "其中部分数字没有加载出来。"
+    },
+    "resume": {
+      "title": "简历",
+      "mainLabel": "主简历",
+      "loading": "正在加载你的简历…",
+      "none": "还没有简历。",
+      "add": "添加简历",
+      "improve": "改进我的简历",
+      "open": "打开简历页",
+      "failed": "你的简历没有加载出来。",
+      "asked": "你搜索到的职位要求这些技能，而你的个人资料里没有列出：",
+      "askedIn": "{total} 个职位中有 {count} 个要求"
+    },
+    "ask": {
+      "title": "问一问",
+      "label": "问问和你求职有关的问题",
+      "placeholder": "例如：这些职位中哪一个最适合我？",
+      "submit": "问一问",
+      "hint": "会打开求职助手，并把你的问题填好，随时可以发送。"
     }
   }
 }
