@@ -4028,6 +4028,10 @@
         "system": {
           "sub": "职位来源、后台任务、邮件、求职助手和成本，实时统计。",
           "title": "系统"
+        },
+        "visitors": {
+          "title": "访客与注册",
+          "sub": "谁来过、从哪里来、有多少人创建了账号。"
         }
       },
       "overrides": {
@@ -4536,6 +4540,148 @@
             "duplicate": "这个招聘页面已在列表中。",
             "invalid": "请检查页面标识和企业名称。",
             "generic": "操作未成功，请重试。"
+          }
+        }
+      },
+      "visitors": {
+        "eyebrow": "管理",
+        "title": "访客与注册",
+        "sub": "谁访问了网站、从哪里来、有多少人创建了账号。",
+        "loading": "加载中…",
+        "refresh": "刷新",
+        "refreshing": "刷新中…",
+        "site": "站点",
+        "allSites": "两个站点",
+        "timezone": "日期按 {tz} 时区计算。",
+        "empty": "这段时间内没有记录到访客。",
+        "notReady": {
+          "title": "尚未开始记录访客",
+          "body": "数据库中还没有访客表。添加后会从那一刻起记录访客，之前的访问无法补录。"
+        },
+        "kpi": {
+          "visitors": "新访客",
+          "visitorsDetail": "共浏览 {pages} 个页面",
+          "signedUp": "创建的账号",
+          "signedUpDetail": "来自这些访客",
+          "rate": "访客转为账号",
+          "rateDetail": "{visitors} 位访客中有 {signedUp} 位",
+          "onboarded": "完成初始设置",
+          "onboardedDetail": "占新账号的 {rate}"
+        },
+        "steps": {
+          "title": "从首次访问到创建账号",
+          "sub": "这段时间内首次出现的访客，以及每位访客至今走到了哪一步。",
+          "stages": {
+            "visitors": "访问了网站",
+            "signupViewed": "打开了注册或登录页",
+            "signupStarted": "开始注册",
+            "signedUp": "创建了账号",
+            "onboarded": "完成初始设置"
+          },
+          "ofVisitors": "占访客的 {rate}",
+          "ofPrevious": "占上一步的 {rate}",
+          "median": "注册的人当中，有一半在首次访问后 {time} 内完成注册。",
+          "accounts": "{count, plural, other {这段时间内总共创建了 {formatted} 个账号，包括没有对应访客记录的账号。}}",
+          "knownUsers": "{count, plural, other {另有 {formatted} 位访客在这里首次出现时已有账号，未计入上面的数字。}}",
+          "untracked": "{count, plural, other {另有 {formatted} 次页面访问只做了计数，没有访客记录（欧洲经济区、英国和瑞士尚未允许使用统计的访客），未计入上面的数字。}}"
+        },
+        "daily": {
+          "title": "按日",
+          "sub": "每一列是当天首次出现的访客，填色部分是其中创建了账号的比例。",
+          "visitors": "新访客",
+          "signedUp": "创建了账号",
+          "summary": "{from} 至 {to}：{visitors} 位新访客，{signedUp} 位创建了账号。"
+        },
+        "breakdown": {
+          "visitors": "访客",
+          "signedUp": "账号",
+          "rate": "转化率",
+          "empty": "这段时间内没有记录。",
+          "none": "未记录",
+          "direct": "没有来源网站",
+          "channels": {
+            "title": "到访方式",
+            "sub": "每位访客首次访问的渠道。",
+            "column": "渠道"
+          },
+          "sources": {
+            "title": "来源",
+            "sub": "链接中的活动来源；没有时为链接到这里的网站。",
+            "column": "来源"
+          },
+          "landing": {
+            "title": "首个页面",
+            "sub": "每位访客最先打开的页面。",
+            "column": "页面"
+          },
+          "countries": {
+            "title": "国家和地区",
+            "sub": "访客首次出现时所在的位置。",
+            "column": "国家或地区"
+          },
+          "devices": {
+            "title": "设备",
+            "sub": "访客首次访问时使用的设备。",
+            "column": "设备"
+          },
+          "methods": {
+            "title": "注册方式",
+            "sub": "在开始注册的访客当中。",
+            "column": "方式"
+          }
+        },
+        "channel": {
+          "direct": "直接访问",
+          "search": "搜索",
+          "ai": "AI 助手",
+          "social": "社交平台",
+          "email": "邮件",
+          "paid": "付费广告",
+          "campaign": "活动链接",
+          "invite": "邀请链接",
+          "referral": "其他网站"
+        },
+        "device": {
+          "desktop": "电脑",
+          "mobile": "手机",
+          "tablet": "平板"
+        },
+        "method": {
+          "email": "邮箱",
+          "google": "Google",
+          "line": "LINE",
+          "phone": "手机号",
+          "wechat": "微信"
+        },
+        "status": {
+          "browsing": "浏览中",
+          "signup_viewed": "打开了注册页",
+          "signup_started": "开始注册",
+          "signed_up": "创建了账号",
+          "onboarded": "完成初始设置",
+          "known_user": "已有账号"
+        },
+        "list": {
+          "title": "访客",
+          "sub": "最近出现的排在前面。",
+          "statusFilter": "阶段",
+          "allStatuses": "全部阶段",
+          "channelFilter": "渠道",
+          "allChannels": "全部渠道",
+          "empty": "没有符合筛选条件的访客。",
+          "firstSeen": "首次出现：{time}",
+          "signupFrom": "从这里打开注册页：{from}",
+          "visits": "{count, plural, other {# 次访问}}",
+          "next": "下一页",
+          "first": "回到第一页",
+          "col": {
+            "lastSeen": "最近出现",
+            "status": "阶段",
+            "source": "来源",
+            "landing": "首个页面",
+            "where": "国家和设备",
+            "pages": "页面数",
+            "account": "账号"
           }
         }
       }

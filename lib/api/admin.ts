@@ -375,6 +375,8 @@ export function adminCsvUrl(
 //   POST   /api/v1/roboapply/admin/system/queue/:id/retry
 //   GET    /api/v1/roboapply/admin/system/audit   (admin actions, RAAdminAuditLog)
 //   GET    /api/v1/roboapply/admin/costs          (+ costs.csv, browser download)
+//   GET    /api/v1/roboapply/admin/visitors       (visitors and sign-ups: funnel, by day, by source)
+//   GET    /api/v1/roboapply/admin/visitors/list  (the visitors, most recently seen first)
 //   GET    /api/v1/roboapply/admin/safety
 //   GET    /api/v1/roboapply/admin/reports
 //   POST   /api/v1/roboapply/admin/reports/:id/resolve
@@ -422,6 +424,14 @@ export type {
   ViewAsSessionView,
   ViewAsStartResponse,
   ViewAsStopResponse,
+  VisitorBreakdownRow,
+  VisitorChannelId,
+  VisitorDayRow,
+  VisitorFunnel,
+  VisitorListResponse,
+  VisitorStatus,
+  VisitorView,
+  VisitorsReportResponse,
   WorkItemView,
   WorkItemsResponse,
 } from './contracts/admin';
@@ -456,6 +466,16 @@ export function getCosts(query?: In<typeof AD.CostsQuerySchema>, opts?: CallOpti
 /** Download link for `GET /api/v1/roboapply/admin/costs.csv` (an anchor `href`). */
 export function costsCsvUrl(query?: In<typeof AD.CostsQuerySchema>): string {
   return apiUrl(withQuery(`${CONSOLE}/costs.csv`, query));
+}
+
+/** `admin.visitors` — GET /api/v1/roboapply/admin/visitors */
+export function getVisitorsReport(query?: In<typeof AD.VisitorsQuerySchema>, opts?: CallOptions): Promise<AD.VisitorsReportResponse> {
+  return call<AD.VisitorsReportResponse>('GET', withQuery(`${CONSOLE}/visitors`, query), opts);
+}
+
+/** `admin.visitors.list` — GET /api/v1/roboapply/admin/visitors/list */
+export function listVisitors(query?: In<typeof AD.VisitorListQuerySchema>, opts?: CallOptions): Promise<AD.VisitorListResponse> {
+  return call<AD.VisitorListResponse>('GET', withQuery(`${CONSOLE}/visitors/list`, query), opts);
 }
 
 /** `admin.safety` — GET /api/v1/roboapply/admin/safety */
@@ -533,6 +553,8 @@ export const adminConsoleApi = {
   listAdminAudit,
   getCosts,
   costsCsvUrl,
+  getVisitorsReport,
+  listVisitors,
   getSafety,
   listReports,
   resolveReport,

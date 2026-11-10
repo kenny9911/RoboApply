@@ -1,0 +1,37 @@
+/* components/v3/admin/visitors.module.css — /admin/visitors (visitor conversion).
+   Paper tokens only; light + dark and both brands come from the tokens. The
+   panels, tables and filters are console.module.css. */
+
+.site { flex: 0 1 200px; }
+.sub { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.5; }
+/* Times, the stage pill and the place stay on one line; the table scrolls sideways when it must. */
+.nowrap { white-space: nowrap; }
+
+/* Funnel: one row per stage, a bar as wide as the share of visitors that reached it. */
+.funnel { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.stage { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.stageHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.stageName { font-size: var(--fs-meta); font-weight: 500; color: var(--text); }
+.stageCount { font-size: var(--fs-body); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.track { height: 12px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.fill { height: 100%; border-radius: 999px; background: var(--action); }
+.stageNote { margin: 0; font-size: var(--fs-label); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* What the funnel leaves out, said in words. */
+.notes { margin: 0; padding: 12px 0 0 18px; border-top: 1px solid var(--rule); font-size: var(--fs-label); color: var(--text-2); line-height: 1.7; }
+
+/* By day: a column per day (or run of days); the filled part is the share that created an account. */
+.chart { display: flex; align-items: flex-end; gap: 3px; height: 160px; width: 100%; }
+.day { flex: 1 1 0; min-width: 2px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
+.barVisitors { display: flex; flex-direction: column; justify-content: flex-end; min-height: 3px; border-radius: 4px 4px 0 0; background: var(--surface-3); overflow: hidden; }
+.barSigned { background: var(--action); min-height: 3px; }
+.axis { display: flex; justify-content: space-between; gap: 12px; font-size: var(--fs-label); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: var(--fs-label); color: var(--text-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.swatchVisitors { background: var(--surface-3); border: 1px solid var(--rule); }
+.swatchSigned { background: var(--action); }
+
+@media (max-width: 760px) {
+  .chart { height: 120px; gap: 2px; }
+}
