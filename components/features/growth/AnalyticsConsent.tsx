@@ -9,7 +9,8 @@
 //      (RoboApply asks in the EEA, the UK and Switzerland, and when the
 //      country is unknown; GoApply never shows the banner — its personal
 //      information list covers event collection, WP-13);
-//   2. records `page_viewed` on route changes and notes entry attribution;
+//   2. records `page_viewed` on route changes (with the link's campaign labels
+//      when it has any) and notes entry attribution;
 //   3. where consent is required and no choice is stored, shows a docked,
 //      non-modal banner. "Allow" and "Don't allow" carry identical weight.
 //      Before a choice nothing is stored on the device and nothing is linked.
@@ -41,6 +42,7 @@ import {
   onAnalyticsConsentReview,
   readAnalyticsConsent,
   setAnalyticsConsent,
+  touchFromSearch,
   track,
   type AnalyticsConsentChoice,
 } from '../../../lib/analytics';
@@ -99,8 +101,15 @@ export function AnalyticsConsent({ country }: AnalyticsConsentProps) {
   useEffect(() => {
     if (pathname === null) return;
     captureAttribution();
-    const props: { locale?: string; referrerHost?: string } = {};
+    const props: { locale?: string; referrerHost?: string; utmSource?: string; utmMedium?: string; utmCampaign?: string; from?: string } = {};
     if (typeof document !== 'undefined' && document.documentElement.lang) props.locale = document.documentElement.lang;
+    // The campaign labels of the link that opened this page, and which page's
+    // button led here (`from`): the visitor record's source (server growth/visitors.ts).
+    const entry = typeof location !== 'undefined' ? touchFromSearch(location.search) : null;
+    if (entry?.utmSource) props.utmSource = entry.utmSource;
+    if (entry?.utmMedium) props.utmMedium = entry.utmMedium;
+    if (entry?.utmCampaign) props.utmCampaign = entry.utmCampaign;
+    if (entry?.from) props.from = entry.from;
     if (firstView.current) {
       const host = referrerHost();
       if (host) props.referrerHost = host;
