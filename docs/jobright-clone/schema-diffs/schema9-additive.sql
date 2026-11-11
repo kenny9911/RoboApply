@@ -8,8 +8,13 @@
 --   base commit named below the marker line; it is NOT a database-to-schema diff. On a real
 --   database the diff of server/prisma/sql/README.md step 3 is the one that counts.
 --
--- HOW IT IS APPLIED (the owner, on each database; the engineer of this change ran none of it
--- on any shared or production database)
+-- APPLIED
+--   production (ep-empty-snow-a6mdqwbe), 2026-11-11, at the owner's word: the RAVisitor
+--   statements below in one transaction with `prisma db execute`. The diffs read from that
+--   database before and after are production-2026-11-11-before.sql and -after.sql.
+--   No other database has it yet.
+--
+-- HOW IT IS APPLIED (the owner, or someone the owner told to, on each database)
 --   1. Read the database-to-schema diff and check it:
 --        npx prisma migrate diff --from-config-datasource --to-schema server/prisma/schema --script > /tmp/schema9-before.sql
 --        node scripts/check-schema-additive.mjs --sql /tmp/schema9-before.sql
