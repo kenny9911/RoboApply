@@ -15,9 +15,9 @@ describe('Paper tokens', () => {
   const t = readClarity(REPO);
 
   it('reads the light, dark and GoApply blocks from the app stylesheets', () => {
-    expect(t.light).toMatch(/--action: #121313;/);
+    expect(t.light).toMatch(/--action: #1170CD;/);
     expect(t.light).toMatch(/--fs-body:/);
-    expect(t.dark).toMatch(/--bg: #121313;/);
+    expect(t.dark).toMatch(/--bg: #0F141E;/);
     expect(t.goLight).toMatch(/--action: #0E4A3E;/);
     expect(t.goDark).toMatch(/--action: #A6F2CC;/);
   });
