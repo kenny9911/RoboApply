@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Navegación principal",
-    "brand_home": "%BRAND% — ir a Empleos",
+    "brand_home": "%BRAND% — ir al panel",
     "jobs": "Empleos",
     "resume": "Currículum",
     "applications": "Candidaturas",
@@ -46,11 +46,7 @@
       "refresh_limited": "Buscaste o actualizaste la lista de empleos muchas veces en los últimos minutos. Espera unos minutos e inténtalo otra vez.",
       "search_jobs": "Buscar empleos con «{query}»"
     },
-    "workspace": "Tu espacio de trabajo",
-    "workspace_note": "Un poco de claridad para tu próximo gran paso.",
     "skip_content": "Saltar al contenido",
-    "guide": "Tu carrera, en foco",
-    "guide_note": "Descubre. Prepárate. Avanza.",
     "aria_lower": "Cuenta y más",
     "ask": "Preguntar",
     "ask_aria": "Preguntar al asistente",
@@ -141,6 +137,18 @@
       },
       "source": "Fuente: {label}",
       "view": "Ver fuente"
+    },
+    "dashboard": "Panel",
+    "profile_card": {
+      "you": "Tú",
+      "set_role": "Indica tu puesto objetivo",
+      "percent": "{percent} %",
+      "complete": "Perfil completo al {percent} %"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, one {# sin abrir} other {# sin abrir}}",
+      "ready_open": "Ver lo que está listo",
+      "upgrade": "Mejorar plan"
     }
   },
   "jobs": {
@@ -11683,6 +11691,116 @@
       "source": "Fuente: <link>{name}</link>",
       "title": "Registros de patrocinio de visa de {company}",
       "usNote": "Una solicitud certificada no es una aprobación de visa ni una contratación. Los recuentos de peticiones son primeras decisiones e incluyen empleo nuevo y continuado."
+    }
+  },
+  "dashboard": {
+    "hi": "¡Hola, {name}!",
+    "hi_anon": "¡Hola!",
+    "subtitle": "¿En qué quieres avanzar hoy?",
+    "goals_aria": "Tus objetivos",
+    "goal": {
+      "resume": "Currículum",
+      "jobs": "Búsqueda de empleo",
+      "applications": "Candidaturas",
+      "interview": "Entrevistas"
+    },
+    "progress": "Progreso",
+    "progress_aria": "{goal}: pasos y progreso",
+    "value_percent": "{value} %",
+    "value_count": "{value}/{target}",
+    "value_unknown": "Aún no se sabe",
+    "score_label": "Revisión del CV",
+    "ask_bar": "Pregunta lo que quieras al asistente",
+    "steps": {
+      "resume_check": {
+        "label": "Revisión del currículum",
+        "title_no_resume": "Empieza por tu currículum",
+        "body_no_resume": "Sube el currículum que tienes o créalo paso a paso. Todos los demás pasos parten de él.",
+        "cta_no_resume": "Añadir tu currículum",
+        "title_start": "Mira cómo se lee tu currículum",
+        "body_start": "La revisión del currículum repasa lo que los empleadores leen primero y te dice qué corregir, empezando por lo más importante.",
+        "title_more": "Tu currículum puede dar más",
+        "title_good": "Tu currículum está en buena forma",
+        "body_more": "Tu última revisión obtuvo un {score} %. Abre tu currículum para resolver lo que señaló y vuelve a revisarlo.",
+        "cta": "Abrir tu currículum"
+      },
+      "tailored": {
+        "label": "Currículums adaptados",
+        "title_start": "Adapta tu currículum a una oferta",
+        "body_start": "Elige un empleo guardado o pega una oferta. Obtienes una copia de tu currículum redactada para ese puesto y el original queda igual.",
+        "title_more": "Uno para cada puesto",
+        "body_more": "Una versión por empleo pone primero la experiencia que pide ese puesto. Crea una para cada empleo al que quieras postular.",
+        "cta": "Adaptar un currículum"
+      },
+      "letters": {
+        "label": "Cartas de presentación",
+        "title_start": "Escribe una carta de presentación",
+        "body_start": "Redacta una carta para uno de tus empleos guardados y edítala hasta que suene a ti.",
+        "title_more": "Escribe una para tu próxima candidatura",
+        "body_more": "Una carta funciona mejor si está escrita para un solo empleo. Empieza la siguiente desde un empleo guardado.",
+        "cta": "Abrir cartas"
+      },
+      "profile": {
+        "label": "Perfil",
+        "title_start": "Completa tu perfil",
+        "body_start": "Tu perfil decide qué empleos te mostramos y rellena los formularios de candidatura. Lleva unos minutos.",
+        "title_more": "Tu perfil está completo al {percent} %",
+        "body_more": "Añade lo que falta para que tus coincidencias y los formularios rellenados sean correctos.",
+        "cta": "Abrir tu perfil"
+      },
+      "saved": {
+        "label": "Empleos guardados",
+        "title_start": "Guarda los empleos que te gusten",
+        "body_start": "Los empleos guardados pasan a tu lista de candidaturas, donde puedes adaptar un currículum y preparar cada una.",
+        "title_more": "Sigue ampliando tu selección",
+        "body_more": "Revisa tus nuevas coincidencias y guarda las que valgan la pena.",
+        "cta": "Ver empleos"
+      },
+      "preparing": {
+        "label": "En preparación",
+        "title_start": "Prepara una candidatura",
+        "body_start": "Rellenamos la candidatura y adaptamos tus documentos. Tú lo revisas todo y la envías.",
+        "title_more": "Tus candidaturas se están preparando",
+        "body_more": "Abre cada una para revisar los documentos y las respuestas antes de enviarla.",
+        "cta": "Abrir Listo para postular"
+      },
+      "applied": {
+        "label": "Enviadas",
+        "title_start": "Envía tu primera candidatura",
+        "body_start": "Cuando postules, marca el empleo como enviado para saber cuándo hacer seguimiento.",
+        "title_more": "Haz seguimiento de tus candidaturas",
+        "body_more": "Tu lista de candidaturas muestra cuáles llevan tiempo sin respuesta.",
+        "cta": "Abrir candidaturas"
+      },
+      "interviews": {
+        "label": "Entrevistas",
+        "title_start": "Lleva el control de tus entrevistas",
+        "body_start": "Cuando te inviten a una entrevista, mueve el empleo a esa etapa y toma notas de cada ronda.",
+        "title_more": "Prepárate para tus entrevistas",
+        "body_more": "Haz una entrevista de práctica para el puesto antes de la real.",
+        "cta": "Abrir candidaturas"
+      },
+      "practice": {
+        "label": "Entrevistas de práctica",
+        "title_start": "Practica una entrevista",
+        "body_start": "Haz una entrevista de práctica para el empleo que buscas y recibe comentarios sobre cada respuesta.",
+        "title_more": "Sigue practicando",
+        "body_more": "Cada ronda mejora tus respuestas. Prueba con otro puesto o empresa.",
+        "cta": "Empezar a practicar"
+      }
+    },
+    "matches": {
+      "title": "Tus empleos afines",
+      "update_lead": "¿No encajan?",
+      "update_link": "Actualiza tu búsqueda",
+      "loading": "Cargando tus coincidencias",
+      "off": "Las ofertas de empleo aún no están disponibles aquí.",
+      "error": "No se pudieron cargar tus coincidencias.",
+      "retry": "Reintentar",
+      "empty_title": "Todavía no hay coincidencias",
+      "empty_body": "Dinos qué puestos y lugares buscas y aquí aparecerán los empleos que encajen.",
+      "empty_cta": "Configurar tu búsqueda",
+      "open_aria": "{title} en {company}"
     }
   }
 }

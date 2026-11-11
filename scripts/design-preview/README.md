@@ -1,7 +1,7 @@
 # Local design preview
 
 Run `node scripts/design-preview.mjs` from the repository, using Node 24.
-Open <http://localhost:3612/jobs>.
+Open <http://localhost:3612/dashboard>.
 
 The harness renders actual application components with repository fixtures.
 It is a separate esbuild process: it does not run Next, read environment files,
@@ -11,7 +11,7 @@ live services. The preview server accepts loopback hosts only.
 
 Available routes:
 
-- `/jobs`, `/resume`, `/resume/cm_rv_base`, `/applications`, `/practice`
+- `/dashboard` (also `/`), `/jobs`, `/resume`, `/resume/cm_rv_base`, `/applications`, `/practice`
 - `/jobs?job=job_preview_1` opens the split detail beside the example feed
   (wide screens; `job_preview_1` to `job_preview_6`)
 - `/settings`, `/settings#billing`, `/settings#account`

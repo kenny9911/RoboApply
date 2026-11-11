@@ -45,7 +45,7 @@
 // shows when GoApply's extension has a store id. What GoApply adds stays
 // (校招日历, 内推码).
 //
-// Existing destinations (Jobs, Applications, Resume, Interview prep, Settings,
+// Existing destinations (Dashboard, Jobs, Applications, Resume, Interview prep, Settings,
 // Admin) carry no flag on either brand, so the rail never flickers for them.
 //
 // `mobile`: a slot number on the bottom bar (1–4; the fifth slot is More), or
@@ -67,6 +67,7 @@ import {
   IconCheck,
   IconFile,
   IconGift,
+  IconHome,
   IconPerson,
   IconPuzzle,
   IconSearch,
@@ -120,11 +121,15 @@ const matchJobs = (p: string) => under('/jobs')(p) || under('/job-search')(p);
  */
 export const NAV_ENTRIES: readonly NavEntry[] = [
   // ── RoboApply · top ───────────────────────────────────────────────────
-  { id: 'jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: RA, flag: null, badge: 'jobs', mobile: 1, ready: true, match: matchJobs },
+  // Dashboard is first, so it is the signed-in home (homeHref) on both brands:
+  // the resume.io layout (docs/resume-io/TEARDOWN.md) opens on a goal
+  // dashboard, not on one destination.
+  { id: 'dashboard', href: '/dashboard', labelKey: 'dashboard', icon: IconHome, group: 'top', brands: RA, flag: null, badge: null, mobile: 1, ready: true, match: under('/dashboard') },
+  { id: 'jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: RA, flag: null, badge: 'jobs', mobile: 2, ready: true, match: matchJobs },
   { id: 'ready', href: '/ready', labelKey: 'ready', icon: IconCheck, group: 'top', brands: RA, flag: 'agent', badge: 'ready', mobile: 'more', ready: true, match: under('/ready') },
-  { id: 'applications', href: '/applications', labelKey: 'applications', icon: IconStack, group: 'top', brands: RA, flag: null, badge: 'applications', mobile: 2, ready: true, match: under('/applications') },
-  { id: 'resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: RA, flag: null, badge: null, mobile: 3, ready: true, match: under('/resume') },
-  { id: 'practice', href: '/practice', labelKey: 'practice', icon: IconSparkle, group: 'top', brands: RA, flag: null, badge: null, mobile: 4, ready: true, match: under('/practice') },
+  { id: 'applications', href: '/applications', labelKey: 'applications', icon: IconStack, group: 'top', brands: RA, flag: null, badge: 'applications', mobile: 3, ready: true, match: under('/applications') },
+  { id: 'resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: RA, flag: null, badge: null, mobile: 4, ready: true, match: under('/resume') },
+  { id: 'practice', href: '/practice', labelKey: 'practice', icon: IconSparkle, group: 'top', brands: RA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/practice') },
   { id: 'profile', href: '/profile', labelKey: 'profile', icon: IconPerson, group: 'top', brands: RA, flag: null, badge: 'profile', mobile: 'more', ready: true, match: under('/profile') },
   // ── RoboApply · lower ─────────────────────────────────────────────────
   { id: 'coaching', href: '/coaching', labelKey: 'coaching', icon: IconTarget, group: 'lower', brands: RA, flag: 'coaching', badge: null, mobile: 'more', ready: true, gate: 'coachRoster', match: under('/coaching') },
@@ -133,13 +138,14 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { id: 'settings', href: '/settings', labelKey: 'settings', icon: IconSettings, group: 'lower', brands: RA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/settings') },
   { id: 'admin', href: '/admin', labelKey: 'admin', icon: IconBolt, group: 'lower', brands: RA, flag: null, badge: null, mobile: null, ready: true, gate: 'admin', match: under('/admin') },
 
-  // ── GoApply · top (职位 · 校招日历 · 待投递 · 投递记录 · 简历 · 面试练习 · 我的资料) ──
-  { id: 'cn.jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: GA, flag: null, badge: 'jobs', mobile: 1, ready: true, match: matchJobs },
-  { id: 'cn.campus', href: '/campus', labelKey: 'campus', mobileLabelKey: 'campus_short', icon: IconCalendar, group: 'top', brands: GA, flag: 'jobs.campusCalendar', badge: null, mobile: 2, ready: true, match: under('/campus') },
+  // ── GoApply · top (首页 · 职位 · 校招日历 · 待投递 · 投递记录 · 简历 · 面试练习 · 我的资料) ──
+  { id: 'cn.dashboard', href: '/dashboard', labelKey: 'dashboard', icon: IconHome, group: 'top', brands: GA, flag: null, badge: null, mobile: 1, ready: true, match: under('/dashboard') },
+  { id: 'cn.jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: GA, flag: null, badge: 'jobs', mobile: 2, ready: true, match: matchJobs },
+  { id: 'cn.campus', href: '/campus', labelKey: 'campus', mobileLabelKey: 'campus_short', icon: IconCalendar, group: 'top', brands: GA, flag: 'jobs.campusCalendar', badge: null, mobile: 3, ready: true, match: under('/campus') },
   { id: 'cn.ready', href: '/ready', labelKey: 'cn_ready', icon: IconCheck, group: 'top', brands: GA, flag: 'agent', badge: 'ready', mobile: 'more', ready: true, match: under('/ready') },
-  { id: 'cn.applications', href: '/applications', labelKey: 'cn_applications', mobileLabelKey: 'cn_applications_short', icon: IconStack, group: 'top', brands: GA, flag: null, badge: 'applications', mobile: 3, ready: true, match: under('/applications') },
+  { id: 'cn.applications', href: '/applications', labelKey: 'cn_applications', mobileLabelKey: 'cn_applications_short', icon: IconStack, group: 'top', brands: GA, flag: null, badge: 'applications', mobile: 4, ready: true, match: under('/applications') },
   { id: 'cn.resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: GA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/resume') },
-  { id: 'cn.practice', href: '/practice', labelKey: 'cn_practice', mobileLabelKey: 'cn_practice_short', icon: IconSparkle, group: 'top', brands: GA, flag: null, badge: null, mobile: 4, ready: true, match: under('/practice') },
+  { id: 'cn.practice', href: '/practice', labelKey: 'cn_practice', mobileLabelKey: 'cn_practice_short', icon: IconSparkle, group: 'top', brands: GA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/practice') },
   { id: 'cn.profile', href: '/profile', labelKey: 'cn_profile', icon: IconPerson, group: 'top', brands: GA, flag: null, badge: 'profile', mobile: 'more', ready: true, match: under('/profile') },
   // ── GoApply · lower (求职辅导 · 内推 · 邀请好友 · 浏览器插件 · 设置 · 会员 badge) ──
   { id: 'cn.coaching', href: '/coaching', labelKey: 'coaching', icon: IconTarget, group: 'lower', brands: GA, flag: 'coaching', badge: null, mobile: 'more', ready: true, gate: 'coachRoster', match: under('/coaching') },
@@ -232,8 +238,8 @@ export function buildNav(ctx: NavVisibilityContext, entries: readonly NavEntry[]
 }
 
 /**
- * The signed-in home: the first visible top entry, which is Jobs / 职位 on
- * both brands (neither carries a flag). The fallback covers a registry whose
+ * The signed-in home: the first visible top entry, which is Dashboard / 首页
+ * on both brands (neither carries a flag). The fallback covers a registry whose
  * top group is empty (the `ready` revert, or a test), so the logo and the
  * post-login redirect never land on a hidden page.
  */

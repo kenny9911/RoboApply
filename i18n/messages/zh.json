@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "主导航",
-    "brand_home": "%BRAND% —— 前往职位",
+    "brand_home": "%BRAND% —— 前往首页",
     "jobs": "职位",
     "resume": "简历",
     "applications": "申请记录",
@@ -46,11 +46,7 @@
       "refresh_limited": "最近几分钟内，你搜索或刷新职位列表的次数较多。请等几分钟再试。",
       "search_jobs": "搜索“{query}”相关的职位"
     },
-    "workspace": "你的工作台",
-    "workspace_note": "看得更清楚，下一步更从容。",
     "skip_content": "跳到主要内容",
-    "guide": "聚焦你的职业方向",
-    "guide_note": "探索。准备。向前。",
     "jump_aria": "跳转到某个页面",
     "jump_placeholder": "跳转到某个页面…",
     "aria_lower": "账号及更多",
@@ -141,6 +137,18 @@
       },
       "source": "来源：{label}",
       "view": "查看来源"
+    },
+    "dashboard": "首页",
+    "profile_card": {
+      "you": "你",
+      "set_role": "设置目标职位",
+      "percent": "{percent}%",
+      "complete": "资料完成度 {percent}%"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, other {# 份未打开}}",
+      "ready_open": "查看已备好的申请",
+      "upgrade": "升级"
     }
   },
   "jobs": {
@@ -12802,6 +12810,116 @@
       "source": "来源：<link>{name}</link>",
       "title": "{company} 的签证担保记录",
       "usNote": "获得认证的申请不等于签证获批，也不等于已被录用。请愿数量统计的是首次裁决，包含新聘用和续聘。"
+    }
+  },
+  "dashboard": {
+    "hi": "{name}，你好！",
+    "hi_anon": "你好！",
+    "subtitle": "今天想推进哪一步？",
+    "goals_aria": "你的目标",
+    "goal": {
+      "resume": "简历",
+      "jobs": "找工作",
+      "applications": "申请",
+      "interview": "面试准备"
+    },
+    "progress": "进度",
+    "progress_aria": "{goal}：步骤和进度",
+    "value_percent": "{value}%",
+    "value_count": "{value}/{target}",
+    "value_unknown": "暂不清楚",
+    "score_label": "简历检查",
+    "ask_bar": "有问题，问求职助手",
+    "steps": {
+      "resume_check": {
+        "label": "简历检查",
+        "title_no_resume": "先从简历开始",
+        "body_no_resume": "上传现有简历，或一步步新建一份。这里的其他步骤都从简历开始。",
+        "cta_no_resume": "添加简历",
+        "title_start": "看看你的简历读起来怎么样",
+        "body_start": "简历检查会看用人单位最先读的内容，并按重要程度列出要改的地方。",
+        "title_more": "你的简历还能更好",
+        "title_good": "你的简历状态不错",
+        "body_more": "上次检查得分 {score}%。打开简历按提示修改，然后再检查一次。",
+        "cta": "打开简历"
+      },
+      "tailored": {
+        "label": "定制简历",
+        "title_start": "按职位定制简历",
+        "body_start": "选择一个已收藏的职位，或粘贴职位描述。你会得到一份按该职位改写的简历副本，原简历保持不变。",
+        "title_more": "每个职位定制一份",
+        "body_more": "每个职位一份简历，能把该职位看重的经历放在前面。为每个想申请的职位都定制一份吧。",
+        "cta": "定制简历"
+      },
+      "letters": {
+        "label": "求职信",
+        "title_start": "写一封求职信",
+        "body_start": "为收藏的职位起草一封求职信，再改到像你自己写的。",
+        "title_more": "为下一份申请再写一封",
+        "body_more": "求职信针对单个职位写效果最好。从收藏的职位开始写下一封。",
+        "cta": "打开求职信"
+      },
+      "profile": {
+        "label": "个人资料",
+        "title_start": "完善个人资料",
+        "body_start": "个人资料决定我们为你展示哪些职位，也用来填写申请表。只需几分钟。",
+        "title_more": "个人资料已完成 {percent}%",
+        "body_more": "补全缺少的信息，推荐的职位和自动填写的内容才会准确。",
+        "cta": "打开个人资料"
+      },
+      "saved": {
+        "label": "收藏的职位",
+        "title_start": "收藏你喜欢的职位",
+        "body_start": "收藏的职位会进入你的申请列表，可以在那里定制简历、准备每一份申请。",
+        "title_more": "继续扩充你的候选名单",
+        "body_more": "看看新推荐的职位，把值得申请的收藏起来。",
+        "cta": "浏览职位"
+      },
+      "preparing": {
+        "label": "准备中",
+        "title_start": "准备一份申请",
+        "body_start": "我们填写申请表并定制材料。你检查所有内容，由你自己提交。",
+        "title_more": "申请正在准备中",
+        "body_more": "提交前逐一打开，检查材料和回答。",
+        "cta": "打开待投递"
+      },
+      "applied": {
+        "label": "已申请",
+        "title_start": "发出第一份申请",
+        "body_start": "申请后把职位标记为已申请，就知道什么时候该跟进。",
+        "title_more": "跟进你的申请",
+        "body_more": "申请列表会显示哪些申请已经有一段时间没有回音。",
+        "cta": "打开申请记录"
+      },
+      "interviews": {
+        "label": "面试",
+        "title_start": "管理你的面试",
+        "body_start": "收到面试邀请后，把职位移到面试阶段，并记下每一轮的笔记。",
+        "title_more": "为面试做准备",
+        "body_more": "正式面试前，先按这个职位做一次模拟面试。",
+        "cta": "打开申请记录"
+      },
+      "practice": {
+        "label": "模拟面试",
+        "title_start": "练习一次面试",
+        "body_start": "按你想要的职位做一次模拟面试，每个回答都会得到反馈。",
+        "title_more": "继续练习",
+        "body_more": "每练一轮，回答都会更好。换个职位或公司试试。",
+        "cta": "开始练习"
+      }
+    },
+    "matches": {
+      "title": "为你匹配的职位",
+      "update_lead": "不合适？",
+      "update_link": "调整搜索条件",
+      "loading": "正在加载匹配的职位",
+      "off": "这里暂时还没有职位信息。",
+      "error": "匹配的职位没有加载出来。",
+      "retry": "重试",
+      "empty_title": "还没有可显示的职位",
+      "empty_body": "告诉我们你想要的职位和城市，合适的职位就会出现在这里。",
+      "empty_cta": "设置搜索",
+      "open_aria": "{company} 的 {title}"
     }
   }
 }

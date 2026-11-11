@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Navigation principale",
-    "brand_home": "%BRAND% — aller aux offres",
+    "brand_home": "%BRAND% — aller au tableau de bord",
     "jobs": "Offres",
     "resume": "CV",
     "applications": "Candidatures",
@@ -46,11 +46,7 @@
       "refresh_limited": "Tu as lancé beaucoup de recherches ou d’actualisations de la liste d’offres ces dernières minutes. Attends quelques minutes, puis réessaie.",
       "search_jobs": "Rechercher « {query} » dans les offres"
     },
-    "workspace": "Ton espace de travail",
-    "workspace_note": "Un peu de clarté pour ta prochaine grande étape.",
     "skip_content": "Aller au contenu",
-    "guide": "Le cap sur ta carrière",
-    "guide_note": "Découvre. Prépare-toi. Avance.",
     "aria_lower": "Compte et plus",
     "ask": "Demander",
     "ask_aria": "Poser une question à l’assistant",
@@ -141,6 +137,18 @@
       },
       "source": "Source : {label}",
       "view": "Voir la source"
+    },
+    "dashboard": "Tableau de bord",
+    "profile_card": {
+      "you": "Vous",
+      "set_role": "Indiquez le poste visé",
+      "percent": "{percent} %",
+      "complete": "Profil complet à {percent} %"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, one {# pas encore ouverte} other {# pas encore ouvertes}}",
+      "ready_open": "Voir ce qui est prêt",
+      "upgrade": "Mettre à niveau"
     }
   },
   "jobs": {
@@ -11683,6 +11691,116 @@
       "source": "Source : <link>{name}</link>",
       "title": "Dossiers de parrainage de visa pour {company}",
       "usNote": "Une demande certifiée n’est ni une approbation de visa ni une embauche. Les nombres de pétitions correspondent aux premières décisions et couvrent les nouveaux emplois et leur prolongation."
+    }
+  },
+  "dashboard": {
+    "hi": "Bonjour {name} !",
+    "hi_anon": "Bonjour !",
+    "subtitle": "Sur quoi voulez-vous avancer aujourd’hui ?",
+    "goals_aria": "Vos objectifs",
+    "goal": {
+      "resume": "CV",
+      "jobs": "Recherche d’emploi",
+      "applications": "Candidatures",
+      "interview": "Entretiens"
+    },
+    "progress": "Progression",
+    "progress_aria": "{goal} : étapes et progression",
+    "value_percent": "{value} %",
+    "value_count": "{value}/{target}",
+    "value_unknown": "Pas encore connu",
+    "score_label": "Vérification du CV",
+    "ask_bar": "Posez votre question à l’assistant",
+    "steps": {
+      "resume_check": {
+        "label": "Vérification du CV",
+        "title_no_resume": "Commencez par votre CV",
+        "body_no_resume": "Importez le CV que vous avez ou créez-le étape par étape. Toutes les autres étapes partent de lui.",
+        "cta_no_resume": "Ajouter votre CV",
+        "title_start": "Voyez comment votre CV se lit",
+        "body_start": "La vérification du CV passe en revue ce que les employeurs lisent en premier et liste ce qu’il faut corriger, le plus important d’abord.",
+        "title_more": "Votre CV peut faire mieux",
+        "title_good": "Votre CV est en bonne forme",
+        "body_more": "Votre dernière vérification a obtenu {score} %. Ouvrez votre CV pour traiter les points relevés, puis vérifiez-le à nouveau.",
+        "cta": "Ouvrir votre CV"
+      },
+      "tailored": {
+        "label": "CV adaptés",
+        "title_start": "Adaptez votre CV à une offre",
+        "body_start": "Choisissez une offre enregistrée ou collez une annonce. Vous obtenez une copie de votre CV rédigée pour ce poste ; l’original reste tel quel.",
+        "title_more": "Un CV par poste",
+        "body_more": "Une version par offre met en avant l’expérience que ce poste demande. Créez-en une pour chaque offre qui vous intéresse.",
+        "cta": "Adapter un CV"
+      },
+      "letters": {
+        "label": "Lettres de motivation",
+        "title_start": "Rédigez une lettre de motivation",
+        "body_start": "Rédigez une lettre pour une de vos offres enregistrées, puis modifiez-la jusqu’à ce qu’elle vous ressemble.",
+        "title_more": "Rédigez-en une pour votre prochaine candidature",
+        "body_more": "Une lettre fonctionne mieux quand elle est écrite pour une seule offre. Commencez la suivante depuis une offre enregistrée.",
+        "cta": "Ouvrir les lettres"
+      },
+      "profile": {
+        "label": "Profil",
+        "title_start": "Complétez votre profil",
+        "body_start": "Votre profil détermine les offres que nous vous montrons et remplit les formulaires de candidature. Cela prend quelques minutes.",
+        "title_more": "Votre profil est complet à {percent} %",
+        "body_more": "Ajoutez ce qui manque pour que vos offres et les formulaires remplis soient justes.",
+        "cta": "Ouvrir votre profil"
+      },
+      "saved": {
+        "label": "Offres enregistrées",
+        "title_start": "Enregistrez les offres qui vous plaisent",
+        "body_start": "Les offres enregistrées rejoignent votre liste de candidatures, où vous pouvez adapter un CV et préparer chacune.",
+        "title_more": "Continuez d’étoffer votre sélection",
+        "body_more": "Parcourez vos nouvelles offres et enregistrez celles qui valent une candidature.",
+        "cta": "Voir les offres"
+      },
+      "preparing": {
+        "label": "En préparation",
+        "title_start": "Préparez une candidature",
+        "body_start": "Nous remplissons la candidature et adaptons vos documents. Vous vérifiez tout et l’envoyez vous-même.",
+        "title_more": "Vos candidatures sont en préparation",
+        "body_more": "Ouvrez chacune pour vérifier les documents et les réponses avant de l’envoyer.",
+        "cta": "Ouvrir Prêt à postuler"
+      },
+      "applied": {
+        "label": "Envoyées",
+        "title_start": "Envoyez votre première candidature",
+        "body_start": "Quand vous postulez, marquez l’offre comme envoyée pour savoir quand relancer.",
+        "title_more": "Relancez vos candidatures",
+        "body_more": "Votre liste de candidatures montre celles restées sans réponse depuis un moment.",
+        "cta": "Ouvrir les candidatures"
+      },
+      "interviews": {
+        "label": "Entretiens",
+        "title_start": "Suivez vos entretiens",
+        "body_start": "Quand vous êtes invité à un entretien, passez l’offre à cette étape et prenez des notes à chaque tour.",
+        "title_more": "Préparez vos entretiens",
+        "body_more": "Faites un entretien d’entraînement pour le poste avant le vrai.",
+        "cta": "Ouvrir les candidatures"
+      },
+      "practice": {
+        "label": "Entretiens d’entraînement",
+        "title_start": "Entraînez-vous à un entretien",
+        "body_start": "Passez un entretien d’entraînement pour le poste visé et recevez un retour sur chaque réponse.",
+        "title_more": "Continuez à vous entraîner",
+        "body_more": "Chaque séance affine vos réponses. Essayez-en une pour un autre poste ou une autre entreprise.",
+        "cta": "Commencer l’entraînement"
+      }
+    },
+    "matches": {
+      "title": "Vos offres correspondantes",
+      "update_lead": "Ça ne correspond pas ?",
+      "update_link": "Modifier votre recherche",
+      "loading": "Chargement de vos offres",
+      "off": "Les offres d’emploi ne sont pas encore disponibles ici.",
+      "error": "Vos offres n’ont pas pu être chargées.",
+      "retry": "Réessayer",
+      "empty_title": "Aucune offre pour l’instant",
+      "empty_body": "Indiquez les postes et les lieux que vous visez, et les offres qui correspondent apparaîtront ici.",
+      "empty_cta": "Configurer votre recherche",
+      "open_aria": "{title} chez {company}"
     }
   }
 }

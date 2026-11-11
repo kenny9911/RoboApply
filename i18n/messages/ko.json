@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "기본 내비게이션",
-    "brand_home": "%BRAND% — 채용공고로 이동",
+    "brand_home": "%BRAND% — 대시보드로 이동",
     "jobs": "채용공고",
     "resume": "이력서",
     "applications": "지원 현황",
@@ -46,11 +46,7 @@
       "refresh_limited": "지난 몇 분 동안 공고 목록을 여러 번 검색하거나 새로고침했어요. 몇 분 기다린 뒤 다시 시도해 주세요.",
       "search_jobs": "‘{query}’ 공고 검색"
     },
-    "workspace": "내 작업 공간",
-    "workspace_note": "다음 도약을 위해, 한결 선명한 방향을 찾아요.",
     "skip_content": "본문으로 건너뛰기",
-    "guide": "내 커리어에 집중해요",
-    "guide_note": "탐색하고, 준비하고, 나아가요.",
     "aria_lower": "계정 및 더 보기",
     "ask": "질문하기",
     "ask_aria": "어시스턴트에게 질문하기",
@@ -141,6 +137,18 @@
       },
       "source": "출처: {label}",
       "view": "출처 보기"
+    },
+    "dashboard": "대시보드",
+    "profile_card": {
+      "you": "나",
+      "set_role": "희망 직무를 설정하세요",
+      "percent": "{percent}%",
+      "complete": "프로필 {percent}% 완성"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, other {#건 미확인}}",
+      "ready_open": "준비된 것 보기",
+      "upgrade": "업그레이드"
     }
   },
   "jobs": {
@@ -11683,6 +11691,116 @@
       "source": "출처: <link>{name}</link>",
       "title": "{company}의 비자 스폰서십 기록",
       "usNote": "인증된 신청서는 비자 승인이나 채용을 뜻하지 않아요. 청원 건수는 최초 결정 기준이며 신규 고용과 계속 고용을 모두 포함해요."
+    }
+  },
+  "dashboard": {
+    "hi": "{name}님, 안녕하세요!",
+    "hi_anon": "안녕하세요!",
+    "subtitle": "오늘은 무엇을 진행해 볼까요?",
+    "goals_aria": "목표",
+    "goal": {
+      "resume": "이력서",
+      "jobs": "구직",
+      "applications": "지원",
+      "interview": "면접 준비"
+    },
+    "progress": "진행 상황",
+    "progress_aria": "{goal}: 단계와 진행 상황",
+    "value_percent": "{value}%",
+    "value_count": "{value}/{target}",
+    "value_unknown": "아직 알 수 없어요",
+    "score_label": "이력서 점검",
+    "ask_bar": "어시스턴트에게 무엇이든 물어보세요",
+    "steps": {
+      "resume_check": {
+        "label": "이력서 점검",
+        "title_no_resume": "이력서부터 시작하세요",
+        "body_no_resume": "가지고 있는 이력서를 올리거나 단계별로 만들어 보세요. 다른 모든 단계가 이력서에서 시작해요.",
+        "cta_no_resume": "이력서 추가",
+        "title_start": "이력서가 어떻게 읽히는지 확인하세요",
+        "body_start": "이력서 점검은 채용 담당자가 먼저 읽는 부분을 살펴보고, 고칠 점을 중요한 순서대로 알려 드려요.",
+        "title_more": "이력서를 더 좋게 만들 수 있어요",
+        "title_good": "이력서 상태가 좋아요",
+        "body_more": "최근 점검 점수는 {score}%예요. 이력서를 열어 지적된 점을 고친 뒤 다시 점검해 보세요.",
+        "cta": "이력서 열기"
+      },
+      "tailored": {
+        "label": "맞춤 이력서",
+        "title_start": "채용공고에 맞게 이력서를 맞추세요",
+        "body_start": "저장한 채용공고를 고르거나 공고 내용을 붙여 넣으세요. 그 직무에 맞게 다듬은 이력서 사본이 만들어지고 원본은 그대로 남아요.",
+        "title_more": "직무마다 한 부씩",
+        "body_more": "공고마다 버전을 만들면 그 직무가 원하는 경험을 앞에 둘 수 있어요. 지원하려는 공고마다 하나씩 만들어 보세요.",
+        "cta": "이력서 맞추기"
+      },
+      "letters": {
+        "label": "자기소개서",
+        "title_start": "자기소개서 쓰기",
+        "body_start": "저장한 채용공고 하나에 맞춰 초안을 쓰고, 내 말투가 될 때까지 다듬어 보세요.",
+        "title_more": "다음 지원용으로 하나 더",
+        "body_more": "자기소개서는 한 공고에 맞춰 쓸 때 가장 좋아요. 다음 자기소개서는 저장한 공고에서 시작하세요.",
+        "cta": "자기소개서 열기"
+      },
+      "profile": {
+        "label": "프로필",
+        "title_start": "프로필을 채워 주세요",
+        "body_start": "프로필은 보여 드릴 채용공고를 정하고 지원서 양식을 채우는 데 쓰여요. 몇 분이면 돼요.",
+        "title_more": "프로필이 {percent}% 완성됐어요",
+        "body_more": "빠진 항목을 채우면 추천 공고와 자동 입력 내용이 정확해져요.",
+        "cta": "프로필 열기"
+      },
+      "saved": {
+        "label": "저장한 채용공고",
+        "title_start": "마음에 드는 공고를 저장하세요",
+        "body_start": "저장한 공고는 지원 목록으로 옮겨지고, 거기서 이력서를 맞추고 지원을 준비할 수 있어요.",
+        "title_more": "후보를 계속 늘려 보세요",
+        "body_more": "새로 추천된 공고를 보고 지원할 만한 것을 저장하세요.",
+        "cta": "채용공고 보기"
+      },
+      "preparing": {
+        "label": "준비 중",
+        "title_start": "지원서를 준비하세요",
+        "body_start": "지원서를 작성하고 서류를 맞춰 드려요. 모든 내용을 확인하고 제출은 직접 하세요.",
+        "title_more": "지원서를 준비하고 있어요",
+        "body_more": "제출하기 전에 하나씩 열어 서류와 답변을 확인하세요.",
+        "cta": "지원 준비 완료 열기"
+      },
+      "applied": {
+        "label": "지원 완료",
+        "title_start": "첫 지원서를 보내세요",
+        "body_start": "지원했다면 공고를 지원 완료로 표시해 두세요. 언제 후속 연락을 할지 알 수 있어요.",
+        "title_more": "지원한 곳에 후속 연락하세요",
+        "body_more": "지원 목록에서 한동안 답이 없는 곳을 확인할 수 있어요.",
+        "cta": "지원 현황 열기"
+      },
+      "interviews": {
+        "label": "면접",
+        "title_start": "면접 일정을 관리하세요",
+        "body_start": "면접 제안을 받으면 공고를 그 단계로 옮기고 회차마다 메모를 남기세요.",
+        "title_more": "면접을 준비하세요",
+        "body_more": "실제 면접 전에 그 직무로 연습 면접을 해 보세요.",
+        "cta": "지원 현황 열기"
+      },
+      "practice": {
+        "label": "연습 면접",
+        "title_start": "면접을 연습해 보세요",
+        "body_start": "원하는 직무로 연습 면접을 하고 답변마다 피드백을 받아 보세요.",
+        "title_more": "계속 연습해 보세요",
+        "body_more": "할수록 답변이 좋아져요. 다른 직무나 회사로도 해 보세요.",
+        "cta": "연습 시작"
+      }
+    },
+    "matches": {
+      "title": "나에게 맞는 채용공고",
+      "update_lead": "맞지 않나요?",
+      "update_link": "검색 조건 수정",
+      "loading": "채용공고를 불러오는 중",
+      "off": "채용공고를 아직 여기서 볼 수 없어요.",
+      "error": "채용공고를 불러오지 못했어요.",
+      "retry": "다시 시도",
+      "empty_title": "아직 보여 드릴 공고가 없어요",
+      "empty_body": "원하는 직무와 지역을 알려 주시면 맞는 공고가 여기에 나타나요.",
+      "empty_cta": "검색 설정",
+      "open_aria": "{company} {title}"
     }
   }
 }

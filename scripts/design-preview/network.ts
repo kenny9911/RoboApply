@@ -332,6 +332,16 @@ const fixtures: Record<string, unknown> = {
     currentPeriodEnd: credits.currentPeriodEnd, cancelAtPeriodEnd: false,
   },
   [`${base}/billing/credits`]: credits,
+  // The Dashboard's profile ring and completeness step (example values).
+  [`${base}/profile`]: {
+    userId: 'design-preview-avery', firstName: 'Avery', middleName: null, lastName: 'Chen', headline: 'Product designer',
+    contactEmail: 'avery@example.test', phoneE164: null, phoneType: null, addressLine1: null, city: 'Seattle', region: 'WA',
+    postalCode: null, country: 'US', links: {}, summary: null, skills: [], languages: [], workAuth: [], cnFields: null,
+    twFields: null, education: [], experience: [], completeness: 68, missing: [], availability: null,
+    syncedFromVariantId: null, updatedAt: ago(5),
+  },
+  // The Dashboard's cover letter step: one example letter.
+  [`${base}/cover-letters`]: { items: [{ id: 'cl_preview_1', title: 'Cover letter for Stripe', jobId: 'job_preview_stripe', updatedAt: ago(2) }], cursor: null, aiAvailable: true },
   [`${base}/billing/history`]: { invoices: [] },
   [`${base}/billing/plan`]: {
     region: { market: 'other', currency: 'USD', method: 'stripe', source: 'design-preview' },

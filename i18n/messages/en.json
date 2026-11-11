@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Main navigation",
-    "brand_home": "%BRAND% — go to Jobs",
+    "brand_home": "%BRAND% — go to Dashboard",
     "jobs": "Jobs",
     "resume": "Resume",
     "applications": "Applications",
@@ -46,11 +46,7 @@
       "empty_jobs": "No job in your list matches. The filters of your saved search apply here too.",
       "refresh_limited": "You have searched or refreshed the job list many times in the last few minutes. Wait a few minutes, then try again."
     },
-    "workspace": "Your workspace",
-    "workspace_note": "A little clarity for your next big move.",
     "skip_content": "Skip to content",
-    "guide": "Your career, in focus",
-    "guide_note": "Discover. Prepare. Move forward.",
     "ready": "Ready to apply",
     "profile": "Profile",
     "coaching": "Coaching",
@@ -141,7 +137,19 @@
     "jump_aria": "Jump to a page",
     "jump_placeholder": "Jump to a page…",
     "settingsEmpty": "This section did not load. Reload the page to try again.",
-    "signing_out": "Signing out…"
+    "signing_out": "Signing out…",
+    "dashboard": "Dashboard",
+    "profile_card": {
+      "you": "You",
+      "set_role": "Set your target role",
+      "percent": "{percent}%",
+      "complete": "Profile {percent}% complete"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, one {# not opened yet} other {# not opened yet}}",
+      "ready_open": "See what's ready",
+      "upgrade": "Upgrade"
+    }
   },
   "jobs": {
     "fit": {
@@ -12802,6 +12810,116 @@
       },
       "usNote": "A certified application is not a visa approval or a hire. Petition counts are first decisions and cover new and continuing employment.",
       "disclaimer": "These are public records about the employer, not about this job. Past filings or a sponsor license do not mean this employer will sponsor this role."
+    }
+  },
+  "dashboard": {
+    "hi": "Hi {name}!",
+    "hi_anon": "Hi there!",
+    "subtitle": "What do you want to move forward today?",
+    "goals_aria": "Your goals",
+    "goal": {
+      "resume": "Resume",
+      "jobs": "Job search",
+      "applications": "Applications",
+      "interview": "Interview prep"
+    },
+    "progress": "Progress",
+    "progress_aria": "{goal}: steps and progress",
+    "value_percent": "{value}%",
+    "value_count": "{value}/{target}",
+    "value_unknown": "Not known yet",
+    "score_label": "Resume check",
+    "ask_bar": "Ask the assistant anything",
+    "steps": {
+      "resume_check": {
+        "label": "Resume check",
+        "title_no_resume": "Start with your resume",
+        "body_no_resume": "Upload the resume you have, or build one step by step. Every other step here works from it.",
+        "cta_no_resume": "Add your resume",
+        "title_start": "See how your resume reads",
+        "body_start": "A resume check goes through what employers read first and lists what to fix, most important first.",
+        "title_more": "Your resume can do more",
+        "title_good": "Your resume is in good shape",
+        "body_more": "Your latest check scored {score}%. Open your resume to work through what it listed, then check it again.",
+        "cta": "Open your resume"
+      },
+      "tailored": {
+        "label": "Tailored resumes",
+        "title_start": "Tailor your resume to a job",
+        "body_start": "Pick a saved job or paste a posting. You get a copy of your resume worded for that role, and your original stays as it is.",
+        "title_more": "Tailor one for each role",
+        "body_more": "A version per job puts the experience that role asks for first. Make one for each job you plan to apply to.",
+        "cta": "Tailor a resume"
+      },
+      "letters": {
+        "label": "Cover letters",
+        "title_start": "Write a cover letter",
+        "body_start": "Draft a letter for one of your saved jobs, then edit it until it sounds like you.",
+        "title_more": "Write one for your next application",
+        "body_more": "A letter works best written for one job. Start the next one from a saved job.",
+        "cta": "Open cover letters"
+      },
+      "profile": {
+        "label": "Profile",
+        "title_start": "Fill in your profile",
+        "body_start": "Your profile decides which jobs we show you and fills in application forms. It takes a few minutes.",
+        "title_more": "Your profile is {percent}% complete",
+        "body_more": "Add what is still missing so your matches and filled-in forms are right.",
+        "cta": "Open your profile"
+      },
+      "saved": {
+        "label": "Saved jobs",
+        "title_start": "Save the jobs you like",
+        "body_start": "Saved jobs go to your applications list, where you can tailor a resume and get each one ready.",
+        "title_more": "Keep your shortlist growing",
+        "body_more": "Look through your new matches and save the ones worth applying to.",
+        "cta": "Browse jobs"
+      },
+      "preparing": {
+        "label": "Getting ready",
+        "title_start": "Get an application ready",
+        "body_start": "We fill in the application and tailor your documents. You check everything and submit it yourself.",
+        "title_more": "Your applications are getting ready",
+        "body_more": "Open each one to check the documents and answers before you submit.",
+        "cta": "Open Ready to apply"
+      },
+      "applied": {
+        "label": "Applied",
+        "title_start": "Send your first application",
+        "body_start": "When you apply, mark the job as applied, so you know when to follow up.",
+        "title_more": "Follow up on your applications",
+        "body_more": "Your applications list shows which ones have had no reply for a while.",
+        "cta": "Open applications"
+      },
+      "interviews": {
+        "label": "Interviews",
+        "title_start": "Keep track of your interviews",
+        "body_start": "When you are invited to an interview, move the job to that stage and keep notes for each round.",
+        "title_more": "Get ready for your interviews",
+        "body_more": "Run a practice interview for the role before the real one.",
+        "cta": "Open applications"
+      },
+      "practice": {
+        "label": "Practice interviews",
+        "title_start": "Practice an interview",
+        "body_start": "Talk through a practice interview for the job you want and get feedback on each answer.",
+        "title_more": "Keep practicing",
+        "body_more": "Each round sharpens your answers. Try one for another role or company.",
+        "cta": "Start practicing"
+      }
+    },
+    "matches": {
+      "title": "Your job matches",
+      "update_lead": "Not right?",
+      "update_link": "Update your search",
+      "loading": "Loading your matches",
+      "off": "Job listings are not available here yet.",
+      "error": "Your matches did not load.",
+      "retry": "Try again",
+      "empty_title": "No matches to show yet",
+      "empty_body": "Tell us the roles and places you want, and jobs that fit show up here.",
+      "empty_cta": "Set up your search",
+      "open_aria": "{title} at {company}"
     }
   }
 }

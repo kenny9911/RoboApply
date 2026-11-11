@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Hauptnavigation",
-    "brand_home": "%BRAND% — zu den Jobs",
+    "brand_home": "%BRAND% — zur Übersicht",
     "jobs": "Jobs",
     "resume": "Lebenslauf",
     "applications": "Bewerbungen",
@@ -46,11 +46,7 @@
       "refresh_limited": "Du hast die Jobliste in den letzten Minuten sehr oft durchsucht oder aktualisiert. Warte ein paar Minuten und versuch es dann erneut.",
       "search_jobs": "Jobs zu „{query}“ suchen"
     },
-    "workspace": "Dein Arbeitsbereich",
-    "workspace_note": "Etwas mehr Klarheit für deinen nächsten großen Schritt.",
     "skip_content": "Zum Inhalt springen",
-    "guide": "Deine Karriere im Blick",
-    "guide_note": "Entdecken. Vorbereiten. Weiterkommen.",
     "aria_lower": "Konto und mehr",
     "ask": "Fragen",
     "ask_aria": "Den Assistenten fragen",
@@ -141,6 +137,18 @@
       },
       "source": "Quelle: {label}",
       "view": "Quelle ansehen"
+    },
+    "dashboard": "Übersicht",
+    "profile_card": {
+      "you": "Du",
+      "set_role": "Zielposition festlegen",
+      "percent": "{percent} %",
+      "complete": "Profil zu {percent} % vollständig"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, one {# noch nicht geöffnet} other {# noch nicht geöffnet}}",
+      "ready_open": "Ansehen, was bereit ist",
+      "upgrade": "Upgrade"
     }
   },
   "jobs": {
@@ -11683,6 +11691,116 @@
       "source": "Quelle: <link>{name}</link>",
       "title": "Angaben zum Visa-Sponsoring bei {company}",
       "usNote": "Ein zertifizierter Antrag ist weder eine Visumgenehmigung noch eine Einstellung. Die Zahlen zu den Petitionen sind Erstentscheidungen und umfassen neue und fortgesetzte Beschäftigung."
+    }
+  },
+  "dashboard": {
+    "hi": "Hallo {name}!",
+    "hi_anon": "Hallo!",
+    "subtitle": "Woran möchtest du heute weiterkommen?",
+    "goals_aria": "Deine Ziele",
+    "goal": {
+      "resume": "Lebenslauf",
+      "jobs": "Jobsuche",
+      "applications": "Bewerbungen",
+      "interview": "Vorstellungsgespräche"
+    },
+    "progress": "Fortschritt",
+    "progress_aria": "{goal}: Schritte und Fortschritt",
+    "value_percent": "{value} %",
+    "value_count": "{value}/{target}",
+    "value_unknown": "Noch nicht bekannt",
+    "score_label": "Lebenslauf-Check",
+    "ask_bar": "Frag den Assistenten etwas",
+    "steps": {
+      "resume_check": {
+        "label": "Lebenslauf-Check",
+        "title_no_resume": "Beginne mit deinem Lebenslauf",
+        "body_no_resume": "Lade deinen Lebenslauf hoch oder erstelle ihn Schritt für Schritt. Alle anderen Schritte hier bauen darauf auf.",
+        "cta_no_resume": "Lebenslauf hinzufügen",
+        "title_start": "Sieh dir an, wie dein Lebenslauf wirkt",
+        "body_start": "Ein Lebenslauf-Check prüft, was Arbeitgeber zuerst lesen, und listet auf, was du verbessern solltest – das Wichtigste zuerst.",
+        "title_more": "Dein Lebenslauf kann mehr",
+        "title_good": "Dein Lebenslauf ist gut aufgestellt",
+        "body_more": "Dein letzter Check ergab {score} %. Öffne deinen Lebenslauf, arbeite die Punkte ab und prüfe ihn dann noch einmal.",
+        "cta": "Lebenslauf öffnen"
+      },
+      "tailored": {
+        "label": "Angepasste Lebensläufe",
+        "title_start": "Passe deinen Lebenslauf an eine Stelle an",
+        "body_start": "Wähle einen gespeicherten Job oder füge eine Anzeige ein. Du bekommst eine Kopie deines Lebenslaufs, die zu dieser Stelle passt; dein Original bleibt unverändert.",
+        "title_more": "Eine Version für jede Stelle",
+        "body_more": "Eine eigene Version pro Job stellt die Erfahrung nach vorn, die diese Stelle verlangt. Erstelle eine für jeden Job, auf den du dich bewerben willst.",
+        "cta": "Lebenslauf anpassen"
+      },
+      "letters": {
+        "label": "Anschreiben",
+        "title_start": "Schreib ein Anschreiben",
+        "body_start": "Entwirf ein Anschreiben für einen deiner gespeicherten Jobs und bearbeite es, bis es nach dir klingt.",
+        "title_more": "Schreib eins für deine nächste Bewerbung",
+        "body_more": "Ein Anschreiben wirkt am besten, wenn es für einen Job geschrieben ist. Beginne das nächste bei einem gespeicherten Job.",
+        "cta": "Anschreiben öffnen"
+      },
+      "profile": {
+        "label": "Profil",
+        "title_start": "Vervollständige dein Profil",
+        "body_start": "Dein Profil bestimmt, welche Jobs wir dir zeigen, und füllt Bewerbungsformulare aus. Das dauert nur ein paar Minuten.",
+        "title_more": "Dein Profil ist zu {percent} % vollständig",
+        "body_more": "Ergänze, was noch fehlt, damit deine Treffer und ausgefüllten Formulare stimmen.",
+        "cta": "Profil öffnen"
+      },
+      "saved": {
+        "label": "Gespeicherte Jobs",
+        "title_start": "Speichere die Jobs, die dir gefallen",
+        "body_start": "Gespeicherte Jobs landen in deiner Bewerbungsliste. Dort kannst du einen Lebenslauf anpassen und jede Bewerbung vorbereiten.",
+        "title_more": "Bau deine Auswahl weiter aus",
+        "body_more": "Sieh dir deine neuen Treffer an und speichere die, für die sich eine Bewerbung lohnt.",
+        "cta": "Jobs ansehen"
+      },
+      "preparing": {
+        "label": "In Vorbereitung",
+        "title_start": "Bereite eine Bewerbung vor",
+        "body_start": "Wir füllen die Bewerbung aus und passen deine Unterlagen an. Du prüfst alles und schickst sie selbst ab.",
+        "title_more": "Deine Bewerbungen werden vorbereitet",
+        "body_more": "Öffne jede einzelne und prüfe Unterlagen und Antworten, bevor du sie abschickst.",
+        "cta": "Bereit zum Bewerben öffnen"
+      },
+      "applied": {
+        "label": "Beworben",
+        "title_start": "Schick deine erste Bewerbung ab",
+        "body_start": "Wenn du dich bewirbst, markiere den Job als beworben, damit du weißt, wann du nachfassen solltest.",
+        "title_more": "Fass bei deinen Bewerbungen nach",
+        "body_more": "Deine Bewerbungsliste zeigt, welche schon länger ohne Antwort sind.",
+        "cta": "Bewerbungen öffnen"
+      },
+      "interviews": {
+        "label": "Gespräche",
+        "title_start": "Behalte deine Gespräche im Blick",
+        "body_start": "Wenn du zu einem Gespräch eingeladen wirst, verschiebe den Job in diese Phase und halte Notizen zu jeder Runde fest.",
+        "title_more": "Bereite dich auf deine Gespräche vor",
+        "body_more": "Führe vor dem echten Gespräch ein Übungsgespräch für die Stelle.",
+        "cta": "Bewerbungen öffnen"
+      },
+      "practice": {
+        "label": "Übungsgespräche",
+        "title_start": "Übe ein Vorstellungsgespräch",
+        "body_start": "Führe ein Übungsgespräch für die Stelle, die du willst, und bekomm Feedback zu jeder Antwort.",
+        "title_more": "Bleib dran",
+        "body_more": "Jede Runde schärft deine Antworten. Probier eine für eine andere Stelle oder Firma.",
+        "cta": "Üben starten"
+      }
+    },
+    "matches": {
+      "title": "Deine passenden Jobs",
+      "update_lead": "Passt nicht?",
+      "update_link": "Suche anpassen",
+      "loading": "Deine Treffer werden geladen",
+      "off": "Stellenanzeigen sind hier noch nicht verfügbar.",
+      "error": "Deine Treffer konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "empty_title": "Noch keine Treffer",
+      "empty_body": "Sag uns, welche Stellen und Orte du suchst, dann erscheinen passende Jobs hier.",
+      "empty_cta": "Suche einrichten",
+      "open_aria": "{title} bei {company}"
     }
   }
 }

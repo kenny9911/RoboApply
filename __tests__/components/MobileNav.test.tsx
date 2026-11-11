@@ -38,10 +38,10 @@ import { MobileNav } from '../../components/v3/shell/MobileNav';
 import { DESTINATIONS } from '../../components/v3/shell/Sidebar';
 
 const IA: [string, string][] = [
+  ['/dashboard', 'Dashboard'],
   ['/jobs', 'Jobs'],
   ['/applications', 'Applications'],
   ['/resume', 'Resume'],
-  ['/practice', 'Interview prep'],
 ];
 
 describe('MobileNav', () => {
@@ -114,9 +114,9 @@ describe('MobileNav', () => {
     ).not.toHaveAttribute('aria-current');
     unmount();
 
-    pathnameRef.current = '/practice/cm_session_xyz';
+    pathnameRef.current = '/resume/cm_resume_xyz';
     renderWithProviders(<MobileNav />);
-    expect(screen.getByRole('link', { name: /Interview prep/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Resume/ })).toHaveAttribute(
       'aria-current',
       'page',
     );

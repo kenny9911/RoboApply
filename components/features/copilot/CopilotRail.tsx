@@ -18,7 +18,10 @@
 //     consent — AND no `ai_unavailable` this session). A request that opens
 //     the rail while the user may not ask is closed again once that is known;
 //   • on /assistant the page is the Assistant: no floating button and
-//     Cmd/Ctrl+J is left alone (no second conversation).
+//     Cmd/Ctrl+J is left alone (no second conversation);
+//   • on /dashboard the page carries its own entry, the ask bar at its foot
+//     (components/features/dashboard/AskBar.tsx, after resume.io's layout),
+//     so the floating button is not offered there; Cmd/Ctrl+J still works.
 //
 // The job on screen is the job in context. Ask in the top bar, the floating
 // button and Cmd/Ctrl+J carry no job, so on a job page (`/jobs/<id>`) an
@@ -92,6 +95,7 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
   const pathname = usePathname() ?? '';
   const chat = useCopilotChat();
   const onAssistantPage = pathname === '/assistant' || pathname.startsWith('/assistant/');
+  const onDashboard = pathname === '/dashboard' || pathname.startsWith('/dashboard/');
   // Ask is shown only once the Assistant surface has shipped (INT flips
   // SURFACES_READY.assistant; the dev override shows it early) and only to a
   // user who may ask.
@@ -122,7 +126,7 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
   }, [entryVisible]);
 
   /** The floating button belongs on this page (whether or not it is stepping aside right now). */
-  const fabOffered = entryVisible && memory.fabHidden === false && !rail.open && !onAssistantPage;
+  const fabOffered = entryVisible && memory.fabHidden === false && !rail.open && !onAssistantPage && !onDashboard;
   const fabVisible = fabOffered && !editing;
 
   // Each open request (a new seq) may carry a thread, a job or a prompt.

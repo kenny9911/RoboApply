@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Navegação principal",
-    "brand_home": "%BRAND% — ir para Vagas",
+    "brand_home": "%BRAND% — ir para o painel",
     "jobs": "Vagas",
     "resume": "Currículo",
     "applications": "Candidaturas",
@@ -46,11 +46,7 @@
       "refresh_limited": "Você buscou ou atualizou a lista de vagas muitas vezes nos últimos minutos. Espere alguns minutos e tente de novo.",
       "search_jobs": "Buscar vagas com “{query}”"
     },
-    "workspace": "Seu espaço de trabalho",
-    "workspace_note": "Um pouco de clareza para seu próximo grande passo.",
     "skip_content": "Pular para o conteúdo",
-    "guide": "Sua carreira em foco",
-    "guide_note": "Descubra. Prepare-se. Avance.",
     "aria_lower": "Conta e mais",
     "ask": "Perguntar",
     "ask_aria": "Perguntar ao assistente",
@@ -141,6 +137,18 @@
       },
       "source": "Fonte: {label}",
       "view": "Ver fonte"
+    },
+    "dashboard": "Painel",
+    "profile_card": {
+      "you": "Você",
+      "set_role": "Defina seu cargo-alvo",
+      "percent": "{percent}%",
+      "complete": "Perfil {percent}% completo"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, one {# ainda não aberta} other {# ainda não abertas}}",
+      "ready_open": "Ver o que está pronto",
+      "upgrade": "Fazer upgrade"
     }
   },
   "jobs": {
@@ -11683,6 +11691,116 @@
       "source": "Fonte: <link>{name}</link>",
       "title": "Registros de patrocínio de visto de {company}",
       "usNote": "Um pedido certificado não é uma aprovação de visto nem uma contratação. As contagens de petições são primeiras decisões e incluem emprego novo e continuado."
+    }
+  },
+  "dashboard": {
+    "hi": "Olá, {name}!",
+    "hi_anon": "Olá!",
+    "subtitle": "No que você quer avançar hoje?",
+    "goals_aria": "Seus objetivos",
+    "goal": {
+      "resume": "Currículo",
+      "jobs": "Busca de vagas",
+      "applications": "Candidaturas",
+      "interview": "Entrevistas"
+    },
+    "progress": "Progresso",
+    "progress_aria": "{goal}: etapas e progresso",
+    "value_percent": "{value}%",
+    "value_count": "{value}/{target}",
+    "value_unknown": "Ainda não se sabe",
+    "score_label": "Revisão do currículo",
+    "ask_bar": "Pergunte qualquer coisa ao assistente",
+    "steps": {
+      "resume_check": {
+        "label": "Revisão do currículo",
+        "title_no_resume": "Comece pelo seu currículo",
+        "body_no_resume": "Envie o currículo que você tem ou monte um passo a passo. Todas as outras etapas partem dele.",
+        "cta_no_resume": "Adicionar seu currículo",
+        "title_start": "Veja como seu currículo é lido",
+        "body_start": "A revisão do currículo passa pelo que os empregadores leem primeiro e lista o que corrigir, do mais importante para o menos.",
+        "title_more": "Seu currículo pode render mais",
+        "title_good": "Seu currículo está em boa forma",
+        "body_more": "Sua última revisão marcou {score}%. Abra seu currículo para resolver o que ela apontou e revise de novo.",
+        "cta": "Abrir seu currículo"
+      },
+      "tailored": {
+        "label": "Currículos adaptados",
+        "title_start": "Adapte seu currículo a uma vaga",
+        "body_start": "Escolha uma vaga salva ou cole um anúncio. Você recebe uma cópia do seu currículo escrita para esse cargo, e o original continua como está.",
+        "title_more": "Um para cada cargo",
+        "body_more": "Uma versão por vaga coloca em primeiro lugar a experiência que o cargo pede. Crie uma para cada vaga a que você pretende se candidatar.",
+        "cta": "Adaptar um currículo"
+      },
+      "letters": {
+        "label": "Cartas de apresentação",
+        "title_start": "Escreva uma carta de apresentação",
+        "body_start": "Escreva uma carta para uma das suas vagas salvas e edite até ela soar como você.",
+        "title_more": "Escreva uma para sua próxima candidatura",
+        "body_more": "Uma carta funciona melhor quando escrita para uma vaga só. Comece a próxima a partir de uma vaga salva.",
+        "cta": "Abrir cartas"
+      },
+      "profile": {
+        "label": "Perfil",
+        "title_start": "Preencha seu perfil",
+        "body_start": "Seu perfil define quais vagas mostramos e preenche os formulários de candidatura. Leva alguns minutos.",
+        "title_more": "Seu perfil está {percent}% completo",
+        "body_more": "Adicione o que ainda falta para que suas vagas e os formulários preenchidos fiquem certos.",
+        "cta": "Abrir seu perfil"
+      },
+      "saved": {
+        "label": "Vagas salvas",
+        "title_start": "Salve as vagas de que você gostar",
+        "body_start": "As vagas salvas vão para sua lista de candidaturas, onde você pode adaptar um currículo e preparar cada uma.",
+        "title_more": "Continue ampliando sua seleção",
+        "body_more": "Veja suas novas vagas e salve as que valem uma candidatura.",
+        "cta": "Ver vagas"
+      },
+      "preparing": {
+        "label": "Em preparação",
+        "title_start": "Prepare uma candidatura",
+        "body_start": "Nós preenchemos a candidatura e adaptamos seus documentos. Você confere tudo e envia por conta própria.",
+        "title_more": "Suas candidaturas estão sendo preparadas",
+        "body_more": "Abra cada uma para conferir os documentos e as respostas antes de enviar.",
+        "cta": "Abrir Prontas para candidatura"
+      },
+      "applied": {
+        "label": "Enviadas",
+        "title_start": "Envie sua primeira candidatura",
+        "body_start": "Quando se candidatar, marque a vaga como enviada para saber quando fazer o acompanhamento.",
+        "title_more": "Acompanhe suas candidaturas",
+        "body_more": "Sua lista de candidaturas mostra quais estão sem resposta há algum tempo.",
+        "cta": "Abrir candidaturas"
+      },
+      "interviews": {
+        "label": "Entrevistas",
+        "title_start": "Acompanhe suas entrevistas",
+        "body_start": "Quando for chamado para uma entrevista, mova a vaga para essa etapa e anote cada rodada.",
+        "title_more": "Prepare-se para suas entrevistas",
+        "body_more": "Faça uma entrevista de treino para o cargo antes da real.",
+        "cta": "Abrir candidaturas"
+      },
+      "practice": {
+        "label": "Entrevistas de treino",
+        "title_start": "Treine uma entrevista",
+        "body_start": "Faça uma entrevista de treino para a vaga que você quer e receba um retorno sobre cada resposta.",
+        "title_more": "Continue treinando",
+        "body_more": "Cada rodada melhora suas respostas. Tente uma para outro cargo ou empresa.",
+        "cta": "Começar a treinar"
+      }
+    },
+    "matches": {
+      "title": "Suas vagas compatíveis",
+      "update_lead": "Não combinam?",
+      "update_link": "Atualize sua busca",
+      "loading": "Carregando suas vagas",
+      "off": "As vagas ainda não estão disponíveis aqui.",
+      "error": "Não foi possível carregar suas vagas.",
+      "retry": "Tentar de novo",
+      "empty_title": "Ainda não há vagas para mostrar",
+      "empty_body": "Diga quais cargos e lugares você procura, e as vagas compatíveis aparecem aqui.",
+      "empty_cta": "Configurar sua busca",
+      "open_aria": "{title} na {company}"
     }
   }
 }

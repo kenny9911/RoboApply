@@ -3,6 +3,7 @@ import { Component, Suspense, useMemo, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Providers } from '../../app/providers';
 import AuthLayout from '../../app/(auth)/layout';
+import DashboardPage from '../../app/(auth)/dashboard/page';
 import JobsPage from '../../app/(auth)/jobs/page';
 import ResumePage from '../../app/(auth)/resume/page';
 import ResumeEditorPage from '../../app/(auth)/resume/[id]/page';
@@ -43,7 +44,8 @@ function Preview() {
   const params = useMemo(() => Promise.resolve({ id: editorId ?? 'cm_rv_base' }), [editorId]);
   const reportParams = useMemo(() => Promise.resolve({ id: 'ie_preview' }), []);
   let page: ReactNode;
-  if (path === '/jobs' || path === '/') page = <JobsPage />;
+  if (path === '/dashboard' || path === '/') page = <DashboardPage />;
+  else if (path === '/jobs') page = <JobsPage />;
   else if (path === '/resume') page = <ResumePage />;
   else if (editorId) page = <ResumeEditorPage params={params} />;
   else if (path === '/applications') page = <ApplicationsPage />;

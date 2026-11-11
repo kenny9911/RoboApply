@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "主要導覽",
-    "brand_home": "%BRAND% —— 前往職缺",
+    "brand_home": "%BRAND% —— 前往首頁",
     "jobs": "職缺",
     "resume": "履歷",
     "applications": "應徵紀錄",
@@ -46,11 +46,7 @@
       "refresh_limited": "過去幾分鐘內，你已經搜尋或重新整理職缺清單很多次。請等幾分鐘後再試。",
       "search_jobs": "在職缺中搜尋「{query}」"
     },
-    "workspace": "你的工作區",
-    "workspace_note": "多一點清楚，下一步更有把握。",
     "skip_content": "跳至主要內容",
-    "guide": "聚焦你的職涯方向",
-    "guide_note": "探索。準備。向前。",
     "aria_lower": "帳號與更多",
     "ask": "提問",
     "ask_aria": "向助理提問",
@@ -141,6 +137,18 @@
       },
       "source": "來源：{label}",
       "view": "查看來源"
+    },
+    "dashboard": "首頁",
+    "profile_card": {
+      "you": "你",
+      "set_role": "設定目標職務",
+      "percent": "{percent}%",
+      "complete": "個人檔案完成度 {percent}%"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, other {# 筆未開啟}}",
+      "ready_open": "查看已準備好的應徵",
+      "upgrade": "升級"
     }
   },
   "jobs": {
@@ -11683,6 +11691,116 @@
       "source": "來源：<link>{name}</link>",
       "title": "{company} 的簽證贊助紀錄",
       "usNote": "獲得認證的申請不等於簽證核准或錄用。申請數量計算的是首次裁決，涵蓋新聘與續聘。"
+    }
+  },
+  "dashboard": {
+    "hi": "{name}，你好！",
+    "hi_anon": "你好！",
+    "subtitle": "今天想推進哪一步？",
+    "goals_aria": "你的目標",
+    "goal": {
+      "resume": "履歷",
+      "jobs": "找工作",
+      "applications": "應徵",
+      "interview": "面試準備"
+    },
+    "progress": "進度",
+    "progress_aria": "{goal}：步驟與進度",
+    "value_percent": "{value}%",
+    "value_count": "{value}/{target}",
+    "value_unknown": "目前還不知道",
+    "score_label": "履歷健檢",
+    "ask_bar": "有問題，問問助理",
+    "steps": {
+      "resume_check": {
+        "label": "履歷健檢",
+        "title_no_resume": "先從履歷開始",
+        "body_no_resume": "上傳你現有的履歷，或一步步建立一份。這裡的其他步驟都從履歷開始。",
+        "cta_no_resume": "新增履歷",
+        "title_start": "看看你的履歷讀起來如何",
+        "body_start": "履歷健檢會看雇主最先讀的內容，並依重要程度列出要修改的地方。",
+        "title_more": "你的履歷還能更好",
+        "title_good": "你的履歷狀態不錯",
+        "body_more": "上次健檢得分 {score}%。打開履歷依建議修改，然後再健檢一次。",
+        "cta": "打開履歷"
+      },
+      "tailored": {
+        "label": "客製履歷",
+        "title_start": "依職缺客製履歷",
+        "body_start": "選一個已儲存的職缺，或貼上職缺內容。你會得到一份為該職務改寫的履歷副本，原本的履歷保持不變。",
+        "title_more": "每個職務各一份",
+        "body_more": "每個職缺一份履歷，能把該職務重視的經歷放在前面。為每個想應徵的職缺各準備一份。",
+        "cta": "客製履歷"
+      },
+      "letters": {
+        "label": "求職信",
+        "title_start": "寫一封求職信",
+        "body_start": "為已儲存的職缺起草一封求職信，再修改到像你自己寫的。",
+        "title_more": "為下一次應徵再寫一封",
+        "body_more": "求職信針對單一職缺寫效果最好。從已儲存的職缺開始寫下一封。",
+        "cta": "打開求職信"
+      },
+      "profile": {
+        "label": "個人檔案",
+        "title_start": "完成個人檔案",
+        "body_start": "個人檔案決定我們為你顯示哪些職缺，也會用來填寫應徵表單。只要幾分鐘。",
+        "title_more": "個人檔案已完成 {percent}%",
+        "body_more": "補上缺少的資料，推薦的職缺和自動填寫的內容才會正確。",
+        "cta": "打開個人檔案"
+      },
+      "saved": {
+        "label": "已儲存的職缺",
+        "title_start": "儲存你喜歡的職缺",
+        "body_start": "已儲存的職缺會進入你的應徵清單，可以在那裡客製履歷、準備每一份應徵。",
+        "title_more": "繼續擴充候選名單",
+        "body_more": "看看新推薦的職缺，把值得應徵的儲存起來。",
+        "cta": "瀏覽職缺"
+      },
+      "preparing": {
+        "label": "準備中",
+        "title_start": "準備一份應徵",
+        "body_start": "我們會填寫應徵表單並客製你的文件。你檢查所有內容，由你自己送出。",
+        "title_more": "應徵正在準備中",
+        "body_more": "送出前逐一打開，檢查文件和回答。",
+        "cta": "打開準備應徵"
+      },
+      "applied": {
+        "label": "已應徵",
+        "title_start": "送出第一份應徵",
+        "body_start": "應徵後把職缺標記為已應徵，就知道什麼時候該追蹤。",
+        "title_more": "追蹤你的應徵",
+        "body_more": "應徵清單會顯示哪些已經一段時間沒有回音。",
+        "cta": "打開應徵紀錄"
+      },
+      "interviews": {
+        "label": "面試",
+        "title_start": "管理你的面試",
+        "body_start": "收到面試邀請後，把職缺移到面試階段，並記下每一輪的筆記。",
+        "title_more": "為面試做準備",
+        "body_more": "正式面試前，先用這個職務做一次模擬面試。",
+        "cta": "打開應徵紀錄"
+      },
+      "practice": {
+        "label": "模擬面試",
+        "title_start": "練習一次面試",
+        "body_start": "依你想要的職缺做一次模擬面試，每個回答都會得到回饋。",
+        "title_more": "繼續練習",
+        "body_more": "每練一輪，回答都會更好。換個職務或公司試試看。",
+        "cta": "開始練習"
+      }
+    },
+    "matches": {
+      "title": "為你配對的職缺",
+      "update_lead": "不合適？",
+      "update_link": "調整搜尋條件",
+      "loading": "正在載入配對的職缺",
+      "off": "這裡暫時還沒有職缺資訊。",
+      "error": "配對的職缺沒有載入。",
+      "retry": "重試",
+      "empty_title": "還沒有可顯示的職缺",
+      "empty_body": "告訴我們你想要的職務和地點，合適的職缺就會出現在這裡。",
+      "empty_cta": "設定搜尋",
+      "open_aria": "{company} 的 {title}"
     }
   }
 }

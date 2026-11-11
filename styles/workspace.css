@@ -1,135 +1,148 @@
-/* Paper: shared workspace composition (docs/design-system.md). Tokens live in
- * app/globals.css. Feature-specific evidence styles live in discovery.css. */
+/* Desk: shared workspace composition (docs/design-system.md). Tokens live in
+ * app/globals.css. The shell follows resume.io's app (docs/resume-io/
+ * TEARDOWN.md, measured 2026-11-12): a 240px white rail with the person on
+ * top, 40px nav rows that light up as a light-blue wash, and one flat white
+ * workspace under a 72px header row. Feature-specific evidence styles live in
+ * discovery.css. */
 .app {
-  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   /* Less the admin "view as" banner above the shell (--view-as-h; 0 otherwise). */
   grid-template-rows: calc(100dvh - var(--view-as-h, 0px));
   max-width: none;
-}
-/* The frame. The rail sits on the recessed paper and the workspace is an inset
- * sheet with soft corners, 8px off the window edge (docs/skillry-style-
- * reference.md §5, "App shell"). In dark the rail is the lighter tonal step
- * and the sheet is the ink. Below 760px the frame dissolves (see the end). */
-.app { background: var(--surface-2); }
-html[data-theme='dark'] .app { background: var(--surface); }
-.main {
-  margin: 8px 8px 8px 0;
-  border-radius: var(--r-lg);
   background: var(--bg);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+}
+/* One flat sheet: the rail and the workspace share the canvas (white; navy
+ * in dark). Below 760px the rail leaves and the bottom bar takes over (see
+ * the end). */
+.main {
+  margin: 0;
+  border-radius: 0;
+  background: var(--bg);
+  box-shadow: none;
 }
 .side {
-  padding: 20px 14px 16px;
-  gap: 22px;
+  padding: 20px 0 16px;
+  gap: 18px;
   overflow-y: auto;
-  background: transparent;
+  background: var(--bg);
   border-right: 0;
 }
-.brand { gap: 10px; padding: 2px 8px 0; }
-.brand-name { font-size: var(--fs-subtitle); font-weight: 600; letter-spacing: -0.03em; }
-/* The identity tile: the highlighter glyph on the ink plane. */
+.brand { gap: 10px; padding: 0 20px; }
+.brand-name { font-size: var(--fs-subtitle); font-weight: 600; letter-spacing: var(--ls-subtitle); }
+/* The identity tile: the brand glyph on the brand plane. */
 .brand-mark { width: 32px; height: 32px; border-radius: var(--r-sm); background: var(--brand-plane); }
 .brand-mark svg { stroke: var(--brand-mark); }
-.workspace-identity {
+/* The person (components/v3/shell/SidebarProfile.tsx): the avatar in a ring
+ * that fills to the profile's completeness, the percentage on a chip, the
+ * name and the target role. The whole block opens /profile. */
+.side-profile {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 0 2px;
-  padding: 10px 12px;
-  border: 1px solid var(--rule);
+  gap: 12px;
+  margin: 0 8px;
+  padding: 8px 12px;
   border-radius: var(--r-md);
-  background: var(--surface-glass);
+  color: var(--text);
+  text-decoration: none;
+  transition: background var(--dur-hover) var(--ease-out);
 }
-.workspace-avatar {
+.side-profile:hover { background: var(--surface-2); }
+.side-profile:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.side-profile-avatar { position: relative; flex-shrink: 0; width: 52px; height: 52px; }
+.side-profile-avatar svg { position: absolute; inset: 0; width: 52px; height: 52px; transform: rotate(-90deg); }
+.side-profile-avatar .track { stroke: var(--rule); }
+.side-profile-avatar .fill { stroke: var(--warn); transition: stroke-dashoffset var(--dur-modal) var(--ease-out); }
+.side-profile-avatar[data-complete='true'] .fill { stroke: var(--ok); }
+.side-profile-initials {
+  position: absolute;
+  inset: 6px;
   display: grid;
   place-items: center;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
   border-radius: 50%;
-  background: var(--tile-clay);
-  color: var(--tile-ink);
-  font-size: var(--fs-meta);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: var(--fs-body);
   font-weight: 600;
 }
-.workspace-identity strong { display: block; font-size: var(--fs-meta); font-weight: 600; }
-.workspace-identity span:not(.workspace-avatar) {
+.side-profile-pct {
+  position: absolute;
+  left: -4px;
+  bottom: -4px;
+  padding: 0 6px;
+  border: 2px solid var(--bg);
+  border-radius: var(--r-pill);
+  background: var(--warn);
+  color: var(--bg);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.side-profile-avatar[data-complete='true'] .side-profile-pct { background: var(--ok); }
+.side-profile-copy { min-width: 0; }
+.side-profile-copy strong {
+  display: block;
+  overflow: hidden;
+  font-size: var(--fs-subtitle);
+  font-weight: 500;
+  line-height: var(--lh-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-profile-copy span {
   display: block;
   margin-top: 2px;
-  font-size: var(--fs-label);
+  overflow: hidden;
   color: var(--text-muted);
-  line-height: 1.45;
+  font-size: var(--fs-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.nav { gap: 2px; }
+.nav { gap: 0; }
 .nav-item {
   min-height: 40px;
-  padding: 8px 12px;
-  border-radius: var(--r-pill);
-  font-size: var(--fs-meta);
-  font-weight: 500;
-  color: var(--text-2);
+  margin: 0 8px;
+  width: auto;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-subtitle);
+  font-weight: 400;
+  color: var(--text);
 }
-.nav-item svg { width: 17px; height: 17px; }
-.nav-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); }
-/* Where you are: the highlighter. Weight and the trailing dot carry the state
- * too, so it never rests on colour alone (lime on the rail is a hue cue, not
- * a contrast one). */
+.nav-item-label { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.nav-item svg { width: 22px; height: 22px; flex-shrink: 0; color: var(--disabled); }
+.nav-item:hover { background: var(--surface-2); color: var(--text); }
+/* Where you are: resume.io's light-blue wash, blue label and blue icon. The
+ * weight changes too, so the state never rests on colour alone. */
 .nav-item[aria-current="page"],
 .nav-item[aria-current="page"]:hover {
-  background: var(--brand-mark);
-  color: var(--brand-plane);
+  background: var(--action-subtle);
+  color: var(--action);
   box-shadow: none;
-  font-weight: 600;
+  font-weight: 500;
 }
+.nav-item[aria-current="page"] svg { color: var(--action); }
 /* The rule above clears v3's inset bar; keyboard focus still gets the ring. */
 .nav-item[aria-current="page"]:focus-visible { box-shadow: var(--focus-ring); }
-.nav-item[aria-current="page"]::after {
-  content: '';
-  width: 6px;
-  height: 6px;
-  margin-left: auto;
-  border-radius: 50%;
-  background: currentColor;
-}
-.nav-item:has(.count)::after { display: none; }
-.nav-item[aria-current="page"] .count { background: var(--brand-plane); color: var(--brand-mark); }
-.nav-group { border-top-color: color-mix(in srgb, var(--text) 10%, transparent); }
-.workspace-guide {
-  margin: auto 2px 0;
-  padding: 16px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  background: var(--surface-glass);
-}
-.workspace-guide-path { display: flex; align-items: center; color: var(--text); margin-bottom: 14px; }
-.workspace-guide-path i { height: 1px; flex: 1; margin: 0 8px; background: var(--rule-strong); }
-.workspace-guide strong { font-size: var(--fs-meta); font-weight: 600; }
-.workspace-guide p { margin: 4px 0 0; font-size: var(--fs-label); color: var(--text-muted); }
-.main-inner { max-width: 1440px; margin: 0 auto; padding: 36px 44px 80px; }
-/* The sheet's own header row: translucent paper over the scrolling page. */
+.nav-item[aria-current="page"] .count { background: var(--action); color: var(--action-ink); }
+.nav-group { margin-top: 8px; padding-top: 8px; border-top: 0; }
+.main-inner { max-width: 1440px; margin: 0 auto; padding: 24px 40px 80px; }
+/* The workspace's header row: white over the scrolling page, no hairline. */
 .topbar {
-  min-height: 64px;
-  padding: 12px 44px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  min-height: 72px;
+  padding: 12px 40px 12px 24px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
   -webkit-backdrop-filter: saturate(1.2) blur(16px);
   backdrop-filter: saturate(1.2) blur(16px);
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border-bottom: 0;
 }
-.crumbs { font-size: var(--fs-meta); }
-.crumbs .now { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
-.crumbs .now::before {
-  content: '';
-  width: 9px;
-  height: 9px;
-  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
-  border-radius: 3px;
-  background: var(--brand-mark);
-}
+.crumbs { font-size: var(--fs-meta); color: var(--text-muted); }
+.crumbs .now { display: inline-flex; align-items: center; gap: 10px; font-weight: 500; }
 .search {
   height: var(--control-md);
   width: 255px;
-  background: var(--surface-glass);
-  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
   border-radius: var(--r-pill);
 }
 .search:hover { border-color: color-mix(in srgb, var(--text) 24%, transparent); }
@@ -153,11 +166,11 @@ html[data-theme='dark'] .app { background: var(--surface); }
 .icon-btn { background: transparent; border-color: transparent; border-radius: 50%; }
 .icon-btn:hover { background: var(--surface-glass); border-color: color-mix(in srgb, var(--text) 12%, transparent); }
 .top-actions { gap: 8px; }
-.avatar { background: var(--tile-clay); color: var(--tile-ink); }
+.avatar { background: var(--surface-3); color: var(--text-2); }
 .page-h { align-items: flex-end; gap: 24px; margin-bottom: 28px; }
 .page-h-copy { flex: 1; min-width: min(100%, 240px); }
 .page-h h1 { max-width: 24ch; font-size: var(--fs-display); font-weight: 600; line-height: var(--lh-display); margin: 0; text-wrap: balance; }
-/* Eyebrow: sentence case, muted, led by a highlighter swatch. */
+/* Eyebrow: sentence case, muted, led by a small light-blue swatch. */
 .page-h .eyebrow {
   margin-bottom: 12px;
   padding: 0;
@@ -177,28 +190,27 @@ html[data-theme='dark'] .app { background: var(--surface); }
 }
 .page-h .eyebrow:has(.dot)::before { display: none; }
 .page-h .sub { text-align: left; max-width: 64ch; margin: 10px 0 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-muted); }
-/* Buttons are pills. Primary is solid ink (lime in dark); secondary is a
- * translucent sheet with a hairline; `violet` — the stronger of two adjacent
- * CTAs — is the highlighter. */
+/* Buttons follow resume.io: the primary action is a flat blue block with
+ * 4px corners; the secondary one is white with a hairline; `violet` — the
+ * stronger of two adjacent CTAs — is the light-blue highlight. */
 .btn {
   min-height: var(--control-md);
   padding: 8px 18px;
   justify-content: center;
-  border-radius: var(--r-pill);
-  border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
-  background: var(--surface-glass);
-  font-weight: 600;
+  border-radius: var(--r-control);
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  font-weight: 500;
   box-shadow: none;
 }
-.btn:hover { background: var(--surface); border-color: color-mix(in srgb, var(--text) 28%, transparent); }
+.btn:hover { background: var(--surface-2); border-color: color-mix(in srgb, var(--text) 24%, transparent); }
 .btn.primary {
   background: var(--action);
   border-color: var(--action);
   color: var(--action-ink);
-  box-shadow: 0 8px 20px -10px rgba(18, 19, 19, 0.55);
+  box-shadow: none;
 }
-.btn.primary:hover { background: var(--action-hover); border-color: var(--action-hover); transform: translateY(-1px); }
-/* Its drop shadow would otherwise replace the focus ring. */
+.btn.primary:hover { background: var(--action-hover); border-color: var(--action-hover); }
 .btn.primary:focus-visible { box-shadow: var(--focus-ring); }
 .btn.violet { background: var(--brand-mark); border-color: var(--brand-mark); color: var(--brand-plane); }
 .btn.violet:hover {

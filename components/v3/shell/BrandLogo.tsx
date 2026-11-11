@@ -9,8 +9,8 @@
 // request's brand (useBrand()); the colours come from the brand tokens
 // (styles/brands/goapply.css overrides them under html[data-brand]).
 //
-// It doubles as a "go home" affordance. Home is unconditionally /jobs: with
-// auto-apply dead (R1) there is no second landing page to branch to.
+// It doubles as a "go home" affordance. Home is the Dashboard (/dashboard),
+// the first entry of the nav registry on both brands (destinations.ts).
 // No tagline under the wordmark: the product has no persona to introduce.
 
 import Link from 'next/link';
@@ -23,7 +23,7 @@ export function BrandLogo() {
   const t = useTranslations('nav');
   const brand = useBrand();
   return (
-    <Link href="/jobs" className="brand" aria-label={t('brand_home')} data-brand={brand.id}>
+    <Link href="/dashboard" className="brand" aria-label={t('brand_home')} data-brand={brand.id}>
       <span className="brand-mark" aria-hidden="true">
         <BrandSymbol size={23} brand={brand.id} />
       </span>

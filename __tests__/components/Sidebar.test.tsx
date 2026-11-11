@@ -2,7 +2,8 @@
 //
 // What this file is defending (PRODUCT_PLAN.md §3.3 via the registry in
 // components/v3/shell/destinations.ts; OVERHAUL_RULINGS C11, C14):
-//   • RoboApply today: Jobs · Applications · Resume · Interview prep, then a
+//   • RoboApply today: Dashboard · Jobs · Applications · Resume · Interview
+//     prep · Profile, then a
 //     lower group with Settings (the clone's new entries stay hidden until
 //     INT flips `ready`) — no /queue, no "NEW" pill, no section headers
 //     outside /settings,
@@ -58,6 +59,7 @@ import {
 /** The IA, spelled out here so a change to the nav has to be a change to this
  *  list too. Route = nav label. Top group, then the lower group. */
 const IA: [string, string][] = [
+  ['/dashboard', 'Dashboard'], // the resume.io-style home (docs/resume-io/TEARDOWN.md)
   ['/jobs', 'Jobs'],
   ['/applications', 'Applications'],
   ['/resume', 'Resume'],
@@ -93,13 +95,13 @@ describe('Sidebar', () => {
   });
 
   it('exports the four destinations MobileNav renders (legacy DESTINATIONS)', () => {
-    // Profile sits in the More sheet on phones (mobile: 'more'), not the tab bar.
-    expect(DESTINATIONS.map((d) => d.href)).toEqual(IA.filter(([h]) => h !== '/profile').map(([h]) => h));
+    // Interview prep and Profile sit in the More sheet on phones (mobile: 'more'), not the tab bar.
+    expect(DESTINATIONS.map((d) => d.href)).toEqual(IA.filter(([h]) => h !== '/profile' && h !== '/practice').map(([h]) => h));
     expect(DESTINATIONS.map((d) => d.labelKey)).toEqual([
+      'dashboard',
       'jobs',
       'applications',
       'resume',
-      'practice',
     ]);
   });
 

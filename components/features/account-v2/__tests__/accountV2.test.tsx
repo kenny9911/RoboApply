@@ -183,6 +183,6 @@ describe('TwoFactorChallenge (/login/2fa)', () => {
     fireEvent.change(screen.getByLabelText('Recovery code'), { target: { value: 'ABCD-EFGH-JKMN' } });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(api.completeTwoFactorSignIn).toHaveBeenCalledWith({ recoveryCode: 'abcd-efgh-jkmn' }));
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/jobs'));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/dashboard'));
   });
 });

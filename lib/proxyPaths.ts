@@ -49,7 +49,9 @@
 // APP_PATHS in app/robots.ts (a test keeps the two equal).
 
 export const PROTECTED_PREFIXES = [
-  // The four destinations (+ /job-search for /job-search/developers).
+  // The home (Dashboard) and the four destinations (+ /job-search for
+  // /job-search/developers).
+  '/dashboard',
   '/jobs',
   '/job-search',
   '/resume',
