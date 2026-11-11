@@ -150,7 +150,7 @@ Built on `feat/agent-driven`, checked in the fixture preview (`node scripts/desi
 - **A job already on the list shows `Prepare application` until tapped**: the feed item does not carry the list state. The tap is safe (the server returns the existing application and the button becomes a link); showing the right label up front needs one more field on the feed item.
 - **"Today" was a deleted destination.** The July 2026 overhaul removed the old home and two tests asserted it never returns. This redesign brings a home back on purpose, as the place where the agents report; those tests now say so.
 - **Words drift between new and old screens**: Today says "application"; the cost sheet and the Getting ready pages still say "kit" (350 translated strings). One copy pass should rename them in all nine languages.
-- **An unrelated test fails on `main` since 1 November 2026**: `server/src/roboapply/v2/lib/raFantasticJobs.test.ts` hard-codes a billing date that is now in the past. Not touched here.
+- **An unrelated test has failed on `main` since 1 November 2026**: `server/src/roboapply/v2/lib/raFantasticJobs.test.ts` hard-coded a billing date that is now in the past, while the client reads the real clock. Fixed on this branch (the date is now set from the clock), because it turns the pull request's CI red.
 
 ## 10. Open decision for the owner
 
