@@ -900,10 +900,13 @@ describe('the two transports on the wire (fetch mocked): search and feedRequest'
 
     useDirect();
     __test.reset();
+    // The transport reads the real clock, so the billing date is set from it: a fixed date
+    // turns into 0 seconds to the reset on the day it passes.
+    const nextBilling = new Date(Date.now() + 30 * 86_400_000).toISOString();
     mockReplies({
       status: 200,
       body: [atsRow()],
-      headers: { 'x-api-jobs-this-request': '1', 'x-api-jobs-remaining': '9450', 'x-api-jobs-limit': '10000', 'x-api-requests-remaining': '4823', 'x-api-requests-limit': '5000', 'x-api-next-billing-date': '2026-11-01T00:00:00.000Z' },
+      headers: { 'x-api-jobs-this-request': '1', 'x-api-jobs-remaining': '9450', 'x-api-jobs-limit': '10000', 'x-api-requests-remaining': '4823', 'x-api-requests-limit': '5000', 'x-api-next-billing-date': nextBilling },
     });
     await feedRequest('active', FEED_PARAMS);
     expect(seen).toHaveLength(2);
