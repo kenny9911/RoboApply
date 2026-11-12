@@ -1019,7 +1019,23 @@
       },
       "title": "Plantilla y diseño"
     },
-    "ai_edit_cost": "Cada edición con IA de una línea, de tu resumen o de tus habilidades usa 1 crédito."
+    "ai_edit_cost": "Cada edición con IA de una línea, de tu resumen o de tus habilidades usa 1 crédito.",
+    "editor_tabs": {
+      "label": "Editor de currículum",
+      "edit": "Editar",
+      "customize": "Personalizar",
+      "review": "Revisar",
+      "tailor": "Adaptar",
+      "new": "Nuevo",
+      "check": {
+        "loading": "Cargando la última revisión…",
+        "load_error": "No se pudo cargar la última revisión.",
+        "counts": "Puntos por prioridad",
+        "edit_section": "Editar esta sección",
+        "edit_section_aria": "Editar la sección {section}",
+        "change_template": "Cambiar la plantilla"
+      }
+    }
   },
   "applications": {
     "page_title": "Candidaturas",

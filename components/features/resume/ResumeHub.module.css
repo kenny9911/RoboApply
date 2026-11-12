@@ -197,24 +197,7 @@
 }
 
 /* ── Layout panel ─────────────────────────────────────────────────────── */
-.layoutDetails {
-  margin: 0 0 var(--sp-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-}
-
-.layoutSummary {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 var(--sp-4);
-  font-size: var(--fs-body);
-  font-weight: 600;
-  color: var(--text);
-  cursor: pointer;
-}
-
+/* In a card under its title (the editor's Customize tab, editor/EditorTabs.module.css). */
 .layoutPanel {
   display: flex;
   flex-direction: column;

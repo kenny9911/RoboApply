@@ -1019,7 +1019,23 @@
       },
       "title": "範本與版面"
     },
-    "ai_edit_cost": "每次用 AI 修改一條重點、你的個人簡介或技能，會使用 1 點。"
+    "ai_edit_cost": "每次用 AI 修改一條重點、你的個人簡介或技能，會使用 1 點。",
+    "editor_tabs": {
+      "label": "履歷編輯器",
+      "edit": "編輯",
+      "customize": "樣式",
+      "review": "檢查",
+      "tailor": "調整",
+      "new": "新功能",
+      "check": {
+        "loading": "正在載入上次的檢查結果…",
+        "load_error": "無法載入上次的檢查結果。",
+        "counts": "依優先順序排列的項目",
+        "edit_section": "編輯這個區塊",
+        "edit_section_aria": "編輯「{section}」區塊",
+        "change_template": "更換範本"
+      }
+    }
   },
   "applications": {
     "page_title": "應徵紀錄",

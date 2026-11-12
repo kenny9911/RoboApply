@@ -1019,7 +1019,23 @@
       },
       "title": "模板和版式"
     },
-    "ai_edit_cost": "每次用 AI 修改一条要点、你的个人简介或技能，会使用 1 个额度。"
+    "ai_edit_cost": "每次用 AI 修改一条要点、你的个人简介或技能，会使用 1 个额度。",
+    "editor_tabs": {
+      "label": "简历编辑器",
+      "edit": "编辑",
+      "customize": "样式",
+      "review": "体检",
+      "tailor": "定制",
+      "new": "新功能",
+      "check": {
+        "loading": "正在加载上次的检查结果…",
+        "load_error": "上次的检查结果没能加载出来。",
+        "counts": "按优先级分类的问题",
+        "edit_section": "编辑这个栏目",
+        "edit_section_aria": "编辑“{section}”栏目",
+        "change_template": "更换模板"
+      }
+    }
   },
   "applications": {
     "page_title": "申请记录",

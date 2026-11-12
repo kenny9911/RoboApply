@@ -1019,7 +1019,23 @@
       },
       "title": "Vorlage und Layout"
     },
-    "ai_edit_cost": "Jede KI-Bearbeitung eines Stichpunkts, deines Kurzprofils oder deiner Fähigkeiten verbraucht 1 Credit."
+    "ai_edit_cost": "Jede KI-Bearbeitung eines Stichpunkts, deines Kurzprofils oder deiner Fähigkeiten verbraucht 1 Credit.",
+    "editor_tabs": {
+      "label": "Lebenslauf-Editor",
+      "edit": "Bearbeiten",
+      "customize": "Gestalten",
+      "review": "Prüfen",
+      "tailor": "Anpassen",
+      "new": "Neu",
+      "check": {
+        "loading": "Die letzte Prüfung wird geladen…",
+        "load_error": "Die letzte Prüfung konnte nicht geladen werden.",
+        "counts": "Punkte nach Priorität",
+        "edit_section": "Diesen Abschnitt bearbeiten",
+        "edit_section_aria": "Abschnitt {section} bearbeiten",
+        "change_template": "Vorlage ändern"
+      }
+    }
   },
   "applications": {
     "page_title": "Bewerbungen",

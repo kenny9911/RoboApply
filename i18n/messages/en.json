@@ -1019,7 +1019,23 @@
       "placeholders_show": "Show the first one",
       "placeholders_anyway": "Download with these blanks left in"
     },
-    "ai_edit_cost": "Each AI edit of a bullet, your summary or your skills uses 1 credit."
+    "ai_edit_cost": "Each AI edit of a bullet, your summary or your skills uses 1 credit.",
+    "editor_tabs": {
+      "label": "Resume editor",
+      "edit": "Edit",
+      "customize": "Customize",
+      "review": "Review",
+      "tailor": "Tailor",
+      "new": "New",
+      "check": {
+        "loading": "Loading the last check…",
+        "load_error": "The last check did not load.",
+        "counts": "Issues by priority",
+        "edit_section": "Edit this section",
+        "edit_section_aria": "Edit the {section} section",
+        "change_template": "Change the template"
+      }
+    }
   },
   "applications": {
     "page_title": "Applications",

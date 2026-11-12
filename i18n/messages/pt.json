@@ -1019,7 +1019,23 @@
       },
       "title": "Modelo e layout"
     },
-    "ai_edit_cost": "Cada edição com IA de um tópico, do seu resumo ou das suas habilidades usa 1 crédito."
+    "ai_edit_cost": "Cada edição com IA de um tópico, do seu resumo ou das suas habilidades usa 1 crédito.",
+    "editor_tabs": {
+      "label": "Editor de currículo",
+      "edit": "Editar",
+      "customize": "Personalizar",
+      "review": "Conferir",
+      "tailor": "Adaptar",
+      "new": "Novo",
+      "check": {
+        "loading": "Carregando a última conferência…",
+        "load_error": "Não foi possível carregar a última conferência.",
+        "counts": "Itens por prioridade",
+        "edit_section": "Editar esta seção",
+        "edit_section_aria": "Editar a seção {section}",
+        "change_template": "Trocar o modelo"
+      }
+    }
   },
   "applications": {
     "page_title": "Candidaturas",

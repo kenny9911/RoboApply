@@ -1019,7 +1019,23 @@
       },
       "title": "Modèle et mise en page"
     },
-    "ai_edit_cost": "Chaque modification par IA d’une ligne, de ton résumé ou de tes compétences utilise 1 crédit."
+    "ai_edit_cost": "Chaque modification par IA d’une ligne, de ton résumé ou de tes compétences utilise 1 crédit.",
+    "editor_tabs": {
+      "label": "Éditeur de CV",
+      "edit": "Modifier",
+      "customize": "Personnaliser",
+      "review": "Vérifier",
+      "tailor": "Adapter",
+      "new": "Nouveau",
+      "check": {
+        "loading": "Chargement de la dernière vérification…",
+        "load_error": "La dernière vérification n’a pas pu être chargée.",
+        "counts": "Points par priorité",
+        "edit_section": "Modifier cette section",
+        "edit_section_aria": "Modifier la section {section}",
+        "change_template": "Changer de modèle"
+      }
+    }
   },
   "applications": {
     "page_title": "Candidatures",

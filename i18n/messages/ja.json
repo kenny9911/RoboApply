@@ -1019,7 +1019,23 @@
       },
       "title": "テンプレートとレイアウト"
     },
-    "ai_edit_cost": "実績行、要約、スキルをAIで編集するたびに、1クレジットを使います。"
+    "ai_edit_cost": "実績行、要約、スキルをAIで編集するたびに、1クレジットを使います。",
+    "editor_tabs": {
+      "label": "履歴書エディタ",
+      "edit": "編集",
+      "customize": "カスタマイズ",
+      "review": "点検",
+      "tailor": "調整",
+      "new": "新機能",
+      "check": {
+        "loading": "前回の点検結果を読み込んでいます…",
+        "load_error": "前回の点検結果を読み込めませんでした。",
+        "counts": "優先度別の項目",
+        "edit_section": "この項目を編集",
+        "edit_section_aria": "「{section}」を編集",
+        "change_template": "テンプレートを変更"
+      }
+    }
   },
   "applications": {
     "page_title": "応募",

@@ -1019,7 +1019,23 @@
       },
       "title": "서식과 레이아웃"
     },
-    "ai_edit_cost": "성과 줄, 요약, 기술 항목을 AI로 한 번 고칠 때마다 크레딧 1개를 사용해요."
+    "ai_edit_cost": "성과 줄, 요약, 기술 항목을 AI로 한 번 고칠 때마다 크레딧 1개를 사용해요.",
+    "editor_tabs": {
+      "label": "이력서 편집기",
+      "edit": "편집",
+      "customize": "디자인",
+      "review": "점검",
+      "tailor": "맞추기",
+      "new": "새 기능",
+      "check": {
+        "loading": "지난 점검 결과를 불러오는 중…",
+        "load_error": "지난 점검 결과를 불러오지 못했어요.",
+        "counts": "우선순위별 항목",
+        "edit_section": "이 항목 편집하기",
+        "edit_section_aria": "{section} 항목 편집하기",
+        "change_template": "서식 바꾸기"
+      }
+    }
   },
   "applications": {
     "page_title": "지원 현황",
