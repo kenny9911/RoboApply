@@ -47,10 +47,77 @@ export function screensFor(brand: BrandId, branch: string | null): string[] {
   return ONBOARDING_SCREEN_STAGES[brand].filter((s) => brand !== 'roboapply' || !EXPLORE_ONLY.has(s) || branch === 'explore');
 }
 
+// ── The start flow (RoboApply, /onboarding/start) ───────────────────────────
+//
+// Two screens on the web: the resume, then one screen with what the user is
+// looking for. It is NOT a server stage, so it is not in
+// ONBOARDING_SCREEN_STAGES (that list mirrors the stage machine). The server
+// still takes its steps in order; `expressSavePlan` is that order.
+//
+// Who gets it: a RoboApply user whose stage machine is still at its first
+// screen. The stage only moves forward and saving `situation` moves it, so
+// "stage is situation" means nothing was saved yet. Everyone else (mid-way,
+// GoApply, finished) keeps the screens above.
+
+export const EXPRESS_START_ROUTE = '/onboarding/start';
+/** Where the start flow lands when setup is finished. */
+export const EXPRESS_LANDING_ROUTE = '/dashboard';
+/** Query flag set by "Answer a few more questions instead": show the long screens to a new user. */
+export const CLASSIC_FLOW_PARAM = 'classic';
+export const CLASSIC_FLOW_ROUTE = `/onboarding/situation?${CLASSIC_FLOW_PARAM}=1`;
+
+interface FlowState {
+  brand: BrandId;
+  stage: string;
+  completed: boolean;
+}
+
+/** True for a RoboApply user who has saved no step yet. */
+export function startsInExpress(state: FlowState): boolean {
+  return state.brand === 'roboapply' && !state.completed && state.stage === 'situation';
+}
+
+/** True when the URL carries the user's choice of the long screens. */
+export function classicFlowChosen(params: { get(name: string): string | null } | null | undefined): boolean {
+  return params?.get(CLASSIC_FLOW_PARAM) === '1';
+}
+
+/**
+ * Where a long screen (/onboarding/<stage>) sends a user who belongs in the
+ * start flow; null = stay. A user who chose the long screens stays.
+ */
+export function expressRedirect(state: FlowState, classicChosen: boolean): string | null {
+  return !classicChosen && startsInExpress(state) ? EXPRESS_START_ROUTE : null;
+}
+
+/**
+ * The server steps the start flow saves on "Find my jobs", in the stage
+ * machine's order. Any timing but "as soon as possible" is the explore branch,
+ * whose `goal` and `preferences` steps come before `resume`: the start flow
+ * does not ask them, so it saves them as skipped (the server refuses `resume`
+ * while one of them is the current stage). `matching` is the search itself;
+ * `complete` (not a stage with a screen) closes setup after `confirm`.
+ */
+export function expressSavePlan(timing: string): string[] {
+  return [...screensFor('roboapply', timing === 'asap' ? 'urgent' : 'explore'), 'complete'];
+}
+
+/**
+ * Where the start flow lands once setup is closed: Today. One exception, kept
+ * from the long flow (PRODUCT §4.1 "the carried job"): a user who signed up
+ * from a job's page goes back to that job, which is the route POST
+ * /onboarding/complete names for them (`/jobs/<id>`). Its other answer, the
+ * plain job list, is replaced by Today.
+ */
+export function expressLanding(nextRoute: string | null | undefined): string {
+  return nextRoute && /^\/jobs\/[^/?#]+$/.test(nextRoute) ? nextRoute : EXPRESS_LANDING_ROUTE;
+}
+
 /**
  * Where /onboarding sends a user whose setup state is known.
  *
  *   finished                 → the first-value page (`firstValueRoute`, else /jobs)
+ *   RoboApply, nothing saved → /onboarding/start (the two-screen flow)
  *   GoApply at stage `tour`  → /onboarding/confirm. Confirm is saved but the
  *                              first-value screen was not finished. The
  *                              server's `nextRoute` at that stage is already
@@ -71,6 +138,21 @@ export function onboardingIndexTarget(state: {
 }): string {
   const landing = state.firstValueRoute ?? '/jobs';
   if (state.completed) return landing;
+  if (startsInExpress(state)) return EXPRESS_START_ROUTE;
   if (state.brand === 'goapply' && state.stage === 'tour') return '/onboarding/confirm';
   return state.nextRoute ?? landing;
+}
+
+/**
+ * Where /onboarding/start sends a user it is not for; null = show it.
+ *
+ *   finished (RoboApply)     → /dashboard
+ *   nothing saved (RoboApply) → null
+ *   anyone else              → where /onboarding would send them (their
+ *                              current long screen; never back here)
+ */
+export function expressStartExit(state: Parameters<typeof onboardingIndexTarget>[0]): string | null {
+  if (state.completed && state.brand === 'roboapply') return EXPRESS_LANDING_ROUTE;
+  if (startsInExpress(state)) return null;
+  return onboardingIndexTarget(state);
 }

@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Main navigation",
-    "brand_home": "%BRAND% — go to Dashboard",
+    "brand_home": "%BRAND% home",
     "jobs": "Jobs",
     "resume": "Resume",
     "applications": "Applications",
@@ -138,6 +138,7 @@
     "jump_placeholder": "Jump to a page…",
     "settingsEmpty": "This section did not load. Reload the page to try again.",
     "signing_out": "Signing out…",
+    "today": "Today",
     "dashboard": "Dashboard",
     "profile_card": {
       "you": "You",
@@ -205,7 +206,8 @@
       "addJob": "Add a job",
       "detailLabel": "Job details",
       "closeDetail": "Close job details",
-      "introByDate": "Jobs are listed by date posted, newest first. Open one to see the details."
+      "introByDate": "Jobs are listed by date posted, newest first. Open one to see the details.",
+      "searchLabel": "Your search"
     },
     "card": {
       "openJob": "Open {title} at {company}",
@@ -1262,6 +1264,12 @@
     "offers_view": {
       "title": "Offers",
       "empty": "When an application reaches Offer, add its numbers in the application details to compare them here."
+    },
+    "switch": {
+      "label": "Your applications",
+      "ready": "Getting ready",
+      "sent": "Sent",
+      "waiting": "{count, plural, one {# application is ready and waiting for you} other {# applications are ready and waiting for you}}"
     }
   },
   "practice": {
@@ -7479,6 +7487,15 @@
     },
     "hunt": {
       "moved": "Job titles, places, pay, company and industry filters now live in your saved searches below, so the job list and alerts use the same filters."
+    },
+    "summary": {
+      "label": "Your search:",
+      "all": "All jobs",
+      "loading": "Loading your search…",
+      "more": "{count} more",
+      "change": "Change search",
+      "panel": "Search and filters",
+      "done": "Done"
     }
   },
   "fit": {
@@ -9444,6 +9461,45 @@
       "confirmNoAction": "Add the filter",
       "cancel": "Cancel",
       "failed": "That didn't save. Try again."
+    },
+    "express": {
+      "resume": {
+        "title": "Start with your resume",
+        "continue": "Continue",
+        "noResume": "I don't have a resume yet",
+        "working": "One moment…",
+        "classic": "Answer a few more questions instead"
+      },
+      "check": {
+        "title": "Is this what you're looking for?",
+        "subtitleSuggested": "This is what your resume suggests. Change anything that isn't right.",
+        "subtitleNothingSuggested": "Nothing could be suggested from your resume. Fill these in to find jobs.",
+        "subtitleNoResume": "No resume added, so jobs are found from these answers only. You can add one later to see how well each job fits.",
+        "filling": "Filling this in from your resume…",
+        "otherPlaces": "Add another place",
+        "chosenPlaces": "Show chosen places only",
+        "aboutYou": "About you: {value}",
+        "email": "New jobs for this search are emailed to you once a day. You can change that in Settings.",
+        "submit": "Find my jobs",
+        "retry": "Try again"
+      },
+      "progress": {
+        "saving": "Saving your answers…",
+        "searching": "Searching for jobs. This can take a minute or two.",
+        "finishing": "Finishing setup…"
+      },
+      "failed": {
+        "answers": "Your answers couldn't be saved, so the search didn't start.",
+        "resume": "Your resume choice couldn't be saved, so the search didn't start.",
+        "finish": "Your search is saved, but setup couldn't be finished."
+      },
+      "why": {
+        "rate_limited": "There were too many tries in a short time. Wait a minute, then try again.",
+        "invalid": "One of the answers wasn't accepted. Check them, then try again.",
+        "conflict": "Setup has moved on somewhere else, maybe in another tab. Reload this page.",
+        "unavailable": "This isn't available right now. Try again later.",
+        "unknown": "Everything you entered is still here. Try again."
+      }
     }
   },
   "onboardingCn": {
@@ -11198,6 +11254,20 @@
       "awards": "Awards",
       "family_members": "Family members",
       "political_status": "Political status"
+    },
+    "oneTap": {
+      "action": "Prepare application",
+      "adding": "Adding…",
+      "started": "Being prepared. It shows under Waiting for you when it needs your OK.",
+      "failed": "This couldn't be started. Nothing was used. Try again.",
+      "full": "Your list is full. Remove a job from Getting ready, then try again.",
+      "closed": "This job is no longer listed, so nothing was prepared.",
+      "place": {
+        "preparing": "Being prepared",
+        "review": "Check and open",
+        "sent": "See application",
+        "listed": "On your list"
+      }
     }
   },
   "resumeBuilder": {
@@ -12810,6 +12880,104 @@
       },
       "usNote": "A certified application is not a visa approval or a hire. Petition counts are first decisions and cover new and continuing employment.",
       "disclaimer": "These are public records about the employer, not about this job. Past filings or a sponsor license do not mean this employer will sponsor this role."
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, one {# thing is waiting for you} other {# things are waiting for you}}",
+      "titleNone": "Nothing is waiting for you",
+      "titleLoading": "Checking what is waiting for you…",
+      "titlePartial": "Part of today's list did not load"
+    },
+    "goal": {
+      "line": "Looking for {what}",
+      "any": "Your search is open to any job.",
+      "more": "{list} and {count} more",
+      "change": "Change",
+      "changeLabel": "Change what you are looking for",
+      "loading": "Loading your search…",
+      "failed": "Your search could not be loaded.",
+      "none": "No saved search yet.",
+      "setUp": "Set up your search"
+    },
+    "agentTag": "Agent",
+    "retry": "Try again",
+    "laneFailed": "Some of this could not be loaded.",
+    "notLoaded": "Not loaded",
+    "waiting": {
+      "title": "Waiting for you",
+      "loading": "Checking what is waiting for you…",
+      "empty": "Nothing needs you right now. The best picks are below.",
+      "emptyLink": "Go to the picks",
+      "emptyPlain": "Nothing needs you right now.",
+      "more": "{count, plural, one {# more is waiting. It shows here when you finish one of these.} other {# more are waiting. They show here as you finish these.}}",
+      "partial": "Part of this list did not load, so there may be more.",
+      "fact": {
+        "review": "{title} at {company} is ready to check.",
+        "reviewTitle": "{title} is ready to check.",
+        "reviewUnnamed": "An application is ready to check.",
+        "open": "{title} at {company} is ready to open.",
+        "openTitle": "{title} is ready to open.",
+        "openUnnamed": "An application is ready to open.",
+        "verify": "{count, plural, one {# new detail in {name} needs your OK.} other {# new details in {name} need your OK.}}",
+        "noReply": "{count, plural, one {# application has had no reply in {days} days.} other {# applications have had no reply in {days} days.}}",
+        "profile": "{count, plural, one {Your profile is missing # detail that application forms ask for.} other {Your profile is missing # details that application forms ask for.}}",
+        "noResume": "You have not added a resume yet.",
+        "setup": "{count, plural, one {Setup has # step left.} other {Setup has # steps left.}}"
+      },
+      "action": {
+        "review": "Check and open",
+        "open": "Open application",
+        "verify": "Verify details",
+        "noReply": "See them",
+        "profile": "Add details",
+        "noResume": "Add a resume",
+        "setup": "Finish setting up"
+      }
+    },
+    "jobSearch": {
+      "title": "Job search",
+      "found": "{count, plural, =0 {Found no new jobs that fit since {date}.} one {Found # new job that fits since {date}.} other {Found # new jobs that fit since {date}.}}",
+      "foundSinceVisit": "{count, plural, =0 {Found no new jobs that fit since your last visit.} one {Found # new job that fits since your last visit.} other {Found # new jobs that fit since your last visit.}}",
+      "foundCapped": "Found more than {count} new jobs that fit since {date}.",
+      "foundCappedSinceVisit": "Found more than {count} new jobs that fit since your last visit.",
+      "foundUnknown": "New jobs that fit since your last visit:",
+      "picksTitle": "Best picks",
+      "picksLoading": "Loading picks…",
+      "picksNone": "No new picks right now.",
+      "picksFailed": "The picks could not be loaded.",
+      "viewJob": "View job",
+      "seeAll": "See all jobs",
+      "off": "The job list is not available on this account."
+    },
+    "applications": {
+      "title": "Applications",
+      "numbersLabel": "Applications in numbers",
+      "preparing": "Being prepared",
+      "waiting": "Waiting for you",
+      "sent": "Sent this week",
+      "saved": "Saved",
+      "open": "Open applications",
+      "failed": "Some of these numbers could not be loaded."
+    },
+    "resume": {
+      "title": "Resume",
+      "mainLabel": "Main resume",
+      "loading": "Loading your resume…",
+      "none": "No resume yet.",
+      "add": "Add a resume",
+      "improve": "Improve my resume",
+      "open": "Open resumes",
+      "failed": "Your resumes could not be loaded.",
+      "asked": "Jobs in your search ask for these, and your profile does not list them:",
+      "askedIn": "asked in {count} of {total} jobs"
+    },
+    "ask": {
+      "title": "Ask",
+      "label": "Ask about your job search",
+      "placeholder": "For example: which of these jobs is the best fit?",
+      "submit": "Ask",
+      "hint": "Opens the Assistant with your question ready to send."
     }
   },
   "dashboard": {

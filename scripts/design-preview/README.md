@@ -12,6 +12,21 @@ live services. The preview server accepts loopback hosts only.
 Available routes:
 
 - `/dashboard` (also `/`), `/jobs`, `/resume`, `/resume/cm_rv_base`, `/applications`, `/practice`
+- `/dashboard` is the signed-in home with the agent desk. It is the one route
+  reviewed with Ready to apply on, and that flag and its example data
+  (applications ready to check and to open, the week's allowance, picks not yet
+  on the list) are set only when the page is loaded at `/dashboard` (or `/`,
+  or `/today`, which redirects there in the app), so every other route renders
+  as before. `/dashboard?agent=off` shows the layout without Ready to apply (the picks are the top of the example feed; the lane shows the
+  tracker's numbers). Any other route takes `?agent=on` on a full load
+  to be reviewed with Ready to apply on: `/jobs?agent=on` shows the card with
+  `Prepare application` first, `/applications?agent=on` the Getting ready ·
+  Sent switch.
+- `/onboarding/start` is the two-screen setup, shown as a new account. Choosing
+  an example resume answers with what a resume would suggest, so the second
+  screen arrives filled in. Saving and searching are live actions and are
+  refused.
+- `/ready?agent=on` is the Getting ready view of Applications.
 - `/jobs?job=job_preview_1` opens the split detail beside the example feed
   (wide screens; `job_preview_1` to `job_preview_6`)
 - `/settings`, `/settings#billing`, `/settings#account`

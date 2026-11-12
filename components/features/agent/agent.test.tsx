@@ -218,6 +218,8 @@ beforeEach(() => {
   api.getAgentSettings.mockResolvedValue(SETTINGS);
   api.getAgentSetup.mockResolvedValue(setupAt('done', { calibrationDone: true }));
   api.listQueue.mockResolvedValue({ items: [] });
+  // The "Getting ready · Sent" switch at the top of /ready reads this count (nothing is drawn for zero).
+  api.getReadyBadge.mockResolvedValue({ readyNotOpened: 0 });
   api.getSuggestions.mockResolvedValue({ items: [] });
   api.getAnswerBank.mockResolvedValue({ items: [] });
   // WP-52 reads not served yet unless a test says so: the UI falls back.
@@ -260,6 +262,49 @@ describe('/ready', () => {
     api.listQueue.mockRejectedValue(apiError(501, 'not_implemented'));
     renderWithBrand(<ReadyRoute />, { flags: ON });
     expect(await screen.findByText("Ready to apply isn't available here yet")).toBeInTheDocument();
+  });
+
+  // ── Getting ready · Sent (docs/agent-driven/REDESIGN.md §7) ──
+
+  it('the switch is the first thing on the page: "Getting ready" is this page, with the count waiting, and "Sent" links to /applications', async () => {
+    api.getReadyBadge.mockResolvedValue({ readyNotOpened: 2 });
+    api.listQueue.mockResolvedValue({ items: [item({ id: 'q1', jobId: 'job1', state: 'ready_for_review' }), item({ id: 'q2', jobId: 'job2', state: 'approved' })] });
+    nav.params = new URLSearchParams('tab=ready');
+    renderWithBrand(<ReadyRoute />, { flags: ON });
+    const sw = await screen.findByRole('navigation', { name: 'Your applications' });
+    const ready = within(sw).getByRole('link', { name: /^Getting ready/ });
+    expect(ready).toHaveAttribute('href', '/ready');
+    expect(ready).toHaveAttribute('aria-current', 'page');
+    expect(await within(sw).findByTestId('applications-switch-count')).toHaveTextContent(/^2$/);
+    expect(ready).toHaveAccessibleName('Getting ready 2 applications are ready and waiting for you');
+    const sent = within(sw).getByRole('link', { name: 'Sent' });
+    expect(sent).toHaveAttribute('href', '/applications');
+    expect(sent).not.toHaveAttribute('aria-current');
+    // Above the page's own header, and the page under it keeps its tabs and its `?tab=`.
+    const h1 = await screen.findByRole('heading', { level: 1, name: 'Ready to apply' });
+    expect(Boolean(sw.compareDocumentPosition(h1) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getByRole('tab', { name: /^Ready/ })).toHaveAttribute('aria-selected', 'true');
+    expect(nav.replace).not.toHaveBeenCalled();
+    expectNoSubmitWording();
+  });
+
+  it('the switch is there before setup too (the intro), so "Sent" is always one click away', async () => {
+    api.getAgentSetup.mockResolvedValue(setupAt('profile'));
+    renderWithBrand(<ReadyRoute />, { flags: ON });
+    expect(await screen.findByTestId('ready-intro')).toBeInTheDocument();
+    const sw = screen.getByRole('navigation', { name: 'Your applications' });
+    expect(within(sw).getByRole('link', { name: 'Getting ready' })).toHaveAttribute('aria-current', 'page');
+    expect(within(sw).getByRole('link', { name: 'Sent' })).toHaveAttribute('href', '/applications');
+    // Nothing waiting: no number, never "0".
+    expect(screen.queryByTestId('applications-switch-count')).toBeNull();
+  });
+
+  it('no switch with the `agent` flag off, and its count is not asked for', async () => {
+    renderWithBrand(<ReadyRoute />, { flags: {} });
+    expect(await screen.findByText("Ready to apply isn't available here yet")).toBeInTheDocument();
+    expect(screen.queryByTestId('applications-switch')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sent' })).toBeNull();
+    expect(api.getReadyBadge).not.toHaveBeenCalled();
   });
 
   it('shows the intro before setup: what it does, "You submit each application yourself.", the real kit allowance', async () => {

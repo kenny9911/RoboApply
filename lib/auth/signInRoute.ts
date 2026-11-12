@@ -5,8 +5,10 @@
 //   2. onboarding not finished → its screen (`/auth/me.onboarding.nextRoute`);
 //   3. else a same-site `next` the visitor arrived with;
 //   4. else the Dashboard (/dashboard), the signed-in home on both brands
-//      (components/v3/shell/destinations.ts). Finishing onboarding still
-//      lands on the server's first-value page (`firstValueRoute`, /jobs).
+//      (components/v3/shell/destinations.ts; it carries the agent desk of
+//      docs/agent-driven/REDESIGN.md §5). The server's own sign-in answer
+//      (`next`) wins where a flow carries one, so GoApply keeps its
+//      first-value page (R-14) there.
 
 import type { MeResponse } from '../api/auth';
 import { priorityNext, safeNext } from './entry';

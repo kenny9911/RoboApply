@@ -658,6 +658,139 @@ describe('/jobs workspace', () => {
   });
 });
 
+// ── The search is one line until the user opens it (agent-driven redesign §6) ──
+
+describe('/jobs: the search collapses to one line', () => {
+  const SEARCH = { titles: ['Product designer'], workModels: ['remote'], seniority: ['senior'], postedWithinDays: 30 };
+  const withSearch = (over: Record<string, Route> = {}) => baseRoutes({ [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ filters: SEARCH as never })])), ...over });
+  const toggle = () => screen.getByRole('button', { name: 'Change search' });
+
+  it('closed on a plain visit: the search in words and "Change search"; the fit view and the sort stay; no search box, saved searches, filter buttons or chips', async () => {
+    installFetch(withSearch());
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    const region = screen.getByRole('region', { name: 'Your search' });
+    expect(within(region).getByTestId('search-summary')).toHaveTextContent('Product designer · Remote · Senior · Past month');
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById(toggle().getAttribute('aria-controls')!)).toHaveAttribute('hidden');
+    // What stays on screen: the fit view and the sort, on the bar itself.
+    expect(within(region).getByRole('radio', { name: 'Everything' })).toBeChecked();
+    expect(within(region).getByLabelText('Sort')).toHaveValue('recommended');
+    expect(within(region).getByRole('link', { name: 'How ranking works' })).toBeInTheDocument();
+    // What is one click away.
+    expect(screen.queryByRole('search')).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Quick filters' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Active filters' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save as a new search' })).toBeNull();
+    // Nothing was written to the address by arriving.
+    expect(nav.replace).toEqual([]);
+  });
+
+  it('"Hiding {n} weaker fits" shows while the search is closed', async () => {
+    installFetch(
+      baseRoutes({
+        [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ filters: { ...SEARCH, fitTier: 'good' } as never })])),
+        [`POST ${FEED}/query`]: () => ok(page(items(1, 2), { hiddenByTier: 37 })),
+      }),
+    );
+    renderFeed(<JobsWorkspace />);
+    expect(await screen.findByText('Hiding 37 weaker fits.')).toBeInTheDocument();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('"Change search" opens every control in place and leaves the address alone; it stays open when a change reloads the list', async () => {
+    let filters: Record<string, unknown> = { ...SEARCH };
+    let version = 3;
+    const net = installFetch(
+      baseRoutes({
+        [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ version, filters: filters as never })])),
+        [`PATCH ${PROFILES}/sp_main`]: (c) => {
+          const patch = (c.body as { filtersPatch: Record<string, unknown> }).filtersPatch;
+          filters = Object.fromEntries(Object.entries({ ...filters, ...patch }).filter(([, v]) => v !== null));
+          version = 4;
+          return ok(searchProfile({ version, filters: filters as never }));
+        },
+      }),
+    );
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    fireEvent.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Quick filters' })).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Active filters' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Product designer', 'Remote', 'Senior', 'Past month']);
+    expect(nav.replace).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove filter: Senior' }));
+    await waitFor(() => expect(net.to('PATCH', `${PROFILES}/sp_main`)).toHaveLength(1));
+    // The search changed, so the list is asked for again; the controls the user is working in do not close.
+    await waitFor(() => expect(net.to('POST', `${FEED}/query`).length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByTestId('search-summary')).toHaveTextContent(/^Your search: Product designer · Remote · Past month$/));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('search')).toBeInTheDocument();
+  });
+
+  it('/jobs?edit=search arrives with the controls open; closing them takes the request out of the address and keeps the rest', async () => {
+    nav.search = 'sort=newest&edit=search';
+    installFetch(withSearch());
+    renderFeed(<JobsWorkspace />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('group', { name: 'Active filters' })).toBeInTheDocument();
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(nav.replace).toEqual(['/jobs?sort=newest']);
+  });
+
+  it('a link to /jobs?edit=search followed while the page is already open opens the controls', async () => {
+    installFetch(withSearch());
+    const view = renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    nav.search = 'edit=search';
+    view.rerender(<JobsWorkspace />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    // Any other value of the parameter asks for nothing.
+    view.unmount();
+    nav.search = 'edit=resume';
+    renderFeed(<JobsWorkspace />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('after the Assistant changed the search the controls are open beside "Looks better / Not quite"', async () => {
+    installFetch(withSearch());
+    noteAssistantFilterChange({ searchProfileId: 'sp_main', before: { q: 'data' } });
+    renderFeed(<JobsWorkspace />);
+    expect(await screen.findByTestId('after-change')).toBeInTheDocument();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('group', { name: 'Active filters' })).toBeInTheDocument();
+    // "Looks better" settles the question; it does not close what the user may still be reading.
+    fireEvent.click(within(screen.getByTestId('after-change')).getByRole('button', { name: 'Looks better' }));
+    await waitFor(() => expect(screen.queryByTestId('after-change')).toBeNull());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('an Assistant change confirmed while /jobs is open opens the controls then', async () => {
+    installFetch(withSearch());
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    act(() => noteAssistantFilterChange({ searchProfileId: 'sp_main', before: {} }));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('search')).toBeInTheDocument();
+  });
+
+  it('GoApply gets the same line (D5)', async () => {
+    installFetch(withSearch());
+    renderFeed(<JobsWorkspace />, { brand: 'goapply' });
+    await screen.findAllByTestId('job-card');
+    expect(screen.getByTestId('search-summary')).toHaveTextContent('Product designer · Remote · Senior · Past month');
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('search')).toBeNull();
+  });
+});
+
 // ── The same role in several cities: one card, the other places under it (SM-12) ──
 
 describe('"Also in N more locations" under a card', () => {

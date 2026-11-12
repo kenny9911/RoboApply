@@ -10,7 +10,8 @@
 // (styles/brands/goapply.css overrides them under html[data-brand]).
 //
 // It doubles as a "go home" affordance. Home is the Dashboard (/dashboard),
-// the first entry of the nav registry on both brands (destinations.ts).
+// the first entry of the nav registry on both brands (destinations.ts); it
+// carries the agent desk (docs/agent-driven/REDESIGN.md §5).
 // No tagline under the wordmark: the product has no persona to introduce.
 
 import Link from 'next/link';

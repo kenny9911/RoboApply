@@ -5,6 +5,9 @@ import { Providers } from '../../app/providers';
 import AuthLayout from '../../app/(auth)/layout';
 import DashboardPage from '../../app/(auth)/dashboard/page';
 import JobsPage from '../../app/(auth)/jobs/page';
+import ReadyPage from '../../app/(auth)/ready/page';
+import OnboardingLayout from '../../app/(onboarding)/layout';
+import { ExpressOnboarding } from '../../components/features/onboarding';
 import ResumePage from '../../app/(auth)/resume/page';
 import ResumeEditorPage from '../../app/(auth)/resume/[id]/page';
 import ApplicationsPage from '../../app/(auth)/applications/page';
@@ -44,8 +47,9 @@ function Preview() {
   const params = useMemo(() => Promise.resolve({ id: editorId ?? 'cm_rv_base' }), [editorId]);
   const reportParams = useMemo(() => Promise.resolve({ id: 'ie_preview' }), []);
   let page: ReactNode;
-  if (path === '/dashboard' || path === '/') page = <DashboardPage />;
+  if (path === '/dashboard' || path === '/' || path === '/today') page = <DashboardPage />;
   else if (path === '/jobs') page = <JobsPage />;
+  else if (path === '/ready') page = <ReadyPage />;
   else if (path === '/resume') page = <ResumePage />;
   else if (editorId) page = <ResumeEditorPage params={params} />;
   else if (path === '/applications') page = <ApplicationsPage />;
@@ -54,6 +58,10 @@ function Preview() {
   else if (path === '/practice') page = <PracticePage />;
   else if (path === '/settings') page = <SettingsPage />;
   else page = <div className="preview-error">This page is not part of the local preview. <button onClick={() => navigate('/jobs')}>Return to jobs</button></div>;
+  // The two-screen setup renders in its own layout (no rail), as the app serves it.
+  if (path === '/onboarding/start') {
+    return <Providers locale={locale} messages={loadMessages(locale)}><PreviewBoundary route={path}><OnboardingLayout><Suspense fallback={<p>Loading example data…</p>}><ExpressOnboarding /></Suspense></OnboardingLayout></PreviewBoundary></Providers>;
+  }
   return <Providers locale={locale} messages={loadMessages(locale)}><PreviewBoundary route={path}><AuthLayout><Suspense fallback={<p>Loading example data…</p>}>{page}</Suspense></AuthLayout></PreviewBoundary></Providers>;
 }
 

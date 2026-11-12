@@ -88,10 +88,11 @@
   outline: none;
   box-shadow: var(--focus-ring);
 }
-/* Panels in the list column (filters, the split detail, prompts) share the
- * job card's 22px corners and 10% ink hairline. */
+/* Panels in the list column (the search, the split detail, prompts) share the
+ * job card's 22px corners and 10% ink hairline. The search is two short rows
+ * until its controls are opened, so its padding is the tighter step. */
 .filters {
-  padding: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
   border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: var(--r-lg);
   background: var(--surface);
@@ -190,7 +191,11 @@
   border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: var(--r-lg);
   background: var(--surface);
-  overflow: hidden;
+  /* Clipped sideways only. The "…" menu opens upward and can be taller than a
+   * short card (one with no fit block), so the card's height does not cut it
+   * off. The fit strip follows the rounded top through its own layer (.strip). */
+  overflow-x: clip;
+  overflow-y: visible;
   min-width: 0;
   transition:
     box-shadow var(--dur-hover) var(--ease-out),
@@ -209,15 +214,26 @@
   border-color: var(--action);
   box-shadow: 0 0 0 1px var(--action);
 }
+/* A layer the size of the card, rounded like its inner edge, that only clips:
+ * the 4px track and its fill sit along the top and take the card's corners. */
 .strip {
+  position: absolute;
+  inset: 0;
+  border-radius: calc(var(--r-lg) - 1px);
+  overflow: hidden;
+  pointer-events: none;
+}
+.strip::before {
+  content: '';
   position: absolute;
   inset: 0 0 auto 0;
   height: 4px;
   background: var(--surface-3);
 }
 .stripFill {
-  display: block;
-  height: 100%;
+  position: absolute;
+  inset: 0 auto auto 0;
+  height: 4px;
   background: var(--action);
 }
 .stripFill[data-tier='good'] {
