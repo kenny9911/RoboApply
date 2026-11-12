@@ -5242,7 +5242,23 @@
       "applying": "Wird bearbeitet…",
       "inProgress": "Daran wird schon gearbeitet. Wenn in einer Minute nichts erscheint, versuch es erneut.",
       "notSaved": "Dieser Vorschlag wurde nicht zusammen mit seiner Antwort gespeichert und lässt sich deshalb nicht nutzen. Frag noch einmal nach.",
-      "waitForAnswer": "Du kannst das nutzen, sobald die Antwort fertig ist."
+      "waitForAnswer": "Du kannst das nutzen, sobald die Antwort fertig ist.",
+      "listAdd": {
+        "title": "{job} auf deine Liste setzen",
+        "body": "Es wird kein Credit verbraucht, und nichts wird vorbereitet, bis du es möchtest.",
+        "confirm": "Auf meine Liste setzen"
+      },
+      "prepare": {
+        "title": "Deine Bewerbung für {job} vorbereiten",
+        "addsToList": "Der Job kommt zuerst auf deine Liste. Dafür wird kein Credit verbraucht."
+      },
+      "applicationStatus": {
+        "title": "Deine Bewerbung für {job}",
+        "picked": "Der Job steht auf deiner Liste. Bereite die Bewerbung dort vor, wenn du so weit bist.",
+        "open": "Unter „Vorbereiten“ öffnen",
+        "unavailable": "Bewerbungen vorbereiten ist für dein Konto nicht verfügbar.",
+        "closed": "Dieser Job ist nicht mehr ausgeschrieben, deshalb wurde nichts hinzugefügt."
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -5456,7 +5472,10 @@
       "top_fit_jobs": "Deine am besten passenden Jobs werden gesucht…",
       "added_jobs": "Die von dir hinzugefügten Jobs werden angesehen…",
       "show_jobs": "Die Liste wird zusammengestellt…",
-      "similar_jobs": "Ähnliche Jobs werden gesucht…"
+      "similar_jobs": "Ähnliche Jobs werden gesucht…",
+      "application_status": "Deine Liste wird geprüft…",
+      "add_to_list": "Deine Liste wird geprüft…",
+      "prepare_application": "Es wird geprüft, was die Vorbereitung verbraucht…"
     },
     "voice": {
       "blocked": "Der Mikrofonzugriff ist in diesem Browser blockiert.",

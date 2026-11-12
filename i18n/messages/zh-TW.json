@@ -5242,7 +5242,23 @@
       "applying": "處理中…",
       "inProgress": "這件事已經在處理了。如果一分鐘後還沒有結果，請重試。",
       "notSaved": "這個建議沒有和回答一起儲存，所以無法使用。請再問一次。",
-      "waitForAnswer": "回答完成後才能使用。"
+      "waitForAnswer": "回答完成後才能使用。",
+      "listAdd": {
+        "title": "把 {job} 加入你的清單",
+        "body": "不會扣點。在你提出之前，不會準備任何內容。",
+        "confirm": "加入我的清單"
+      },
+      "prepare": {
+        "title": "為 {job} 準備應徵資料",
+        "addsToList": "會先加入你的清單，這一步不會扣點。"
+      },
+      "applicationStatus": {
+        "title": "{job} 的應徵",
+        "picked": "已在你的清單上。準備好時，可以從清單準備應徵資料。",
+        "open": "在「準備應徵」中開啟",
+        "unavailable": "你的帳號目前無法使用應徵資料準備功能。",
+        "closed": "這個職缺已不再刊登，所以沒有加入清單。"
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -5456,7 +5472,10 @@
       "top_fit_jobs": "正在找出最適合你的職缺…",
       "added_jobs": "正在查看你新增的職缺…",
       "show_jobs": "正在整理清單…",
-      "similar_jobs": "正在尋找類似的職缺…"
+      "similar_jobs": "正在尋找類似的職缺…",
+      "application_status": "正在查看你的清單…",
+      "add_to_list": "正在查看你的清單…",
+      "prepare_application": "正在確認準備會用掉的點數…"
     },
     "voice": {
       "blocked": "這個瀏覽器封鎖了麥克風的使用權限。",

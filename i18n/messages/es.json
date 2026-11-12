@@ -5242,7 +5242,23 @@
       "applying": "Trabajando en ello…",
       "inProgress": "Ya se está trabajando en esto. Si no aparece nada en un minuto, inténtalo otra vez.",
       "notSaved": "Esta sugerencia no se guardó con su respuesta, así que no se puede usar. Vuelve a preguntar.",
-      "waitForAnswer": "Podrás usar esto cuando la respuesta termine."
+      "waitForAnswer": "Podrás usar esto cuando la respuesta termine.",
+      "listAdd": {
+        "title": "Añadir {job} a tu lista",
+        "body": "No se usa ningún crédito y no se prepara nada hasta que lo pidas.",
+        "confirm": "Añadir a mi lista"
+      },
+      "prepare": {
+        "title": "Preparar tu candidatura para {job}",
+        "addsToList": "Primero se añade a tu lista. Eso no usa ningún crédito."
+      },
+      "applicationStatus": {
+        "title": "Tu candidatura para {job}",
+        "picked": "Está en tu lista. Prepárala desde allí cuando quieras.",
+        "open": "Abrir en Preparación",
+        "unavailable": "La preparación de candidaturas no está disponible para tu cuenta.",
+        "closed": "Este empleo ya no se publica, así que no se añadió nada."
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -5456,7 +5472,10 @@
       "top_fit_jobs": "Buscando los empleos que mejor encajan contigo…",
       "added_jobs": "Revisando los empleos que añadiste…",
       "show_jobs": "Armando la lista…",
-      "similar_jobs": "Buscando empleos similares…"
+      "similar_jobs": "Buscando empleos similares…",
+      "application_status": "Revisando tu lista…",
+      "add_to_list": "Revisando tu lista…",
+      "prepare_application": "Revisando lo que usa la preparación…"
     },
     "voice": {
       "blocked": "El acceso al micrófono está bloqueado en este navegador.",

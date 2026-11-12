@@ -5148,7 +5148,10 @@
       "other": "Working…",
       "added_jobs": "Looking at the jobs you added…",
       "similar_jobs": "Looking for similar jobs…",
-      "show_jobs": "Putting the list together…"
+      "show_jobs": "Putting the list together…",
+      "application_status": "Checking your list…",
+      "add_to_list": "Checking your list…",
+      "prepare_application": "Checking what preparing uses…"
     },
     "errors": {
       "credits_exhausted": "No Assistant messages left today.",
@@ -5522,7 +5525,23 @@
       "applying": "Working on it…",
       "inProgress": "This is already being worked on. If nothing shows up in a minute, try again.",
       "waitForAnswer": "You can use this once the answer is finished.",
-      "notSaved": "This suggestion was not saved with its answer, so it cannot be used. Ask again."
+      "notSaved": "This suggestion was not saved with its answer, so it cannot be used. Ask again.",
+      "listAdd": {
+        "title": "Put {job} on your list",
+        "body": "No credit is used, and nothing is prepared until you ask.",
+        "confirm": "Add to my list"
+      },
+      "prepare": {
+        "title": "Prepare your application for {job}",
+        "addsToList": "It goes on your list first. That uses no credit."
+      },
+      "applicationStatus": {
+        "title": "Your application for {job}",
+        "picked": "It's on your list. Prepare it from there when you're ready.",
+        "open": "Open it in Getting ready",
+        "unavailable": "Preparing applications isn't available for your account.",
+        "closed": "This job is no longer listed, so nothing was added."
+      }
     },
     "memory": {
       "title": "What the Assistant remembers",

@@ -7652,7 +7652,23 @@
       "applying": "正在处理…",
       "inProgress": "这件事已经在处理了。如果一分钟后还没有结果，请重试。",
       "notSaved": "这条建议没有和回答一起保存，所以无法使用。请重新提问。",
-      "waitForAnswer": "回答完成后才能使用。"
+      "waitForAnswer": "回答完成后才能使用。",
+      "listAdd": {
+        "title": "把 {job} 加入你的列表",
+        "body": "不消耗额度。你提出之前，不会准备任何内容。",
+        "confirm": "加入我的列表"
+      },
+      "prepare": {
+        "title": "为 {job} 准备申请材料",
+        "addsToList": "会先加入你的列表，这一步不消耗额度。"
+      },
+      "applicationStatus": {
+        "title": "{job} 的申请",
+        "picked": "已在你的列表中。准备好后，可以在列表里准备申请材料。",
+        "open": "在“待投递”中打开",
+        "unavailable": "你的账号暂时无法使用申请材料准备功能。",
+        "closed": "这个职位已下架，所以没有加入列表。"
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -7866,7 +7882,10 @@
       "top_fit_jobs": "正在找最适合你的职位…",
       "added_jobs": "正在查看你添加的职位…",
       "show_jobs": "正在整理列表…",
-      "similar_jobs": "正在查找相似职位…"
+      "similar_jobs": "正在查找相似职位…",
+      "application_status": "正在查看你的列表…",
+      "add_to_list": "正在查看你的列表…",
+      "prepare_application": "正在核对准备所需的额度…"
     },
     "voice": {
       "blocked": "这个浏览器阻止了麦克风访问。",

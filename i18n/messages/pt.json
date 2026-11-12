@@ -5242,7 +5242,23 @@
       "applying": "Trabalhando nisso…",
       "inProgress": "Isso já está sendo feito. Se nada aparecer em um minuto, tente de novo.",
       "notSaved": "Esta sugestão não foi salva com a resposta, então não pode ser usada. Pergunte de novo.",
-      "waitForAnswer": "Você pode usar isto quando a resposta terminar."
+      "waitForAnswer": "Você pode usar isto quando a resposta terminar.",
+      "listAdd": {
+        "title": "Colocar {job} na sua lista",
+        "body": "Nenhum crédito é usado, e nada é preparado até você pedir.",
+        "confirm": "Adicionar à minha lista"
+      },
+      "prepare": {
+        "title": "Preparar sua candidatura para {job}",
+        "addsToList": "Primeiro a vaga entra na sua lista. Isso não usa crédito."
+      },
+      "applicationStatus": {
+        "title": "Sua candidatura para {job}",
+        "picked": "Está na sua lista. Prepare a candidatura por lá quando quiser.",
+        "open": "Abrir em “Ficando prontas”",
+        "unavailable": "A preparação de candidaturas não está disponível para a sua conta.",
+        "closed": "Esta vaga não está mais anunciada, então nada foi adicionado."
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -5456,7 +5472,10 @@
       "top_fit_jobs": "Procurando as vagas que mais combinam com você…",
       "added_jobs": "Olhando as vagas que você adicionou…",
       "show_jobs": "Montando a lista…",
-      "similar_jobs": "Procurando vagas parecidas…"
+      "similar_jobs": "Procurando vagas parecidas…",
+      "application_status": "Verificando sua lista…",
+      "add_to_list": "Verificando sua lista…",
+      "prepare_application": "Verificando o que a preparação usa…"
     },
     "voice": {
       "blocked": "O acesso ao microfone está bloqueado neste navegador.",

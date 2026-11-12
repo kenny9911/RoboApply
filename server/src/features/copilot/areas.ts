@@ -23,6 +23,7 @@
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { cnRecruitmentInfoMode } from '../../platform/flags.js';
+import { HttpError } from '../../platform/http.js';
 import type { FitFunctions, MatchFitView } from '../match/index.js';
 import type { JobDetailService, SimilarJobsResponse } from '../jobs/detail/index.js';
 import type { CopilotAreas } from './types.js';
@@ -251,6 +252,27 @@ export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
         idempotencyKey: input.idempotencyKey,
         locale: input.locale,
       });
+    },
+    // The applications agent, through its public surface (`agentService`): the same list, credit
+    // rules, weekly allowance and states as the "Prepare application" button on the web.
+    async jobPlaces(userId, jobIds) {
+      const { agentService } = await import('../agent/index.js');
+      return agentService.jobPlaces(userId, jobIds);
+    },
+    async prepareQuote(userId, jobId) {
+      const { agentService } = await import('../agent/index.js');
+      return agentService.quoteJob(userId, jobId);
+    },
+    async addToList(userId, jobId) {
+      const { agentService } = await import('../agent/index.js');
+      const { items } = await agentService.addToQueue(userId, { jobIds: [jobId], addedVia: 'copilot' });
+      const item = items.find((i) => i.jobId === jobId);
+      if (!item) throw new HttpError('not_found', 'Job not found.', { reason: 'job_not_found' });
+      return item;
+    },
+    async prepareApplication(userId, queueItemId, idempotencyKey) {
+      const { agentService } = await import('../agent/index.js');
+      return agentService.prepare(userId, [queueItemId], { idempotencyKey });
     },
   };
 }

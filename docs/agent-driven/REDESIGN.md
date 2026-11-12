@@ -137,7 +137,7 @@ Built on `feat/agent-driven`, checked in the fixture preview (`node scripts/desi
 | Jobs: search collapsed to one line, card and job page lead with `Prepare application` | built | `components/features/filters/SearchSummary.tsx`, `components/features/feed`, `components/features/job/JobDetailPanel.tsx` |
 | Applications: Getting ready · Sent switch | built | `components/features/tracker/ApplicationsSwitch.tsx` |
 | Translations | all nine locales | `i18n/messages/*.json` (129 strings) |
-| Assistant tools that add to the list and prepare | not built | needs new copilot tools on the server |
+| Assistant tools that add to the list and prepare | built (capability `agent`) | `application_status`, `add_to_list`, `prepare_application` in `server/src/features/copilot/tools/applications.ts`, applied in `proposals.ts` through the agent's `addToQueue` / `prepare` (kit reservation keyed `copilot:<proposalId>`); the cost on the card is the agent's `quoteJob`, the cost sheet's own lines; cards `ListAddCard`, `PrepareApplicationCard`, `ApplicationStatusCard` in `components/features/copilot/cards` |
 | Preparing the weekly list with no tap | not built | spends credits without a confirmation: an owner decision |
 | A first-class "target company" | not built | companies stay a list inside the saved search |
 

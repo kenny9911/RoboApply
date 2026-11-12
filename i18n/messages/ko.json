@@ -5242,7 +5242,23 @@
       "applying": "처리하는 중…",
       "inProgress": "이미 처리 중이에요. 1분이 지나도 아무것도 나타나지 않으면 다시 시도해 주세요.",
       "notSaved": "이 제안은 답변과 함께 저장되지 않아서 사용할 수 없어요. 다시 물어봐 주세요.",
-      "waitForAnswer": "답변이 끝나면 사용할 수 있어요."
+      "waitForAnswer": "답변이 끝나면 사용할 수 있어요.",
+      "listAdd": {
+        "title": "{job} 공고를 내 목록에 추가",
+        "body": "크레딧은 사용하지 않아요. 요청하기 전에는 아무것도 준비하지 않아요.",
+        "confirm": "내 목록에 추가하기"
+      },
+      "prepare": {
+        "title": "{job} 지원서 준비하기",
+        "addsToList": "먼저 내 목록에 추가해요. 추가에는 크레딧이 들지 않아요."
+      },
+      "applicationStatus": {
+        "title": "{job} 지원서",
+        "picked": "내 목록에 있어요. 준비되면 목록에서 지원서를 준비하세요.",
+        "open": "‘지원 준비’에서 열기",
+        "unavailable": "이 계정에서는 지원서 준비를 사용할 수 없어요.",
+        "closed": "이 공고는 게시가 종료돼서 목록에 추가하지 않았어요."
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -5456,7 +5472,10 @@
       "top_fit_jobs": "가장 잘 맞는 공고를 찾는 중…",
       "added_jobs": "내가 추가한 공고를 보는 중…",
       "show_jobs": "목록을 만드는 중…",
-      "similar_jobs": "비슷한 공고를 찾는 중…"
+      "similar_jobs": "비슷한 공고를 찾는 중…",
+      "application_status": "내 목록을 확인하는 중…",
+      "add_to_list": "내 목록을 확인하는 중…",
+      "prepare_application": "준비에 드는 크레딧을 확인하는 중…"
     },
     "voice": {
       "blocked": "이 브라우저에서 마이크 사용이 차단돼 있어요.",

@@ -56,6 +56,9 @@ import {
   type AnswerBankItemView,
   type CalibrationEntry,
   type GenerateListResponse,
+  type JobPlacesResponse,
+  type JobPlaceView,
+  type JobPrepareQuote,
   type KitEventDetail,
   type KitEventView,
   type OpenApplicationResponse,
@@ -92,6 +95,7 @@ import {
   QUEUE_SELECT,
   isJobClosed,
   itemOrThrow,
+  jobSummary,
   readCalibration,
   readDetail,
   recordKitNote,
@@ -932,7 +936,104 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
 
   // ── Prepare (F-AGENT-10: the cost before the work) ─────────────────────
 
-  async function prepare(userId: string, ids: string[], confirm: boolean): Promise<PrepareProposal> {
+  /**
+   * What preparing these kits uses: one `ready_kits` credit each (the weekly
+   * allowance), one `tailor` credit each when AI is on and the settings tailor
+   * each kit, and one `cover_letter` credit for each kit with no letter yet
+   * whose post asks for one (or always, by the settings). With what is left of
+   * each, and the first line that does not fit (`short`). One rule for
+   * `prepare` and `quoteJob`, so the Assistant's card states what the cost
+   * sheet states.
+   */
+  async function costOf(
+    userId: string,
+    settings: AgentSettings,
+    ai: boolean,
+    targets: ReadonlyArray<{ coverLetterId: string | null; job: JobRow }>,
+  ): Promise<{ credits: PrepareCreditLine[]; short: PrepareCreditLine | null; usage: CreditUsage }> {
+    const tailorCost = ai && settings.tailorEach ? targets.length : 0;
+    const letterCost = ai
+      ? targets.filter((t) => !t.coverLetterId && letterNeeded(settings.coverLetterMode, postAsksForCoverLetter(t.job.descriptionPlain, t.job.qualifications))).length
+      : 0;
+    const usage = await deps.creditUsage(userId);
+    const line = (bucket: PrepareCreditLine['bucket'], cost: number): PrepareCreditLine => creditLine(usage, bucket, cost);
+    const credits: PrepareCreditLine[] = [line('ready_kits', targets.length)];
+    if (tailorCost) credits.push(line('tailor', tailorCost));
+    if (letterCost) credits.push(line('cover_letter', letterCost));
+    return { credits, short: credits.find((c) => typeof c.remaining === 'number' && c.cost > c.remaining) ?? null, usage };
+  }
+
+  /**
+   * Where jobs stand on the user's list, for a reader that holds job ids (the
+   * Assistant): each job as the list shows it (null when it cannot go on this
+   * user's list) and its list item (null when it is not on it), plus whether
+   * the list has room for another job. Read only: no posting check, no
+   * expiry, no fit (the list's own reads do those).
+   */
+  async function jobPlaces(userId: string, jobIds: readonly string[]): Promise<JobPlacesResponse> {
+    const db = await deps.getDb();
+    const { places, listFull } = await placesOf(db, userId, jobIds);
+    return { items: places.map((p) => p.view), listFull };
+  }
+
+  /** `jobPlaces` with the rows behind each view (the job row the cost reads, and the list item's row). */
+  async function placesOf(
+    db: AgentDb,
+    userId: string,
+    jobIds: readonly string[],
+  ): Promise<{ places: Array<{ view: JobPlaceView; job: JobRow | null; row: QueueRow | null }>; listFull: boolean }> {
+    const ids = [...new Set(jobIds)];
+    const jobs = await visibleJobs(db, userId, ids);
+    const rows = ids.length ? ((await db.rAAgentQueueItem.findMany({ where: { userId, jobId: { in: ids } }, select: QUEUE_SELECT })) as QueueRow[]) : [];
+    const byJob = new Map(rows.map((r) => [r.jobId, r]));
+    const listFull = (await activeCount(db, userId)) >= MAX_ACTIVE_QUEUE_ITEMS;
+    const places = ids.map((jobId) => {
+      const job = jobs.get(jobId) ?? null;
+      // An item whose job this user can no longer see is not shown (the list's own rule, `views`).
+      const row = job ? (byJob.get(jobId) ?? null) : null;
+      return { view: { jobId, job: jobSummary(job), item: row && job ? toQueueView(row, job) : null }, job, row };
+    });
+    return { places, listFull };
+  }
+
+  /**
+   * What preparing one job's application uses, before anything is spent
+   * (F-AGENT-10), whether or not the job is on the list yet: for its list item
+   * exactly what `prepare` without `confirm` answers, else for the job as
+   * `addToQueue` would put it there (a new item has no letter yet). A job that
+   * cannot be prepared from here (not on this user's list, closed, or past
+   * "To prepare") gets no proposal. Read only.
+   */
+  async function quoteJob(userId: string, jobId: string): Promise<JobPrepareQuote> {
+    const db = await deps.getDb();
+    const { places, listFull } = await placesOf(db, userId, [jobId]);
+    const { view, job, row } = places[0] ?? { view: { jobId, job: null, item: null }, job: null, row: null };
+    const settings = settingsFromRow(await settingsRow(db, userId));
+    const out: JobPrepareQuote = { ...view, listFull, tailorEach: settings.tailorEach, proposal: null };
+    const preparable = !row || (PREPARABLE_STATES as readonly string[]).includes(row.state);
+    if (!job || isJobClosed(job) || !preparable) return out;
+    const ai = await deps.aiAvailable(userId);
+    const cost = await costOf(userId, settings, ai, [{ coverLetterId: row?.coverLetterId ?? null, job }]);
+    out.proposal = {
+      credits: cost.credits,
+      confirmed: false,
+      enough: !cost.short,
+      aiAvailable: ai,
+      itemIds: row ? [row.id] : [],
+      notPreparable: [],
+    };
+    return out;
+  }
+
+  /**
+   * The credit proposal for these kits (`confirm` false), or the start of
+   * their preparation (`confirm` true). `idempotencyKey` (the Assistant:
+   * `copilot:<proposalId>`) names the `ready_kits` reservation of each kit
+   * after the caller's own key instead of the list's, so the action the user
+   * confirmed reserves its kit once however often it is sent; the attempt
+   * number keeps a later preparation of the same kit (after a failure) its own.
+   */
+  async function prepare(userId: string, ids: string[], confirm: boolean, options: { idempotencyKey?: string } = {}): Promise<PrepareProposal> {
     const db = await deps.getDb();
     const items = (await db.rAAgentQueueItem.findMany({ where: { userId, id: { in: [...new Set(ids)] } }, select: QUEUE_SELECT })) as QueueRow[];
     if (!items.length) throw new HttpError('not_found', 'This job is not in your Ready to apply list.', { reason: AGENT_ERROR_CODES.notFound });
@@ -946,20 +1047,14 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
       preparable.map((i) => i.jobId),
     );
     const targets = preparable.filter((i) => jobs.has(i.jobId));
-    const tailorCost = ai && settings.tailorEach ? targets.length : 0;
-    const letterCost = ai
-      ? targets.filter((i) => {
-          const j = jobs.get(i.jobId)!;
-          return !i.coverLetterId && letterNeeded(settings.coverLetterMode, postAsksForCoverLetter(j.descriptionPlain, j.qualifications));
-        }).length
-      : 0;
-
-    const usage = await deps.creditUsage(userId);
-    const line = (bucket: PrepareCreditLine['bucket'], cost: number): PrepareCreditLine => creditLine(usage, bucket, cost);
-    const credits: PrepareCreditLine[] = [line('ready_kits', targets.length)];
-    if (tailorCost) credits.push(line('tailor', tailorCost));
-    if (letterCost) credits.push(line('cover_letter', letterCost));
-    const short = credits.find((c) => typeof c.remaining === 'number' && c.cost > c.remaining);
+    const { credits, short, usage } = await costOf(
+      userId,
+      settings,
+      ai,
+      targets.map((i) => ({ coverLetterId: i.coverLetterId, job: jobs.get(i.jobId)! })),
+    );
+    const tailorCost = credits.find((c) => c.bucket === 'tailor')?.cost ?? 0;
+    const letterCost = credits.find((c) => c.bucket === 'cover_letter')?.cost ?? 0;
     const proposal: PrepareProposal = {
       credits,
       confirmed: false,
@@ -981,8 +1076,9 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     for (const item of targets) {
       const attempt = (await db.rAAgentKitEvent.count({ where: { queueItemId: item.id, toState: 'preparing' } })) + 1;
       let reservation: { id: string; replayed: boolean } | null = null;
+      const reservationKey = options.idempotencyKey ? `${options.idempotencyKey}:${item.id}:${attempt}` : `ready_kit:${item.id}:${attempt}`;
       try {
-        reservation = await deps.reserveKit(userId, `ready_kit:${item.id}:${attempt}`, item.id);
+        reservation = await deps.reserveKit(userId, reservationKey, item.id);
       } catch (err) {
         if (started.length) break; // a race used the last kit credit: keep what started
         throw err;
@@ -1665,6 +1761,8 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     saveToMain,
     listQueue,
     addToQueue,
+    jobPlaces,
+    quoteJob,
     badge,
     history,
     detail,

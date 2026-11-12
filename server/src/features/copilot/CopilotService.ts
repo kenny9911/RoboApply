@@ -227,6 +227,7 @@ export class CopilotService {
       hasConsent: deps.hasConsent,
       newCardId: this.newCardId,
       turnUnsaved: (messageId) => this.unsavedTurns.has(messageId),
+      isEnabled: (key, userId) => deps.isEnabled(key, userId),
     });
   }
 
@@ -545,7 +546,7 @@ export class CopilotService {
 
     const tools = await availableTools(spec.scope, toolCtx);
     const llmTools = toLlmTools(tools);
-    const sys = systemPrompt({ brand, locale: spec.locale, today, scope: spec.scope });
+    const sys = systemPrompt({ brand, locale: spec.locale, today, scope: spec.scope, tools: tools.map((t) => t.name) });
     const ctxMsg = contextMessage(blocks);
     const hint = chipHint(spec.chip as never);
     const userText = redactUserText(spec.text, [knownName]);

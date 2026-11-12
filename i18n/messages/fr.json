@@ -5242,7 +5242,23 @@
       "applying": "En cours…",
       "inProgress": "C’est déjà en cours. Si rien n’apparaît dans une minute, réessaie.",
       "notSaved": "Cette suggestion n’a pas été enregistrée avec sa réponse, elle ne peut donc pas être utilisée. Redemande.",
-      "waitForAnswer": "Tu pourras l’utiliser quand la réponse sera terminée."
+      "waitForAnswer": "Tu pourras l’utiliser quand la réponse sera terminée.",
+      "listAdd": {
+        "title": "Ajouter {job} à ta liste",
+        "body": "Aucun crédit n’est utilisé, et rien n’est préparé tant que tu ne le demandes pas.",
+        "confirm": "Ajouter à ma liste"
+      },
+      "prepare": {
+        "title": "Préparer ta candidature pour {job}",
+        "addsToList": "L’offre est d’abord ajoutée à ta liste. Cela n’utilise aucun crédit."
+      },
+      "applicationStatus": {
+        "title": "Ta candidature pour {job}",
+        "picked": "L’offre est dans ta liste. Prépare la candidature depuis la liste quand tu veux.",
+        "open": "Ouvrir dans « Préparation »",
+        "unavailable": "La préparation des candidatures n’est pas disponible pour ton compte.",
+        "closed": "Cette offre n’est plus publiée, donc rien n’a été ajouté."
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -5456,7 +5472,10 @@
       "top_fit_jobs": "Recherche des offres qui te correspondent le mieux…",
       "added_jobs": "Consultation des offres que tu as ajoutées…",
       "show_jobs": "Préparation de la liste…",
-      "similar_jobs": "Recherche d’offres similaires…"
+      "similar_jobs": "Recherche d’offres similaires…",
+      "application_status": "Vérification de ta liste…",
+      "add_to_list": "Vérification de ta liste…",
+      "prepare_application": "Vérification de ce que la préparation utilise…"
     },
     "voice": {
       "blocked": "L’accès au micro est bloqué dans ce navigateur.",
