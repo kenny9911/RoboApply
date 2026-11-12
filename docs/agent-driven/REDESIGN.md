@@ -131,8 +131,8 @@ Built on `feat/agent-driven`, checked in the fixture preview (`node scripts/desi
 | Part | State | Where |
 |---|---|---|
 | Shared `PrepareApplicationButton` | built | `components/features/agent/PrepareApplicationButton.tsx` |
-| Navigation: Today first and home, Ready folded into Applications, Profile in the lower group | built | `components/v3/shell/destinations.ts`, `lib/proxyPaths.ts`, `lib/auth/signInRoute.ts`, `next.config.mjs` (`/home` → `/today`), server `homeRoute()` |
-| `/today` | built | `app/(auth)/today`, `components/features/today`, `hooks/today` |
+| Navigation: the home first (Today, then the Dashboard after §11), Ready folded into Applications, Profile in the lower group | built | `components/v3/shell/destinations.ts`, `lib/proxyPaths.ts`, `lib/auth/signInRoute.ts`, `next.config.mjs` (`/home` and `/today` → `/dashboard`), server `homeRoute()` |
+| The desk (first `/today`, now drawn inside `/dashboard`, §11) | built | `components/features/today` (`TodayDesk variant="dashboard"`), `components/features/dashboard`, `hooks/today` |
 | `/onboarding/start` (resume first, two screens) | built, RoboApply | `components/features/onboarding/express`, `hooks/onboarding/useExpressOnboarding.ts` |
 | Jobs: search collapsed to one line, card and job page lead with `Prepare application` | built | `components/features/filters/SearchSummary.tsx`, `components/features/feed`, `components/features/job/JobDetailPanel.tsx` |
 | Applications: Getting ready · Sent switch | built | `components/features/tracker/ApplicationsSwitch.tsx` |
