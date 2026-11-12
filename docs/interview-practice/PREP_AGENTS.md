@@ -27,6 +27,14 @@ with 20 as the default.
 5. **Start.** The session keeps the plan; the questions, the live interviewer, the
    written fallback, the live coach and the report all follow it.
 
+At desktop widths (≥1100px) the setup is two columns, after resume.io's interview
+prep start screen: steps 1–4 on the left, and on the right a sticky panel
+(`components/v3/mock/PracticeSidePanel.tsx`) that says how a practice works and
+lists the recent practices until a job is chosen, then sums up the job, the
+company's style, the interviewer, the focus and the length above Start. Below
+1100px the panel follows the form and the summary is a bar pinned to the bottom
+of the screen.
+
 ## Architecture
 
 ```

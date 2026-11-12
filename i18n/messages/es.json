@@ -1301,7 +1301,7 @@
         "noMatch": "Ningún puesto coincide con «{query}». Prueba con una palabra más corta o pega el anuncio.",
         "planLegend": "Tu entrevista",
         "planHint": "Ajustada al puesto. Cambia lo que quieras.",
-        "pickRoleFirst": "Elige arriba un puesto para empezar.",
+        "pickRoleFirst": "Elige un puesto para empezar.",
         "chip": {
           "focus": "Enfoque",
           "mode": "Formato",
@@ -1315,6 +1315,35 @@
         "useShorter": "Usar {minutes} min",
         "previewToggle": "Ver qué podrían preguntarte",
         "costShort": "{n, plural, one {# crédito} other {# créditos}} — más de los que tienes"
+      },
+      "side": {
+        "howTitle": "Cómo funciona una práctica",
+        "steps": {
+          "job": {
+            "title": "Elige el puesto",
+            "body": "Busca empleos abiertos, explora un sector o pega un anuncio. Indicar la empresa es opcional."
+          },
+          "plan": {
+            "title": "Recibe un plan para ese puesto",
+            "body": "Quiénes te entrevistarían para este puesto y qué evalúan, y cómo entrevista la empresa si la nombras. Puedes cambiar todo."
+          },
+          "interview": {
+            "title": "Practica en voz alta",
+            "body": "Quien entrevista pregunta en voz alta y tú respondes hablando, con una transcripción en vivo en pantalla."
+          },
+          "written": {
+            "title": "Responde por escrito",
+            "body": "Las preguntas llegan de una en una y respondes cada una por escrito."
+          },
+          "report": {
+            "title": "Lee el informe",
+            "body": "Una puntuación, lo que funcionó y lo que hay que corregir, para que sepas qué practicar después."
+          }
+        },
+        "summaryTitle": "Tu práctica",
+        "planPending": "Quién entrevista, el enfoque y la duración aparecen aquí cuando el plan esté listo.",
+        "basisSources": "De fuentes públicas",
+        "basisGeneral": "Lo habitual en empresas similares"
       },
       "loading": "Cargando la práctica…",
       "startError": "Esa entrevista no se pudo empezar. Inténtalo otra vez.",

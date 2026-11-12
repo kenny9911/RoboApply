@@ -1301,7 +1301,7 @@
         "noMatch": "沒有職務符合「{query}」。換個短一點的詞，或直接貼上職缺說明。",
         "planLegend": "你的這場面試",
         "planHint": "已照職缺配好，哪一項都能改。",
-        "pickRoleFirst": "先在上面選一個職缺。",
+        "pickRoleFirst": "先選一個職缺。",
         "chip": {
           "focus": "重點",
           "mode": "形式",
@@ -1315,6 +1315,35 @@
         "useShorter": "改成 {minutes} 分鐘",
         "previewToggle": "預覽面試可能會問的問題",
         "costShort": "{n, plural, other {# 點}} —— 比你現有的點數多"
+      },
+      "side": {
+        "howTitle": "練習怎麼進行",
+        "steps": {
+          "job": {
+            "title": "選職缺",
+            "body": "搜尋招募中的職缺、依產業瀏覽，或貼上職缺說明。目標公司選填。"
+          },
+          "plan": {
+            "title": "拿到這個職缺的安排",
+            "body": "這個職缺會有哪些面試官、各自看什麼；填了公司，還會寫出這家公司怎麼面試。哪一項都能改。"
+          },
+          "interview": {
+            "title": "開口練習",
+            "body": "面試官用語音提問，你開口回答，畫面上即時顯示逐字稿。"
+          },
+          "written": {
+            "title": "用文字作答",
+            "body": "題目一題一題出現，你逐題用文字回答。"
+          },
+          "report": {
+            "title": "看報告",
+            "body": "看分數、做得好的地方和要改的地方，知道下一步該練什麼。"
+          }
+        },
+        "summaryTitle": "你的這場練習",
+        "planPending": "安排好之後，面試官、重點和長度會顯示在這裡。",
+        "basisSources": "來自公開資料",
+        "basisGeneral": "同類公司的常見做法"
       },
       "loading": "正在載入面試準備…",
       "startError": "這場面試沒有開始成功。請重試。",

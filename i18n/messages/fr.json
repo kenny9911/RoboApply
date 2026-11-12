@@ -1301,7 +1301,7 @@
         "noMatch": "Aucun poste ne correspond à « {query} ». Essaie un mot plus court ou colle l’annonce.",
         "planLegend": "Ton entretien",
         "planHint": "Adapté au poste. Change ce que tu veux.",
-        "pickRoleFirst": "Choisis un poste ci-dessus pour commencer.",
+        "pickRoleFirst": "Choisis un poste pour commencer.",
         "chip": {
           "focus": "Thèmes",
           "mode": "Format",
@@ -1315,6 +1315,35 @@
         "useShorter": "Passer à {minutes} min",
         "previewToggle": "Voir les questions possibles",
         "costShort": "{n, plural, one {# crédit} other {# crédits}} — plus que tu n’en as"
+      },
+      "side": {
+        "howTitle": "Comment se déroule un entraînement",
+        "steps": {
+          "job": {
+            "title": "Choisis le poste",
+            "body": "Cherche des offres, parcours un secteur ou colle une annonce. Indiquer l’entreprise est facultatif."
+          },
+          "plan": {
+            "title": "Reçois un plan pour ce poste",
+            "body": "Les interlocuteurs de ce poste et ce qu’ils évaluent, plus la façon dont l’entreprise recrute si tu la nommes. Tu peux tout changer."
+          },
+          "interview": {
+            "title": "Entraîne-toi à voix haute",
+            "body": "L’interlocuteur pose ses questions à voix haute et tu réponds à l’oral, avec une transcription en direct à l’écran."
+          },
+          "written": {
+            "title": "Réponds par écrit",
+            "body": "Les questions arrivent une par une et tu réponds à chacune par écrit."
+          },
+          "report": {
+            "title": "Lis le compte rendu",
+            "body": "Un score, ce qui a marché et ce qu’il faut corriger, pour savoir quoi travailler ensuite."
+          }
+        },
+        "summaryTitle": "Ton entraînement",
+        "planPending": "L’interlocuteur, les thèmes et la durée s’affichent ici dès que le plan est prêt.",
+        "basisSources": "D’après des sources publiques",
+        "basisGeneral": "Pratique courante dans les entreprises comparables"
       },
       "loading": "Chargement de l’entraînement…",
       "startError": "Cet entretien n’a pas pu démarrer. Réessaie.",

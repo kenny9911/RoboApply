@@ -1301,7 +1301,7 @@
         "noMatch": "没有职位匹配“{query}”。换个更短的词，或者直接粘贴职位描述。",
         "planLegend": "你的这场面试",
         "planHint": "已按职位配好，哪项都能改。",
-        "pickRoleFirst": "先在上面选一个职位。",
+        "pickRoleFirst": "先选一个职位。",
         "chip": {
           "focus": "重点",
           "mode": "形式",
@@ -1315,6 +1315,35 @@
         "useShorter": "改成 {minutes} 分钟",
         "previewToggle": "预览可能会问的问题",
         "costShort": "{n, plural, other {# 个额度}} —— 超出你现有的额度"
+      },
+      "side": {
+        "howTitle": "练习怎么进行",
+        "steps": {
+          "job": {
+            "title": "选职位",
+            "body": "搜索在招职位、按行业浏览，或粘贴职位描述。目标公司选填。"
+          },
+          "plan": {
+            "title": "拿到这个职位的方案",
+            "body": "这个职位会有哪些面试官、各自考察什么；填了公司，还会写明这家公司怎么面试。哪项都能改。"
+          },
+          "interview": {
+            "title": "开口练",
+            "body": "面试官用语音提问，你开口回答，屏幕上实时显示文字记录。"
+          },
+          "written": {
+            "title": "用文字作答",
+            "body": "问题逐个出现，你逐题用文字回答。"
+          },
+          "report": {
+            "title": "看报告",
+            "body": "看得分、做得好的地方和要改的地方，知道下一步该练什么。"
+          }
+        },
+        "summaryTitle": "你的这场练习",
+        "planPending": "方案准备好后，面试官、重点和时长会显示在这里。",
+        "basisSources": "来自公开资料",
+        "basisGeneral": "同类公司的常见做法"
       },
       "loading": "正在加载面试准备…",
       "startError": "这场面试没有开始成功。请重试。",

@@ -1301,7 +1301,7 @@
         "noMatch": "No role matches “{query}”. Try a shorter word, or paste the job post instead.",
         "planLegend": "Your interview",
         "planHint": "Matched to the role. Change anything.",
-        "pickRoleFirst": "Pick a job above to begin.",
+        "pickRoleFirst": "Pick a job to begin.",
         "chip": {
           "focus": "Focus",
           "mode": "Format",
@@ -1315,6 +1315,35 @@
         "costShort": "{n, plural, one {# credit} other {# credits}} — more than you have",
         "useShorter": "Use {minutes} min instead",
         "previewToggle": "Preview what you may be asked"
+      },
+      "side": {
+        "howTitle": "How a practice works",
+        "steps": {
+          "job": {
+            "title": "Choose the job",
+            "body": "Search open jobs, browse an industry or paste a job post. Naming the company is optional."
+          },
+          "plan": {
+            "title": "Get a plan for it",
+            "body": "The interviewers for this job and what they test, plus how the company interviews when you name it. Change any of it."
+          },
+          "interview": {
+            "title": "Practice out loud",
+            "body": "The interviewer asks by voice and you answer by speaking, with a live transcript on screen."
+          },
+          "written": {
+            "title": "Answer in writing",
+            "body": "The questions come one at a time, and you answer each one in writing."
+          },
+          "report": {
+            "title": "Read the report",
+            "body": "A score, what worked and what to fix, so you know what to practice next."
+          }
+        },
+        "summaryTitle": "Your practice",
+        "planPending": "The interviewer, focus and length show here once the plan is ready.",
+        "basisSources": "From public sources",
+        "basisGeneral": "Usual practice for companies like it"
       },
       "loading": "Loading interview prep…",
       "startError": "That interview could not be started. Try again.",

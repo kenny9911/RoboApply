@@ -1301,7 +1301,7 @@
         "noMatch": "Kein Job passt zu „{query}“. Probier ein kürzeres Wort oder füg die Stellenanzeige ein.",
         "planLegend": "Dein Gespräch",
         "planHint": "Auf den Job abgestimmt. Änder, was du willst.",
-        "pickRoleFirst": "Wähl oben einen Job, dann geht’s los.",
+        "pickRoleFirst": "Wähl einen Job, dann geht’s los.",
         "chip": {
           "focus": "Schwerpunkt",
           "mode": "Format",
@@ -1315,6 +1315,35 @@
         "useShorter": "Lieber {minutes} Min.",
         "previewToggle": "Vorschau auf mögliche Fragen",
         "costShort": "{n, plural, one {# Credit} other {# Credits}} — mehr, als du hast"
+      },
+      "side": {
+        "howTitle": "So läuft ein Übungsgespräch ab",
+        "steps": {
+          "job": {
+            "title": "Job wählen",
+            "body": "Such nach offenen Stellen, stöbere in einer Branche oder füg eine Stellenanzeige ein. Das Unternehmen kannst du angeben, musst du aber nicht."
+          },
+          "plan": {
+            "title": "Plan bekommen",
+            "body": "Die Gesprächspersonen für diesen Job und was sie prüfen – und, wenn du das Unternehmen nennst, wie es Gespräche führt. Alles lässt sich ändern."
+          },
+          "interview": {
+            "title": "Laut üben",
+            "body": "Die Gesprächsperson fragt per Stimme, du antwortest mündlich, und auf dem Bildschirm läuft eine Live-Mitschrift mit."
+          },
+          "written": {
+            "title": "Schriftlich antworten",
+            "body": "Die Fragen kommen einzeln, und du beantwortest jede schriftlich."
+          },
+          "report": {
+            "title": "Bericht lesen",
+            "body": "Eine Punktzahl, was funktioniert hat und was du ändern solltest – so weißt du, was du als Nächstes übst."
+          }
+        },
+        "summaryTitle": "Dein Übungsgespräch",
+        "planPending": "Gesprächsperson, Schwerpunkt und Länge erscheinen hier, sobald der Plan steht.",
+        "basisSources": "Aus öffentlichen Quellen",
+        "basisGeneral": "Üblich bei vergleichbaren Unternehmen"
       },
       "loading": "Vorbereitung wird geladen…",
       "startError": "Dieses Gespräch konnte nicht gestartet werden. Versuch es erneut.",

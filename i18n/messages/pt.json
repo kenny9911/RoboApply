@@ -1301,7 +1301,7 @@
         "noMatch": "Nenhum cargo corresponde a “{query}”. Tente uma palavra mais curta ou cole o anúncio da vaga.",
         "planLegend": "Sua entrevista",
         "planHint": "Ajustada à vaga. Mude o que quiser.",
-        "pickRoleFirst": "Escolha uma vaga acima para começar.",
+        "pickRoleFirst": "Escolha uma vaga para começar.",
         "chip": {
           "focus": "Foco",
           "mode": "Formato",
@@ -1315,6 +1315,35 @@
         "useShorter": "Usar {minutes} min",
         "previewToggle": "Ver o que podem perguntar",
         "costShort": "{n, plural, one {# crédito} other {# créditos}} — mais do que você tem"
+      },
+      "side": {
+        "howTitle": "Como funciona um treino",
+        "steps": {
+          "job": {
+            "title": "Escolha a vaga",
+            "body": "Busque vagas abertas, explore um setor ou cole um anúncio. Informar a empresa é opcional."
+          },
+          "plan": {
+            "title": "Receba um plano para a vaga",
+            "body": "Quem entrevistaria você para esta vaga e o que avalia, e como a empresa entrevista, se você disser qual é. Dá para mudar tudo."
+          },
+          "interview": {
+            "title": "Treine em voz alta",
+            "body": "Quem entrevista pergunta em voz alta e você responde falando, com uma transcrição ao vivo na tela."
+          },
+          "written": {
+            "title": "Responda por escrito",
+            "body": "As perguntas chegam uma de cada vez, e você responde cada uma por escrito."
+          },
+          "report": {
+            "title": "Leia o relatório",
+            "body": "Uma pontuação, o que funcionou e o que corrigir, para você saber o que treinar em seguida."
+          }
+        },
+        "summaryTitle": "Seu treino",
+        "planPending": "Quem entrevista, o foco e a duração aparecem aqui assim que o plano estiver pronto.",
+        "basisSources": "De fontes públicas",
+        "basisGeneral": "O que costuma acontecer em empresas parecidas"
       },
       "loading": "Carregando a preparação…",
       "startError": "Essa entrevista não pôde começar. Tente de novo.",
