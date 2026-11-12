@@ -1,12 +1,12 @@
-// components/features/today — /today, the signed-in home ("the desk";
-// docs/agent-driven/REDESIGN.md §5). Other areas import from here only.
+// components/features/today — the agent desk ("the desk";
+// docs/agent-driven/REDESIGN.md §5). The signed-in home is the Dashboard
+// (components/features/dashboard), which gathers the reads (hooks/today) and
+// draws the desk with `variant="dashboard"`. Other areas import from here only.
 //
-//   TodayPage    the route body: gathers the reads (hooks/today) and draws the desk
-//   TodayDesk    the desk itself, from the reads it is handed (tests, previews)
+//   TodayDesk    the desk itself, from the reads it is handed (Dashboard, tests, previews)
 //   todayModel   pure: what waits (order, cap), the title, the counts, the goal line
 
-export { TodayPage } from './TodayPage';
-export { TodayDesk, type TodayDeskProps } from './TodayDesk';
+export { TodayDesk, type TodayDeskProps, type DeskGoalsContext } from './TodayDesk';
 export { WaitingList, waitingHref, PICKS_ANCHOR, type WaitingListProps } from './WaitingList';
 export { JobSearchLane, jobHref, shownPicks, useHeldPicks, type JobSearchLaneProps } from './JobSearchLane';
 export { ApplicationsLane, type ApplicationsLaneProps } from './ApplicationsLane';

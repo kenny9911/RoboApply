@@ -13075,19 +13075,6 @@
         "body_more": "Each round sharpens your answers. Try one for another role or company.",
         "cta": "Start practicing"
       }
-    },
-    "matches": {
-      "title": "Your job matches",
-      "update_lead": "Not right?",
-      "update_link": "Update your search",
-      "loading": "Loading your matches",
-      "off": "Job listings are not available here yet.",
-      "error": "Your matches did not load.",
-      "retry": "Try again",
-      "empty_title": "No matches to show yet",
-      "empty_body": "Tell us the roles and places you want, and jobs that fit show up here.",
-      "empty_cta": "Set up your search",
-      "open_aria": "{title} at {company}"
     }
   }
 }

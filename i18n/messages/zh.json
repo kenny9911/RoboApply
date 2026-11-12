@@ -13075,19 +13075,6 @@
         "body_more": "每练一轮，回答都会更好。换个职位或公司试试。",
         "cta": "开始练习"
       }
-    },
-    "matches": {
-      "title": "为你匹配的职位",
-      "update_lead": "不合适？",
-      "update_link": "调整搜索条件",
-      "loading": "正在加载匹配的职位",
-      "off": "这里暂时还没有职位信息。",
-      "error": "匹配的职位没有加载出来。",
-      "retry": "重试",
-      "empty_title": "还没有可显示的职位",
-      "empty_body": "告诉我们你想要的职位和城市，合适的职位就会出现在这里。",
-      "empty_cta": "设置搜索",
-      "open_aria": "{company} 的 {title}"
     }
   }
 }

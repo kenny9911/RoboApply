@@ -11956,19 +11956,6 @@
         "body_more": "每練一輪，回答都會更好。換個職務或公司試試看。",
         "cta": "開始練習"
       }
-    },
-    "matches": {
-      "title": "為你配對的職缺",
-      "update_lead": "不合適？",
-      "update_link": "調整搜尋條件",
-      "loading": "正在載入配對的職缺",
-      "off": "這裡暫時還沒有職缺資訊。",
-      "error": "配對的職缺沒有載入。",
-      "retry": "重試",
-      "empty_title": "還沒有可顯示的職缺",
-      "empty_body": "告訴我們你想要的職務和地點，合適的職缺就會出現在這裡。",
-      "empty_cta": "設定搜尋",
-      "open_aria": "{company} 的 {title}"
     }
   }
 }

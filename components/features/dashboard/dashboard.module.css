@@ -1,8 +1,9 @@
 /* components/features/dashboard/dashboard.module.css — the Dashboard, after
  * resume.io's app dashboard (docs/resume-io/TEARDOWN.md; sizes measured on
  * 2026-11-12: 1120px column, 32px-radius goal pills, a 352px progress card
- * of 64px rows with 48px icon tiles and 4px bars, a 32px-padded hero, job
- * cards with a 1px hairline and 24px padding). Tokens only (ARCHITECTURE.md
+ * of 64px rows with 48px icon tiles and 4px bars, a 32px-padded hero). The
+ * agent desk around it (waiting cards, picks, lanes) is styled in
+ * components/features/today/today.module.css. Tokens only (ARCHITECTURE.md
  * §10.2); type sizes come from the --fs-* scale. */
 
 .page {
@@ -10,22 +11,30 @@
   margin: 0 auto;
 }
 
-/* ── Greeting ───────────────────────────────────────────────────────────── */
-.greeting {
+/* ── Greeting (the agent desk's header draws it, centred over the count and
+ *    the goal line: components/features/today, variant="dashboard") ───── */
+.hi {
   margin: 8px 0 0;
-  text-align: center;
-}
-.greeting h1 {
-  margin: 0;
   font-size: var(--fs-display);
   font-weight: 600;
   line-height: var(--lh-display);
   letter-spacing: var(--ls-display);
 }
-.greeting p {
-  margin: 8px 0 0;
-  color: var(--text-muted);
-  font-size: var(--fs-subtitle);
+
+/* ── "What's your goal today?" ──────────────────────────────────────────── */
+.goalsSection {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-top: 8px;
+}
+.goalsTitle {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: var(--lh-title);
+  letter-spacing: var(--ls-title);
+  text-align: center;
 }
 
 /* ── Goal tabs: pills joined by short rules; the rules up to the selected
@@ -36,7 +45,7 @@
   justify-content: center;
   align-items: center;
   row-gap: 12px;
-  margin: 32px 0 40px;
+  margin: 20px 0 32px;
 }
 .goalItem { display: inline-flex; align-items: center; }
 .goalRule {
@@ -78,7 +87,6 @@
   grid-template-columns: 352px minmax(0, 1fr);
   gap: 24px;
   align-items: stretch;
-  margin-bottom: 64px;
 }
 
 .progress {
@@ -225,7 +233,16 @@
     box-shadow var(--dur-hover) var(--ease-out);
 }
 .heroCta:hover { color: var(--action); box-shadow: var(--e2); }
-.heroCta:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* The screen's one primary button when nothing waits for the user (the first
+   waiting card holds it otherwise). */
+.heroCta[data-primary='true'] {
+  background: var(--action);
+  color: var(--action-ink);
+  box-shadow: none;
+}
+.heroCta[data-primary='true']:hover { background: var(--action-hover); color: var(--action-ink); }
+.heroCta:focus-visible,
+.heroCta[data-primary='true']:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .heroVisual { display: flex; justify-content: center; align-items: center; min-width: 0; }
 .heroResume {
   position: relative;
@@ -274,116 +291,6 @@
   background: var(--surface);
 }
 .heroArtMeter span { display: block; height: 100%; border-radius: inherit; background: var(--accent-line); }
-
-/* ── Job matches ────────────────────────────────────────────────────────── */
-.matches { margin: 0; }
-.matchesHead {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px 16px;
-  margin-bottom: 24px;
-}
-.matchesHead h2 {
-  margin: 0;
-  font-size: var(--fs-display);
-  font-weight: 600;
-  line-height: var(--lh-display);
-  letter-spacing: var(--ls-display);
-}
-.matchesHead p { margin: 0; color: var(--text-muted); font-size: var(--fs-subtitle); }
-.matchesHead a { color: var(--action); font-weight: 500; text-decoration: none; }
-.matchesHead a:hover { text-decoration: underline; }
-.matchGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.match {
-  display: flex;
-  gap: 20px;
-  height: 100%;
-  min-height: 136px;
-  padding: 24px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--text);
-  text-decoration: none;
-  transition:
-    box-shadow var(--dur-hover) var(--ease-out),
-    border-color var(--dur-hover) var(--ease-out);
-}
-.match:hover { border-color: transparent; box-shadow: var(--e2); }
-.match:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.matchLogo {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  overflow: hidden;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-}
-.matchLogo img { max-width: 48px; max-height: 48px; object-fit: contain; }
-.matchLogo span { color: var(--text-2); font-size: var(--fs-title); font-weight: 600; }
-.matchCopy { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.matchTitle {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: var(--fs-subtitle);
-  font-weight: 500;
-  line-height: var(--lh-title);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-.matchPlace {
-  overflow: hidden;
-  color: var(--text-2);
-  font-size: var(--fs-body);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.matchWhen { margin-top: auto; color: var(--text-muted); font-size: var(--fs-meta); }
-.matchSkeleton {
-  height: 136px;
-  border-radius: var(--r-md);
-  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
-  background-size: 200% 100%;
-  animation: dashboard-shimmer 1.4s ease-in-out infinite;
-}
-@keyframes dashboard-shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
-}
-.matchesNote {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--fs-body);
-}
-.matchesNote p { margin: 0; }
-.matchesEmpty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 40px 24px;
-  border: 1px dashed var(--rule-strong);
-  border-radius: var(--r-md);
-  text-align: center;
-}
-.matchesEmpty strong { font-size: var(--fs-subtitle); font-weight: 600; }
-.matchesEmpty p { max-width: 52ch; margin: 0 0 8px; color: var(--text-muted); font-size: var(--fs-body); }
 
 /* ── Ask bar: sticks to the foot of the workspace while the page scrolls ─ */
 .askDock {
@@ -437,7 +344,7 @@
   .goals {
     flex-wrap: nowrap;
     justify-content: flex-start;
-    margin: 24px 0 28px;
+    margin: 16px 0 24px;
     padding: 0 0 4px;
     overflow-x: auto;
     scrollbar-width: none;
@@ -446,7 +353,5 @@
   .goalTab { white-space: nowrap; }
   .hero { grid-template-columns: 1fr; min-height: 0; padding: 24px; }
   .heroVisual { display: none; }
-  .matchGrid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .match { padding: 20px; }
   .askDock { bottom: calc(84px + env(safe-area-inset-bottom)); margin-top: 32px; }
 }

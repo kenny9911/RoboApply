@@ -1,8 +1,11 @@
 'use client';
 
-// TodayDesk — the whole of /today, drawn from the reads it is handed
-// (docs/agent-driven/REDESIGN.md §5). It asks for nothing itself: TodayPage
-// composes the reads (hooks/today) and tests hand it fixtures.
+// TodayDesk — the agent desk, drawn from the reads it is handed
+// (docs/agent-driven/REDESIGN.md §5). It asks for nothing itself: the
+// Dashboard composes the reads (hooks/today) and tests hand it fixtures.
+// The signed-in home is the resume.io-style Dashboard (/dashboard; /today
+// redirects there), which draws this desk with `variant="dashboard"`; the
+// order below is the `desk` variant's.
 //
 // Order on a phone; from 1100px the first two share the main column and the
 // rest sit beside them:
@@ -16,7 +19,7 @@
 //
 // No persona (ruling C9): lanes are named by their job; nothing here says "I".
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { PageHeader } from '../../v3/primitives';
@@ -32,15 +35,37 @@ import { titleOf, waitingOf } from './todayModel';
 import { WaitingList } from './WaitingList';
 import styles from './today.module.css';
 
+export interface DeskGoalsContext {
+  /**
+   * Nothing waits for the user (the list has answered), so the goals section's
+   * call to action is the screen's one primary button. False while a waiting
+   * card holds it, and while the waiting list is still loading.
+   */
+  leadPrimary: boolean;
+}
+
 export interface TodayDeskProps {
   sources: TodaySources;
   /** The main resume's latest check; null when there is no main resume (or the resumes are not loaded). */
   check: CheckState | null;
   /** "Now", for the date, the 10-day rule and "this week". Injectable for tests and previews. */
   now?: Date;
+  /**
+   * `desk` is the agent desk on its own (two columns from 1100px, the count as
+   * the page title). `dashboard` is the same desk inside the resume.io-style
+   * Dashboard (components/features/dashboard): one column, the Dashboard's own
+   * greeting as the title with the count under it, the goals section between
+   * "Waiting for you" and the lanes, the picks as cards, and no Ask box (the
+   * Dashboard has its own ask bar).
+   */
+  variant?: 'desk' | 'dashboard';
+  /** `dashboard`: the page title (the greeting, an h1). */
+  greeting?: ReactNode;
+  /** `dashboard`: the goals section, told whether it carries the primary button. */
+  goals?: (ctx: DeskGoalsContext) => ReactNode;
 }
 
-export function TodayDesk({ sources, check, now: nowProp }: TodayDeskProps) {
+export function TodayDesk({ sources, check, now: nowProp, variant = 'desk', greeting, goals }: TodayDeskProps) {
   const t = useTranslations('today');
   const format = useFormatter();
   const market = useBrand().market;
@@ -59,9 +84,31 @@ export function TodayDesk({ sources, check, now: nowProp }: TodayDeskProps) {
           : t('header.titleNone');
   // The empty "Waiting for you" line points at the picks only when there are picks on screen to point at.
   const picksBelow = sources.picks.status === 'ready' && shownPicks(sources.picks.data, market).length > 0;
-  // One primary button on the screen, always: the first waiting card when something waits, else the first pick.
-  // Only once the waiting list has answered with nothing: while it loads, a card may still be about to take it.
+  // One primary button on the screen, always: the first waiting card when something waits, else the first pick
+  // (on the Dashboard: the goals section's call to action). Only once the waiting list has answered with nothing:
+  // while it loads, a card may still be about to take it.
   const leadPrimary = waiting.status === 'ready' && waiting.shown.length === 0;
+
+  if (variant === 'dashboard') {
+    return (
+      <div className={styles.dash} data-testid="today-desk" data-variant="dashboard">
+        <header className={styles.dashHead}>
+          {greeting}
+          <p className={styles.dashStatus} data-testid="today-status">
+            {heading}
+          </p>
+          <GoalLine search={sources.search} />
+        </header>
+        <WaitingList waiting={waiting} picksBelow={picksBelow} />
+        {goals ? goals({ leadPrimary }) : null}
+        <JobSearchLane flags={sources.flags} newJobs={sources.newJobs} picks={sources.picks} picksFrom={sources.picksFrom} leadPrimary={false} />
+        <div className={styles.dashLanes}>
+          <ApplicationsLane flags={sources.flags} queue={sources.queue} board={sources.board} now={now} />
+          <ResumeLane resumes={sources.resumes} check={check} skills={sources.skills} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

@@ -11956,19 +11956,6 @@
         "body_more": "Cada ronda mejora tus respuestas. Prueba con otro puesto o empresa.",
         "cta": "Empezar a practicar"
       }
-    },
-    "matches": {
-      "title": "Tus empleos afines",
-      "update_lead": "¿No encajan?",
-      "update_link": "Actualiza tu búsqueda",
-      "loading": "Cargando tus coincidencias",
-      "off": "Las ofertas de empleo aún no están disponibles aquí.",
-      "error": "No se pudieron cargar tus coincidencias.",
-      "retry": "Reintentar",
-      "empty_title": "Todavía no hay coincidencias",
-      "empty_body": "Dinos qué puestos y lugares buscas y aquí aparecerán los empleos que encajen.",
-      "empty_cta": "Configurar tu búsqueda",
-      "open_aria": "{title} en {company}"
     }
   }
 }

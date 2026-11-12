@@ -1,30 +1,43 @@
 'use client';
 
-// Dashboard — the signed-in home (/dashboard), laid out as resume.io's app
-// dashboard (docs/resume-io/TEARDOWN.md, "The dashboard"):
+// Dashboard — the signed-in home (/dashboard; /today and /home redirect here),
+// laid out as resume.io's app dashboard (docs/resume-io/TEARDOWN.md, "The
+// dashboard") around the agent desk (docs/agent-driven/REDESIGN.md §5):
 //
-//   "Hi {name}!" and a question, centred
-//   four goal tabs joined by short rules (Resume · Job search · Applications ·
-//   Interview prep)
-//   the Progress card (the goal's steps, each a row with an icon tile, the
-//   value and a bar) beside the hero card (the selected step: what it is,
-//   one call to action and a picture of it)
-//   "Your job matches" (JobMatches) and the floating ask bar (AskBar)
+//   "Hi {name}!", the count of what waits for the user, and the goal line
+//   (what the job search looks for, with Change)
+//   Waiting for you: at most four cards, one fact and one action each
+//   "What's your goal today?": four goal tabs joined by short rules (Resume ·
+//   Job search · Applications · Interview prep), the Progress card (the goal's
+//   steps, each a row with an icon tile, the value and a bar) beside the hero
+//   card (the selected step: what it is, one call to action, a picture of it)
+//   Job search: the agent's picks, each with Prepare application
+//   Applications and Resume: what those agents did, side by side
+//   the floating ask bar (AskBar)
 //
-// The selection lives in the URL (`?goal=…&step=…`, like resume.io's
+// The desk parts are components/features/today's, drawn with
+// `variant="dashboard"`; this file adds the greeting and the goals section.
+// One primary button on the screen: the first waiting card's, else the hero
+// card's (TodayDesk decides and passes `leadPrimary`).
+//
+// The goal selection lives in the URL (`?goal=…&step=…`, like resume.io's
 // `categoryTab` / `serviceId`), so a link can open a step and Back restores
-// it. Every value comes from useDashboardFacts (real, or "not known yet");
-// the model (model.ts) turns facts into meters. All copy is under the
-// `dashboard` namespace.
+// it. Every value comes from useDashboardFacts or the desk's reads (real, or
+// "not known yet"); the model (model.ts) turns facts into meters. Copy is
+// under the `dashboard` and `today` namespaces.
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useMemo, type ComponentType } from 'react';
+import { useCallback, useId, useMemo, type ComponentType } from 'react';
 
 import { useAuth } from '../../../lib/auth/useAuth';
 import { useFlag } from '../../../lib/flags';
+import { useLatestResumeCheck } from '../../../hooks/resume/useResumeCheck';
+import { useTodaySources } from '../../../hooks/today';
+import { checkStateOf, mainResumeOf, sortBases } from '../resume';
 import { ResumeThumb } from '../resume/hub/ResumeThumb';
+import { TodayDesk } from '../today/TodayDesk';
 import {
   IconArrow,
   IconCalendar,
@@ -52,7 +65,6 @@ import {
   type StepProgress,
 } from './model';
 import { useDashboardFacts } from './useDashboardFacts';
-import { JobMatches } from './JobMatches';
 import { AskBar } from './AskBar';
 import styles from './dashboard.module.css';
 
@@ -77,6 +89,31 @@ export function firstNameOf(name: string | null | undefined): string | null {
 export function Dashboard() {
   const t = useTranslations('dashboard');
   const { user } = useAuth();
+  const name = firstNameOf(user?.name);
+
+  // The agent desk's reads, and the main resume's latest check (the resume hub's rule picks the main one).
+  const sources = useTodaySources();
+  const main = sources.resumes.status === 'ready' ? mainResumeOf(sortBases(sources.resumes.data)) : null;
+  const latest = useLatestResumeCheck(main?.id);
+
+  return (
+    <div className={styles.page}>
+      <TodayDesk
+        variant="dashboard"
+        sources={sources}
+        check={main ? checkStateOf(latest) : null}
+        greeting={<h1 className={styles.hi}>{name ? t('hi', { name }) : t('hi_anon')}</h1>}
+        goals={({ leadPrimary }) => <Goals leadPrimary={leadPrimary} />}
+      />
+      <AskBar />
+    </div>
+  );
+}
+
+/** "What's your goal today?": the goal tabs, the Progress card and the hero card. */
+function Goals({ leadPrimary }: { leadPrimary: boolean }) {
+  const t = useTranslations('dashboard');
+  const titleId = useId();
   const facts = useDashboardFacts();
   const agentOn = useFlag('agent');
   const hidden = useMemo<HiddenSteps>(() => (agentOn ? new Set() : new Set<StepId>(['preparing'])), [agentOn]);
@@ -99,40 +136,28 @@ export function Dashboard() {
 
   const steps = goalSteps(goal, facts, hidden);
   const active = steps.find((s) => s.id === step) ?? steps[0]!;
-  const name = firstNameOf(user?.name);
 
   return (
-    <div className={styles.page}>
-      <header className={styles.greeting}>
-        <h1>{name ? t('hi', { name }) : t('hi_anon')}</h1>
-        <p>{t('subtitle')}</p>
-      </header>
-
+    <section className={styles.goalsSection} aria-labelledby={titleId} data-testid="dashboard-goals">
+      <h2 id={titleId} className={styles.goalsTitle}>
+        {t('subtitle')}
+      </h2>
       <div className={styles.goals} role="group" aria-label={t('goals_aria')}>
         {GOALS.map((g, i) => (
           <span key={g} className={styles.goalItem}>
             {i > 0 ? <span className={styles.goalRule} aria-hidden="true" data-on={GOALS.indexOf(goal) >= i ? 'true' : 'false'} /> : null}
-            <button
-              type="button"
-              className={styles.goalTab}
-              aria-pressed={g === goal}
-              onClick={() => select({ goal: g })}
-            >
+            <button type="button" className={styles.goalTab} aria-pressed={g === goal} onClick={() => select({ goal: g })}>
               {t(`goal.${g}`)}
             </button>
           </span>
         ))}
       </div>
 
-      <section className={styles.focus} aria-label={t('progress_aria', { goal: t(`goal.${goal}`) })}>
+      <div className={styles.focus} role="group" aria-label={t('progress_aria', { goal: t(`goal.${goal}`) })}>
         <ProgressCard steps={steps} activeId={active.id} onSelect={(id) => select({ goal, step: id })} />
-        <HeroCard goal={goal} progress={active} facts={facts} />
-      </section>
-
-      <JobMatches />
-
-      <AskBar />
-    </div>
+        <HeroCard goal={goal} progress={active} facts={facts} primary={leadPrimary} />
+      </div>
+    </section>
   );
 }
 
@@ -204,7 +229,7 @@ function ProgressCard({
   );
 }
 
-function HeroCard({ goal, progress, facts }: { goal: GoalId; progress: StepProgress; facts: DashboardFacts }) {
+function HeroCard({ goal, progress, facts, primary }: { goal: GoalId; progress: StepProgress; facts: DashboardFacts; primary: boolean }) {
   const t = useTranslations('dashboard');
   const state = heroState(progress, facts);
   const id = progress.id;
@@ -240,7 +265,7 @@ function HeroCard({ goal, progress, facts }: { goal: GoalId; progress: StepProgr
         <p className={styles.heroTag}>{t(`goal.${goal}`)}</p>
         <h2 className={styles.heroTitle}>{title}</h2>
         <p className={styles.heroBody}>{body}</p>
-        <Link href={href} className={styles.heroCta}>
+        <Link href={href} className={styles.heroCta} data-primary={primary ? 'true' : 'false'}>
           <span>{cta}</span>
           <IconArrow size={16} />
         </Link>

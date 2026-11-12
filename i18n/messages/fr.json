@@ -11956,19 +11956,6 @@
         "body_more": "Chaque séance affine vos réponses. Essayez-en une pour un autre poste ou une autre entreprise.",
         "cta": "Commencer l’entraînement"
       }
-    },
-    "matches": {
-      "title": "Vos offres correspondantes",
-      "update_lead": "Ça ne correspond pas ?",
-      "update_link": "Modifier votre recherche",
-      "loading": "Chargement de vos offres",
-      "off": "Les offres d’emploi ne sont pas encore disponibles ici.",
-      "error": "Vos offres n’ont pas pu être chargées.",
-      "retry": "Réessayer",
-      "empty_title": "Aucune offre pour l’instant",
-      "empty_body": "Indiquez les postes et les lieux que vous visez, et les offres qui correspondent apparaîtront ici.",
-      "empty_cta": "Configurer votre recherche",
-      "open_aria": "{title} chez {company}"
     }
   }
 }

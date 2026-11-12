@@ -11956,19 +11956,6 @@
         "body_more": "Jede Runde schärft deine Antworten. Probier eine für eine andere Stelle oder Firma.",
         "cta": "Üben starten"
       }
-    },
-    "matches": {
-      "title": "Deine passenden Jobs",
-      "update_lead": "Passt nicht?",
-      "update_link": "Suche anpassen",
-      "loading": "Deine Treffer werden geladen",
-      "off": "Stellenanzeigen sind hier noch nicht verfügbar.",
-      "error": "Deine Treffer konnten nicht geladen werden.",
-      "retry": "Erneut versuchen",
-      "empty_title": "Noch keine Treffer",
-      "empty_body": "Sag uns, welche Stellen und Orte du suchst, dann erscheinen passende Jobs hier.",
-      "empty_cta": "Suche einrichten",
-      "open_aria": "{title} bei {company}"
     }
   }
 }

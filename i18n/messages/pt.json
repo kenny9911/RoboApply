@@ -11956,19 +11956,6 @@
         "body_more": "Cada rodada melhora suas respostas. Tente uma para outro cargo ou empresa.",
         "cta": "Começar a treinar"
       }
-    },
-    "matches": {
-      "title": "Suas vagas compatíveis",
-      "update_lead": "Não combinam?",
-      "update_link": "Atualize sua busca",
-      "loading": "Carregando suas vagas",
-      "off": "As vagas ainda não estão disponíveis aqui.",
-      "error": "Não foi possível carregar suas vagas.",
-      "retry": "Tentar de novo",
-      "empty_title": "Ainda não há vagas para mostrar",
-      "empty_body": "Diga quais cargos e lugares você procura, e as vagas compatíveis aparecem aqui.",
-      "empty_cta": "Configurar sua busca",
-      "open_aria": "{title} na {company}"
     }
   }
 }

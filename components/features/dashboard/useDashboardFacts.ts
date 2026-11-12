@@ -4,7 +4,8 @@
 // (model.ts), read through the hooks the owning areas already use, so the
 // dashboard shares their caches and never invents a number:
 //
-//   resumes        useResumeList (base vs tailored; the primary base resume)
+//   resumes        useResumeList (base vs tailored; the main base resume, by
+//                  the resume hub's rule: the primary, else the newest)
 //   resume check   useLatestResumeCheck on the primary resume (finished only)
 //   cover letters  useCoverLetterList (first page; enough to know 0 vs ≥1)
 //   profile        useProfile (completeness 0–100)
@@ -27,6 +28,7 @@ import { usePipelineBoard } from '../../../hooks/usePipelineBoard';
 import { useReadyQueue } from '../../../hooks/agent/useAgent';
 import { useFlag } from '../../../lib/flags';
 import { interviewEngineApi } from '../../../lib/api/interviewEngine';
+import { mainResumeOf, sortBases } from '../resume';
 import type { DashboardFacts } from './model';
 
 export const dashboardKeys = {
@@ -39,8 +41,9 @@ export const PREPARING_QUEUE_STATES: readonly string[] = ['preparing', 'ready_fo
 export function useDashboardFacts(): DashboardFacts {
   const resumes = useResumeList();
   const list = resumes.data?.resumes ?? null;
-  const bases = useMemo(() => (list ? list.filter((r) => r.kind !== 'tailored_for_jd') : null), [list]);
-  const primary = bases ? (bases.find((r) => r.isPrimary) ?? bases[0] ?? null) : null;
+  // The resume hub's rule (and the agent desk's): base resumes, primary first; the main one is the primary, else the newest.
+  const bases = useMemo(() => (list ? sortBases(list) : null), [list]);
+  const primary = bases ? mainResumeOf(bases) : null;
 
   const check = useLatestResumeCheck(primary?.id ?? null);
   const grade = check.data?.grade ?? null;

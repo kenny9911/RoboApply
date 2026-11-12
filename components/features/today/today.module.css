@@ -1,5 +1,5 @@
-/* /today — the desk (components/features/today; docs/agent-driven/REDESIGN.md §5).
-   Paper tokens only (app/globals.css). One column on a phone, in reading
+/* The agent desk (components/features/today; docs/agent-driven/REDESIGN.md §5).
+   Design tokens only (app/globals.css). One column on a phone, in reading
    order: Waiting for you · Job search · Applications · Resume · Ask. From
    1100px the first two keep the main column and the rest sit beside them. */
 
@@ -497,6 +497,98 @@
 @keyframes todayPulse {
   from { opacity: 1; }
   to { opacity: 0.55; }
+}
+
+/* ── Inside the Dashboard (TodayDesk variant="dashboard") ───────────────────
+   The resume.io-style home (components/features/dashboard): one column, the
+   greeting and the count centred over the goal line, the waiting cards as a
+   grid, the picks as bordered cards without a frame around them (resume.io's
+   "Your job matches"), and the Applications and Resume lanes side by side. */
+
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.dashHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  text-align: center;
+}
+.dashStatus {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-subtitle);
+  line-height: var(--lh-subtitle);
+}
+.dashHead .goal {
+  justify-content: center;
+}
+.dash .cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+}
+.dash .card {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  border-color: var(--rule);
+  border-radius: var(--r-md);
+}
+.dash .card .action {
+  grid-column: 2;
+  justify-self: start;
+}
+.dash > .lane {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.dash .picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--sp-4);
+}
+.dash .pick {
+  justify-content: space-between;
+  padding: var(--sp-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--e1);
+}
+.dash .pick:last-child {
+  padding-bottom: var(--sp-5);
+}
+.dash .pickBottom {
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+}
+/* The row layout's 240px basis would become a height in this column. */
+.dash .identity {
+  flex: 0 1 auto;
+}
+.dash .pickBottom :global(.btn) {
+  width: 100%;
+}
+.dash .lane {
+  border-color: var(--rule);
+  border-radius: var(--r-md);
+}
+.dashLanes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-5);
+}
+@media (min-width: 900px) {
+  .dashLanes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* ── Narrow main column ─────────────────────────────────────────────────── */
