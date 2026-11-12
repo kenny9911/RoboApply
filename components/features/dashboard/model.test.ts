@@ -125,7 +125,7 @@ describe('dashboard model: where each step leads', () => {
   });
 
   it('the resume check opens the primary resume when there is one, the hub otherwise', () => {
-    expect(stepHref('resume_check', facts({ primaryResumeId: 'cm 1' }))).toBe('/resume/cm%201');
+    expect(stepHref('resume_check', facts({ primaryResumeId: 'cm 1' }))).toBe('/resume/cm%201?tab=review');
     expect(stepHref('resume_check', facts())).toBe('/resume');
   });
 

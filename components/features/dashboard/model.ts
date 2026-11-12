@@ -17,6 +17,8 @@
 // An unknown fact (still loading, or the area is off) is null and the row
 // says nothing rather than showing a zero it does not know.
 
+import { editorTabHref } from '../resume/editor/tabs';
+
 export const GOALS = ['resume', 'jobs', 'applications', 'interview'] as const;
 export type GoalId = (typeof GOALS)[number];
 
@@ -209,7 +211,8 @@ export function selectionFrom(
 export function stepHref(step: StepId, facts: Pick<DashboardFacts, 'primaryResumeId' | 'hasResume'>): string {
   switch (step) {
     case 'resume_check':
-      return facts.primaryResumeId ? `/resume/${encodeURIComponent(facts.primaryResumeId)}` : '/resume';
+      // The editor's Review tab (the latest check and what to change), as resume.io's dashboard opens AI Review.
+      return facts.primaryResumeId ? editorTabHref(facts.primaryResumeId, 'review') : '/resume';
     case 'tailored':
       return '/resume';
     case 'letters':
