@@ -96,6 +96,9 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
   const chat = useCopilotChat();
   const onAssistantPage = pathname === '/assistant' || pathname.startsWith('/assistant/');
   const onDashboard = pathname === '/dashboard' || pathname.startsWith('/dashboard/');
+  // The practice setup pins its Start button to the foot of a phone screen, where the floating button would cover
+  // it; the Topbar's Ask stays there, as on the Dashboard (whose ask bar replaces the floating button).
+  const onPracticeSetup = pathname === '/practice';
   // Ask is shown only once the Assistant surface has shipped (INT flips
   // SURFACES_READY.assistant; the dev override shows it early) and only to a
   // user who may ask.
@@ -126,7 +129,7 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
   }, [entryVisible]);
 
   /** The floating button belongs on this page (whether or not it is stepping aside right now). */
-  const fabOffered = entryVisible && memory.fabHidden === false && !rail.open && !onAssistantPage && !onDashboard;
+  const fabOffered = entryVisible && memory.fabHidden === false && !rail.open && !onAssistantPage && !onDashboard && !onPracticeSetup;
   const fabVisible = fabOffered && !editing;
 
   // Each open request (a new seq) may carry a thread, a job or a prompt.
