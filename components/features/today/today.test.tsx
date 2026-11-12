@@ -495,6 +495,31 @@ describe('/today "Job search"', () => {
     expect(within(screen.getByRole('dialog', { name: 'Prepare 1 kit' })).getByRole('button', { name: 'Prepare 1 kit' })).toBeEnabled();
   });
 
+  it('a pick whose list state the server sent says where it is up front; one not on the list keeps `Prepare application` (REDESIGN §9)', () => {
+    renderToday(
+      <TodayDesk
+        sources={sourcesWith({
+          picks: ready([
+            pick('p1', 'Analytics Engineer', { application: { state: 'ready_for_review', trackerEntryId: null } }),
+            pick('p2', 'Data Scientist', { application: { state: 'preparing', trackerEntryId: null } }),
+            pick('p3', 'Insights Lead', { application: null }),
+          ]),
+        })}
+        check={CHECK_DONE}
+        now={NOW}
+      />,
+      { flags: ALL_ON },
+    );
+    const [one, two, three] = screen.getAllByTestId('today-pick');
+    expect(within(one!).getByRole('link', { name: 'Check and open' })).toHaveAttribute('href', '/ready/p1');
+    expect(within(two!).getByRole('link', { name: 'Being prepared' })).toHaveAttribute('href', '/ready/p2');
+    expect(within(three!).getByRole('button', { name: 'Prepare application' })).toBeEnabled();
+    expect(within(one!).queryByRole('button', { name: 'Prepare application' })).toBeNull();
+    // Gap first and the honesty line under every score still hold on such a row (R2, C5).
+    expect(within(one!).getByTestId('pick-gap')).toBeInTheDocument();
+    expect(within(one!).getByText('This is not your chance of getting hired.')).toBeInTheDocument();
+  });
+
   it('says when there is no new pick, when the picks are loading and when they failed', () => {
     const none = renderToday(<TodayDesk sources={sourcesWith()} check={null} now={NOW} />, { flags: ALL_ON });
     expect(screen.getByTestId('today-picks-none')).toHaveTextContent('No new picks right now.');

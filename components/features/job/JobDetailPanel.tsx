@@ -45,6 +45,16 @@
 // shared from inside WeChat — the job's title and company, its place and the
 // pay as the post lists it (left out when the post lists none). It renders
 // nothing and does nothing outside WeChat.
+//
+// `preview` (split view only): the desktop Jobs list shows its first job here
+// before the person picked one. The page is then read without recording a
+// view (`useJob` `preview`), and nothing on it reads the page a second way.
+// Once the person opens the job, the caller drops `preview` and the page is
+// read again as an open, with the preview kept on screen meanwhile.
+//
+// `application` (split view only): the job's place on the person's list as
+// the list's card knows it (`FeedItem.application`), so "Prepare application"
+// says "Being prepared" or "Check and open" up front, like the card beside it.
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -66,6 +76,7 @@ import { apiErrorCode, apiErrorDetails } from '../../../lib/api/contracts/wire';
 import { RoboApiError } from '../../../lib/api/client';
 import { cn } from '../../../lib/utils';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
+import type { FeedApplication } from '../../../lib/api/contracts/feed';
 // The file, not the `agent` barrel: that barrel imports this area (jobDetailHref).
 import { PrepareApplicationButton } from '../agent/PrepareApplicationButton';
 import { ApplyInterceptSheet } from './ApplyInterceptSheet';
@@ -83,6 +94,10 @@ export interface JobDetailPanelProps {
   mode: 'split' | 'page';
   /** Split view only: close the panel (the feed drops `?job=`). */
   onClose?: () => void;
+  /** Shown before the person opened the job (the list's first job): no view is recorded. See the header. */
+  preview?: boolean;
+  /** The job's place on the person's list, when the caller knows it (the list's card). See the header. */
+  application?: FeedApplication | null;
 }
 
 type TabId = 'overview' | 'company' | 'people';
@@ -125,7 +140,19 @@ function useOpenJob(mode: JobDetailPanelProps['mode']): (jobId: string) => void 
 /** How long the header waits for the page data after an undo before showing what it has. */
 const UNDO_RESYNC_MS = 8_000;
 
-function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse; mode: JobDetailPanelProps['mode']; onClose?: () => void; refetch: () => void }) {
+function Loaded({
+  detail,
+  mode,
+  onClose,
+  refetch,
+  application,
+}: {
+  detail: JobDetailResponse;
+  mode: JobDetailPanelProps['mode'];
+  onClose?: () => void;
+  refetch: () => void;
+  application?: FeedApplication | null;
+}) {
   const t = useTranslations('jobDetail');
   const format = useFormatter();
   const brand = useBrand();
@@ -287,7 +314,15 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
       <JobHeaderActions>
         {/* Agent-driven order (docs/agent-driven/REDESIGN.md §6): preparing the application is the
             primary action; going to the company site now stays second. One primary button either way. */}
-        {agent && open && !applied ? <PrepareApplicationButton jobId={job.id} variant="primary" addedVia="feed" /> : null}
+        {agent && open && !applied ? (
+          <PrepareApplicationButton
+            jobId={job.id}
+            queueState={application?.state ?? null}
+            trackerEntryId={application?.trackerEntryId ?? null}
+            variant="primary"
+            addedVia="feed"
+          />
+        ) : null}
         {open && job.applyUrl && !applied ? (
           <Btn variant={agent ? 'default' : 'primary'} onClick={apply} disabled={actions.pending === 'apply'} data-testid="apply-button">
             {applyCopy ? tCn(applyCopy.labelKey, { name: applyCopy.name }) : t('actions.apply')}
@@ -434,9 +469,9 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   );
 }
 
-export function JobDetailPanel({ jobId, mode, onClose }: JobDetailPanelProps) {
+export function JobDetailPanel({ jobId, mode, onClose, preview = false, application }: JobDetailPanelProps) {
   const t = useTranslations('jobDetail');
-  const q = useJob(jobId);
+  const q = useJob(jobId, { preview: mode === 'split' && preview });
 
   if (q.isPending) return <Skeleton mode={mode} />;
   if (q.isError || !q.data) {
@@ -468,7 +503,7 @@ export function JobDetailPanel({ jobId, mode, onClose }: JobDetailPanelProps) {
       </div>
     );
   }
-  return <Loaded detail={q.data} mode={mode} onClose={onClose} refetch={() => void q.refetch()} />;
+  return <Loaded detail={q.data} mode={mode} onClose={onClose} refetch={() => void q.refetch()} application={mode === 'split' ? application : undefined} />;
 }
 
 export default JobDetailPanel;

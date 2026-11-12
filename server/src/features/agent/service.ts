@@ -571,7 +571,12 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     return out;
   }
 
-  /** Top-fit jobs not in the list yet (calibration "Show 3 more", "Add jobs"). */
+  /**
+   * Top-fit jobs not in the list yet (calibration "Show 3 more", "Add jobs",
+   * the Dashboard's picks). Each carries `application: null`, the feed card's
+   * list state: a job with any item on the list, whatever its state, is never
+   * suggested (`excludedJobIds`), so that is known without another read.
+   */
   async function suggestions(userId: string, input: { limit?: number; exclude?: string }) {
     const db = await deps.getDb();
     if (!(await deps.flag('jobs.feed', userId))) return { items: [] };
@@ -586,7 +591,9 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
         .filter((j) => !skip.has(j.jobId) && !ex.queued.has(j.jobId) && !ex.rated.has(j.jobId))
         .filter((j) => !j.tracker || j.tracker.status === 'bookmarked'),
       dislikes,
-    ).slice(0, limit);
+    )
+      .slice(0, limit)
+      .map((j) => ({ ...j, application: null }));
     return { items };
   }
 

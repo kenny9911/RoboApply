@@ -29,7 +29,18 @@
 //                 filter and nothing is checked against them (SM-9).
 //   list          infinite, 20 per page; the rating card after 10 cards
 //   split detail  desktop `?job=<id>` renders JobDetailPanel (WP-34) beside
-//                 the list; on a phone a job opens as /jobs/[id]
+//                 the list; on a phone a job opens as /jobs/[id]. Like
+//                 resume.io's job search, a desktop list with no `?job=`
+//                 opens its first job there once the list is on screen. That
+//                 job is a PREVIEW: the person did not open it, so its page is
+//                 read without recording a view (`viewedAt`, which the feed's
+//                 "seen and skipped" rule reads) and the address is not
+//                 written (Back and a shared link behave as before). Opening a
+//                 job (its title, by click or keyboard, or a `?job=` link) is
+//                 the normal read. Closing the pane ends the preview for this
+//                 visit. Phones never open one. The selected card is washed
+//                 blue with a blue rule; the pane sticks under the top bar and
+//                 scrolls on its own.
 //
 // The feed is on by default on both brands (D5). With `jobs.feed` switched
 // off (GoApply: CN_RECRUITMENT_INFO_MODE=off) there is no list at all, only
@@ -225,14 +236,24 @@ export function JobsWorkspace() {
     [desktop, params, pathname, router],
   );
 
+  // The first job the list shows (FeedList reports it once its first page answered), previewed on desktop.
+  const [firstShownId, setFirstShownId] = useState<string | null>(null);
+  const [previewOn, setPreviewOn] = useState(true);
+  const previewId = desktop && feedOn && previewOn && !jobParam ? firstShownId : null;
+  const splitJobId = desktop ? (jobParam ?? previewId) : null;
+  const splitOpen = splitJobId !== null;
+  // What the list's card knows about the open job, for the pane's "Prepare application".
+  const splitItem = splitJobId ? feed.items.find((i) => i.jobId === splitJobId) : undefined;
+
   const closeJob = useCallback(() => {
+    // Closing the pane ends the first-job preview for this visit: the list takes the width.
+    setPreviewOn(false);
+    if (!params?.get('job')) return;
     const next = new URLSearchParams(params?.toString() ?? '');
     next.delete('job');
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [params, pathname, router]);
-
-  const splitOpen = desktop && !!jobParam;
 
   return (
     <div className={styles.workspace}>
@@ -300,9 +321,10 @@ export function JobsWorkspace() {
                   feed={feed}
                   market={market}
                   label={t('listLabel')}
-                  activeJobId={splitOpen ? jobParam : null}
+                  activeJobId={splitJobId}
                   onOpen={openJob}
                   onSeen={markSeen}
+                  onFirstShown={setFirstShownId}
                   empty={<ZeroResults profile={profile} />}
                   inline={
                     ratingFixes
@@ -328,14 +350,22 @@ export function JobsWorkspace() {
                   }
                 />
               </div>
-              {splitOpen && jobParam ? (
-                <aside className={styles.detail} aria-label={t('detailLabel')} data-testid="split-detail">
+              {splitJobId ? (
+                <aside className={styles.detail} aria-label={t('detailLabel')} data-testid="split-detail" data-preview={jobParam ? undefined : 'true'}>
                   <div className={styles.detailHead}>
                     <button type="button" className={styles.iconBtn} onClick={closeJob} aria-label={t('closeDetail')}>
                       <span aria-hidden="true">×</span>
                     </button>
                   </div>
-                  <JobDetailPanel key={jobParam} jobId={jobParam} mode="split" onClose={closeJob} />
+                  {/* Keyed by job only: opening the previewed job keeps the pane and reads the page again as an open. */}
+                  <JobDetailPanel
+                    key={splitJobId}
+                    jobId={splitJobId}
+                    mode="split"
+                    preview={!jobParam}
+                    application={splitItem?.application}
+                    onClose={closeJob}
+                  />
                 </aside>
               ) : null}
             </div>

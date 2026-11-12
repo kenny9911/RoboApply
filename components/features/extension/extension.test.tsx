@@ -502,6 +502,18 @@ describe('FillWithExtensionButton', () => {
     expect(await screen.findByRole('link', { name: /Fill this form/ })).toHaveAttribute('href', 'https://acme.wd1.myworkdayjobs.com/External/job/1');
   });
 
+  it('a caller that holds the job page passes its autofill: the button reads nothing itself', async () => {
+    fakeExtension({ installed: true });
+    renderWithBrand(
+      <FillWithExtensionButton jobId="cm1" applyUrl="https://acme.wd1.myworkdayjobs.com/External/job/1" autofill={{ supported: true, atsType: 'workday' }} />,
+      { flags: { extension: true } },
+    );
+    expect(await screen.findByRole('link', { name: /Fill this form/ })).toHaveAttribute('href', 'https://acme.wd1.myworkdayjobs.com/External/job/1');
+    const none = renderWithBrand(<FillWithExtensionButton jobId="cm2" applyUrl="https://acme.wd1.myworkdayjobs.com/x" autofill={null} />, { flags: { extension: true } });
+    expect(none.container).toBeEmptyDOMElement();
+    expect(jobsApi.getJob).not.toHaveBeenCalled();
+  });
+
   it('hidden for a form no adapter supports, without an apply link, or for a non-web link', async () => {
     fakeExtension({ installed: true });
     jobsApi.getJob.mockResolvedValue({ autofill: { supported: false, atsType: 'workday' } });

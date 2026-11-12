@@ -33,6 +33,7 @@
 // company fact and never a job badge.
 
 import { z } from 'zod';
+import type { QueueState } from '../agent/contract.js';
 import type { MatchExplanation } from '../compliance/contract.js';
 import { PROVIDER_META } from '../jobs/normalize/index.js';
 import type { FilterSet, FilterSetPatch } from '../search/contract.js';
@@ -221,6 +222,19 @@ export interface FeedItem {
   fit: FitBadge | null;
   tracker: { status: string } | null;
   /**
+   * Where the job is on the reader's own list (Applications → Getting ready),
+   * so the card shows "Being prepared" or "Check and open" up front instead of
+   * "Prepare application" (docs/agent-driven/REDESIGN.md §9). Sent on every
+   * card of the /jobs list (`POST /feed/query`) while the reader's `agent`
+   * capability is on: null for a job that is not on the list. The agent
+   * area's suggestions carry null (a suggestion is never on the list). Left
+   * off when the capability is off, on the lists other areas read through
+   * `preview`, for a list item in a state this contract does not name, and
+   * when the list could not be read: a reader then knows nothing (D3) and the
+   * card keeps its one-tap action. Read in one statement per page.
+   */
+  application?: FeedApplication | null;
+  /**
    * GoApply 网申 close date / 届别, only as the posting states them.
    * `applyClosesAt` is the stated date (yyyy-mm-dd, China time) with its
    * quote; null when the posting states none (RAJob.expiresAt is never shown:
@@ -251,6 +265,17 @@ export interface FeedItem {
    * treats a missing value as "no other postings".
    */
   alsoIn?: { count: number; locations: string[]; jobIds: string[] };
+}
+
+/**
+ * A job's item on the reader's list (the agent area's queue, `RAAgentQueueItem`):
+ * `FeedItem.application`. D1: there is no "submitted" state; the user submits.
+ */
+export interface FeedApplication {
+  /** The list item's state (agent contract `QUEUE_STATES`). */
+  state: QueueState;
+  /** The tracker entry the application moved to once it was opened ("See application"); null before that. */
+  trackerEntryId: string | null;
 }
 
 /**
@@ -567,8 +592,8 @@ export const PublicFeedQuerySchema = z.object({
   city: z.string().trim().max(80).optional(),
   country: z.string().regex(/^[A-Z]{2}$/).optional(),
 });
-/** No fit, `publicDisplay` jobs only, 20 items. */
-export type PublicFeedItem = Omit<FeedItem, 'fit' | 'tracker' | 'cardMeta' | 'explanation'>;
+/** No fit, `publicDisplay` jobs only, 20 items. Nothing of the reader's own (no tracker, no list state). */
+export type PublicFeedItem = Omit<FeedItem, 'fit' | 'tracker' | 'cardMeta' | 'explanation' | 'application'>;
 export interface PublicFeedResponse {
   items: PublicFeedItem[];
 }

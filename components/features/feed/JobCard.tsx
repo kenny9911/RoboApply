@@ -19,7 +19,13 @@
 // action, for a user who wants to go now. "Tailor resume" and "Ask about this
 // job" keep what they do and sit in the "…" menu. A job the user applied to,
 // or whose posting is gone, offers neither apply nor prepare. Flag off: the
-// row above, unchanged.
+// row above, unchanged. A job already on the user's list says where it is up
+// front ("Being prepared", "Check and open", …) from the item's own
+// `application` (docs/agent-driven/REDESIGN.md §9); a job the server said
+// nothing about keeps the one-tap action.
+//
+// The job open in the desktop split view (`active`) is the selected card:
+// washed blue with a blue rule down its left edge (resume.io's job list).
 //
 // GoApply: the market slot (JobMetaCn) prints the pay as the post states it,
 // the post's own date, "Last checked" and the source. When it does, the card
@@ -378,6 +384,7 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
       ref={observe}
       data-job-id={item.jobId}
       data-testid="job-card"
+      data-active={active ? 'true' : undefined}
       aria-labelledby={titleId}
       className={`${styles.card}${active ? ` ${styles.cardActive}` : ''}`}
     >
@@ -524,7 +531,16 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
       <div className={styles.actions} role="group" aria-label={t('actions.label', { title: item.title })}>
         {agentOn ? (
           <>
-            {canApply ? <PrepareApplicationButton jobId={item.jobId} variant="primary" addedVia="feed" className={styles.actionBtn} /> : null}
+            {canApply ? (
+              <PrepareApplicationButton
+                jobId={item.jobId}
+                queueState={item.application?.state ?? null}
+                trackerEntryId={item.application?.trackerEntryId ?? null}
+                variant="primary"
+                addedVia="feed"
+                className={styles.actionBtn}
+              />
+            ) : null}
             {applyButton}
             {saveButton}
           </>

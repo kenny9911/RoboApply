@@ -27,7 +27,10 @@ export { registerExtensionAtsTypes } from './defaultService.js';
 export { peopleSearchLinks, shareTarget, toBadges, toPay, toSponsorship, toRequirements, slugify } from './view.js';
 
 export interface JobDetailService {
-  /** `opts.locale`: the request's UI language (the skill labels of the fit follow it). */
+  /**
+   * `opts.locale`: the request's UI language (the skill labels of the fit follow it). `opts.preview`: the page
+   * is shown without the person having opened the job, so `viewedAt` is not stamped (`GET /jobs/:id?preview=1`).
+   */
   get(userId: string, jobId: string, opts?: JobReadOptions): Promise<JobDetailResponse>;
   /**
    * The job page's Similar jobs list (`GET /jobs/:id/similar`): by job vector,

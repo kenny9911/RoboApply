@@ -14,7 +14,12 @@
 //   3. POST /agent/queue/:id/prepare { confirm: true }, through the credit gate
 //
 // A job that is already past "picked" is not prepared twice: the button
-// becomes a link to where that application is now.
+// becomes a link to where that application is now. When the caller knows the
+// job's list state (the Jobs card's and the Dashboard pick's `application`,
+// docs/agent-driven/REDESIGN.md §9) the link is there before any tap: "Being
+// prepared" and "Check and open" lead to the application's page (`kitHref`).
+// A job on the list that can still be prepared (picked, failed), and one the
+// caller knows nothing about, keep the button and its tap flow.
 //
 // D1: nothing here applies or submits. Preparing tailors the resume and writes
 // the letter; the user opens the application and submits it themselves.

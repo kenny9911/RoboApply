@@ -74,7 +74,8 @@ import { SETTINGS_REGISTRY, type SettingsSectionId } from '../../components/feat
 import { TwoFactorSettings } from '../../components/features/account-v2';
 import { FinishSetupSettingsLine } from '../../components/features/onboarding';
 import type { SettingsSectionProps } from '../../components/features/settings/sectionComponents';
-import type { PublicFeedItem } from '../../lib/api/contracts/feed';
+import type { FeedApplication, PublicFeedItem } from '../../lib/api/contracts/feed';
+import type { JobDetailResponse } from '../../lib/api/contracts/jobs/detail';
 import type { StepResponse as OnboardingStepResponse } from '../../lib/api/contracts/onboarding';
 import { GOAPPLY_ONBOARDING_STAGES } from '../../server/src/features/onboarding/contract';
 
@@ -92,11 +93,20 @@ beforeEach(() => {
 describe('props contracts (compile-time)', () => {
   it('job, people, offers, extension, coaching, practice', () => {
     expectTypeOf<ComponentProps<typeof job.JobDetailPanel>>().toEqualTypeOf<job.JobDetailPanelProps>();
-    expectTypeOf<job.JobDetailPanelProps>().toEqualTypeOf<{ jobId: string; mode: 'split' | 'page'; onClose?: () => void }>();
+    // `preview` and `application` (split view): the Jobs list's first job, read without recording a view, and the
+    // job's place on the person's list as the list's card knows it (docs/agent-driven/REDESIGN.md §9).
+    expectTypeOf<job.JobDetailPanelProps>().toEqualTypeOf<{
+      jobId: string;
+      mode: 'split' | 'page';
+      onClose?: () => void;
+      preview?: boolean;
+      application?: FeedApplication | null;
+    }>();
     expectTypeOf<network.PeoplePanelProps>().toEqualTypeOf<{ jobId: string; companyId: string | null; companyName: string }>();
     expectTypeOf<offers.OfferSectionProps>().toEqualTypeOf<{ trackerEntryId: string; onChange?: () => void }>();
     expectTypeOf<offers.OfferComparisonProps>().toEqualTypeOf<{ trackerEntryIds?: readonly string[] }>();
-    expectTypeOf<extension.FillWithExtensionButtonProps>().toEqualTypeOf<{ jobId: string; applyUrl: string | null }>();
+    // `autofill`: the job page's own, when the caller holds the page (the button then reads nothing itself).
+    expectTypeOf<extension.FillWithExtensionButtonProps>().toEqualTypeOf<{ jobId: string; applyUrl: string | null; autofill?: JobDetailResponse['autofill'] | null }>();
     expectTypeOf<coaching.PracticeReportCoachLineProps>().toEqualTypeOf<{ sessionId: string; jobId?: string | null }>();
     expectTypeOf<practiceCn.CnReportProps>().toEqualTypeOf<{ sessionId: string }>();
   });

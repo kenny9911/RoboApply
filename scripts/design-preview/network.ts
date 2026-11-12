@@ -290,9 +290,9 @@ const feedJobs: FeedItem[] = [
   },
 ];
 
-const feedPage: FeedQueryResponse = { items: feedJobs, cursor: null, endOfFeed: true, hiddenByTier: 0, sessionId: 'fs_preview', order: 'personalized', sort: 'recommended', thin: false };
-
-// The split detail (`/jobs?job=<id>` on a wide screen) reads the job and its fit.
+// The split detail (`/jobs?job=<id>` on a wide screen, and the first job, which
+// a wide screen opens there by itself) reads the job and its fit. The first job
+// is read with `?preview=1`; the fixtures answer by path, so both reads match.
 const fitView = (job: FeedItem): ScoreJobResponse['fit'] => ({
   jobId: job.jobId, score: job.fit?.score ?? null, tier: job.fit?.tier ?? null, kind: job.fit?.kind ?? 'pre', dimensions: [],
   summary: job.fit?.topOverlap ?? null, strengths: job.fit?.topOverlap ? [job.fit.topOverlap] : [], gaps: job.fit?.topGap ? [job.fit.topGap] : [],
@@ -344,7 +344,19 @@ const kitFor = (jobId: string, state: QueueItemView['state'], daysSince: number)
 const todayKits = [kitFor('job_preview_2', 'ready_for_review', 1), kitFor('job_preview_5', 'approved', 2), kitFor('job_preview_4', 'preparing', 0)];
 const todayQueue: QueueListResponse = { items: todayKits, counts: { to_prepare: 0, ready: todayKits.length, done: 0 }, weekKey: 'preview', nextCursor: null };
 const todayBadge: ReadyBadgeResponse = { readyNotOpened: 2 };
-const todaySuggestions = { items: feedJobs.filter((job) => !todayKits.some((kit) => kit.jobId === job.jobId)).slice(0, 3) };
+// A suggestion is never on the list: the server sends each with `application: null`.
+const todaySuggestions = { items: feedJobs.filter((job) => !todayKits.some((kit) => kit.jobId === job.jobId)).slice(0, 3).map((job): FeedItem => ({ ...job, application: null })) };
+// With Ready to apply on, every card of the Jobs list carries its place on the list, as the server sends it to a
+// reader with the `agent` capability: the kits above ("Check and open", "Being prepared"), null for the others.
+// Without it the cards carry no such field, as from the server.
+const onTheList = (job: FeedItem): FeedItem => {
+  const kit = todayKits.find((k) => k.jobId === job.jobId);
+  return { ...job, application: kit ? { state: kit.state, trackerEntryId: kit.trackerEntryId } : null };
+};
+const feedPage: FeedQueryResponse = {
+  items: todayAgent ? feedJobs.map(onTheList) : feedJobs,
+  cursor: null, endOfFeed: true, hiddenByTier: 0, sessionId: 'fs_preview', order: 'personalized', sort: 'recommended', thin: false,
+};
 const todayNewCount: NewCountResponse = { count: 12, since: ago(2), capped: false };
 const todaySkills: SkillsCheckResponse = { skills: [{ skill: 'Motion design', askedIn: 9, outOf: 50 }, { skill: 'Experiment design', askedIn: 6, outOf: 50 }, { skill: 'Design tokens', askedIn: 4, outOf: 50 }] };
 const weekBucket = (cap: number, remaining: number, window: 'day' | 'week') => ({ cap, window, used: cap - remaining, remaining, grantRemaining: 0, resetsAt: new Date(Date.now() + 4 * day).toISOString() });

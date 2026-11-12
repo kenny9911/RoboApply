@@ -7,6 +7,9 @@
 //     spent), then `confirm: true` through the credit gate;
 //   • a job that is already past "picked" is never prepared twice: the button
 //     is a link to where that application is;
+//   • a state the caller already knows (the Jobs card's and the Dashboard
+//     pick's `application`, REDESIGN §9) shows that link before any tap; a
+//     preparable or unknown one keeps the button and its flow;
 //   • a closed posting and a full list say so and spend nothing;
 //   • flag `agent` off → nothing renders (R-04);
 //   • no wording implies the product applies or submits (D1).
@@ -171,14 +174,40 @@ describe('PrepareApplicationButton', () => {
 
   it.each([
     ['preparing', 'Being prepared', '/ready/job1'],
+    ['ready_for_review', 'Check and open', '/ready/job1'],
     ['approved', 'Check and open', '/ready/job1'],
+    ['opened', 'See application', '/applications?entry=t9'],
     ['applied', 'See application', '/applications?entry=t9'],
+    ['skipped', 'On your list', '/ready?tab=done'],
     ['expired', 'On your list', '/ready?tab=done'],
   ] as const)('a known state "%s" renders the link "%s" without any request', (queueState, name, href) => {
     renderWithBrand(<PrepareApplicationButton jobId="job1" queueState={queueState} trackerEntryId="t9" />, { flags: ON });
     expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);
     expect(screen.queryByRole('button')).toBeNull();
     expect(api.addToQueue).not.toHaveBeenCalled();
+  });
+
+  it('an application opened before its tracker entry was known links to Applications as a whole', () => {
+    renderWithBrand(<PrepareApplicationButton jobId="job1" queueState="opened" trackerEntryId={null} />, { flags: ON });
+    expect(screen.getByRole('link', { name: 'See application' })).toHaveAttribute('href', '/applications');
+  });
+
+  it.each(['picked', 'failed', null] as const)('a known state "%s" (on the list and still preparable, or not on it) keeps the button and the same tap flow', async (queueState) => {
+    renderWithBrand(<PrepareApplicationButton jobId="job1" queueState={queueState} />, { flags: ON });
+    expect(screen.queryByRole('link')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare application' }));
+    await waitFor(() => expect(api.addToQueue).toHaveBeenCalledWith({ jobIds: ['job1'], addedVia: 'feed' }));
+    expect(await screen.findByTestId('prepare-sheet')).toBeInTheDocument();
+    // The quote spends nothing.
+    expect(api.prepareKit.mock.calls.every((c) => c[1]?.confirm !== true)).toBe(true);
+  });
+
+  it('what the tap learned wins over the state the caller knew (a list read since the page loaded)', async () => {
+    api.addToQueue.mockResolvedValue({ items: [item({ state: 'approved' })] });
+    renderWithBrand(<PrepareApplicationButton jobId="job1" queueState="picked" />, { flags: ON });
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare application' }));
+    expect(await screen.findByRole('link', { name: 'Check and open' })).toHaveAttribute('href', '/ready/job1');
+    expect(api.prepareKit).not.toHaveBeenCalled();
   });
 
   it('a status link stays quiet even when the caller asked for a primary button', () => {

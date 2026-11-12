@@ -184,7 +184,14 @@ function PickRow({ item, agent, withSource, lead }: { item: FeedItem; agent: boo
         {/* Three rows share one action word: the group names the job it acts on. */}
         <div role="group" aria-label={tAny('jobs.card.actions.label', { title: item.title })}>
           {agent ? (
-            <PrepareApplicationButton jobId={item.jobId} variant={lead ? 'primary' : 'default'} addedVia="suggestions" />
+            // The pick's own list state, when the server sent one: a job on the list says where it is up front.
+            <PrepareApplicationButton
+              jobId={item.jobId}
+              queueState={item.application?.state ?? null}
+              trackerEntryId={item.application?.trackerEntryId ?? null}
+              variant={lead ? 'primary' : 'default'}
+              addedVia="suggestions"
+            />
           ) : (
             <Link href={href} className={lead ? 'btn primary' : 'btn'} data-testid="pick-view">
               {t('jobSearch.viewJob')}

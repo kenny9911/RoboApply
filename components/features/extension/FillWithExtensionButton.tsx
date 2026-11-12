@@ -19,18 +19,26 @@
 // Opening the page does NOT move the job to Applied: only the user's answer
 // to the extension's "Did you submit this application?" does. Nothing here
 // reads the page or asks for a fit score.
+//
+// A caller that already holds the job page passes its `autofill`, and the
+// button then reads nothing itself: the job page's own read stays the only
+// one (the desktop Jobs list previews its first job without recording a
+// view, and a second read of the page here would record one).
 
 import { useTranslations } from 'next-intl';
 
 import { useJob } from '../../../hooks/job';
 import { extensionFillsAts, useExtensionPresence } from '../../../hooks/extension';
 import { useBrandId } from '../../../lib/brand/BrandProvider';
+import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
 import s from './extension.module.css';
 
 export interface FillWithExtensionButtonProps {
   jobId: string;
   /** The employer's application URL; null when the job has none (the button stays hidden). */
   applyUrl: string | null;
+  /** The job page's `autofill`, when the caller holds the page: no read of its own then. */
+  autofill?: JobDetailResponse['autofill'] | null;
 }
 
 function safeHttpUrl(url: string | null): string | null {
@@ -43,19 +51,20 @@ function safeHttpUrl(url: string | null): string | null {
   }
 }
 
-export function FillWithExtensionButton({ jobId, applyUrl }: FillWithExtensionButtonProps) {
+export function FillWithExtensionButton({ jobId, applyUrl, autofill: given }: FillWithExtensionButtonProps) {
   const t = useTranslations('extensionWeb');
   const href = safeHttpUrl(applyUrl);
-  const job = useJob(href ? jobId : null);
+  const job = useJob(href && given === undefined ? jobId : null);
+  const autofill = given === undefined ? job.data?.autofill : given;
   const brand = useBrandId();
-  const supported = job.data?.autofill?.supported === true && extensionFillsAts(brand, job.data?.autofill?.atsType);
+  const supported = autofill?.supported === true && extensionFillsAts(brand, autofill?.atsType);
   const presence = useExtensionPresence({ enabled: !!href && supported });
 
   if (!href || !supported) return null;
   if (presence.state === 'present') {
     return (
       <div className={s.fill}>
-        <a className={s.fillAction} href={href} target="_blank" rel="noopener noreferrer" data-ats={job.data?.autofill?.atsType ?? undefined}>
+        <a className={s.fillAction} href={href} target="_blank" rel="noopener noreferrer" data-ats={autofill?.atsType ?? undefined}>
           {t('fill.cta')}
           <span className="sr-only"> {t('fill.newTab')}</span>
         </a>
