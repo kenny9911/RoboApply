@@ -11,8 +11,9 @@
 // (schools, provinces, the multi-role market snapshot, 届别 defaults) are a
 // separate router at /api/v1/roboapply/onboarding/cn.
 //
-//   GET  /state                       → OnboardingStateView
-//   PUT  /steps/:step                 step body (+ skip) → StepResponse (idempotent upsert)
+//   GET  /state                       → OnboardingStateView (with `searchRunning`: the setup search is at work)
+//   PUT  /steps/:step                 step body (+ skip) → StepResponse (idempotent upsert); in the stage
+//                                       order, except RoboApply's `confirm`, also taken while `matching`
 //   GET  /title-suggest?q             → { items: TitleSuggestionView[] } · 60/min per user
 //   GET  /market-snapshot?taxonomyId&country[&city] → MarketSnapshotResponse (Sourced; 6 h cache on
 //                                       RoboApply; GoApply reads the cn index through onboarding-cn)
@@ -20,7 +21,9 @@
 //   POST /match                       → SSE: phase × 5 (each after its work), then done | error
 //                                       only at matching/confirm/tour (409 otherwise) · 5/hour per user
 //   POST /confirm                     RoboApply: ConfirmStep; GoApply: the cn confirm body
-//                                       (same as PUT /steps/confirm) → OnboardingStageResponse
+//                                       (same as PUT /steps/confirm) → OnboardingStageResponse.
+//                                       RoboApply takes it while `matching` too: setup finishes while
+//                                       the search runs on (one is queued when none is at work)
 //   POST /complete                    → OnboardingStageResponse (tour → done)
 //   POST /skip                        → OnboardingStageResponse (leave early; finish banner)
 

@@ -95,15 +95,18 @@ export function expressRedirect(state: FlowState, classicChosen: boolean): strin
  * machine's order. Any timing but "as soon as possible" is the explore branch,
  * whose `goal` and `preferences` steps come before `resume`: the start flow
  * does not ask them, so it saves them as skipped (the server refuses `resume`
- * while one of them is the current stage). `matching` is the search itself;
- * `complete` (not a stage with a screen) closes setup after `confirm`.
+ * while one of them is the current stage). `matching` starts the search:
+ * setup does not wait for its end, because the server takes RoboApply's
+ * `confirm` while the stage is still `matching` (docs/agent-driven/REDESIGN.md
+ * §9). `complete` (not a stage with a screen) closes setup after `confirm`.
  */
 export function expressSavePlan(timing: string): string[] {
   return [...screensFor('roboapply', timing === 'asap' ? 'urgent' : 'explore'), 'complete'];
 }
 
 /**
- * Where the start flow lands once setup is closed: Today. One exception, kept
+ * Where the start flow lands once setup is closed: the Dashboard (its Job
+ * search lane shows the search until the picks arrive). One exception, kept
  * from the long flow (PRODUCT §4.1 "the carried job"): a user who signed up
  * from a job's page goes back to that job, which is the route POST
  * /onboarding/complete names for them (`/jobs/<id>`). Its other answer, the

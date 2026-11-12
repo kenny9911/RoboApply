@@ -32,7 +32,7 @@ vi.mock('../../lib/flags', () => ({ useCapabilities: () => h.caps() }));
 vi.mock('../agent', () => ({ useReadyQueue: (o: unknown) => h.queue(o), useSuggestions: (o: unknown) => h.suggestions(o) }));
 vi.mock('../feed/useFeed', () => ({ useFeed: (p: unknown) => h.feed(p) }));
 vi.mock('../feed/useCalibration', () => ({ useSkillsCheckData: (enabled: boolean) => h.skills(enabled) }));
-vi.mock('../onboarding/useOnboarding', () => ({ useOnboardingState: () => h.onboarding() }));
+vi.mock('../onboarding/useOnboarding', () => ({ useOnboardingState: (o: unknown) => h.onboarding(o) }));
 vi.mock('../profile/useProfile', () => ({ useProfile: () => h.profile() }));
 vi.mock('../search/useSearchProfiles', () => ({ useActiveSearchProfile: () => h.search() }));
 vi.mock('../usePipelineBoard', () => ({ usePipelineBoard: () => h.board() }));
@@ -54,14 +54,15 @@ const feedState = (over: Record<string, unknown> = {}) => ({ items: [], isPendin
 const feedItem = (jobId: string) => ({ jobId, title: jobId });
 const PROFILE = { id: 'sp1', version: 4, filters: { fitTier: 'good' } };
 
+let client: QueryClient;
 function wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 const sources = () => renderHook(() => useTodaySources(), { wrapper });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   h.caps.mockReturnValue(flags({ agent: true, copilot: true, 'jobs.feed': true }));
   h.queue.mockReturnValue(answered({ items: [] }));
   h.suggestions.mockReturnValue(answered({ items: [] }));
@@ -267,6 +268,64 @@ describe('useTodaySources: each read on its own', () => {
     expect(valueOf(sources().result.current.search)).toBe(PROFILE);
     h.search.mockReturnValue({ ...answered({ profiles: [] }), profile: null });
     expect(sources().result.current.search).toEqual({ status: 'ready', data: null });
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §9: setup is finished before its search, so the first visit often comes while it runs.
+describe('useTodaySources: the setup search', () => {
+  it('reads the setup state the way a waiting screen does (again while the search is at work)', () => {
+    sources();
+    expect(h.onboarding).toHaveBeenLastCalledWith({ pollWhileSearching: true });
+  });
+
+  it('while the search is at work no picks are asked for: the lane reads loading and says the search runs', () => {
+    h.onboarding.mockReturnValue(answered({ progress: { total: 5, stepsLeft: 0, leftEarly: null }, searchRunning: true }));
+    const withAgent = sources();
+    expect(h.suggestions).toHaveBeenLastCalledWith({ enabled: false, limit: 3 });
+    expect(withAgent.result.current.picks).toEqual({ status: 'loading' });
+    expect(withAgent.result.current.searching).toBe(true);
+    withAgent.unmount();
+
+    h.caps.mockReturnValue(flags({ 'jobs.feed': true }));
+    h.feed.mockReturnValue(feedState({ items: ['a'].map(feedItem), isPending: false }));
+    const fromList = sources();
+    expect(h.feed).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+    expect(fromList.result.current.picks).toEqual({ status: 'loading' });
+  });
+
+  it('the picks wait for the setup state itself (a list read first could be from before the search)', () => {
+    h.onboarding.mockReturnValue(pending());
+    const { result } = sources();
+    expect(h.suggestions).toHaveBeenLastCalledWith({ enabled: false, limit: 3 });
+    expect(result.current.picks).toEqual({ status: 'loading' });
+    expect(result.current.searching).toBe(false);
+  });
+
+  it('a setup state that cannot be read never holds the picks back', () => {
+    h.onboarding.mockReturnValue(errored());
+    h.suggestions.mockReturnValue(answered({ items: ['a'].map(feedItem) }));
+    const { result } = sources();
+    expect(h.suggestions).toHaveBeenLastCalledWith({ enabled: true, limit: 3 });
+    expect(valueOf(result.current.picks)?.map((p) => p.jobId)).toEqual(['a']);
+  });
+
+  it('when the search ends the picks and the new-jobs count are read afresh; nothing is read again before', async () => {
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    h.onboarding.mockReturnValue(answered({ progress: { total: 5, stepsLeft: 0, leftEarly: null }, searchRunning: true }));
+    const view = sources();
+    expect(invalidate).not.toHaveBeenCalled();
+    h.onboarding.mockReturnValue(answered({ progress: { total: 5, stepsLeft: 0, leftEarly: null }, searchRunning: false }));
+    h.suggestions.mockReturnValue(answered({ items: ['a', 'b'].map(feedItem) }));
+    view.rerender();
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['agent', 'suggestions'] }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['feed', 'new-count'] });
+    expect(h.suggestions).toHaveBeenLastCalledWith({ enabled: true, limit: 3 });
+    expect(view.result.current.searching).toBe(false);
+    expect(valueOf(view.result.current.picks)?.map((p) => p.jobId)).toEqual(['a', 'b']);
+    // Once only.
+    const calls = invalidate.mock.calls.length;
+    view.rerender();
+    expect(invalidate.mock.calls.length).toBe(calls);
   });
 });
 

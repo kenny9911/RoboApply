@@ -1,5 +1,5 @@
 // WP-53 acceptance (Ready to apply UI): every kit state, the intro, the
-// setup wizard's five steps, the cost shown before "Prepare kits", the
+// setup wizard's five steps, the cost shown before "Prepare applications", the
 // out-of-credits sheet, the mandatory Verify details block, "Open application"
 // → Applied at once with "Undo · I didn't apply", the F-FILT-07 question and
 // the mobile layout. Agent calls are mocked at lib/api/agent; every other
@@ -312,7 +312,7 @@ describe('/ready', () => {
     renderWithBrand(<ReadyRoute />, { flags: ON });
     expect(await screen.findByTestId('ready-intro')).toBeInTheDocument();
     expect(screen.getByText('You submit each application yourself.')).toBeInTheDocument();
-    expect(await screen.findByText(/2 of 3 kits left this week\./)).toBeInTheDocument();
+    expect(await screen.findByText(/2 of 3 applications left this week\./)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See Pro' })).toHaveAttribute('href', '/settings/billing#plans');
     expect(screen.getByRole('link', { name: 'Set up Ready to apply' })).toHaveAttribute('href', '/ready/setup');
     expectNoSubmitWording();
@@ -325,7 +325,7 @@ describe('/ready', () => {
     installNet();
     renderWithBrand(<ReadyRoute />, { flags: ON });
     expect(await screen.findByRole('link', { name: 'Continue setup' })).toBeInTheDocument();
-    expect(await screen.findByText('Kits left this week: —')).toBeInTheDocument();
+    expect(await screen.findByText('Applications left this week: —')).toBeInTheDocument();
   });
 
   it('lists kits by tab with real counts (the contract grouping), and flags expired jobs under Done', async () => {
@@ -395,7 +395,7 @@ describe('/ready', () => {
     nav.params = new URLSearchParams('tab=ready');
     api.listQueue.mockResolvedValue({ items: [item({ id: 'q3', jobId: 'job3', state: 'ready_for_review' }), item({ id: 'q5', jobId: 'job1', state: 'approved' })] });
     renderWithBrand(<ReadyRoute />, { flags: ON });
-    expect(await screen.findByRole('link', { name: 'Review kit' })).toHaveAttribute('href', '/ready/job3');
+    expect(await screen.findByRole('link', { name: 'Review application' })).toHaveAttribute('href', '/ready/job3');
     expect(screen.getByRole('link', { name: 'Review and open' })).toHaveAttribute('href', '/ready/job1');
     fireEvent.click(screen.getByRole('tab', { name: /Done/ }));
     expect(nav.replace).toHaveBeenCalledWith('/ready?tab=done', { scroll: false });
@@ -409,15 +409,15 @@ describe('/ready', () => {
     renderWithBrand(<ReadyRoute />, { flags: ON });
     fireEvent.click(await screen.findByLabelText('Select all 2 jobs'));
     const bar = await screen.findByTestId('prepare-bar');
-    fireEvent.click(within(bar).getByRole('button', { name: 'Prepare 2 kits' }));
+    fireEvent.click(within(bar).getByRole('button', { name: 'Prepare 2 applications' }));
     const sheet = await screen.findByTestId('prepare-sheet');
-    expect(await within(sheet).findByTestId('cost-ready_kits')).toHaveTextContent('Uses 2 kits; you have 2 left this week.');
+    expect(await within(sheet).findByTestId('cost-ready_kits')).toHaveTextContent('Uses 2 applications; you have 2 left this week.');
     expect(within(sheet).getByTestId('cost-tailor')).toHaveTextContent('Uses 2 tailoring credits; you have 2 left today.');
     expect(within(sheet).getByTestId('cost-cover_letter')).toHaveTextContent('Uses 2 cover letter credits; you have 1 left today. Only 1 can be prepared now.');
     // Quoting spends nothing: no `confirm` yet.
     expect(api.prepareKit).toHaveBeenCalledWith('q1', {});
     expect(api.prepareKit).toHaveBeenCalledWith('q2', {});
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare 2 kits' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare 2 applications' }));
     await waitFor(() => expect(api.prepareKit).toHaveBeenCalledTimes(4));
     const confirmed = api.prepareKit.mock.calls.filter((c) => c[1]?.confirm === true);
     expect(confirmed.map((c) => c[0])).toEqual(['q1', 'q2']);
@@ -436,7 +436,7 @@ describe('/ready', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
     const sheet = await screen.findByTestId('prepare-sheet');
     await within(sheet).findByTestId('cost-tailor');
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare 1 kit' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare 1 application' }));
     await waitFor(() => expect(__outOfCreditsStore.get()).toEqual({ bucket: 'ready_kits', resetsAt: RESETS, upgradable: true }));
     await waitFor(() => expect(screen.queryByTestId('prepare-sheet')).toBeNull());
   });
@@ -477,7 +477,7 @@ describe('KitRow', () => {
     ['preparing', []],
     ['expired', ['Remove']],
     ['skipped', ['Put back', 'Remove']],
-    ['ready_for_review', ['Review kit']],
+    ['ready_for_review', ['Review application']],
     ['approved', ['Review and open']],
     ['opened', ['See in Applications']],
     ['applied', ['See in Applications']],
@@ -521,7 +521,7 @@ describe('KitRow', () => {
       { flags: ON },
     );
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
-    await waitFor(() => expect(toasts()).toContain('warn: This kit changed in the meantime. The page now shows its latest state.'));
+    await waitFor(() => expect(toasts()).toContain('warn: This application changed in the meantime. The page now shows its latest state.'));
     view.unmount();
     renderWithBrand(
       <ul>
@@ -597,7 +597,7 @@ describe('/ready/[jobId] kit review', () => {
     renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
     expect(await screen.findByTestId('verify-block')).toHaveTextContent('Check 2 details above before you use this resume.');
     const resume = screen.getByTestId('kit-resume');
-    expect(within(resume).getByRole('button', { name: 'Use in this kit' })).toBeDisabled();
+    expect(within(resume).getByRole('button', { name: 'Use in this application' })).toBeDisabled();
     // Two fits can be on this page (today's by the title, the tailoring's here): each says what it is.
     expect(within(resume).getByTestId('kit-fit-note')).toHaveTextContent('show your fit when this resume was tailored. The fit next to the job title is today\'s');
   });
@@ -613,7 +613,7 @@ describe('/ready/[jobId] kit review', () => {
     api.confirmKitPart.mockResolvedValue(item({ state: 'approved' }));
     renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
     const resume = await screen.findByTestId('kit-resume');
-    const use = await within(resume).findByRole('button', { name: 'Use in this kit' });
+    const use = await within(resume).findByRole('button', { name: 'Use in this application' });
     await waitFor(() => expect(use).toBeEnabled());
     expect(screen.queryByTestId('verify-block')).toBeNull();
     fireEvent.click(use);
@@ -628,11 +628,11 @@ describe('/ready/[jobId] kit review', () => {
     api.confirmKitPart.mockRejectedValueOnce(apiError(409, 'conflict', { reason: 'kit_unverified_claims', pending: 1 })).mockResolvedValueOnce(item({ state: 'approved' }));
     renderWithBrand(<KitReview jobId="job1" />, { flags: { ...ON, 'ai.text': true } });
     const resume = await screen.findByTestId('kit-resume');
-    expect(within(resume).getByText('This kit uses your resume as it is.')).toBeInTheDocument();
+    expect(within(resume).getByText('This application uses your resume as it is.')).toBeInTheDocument();
     // Never described as tailored.
     expect(resume).not.toHaveTextContent(/tailored/i);
     expect(within(resume).getByRole('link', { name: 'Open resume' })).toHaveAttribute('href', '/resume/v0');
-    const use = within(resume).getByRole('button', { name: 'Use in this kit' });
+    const use = within(resume).getByRole('button', { name: 'Use in this application' });
     expect(use).toBeEnabled();
     fireEvent.click(use);
     expect(await within(resume).findByRole('alert')).toHaveTextContent('Check the details the tailored resume added before you use it.');
@@ -645,9 +645,9 @@ describe('/ready/[jobId] kit review', () => {
     api.confirmKitPart.mockResolvedValue(item({ state: 'approved' }));
     renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
     const resume = await screen.findByTestId('kit-resume');
-    expect(within(resume).getByText('This kit uses your resume as it is.')).toBeInTheDocument();
+    expect(within(resume).getByText('This application uses your resume as it is.')).toBeInTheDocument();
     expect(within(resume).queryByRole('link', { name: 'Open resume' })).toBeNull();
-    fireEvent.click(within(resume).getByRole('button', { name: 'Use in this kit' }));
+    fireEvent.click(within(resume).getByRole('button', { name: 'Use in this application' }));
     await waitFor(() => expect(api.confirmKitPart).toHaveBeenCalledWith('q1', { part: 'resume', decision: 'use' }));
   });
 
@@ -657,7 +657,7 @@ describe('/ready/[jobId] kit review', () => {
     api.getKitDetail.mockResolvedValue(detailOf(it0, { resume: { pendingClaims: 1 } }));
     renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
     expect(await screen.findByTestId('verify-block')).toHaveTextContent('Check 1 detail above before you use this resume.');
-    expect(within(screen.getByTestId('kit-resume')).getByRole('button', { name: 'Use in this kit' })).toBeDisabled();
+    expect(within(screen.getByTestId('kit-resume')).getByRole('button', { name: 'Use in this application' })).toBeDisabled();
   });
 
   it('the tailoring session comes from the kit detail when the list item has none', async () => {
@@ -692,12 +692,12 @@ describe('/ready/[jobId] kit review', () => {
     api.getKitDetail.mockResolvedValue(detailOf(it0, { aiAvailable: false }));
     const view = renderWithBrand(<KitReview jobId="job1" />, { brand: 'goapply', flags: { ...ON, 'ai.text': true } });
     const resume = await screen.findByTestId('kit-resume');
-    expect(await within(resume).findByText('AI writing is off for your account, so kits use your resume as it is.')).toBeInTheDocument();
+    expect(await within(resume).findByText('AI writing is off for your account, so applications use your resume as it is.')).toBeInTheDocument();
     await within(screen.getByTestId('kit-letter')).findByText('Hello.');
     expect(screen.queryByRole('button', { name: 'Ask for changes' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Tailor/ })).toBeNull();
     // "Use" stays: it is not an AI step.
-    expect(within(resume).getByRole('button', { name: 'Use in this kit' })).toBeEnabled();
+    expect(within(resume).getByRole('button', { name: 'Use in this application' })).toBeEnabled();
     view.unmount();
 
     // The brand without an AI text model: same, whatever the detail says.
@@ -726,7 +726,7 @@ describe('/ready/[jobId] kit review', () => {
     expect(within(letter).getByRole('link', { name: 'Edit letter' })).toHaveAttribute('href', '/resume/letters/cl1');
     fireEvent.click(within(letter).getByRole('button', { name: 'Copy the cover letter' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('Dear Acme team,\n\nI build dashboards.'));
-    fireEvent.click(within(letter).getByRole('button', { name: 'Use in this kit' }));
+    fireEvent.click(within(letter).getByRole('button', { name: 'Use in this application' }));
     await waitFor(() => expect(api.confirmKitPart).toHaveBeenCalledWith('q1', { part: 'letter', decision: 'use' }));
 
     const answers = screen.getByTestId('kit-answers');
@@ -789,7 +789,7 @@ describe('/ready/[jobId] kit review', () => {
     const part = await screen.findByTestId('kit-open');
     await screen.findByText('Data Analyst');
     fireEvent.click(within(part).getByRole('button', { name: 'Open application' }));
-    expect(await within(part).findByRole('alert')).toHaveTextContent('This kit changed in the meantime.');
+    expect(await within(part).findByRole('alert')).toHaveTextContent('This application changed in the meantime.');
     expect(tab.close).toHaveBeenCalled();
     expect(tab.location.href).toBe('');
     expect(within(part).queryByTestId('kit-undo')).toBeNull();
@@ -914,7 +914,7 @@ describe('/ready/[jobId] kit review', () => {
     });
     renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
     await waitFor(() => expect(screen.getByTestId('kit-file-name')).toHaveTextContent('Jane Doe - Acme Corp - Analyst.pdf'));
-    expect(await screen.findByTestId('kit-history')).toHaveTextContent('Cover letter chosen for this kit');
+    expect(await screen.findByTestId('kit-history')).toHaveTextContent('Cover letter chosen for this application');
   });
 
   it('the file name is the server\'s on every load: nothing else is shown while the kit is read (verification finding)', async () => {
@@ -1005,17 +1005,17 @@ describe('/ready/[jobId] kit review', () => {
     expect(nav.push).toHaveBeenCalledWith('/practice?job=job1&resume=v1&from=ready');
   });
 
-  it('a kit not prepared yet offers "Prepare kit" (cost first); a preparing kit says it updates by itself', async () => {
+  it('a kit not prepared yet offers "Prepare application" (cost first); a preparing kit says it updates by itself', async () => {
     api.prepareKit.mockResolvedValue({ credits: [{ bucket: 'tailor', cost: 1 }], confirmed: false });
     api.listQueue.mockResolvedValue({ items: [item({ state: 'picked' })] });
     const view = renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare kit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare application' }));
     expect(await screen.findByTestId('cost-tailor')).toHaveTextContent('Uses 1 tailoring credit; you have 2 left today.');
     view.unmount();
 
     api.listQueue.mockResolvedValue({ items: [item({ state: 'preparing' })] });
     renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
-    expect(await screen.findByTestId('kit-preparing')).toHaveTextContent('Preparing your kit. This page updates by itself.');
+    expect(await screen.findByTestId('kit-preparing')).toHaveTextContent('Preparing your application. This page updates by itself.');
   });
 
   it('an expired job is flagged with Remove (leaving only when it worked); a failed kit can be tried again', async () => {
@@ -1033,7 +1033,7 @@ describe('/ready/[jobId] kit review', () => {
 
     api.listQueue.mockResolvedValue({ items: [item({ state: 'failed', lastError: 'prepare_timeout' })] });
     const failedView = renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
-    expect(await screen.findByText("This kit couldn't be prepared.")).toBeInTheDocument();
+    expect(await screen.findByText("This application couldn't be prepared.")).toBeInTheDocument();
     // The server's code is never shown; a plain reason is.
     expect(screen.getByTestId('kit-failed-reason')).toHaveTextContent('Something went wrong on our side. Try again.');
     expect(screen.queryByText(/prepare_timeout/)).toBeNull();
@@ -1042,7 +1042,7 @@ describe('/ready/[jobId] kit review', () => {
 
     api.listQueue.mockResolvedValue({ items: [item({ state: 'failed', lastError: 'conflict:something_new' })] });
     renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
-    expect(await screen.findByText("This kit couldn't be prepared.")).toBeInTheDocument();
+    expect(await screen.findByText("This application couldn't be prepared.")).toBeInTheDocument();
     expect(screen.queryByTestId('kit-failed-reason')).toBeNull();
     expect(screen.queryByText(/something_new/)).toBeNull();
   });
@@ -1611,21 +1611,21 @@ describe('KitAllowance', () => {
   it('shows the week\'s allowance against the cap, bonus kits on their own line, never "N of M" with N > M', async () => {
     withCredits({ ...bucket(3, 3, 'week'), grantRemaining: 2 });
     renderWithBrand(<KitAllowance />, { flags: ON });
-    expect(await screen.findByText(/3 of 3 kits left this week\./)).toBeInTheDocument();
-    expect(screen.getByText('Plus 2 bonus kits you received.')).toBeInTheDocument();
+    expect(await screen.findByText(/3 of 3 applications left this week\./)).toBeInTheDocument();
+    expect(screen.getByText('Plus 2 bonus applications you received.')).toBeInTheDocument();
     expect(screen.getByTestId('kit-allowance')).toHaveAttribute('data-left', '3');
   });
 
   it('shows the Pro weekly figure only when the server sends it', async () => {
     withCredits({ ...bucket(3, 1, 'week'), proCap: 30 });
     const view = renderWithBrand(<KitAllowance />, { flags: ON });
-    expect(await screen.findByText(/Pro: up to 30 kits a week\./)).toBeInTheDocument();
+    expect(await screen.findByText(/Pro: prepare up to 30 applications a week\./)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See Pro' })).toBeInTheDocument();
     view.unmount();
 
     withCredits(bucket(3, 1, 'week'));
     renderWithBrand(<KitAllowance />, { flags: ON });
-    expect(await screen.findByText(/1 of 3 kits left this week\./)).toBeInTheDocument();
+    expect(await screen.findByText(/1 of 3 applications left this week\./)).toBeInTheDocument();
     expect(screen.queryByText(/Pro: up to/)).toBeNull();
     expect(screen.getByRole('link', { name: 'See Pro' })).toBeInTheDocument();
   });
@@ -1645,7 +1645,7 @@ describe('PrepareSheet zero-tailoring line', () => {
     renderWithBrand(<ReadyRoute />, { flags: { ...ON, 'ai.text': true } });
     fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
     const sheet = await screen.findByTestId('prepare-sheet');
-    expect(await within(sheet).findByText('AI writing is off for your account, so kits use your resume as it is.')).toBeInTheDocument();
-    expect(within(sheet).getByTestId('cost-ready_kits')).toHaveTextContent('Uses 1 kit; you have 2 left this week.');
+    expect(await within(sheet).findByText('AI writing is off for your account, so applications use your resume as it is.')).toBeInTheDocument();
+    expect(within(sheet).getByTestId('cost-ready_kits')).toHaveTextContent('Uses 1 application; you have 2 left this week.');
   });
 });

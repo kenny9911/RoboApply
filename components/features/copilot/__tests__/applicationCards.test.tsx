@@ -54,9 +54,9 @@ describe('prepare_application', () => {
     expect(screen.getByRole('heading', { name: 'Prepare your application for Data Analyst · Acme' })).toBeInTheDocument();
     expect(screen.getByText('It goes on your list first. That uses no credit.')).toBeInTheDocument();
     // The weekly allowance first, then tailoring, each with what is left (the server's summary).
-    await screen.findByText('Uses 1 kit; you have 3 left this week.');
+    await screen.findByText('Uses 1 application; you have 3 left this week.');
     expect(screen.getByText('Uses 1 tailoring credit; you have 2 left today.')).toBeInTheDocument();
-    expect(screen.getByText('Kits are prepared in the background. Nothing is sent to any company.')).toBeInTheDocument();
+    expect(screen.getByText('Applications are prepared in the background. Nothing is sent to any company.')).toBeInTheDocument();
     expect(screen.getByText('You submit each application yourself.')).toBeInTheDocument();
     expect(http.to('POST', applyPath(idOf(proposal)))).toHaveLength(0);
 
@@ -77,7 +77,7 @@ describe('prepare_application', () => {
     const { proposal } = await wireApplication('prepare_application');
     const http = installFetch(routes({}, 0));
     renderUi(<CopilotCardView card={proposal} />);
-    await screen.findByText(/Uses 1 kit; you have 0 left this week\./);
+    await screen.findByText(/Uses 1 application; you have 0 left this week\./);
     fireEvent.click(screen.getByRole('button', { name: 'Prepare application' }));
     await waitFor(() => expect(__outOfCreditsStore.get()).toMatchObject({ bucket: 'ready_kits' }));
     expect(http.to('POST', applyPath(idOf(proposal)))).toHaveLength(0);
@@ -88,7 +88,7 @@ describe('prepare_application', () => {
     const { proposal } = await wireApplication('prepare_application');
     installFetch(routes({ [`POST ${applyPath(idOf(proposal))}`]: () => fail(402, 'credits_exhausted', { bucket: 'tailor', resetsAt: '2026-10-11T00:00:00.000Z', upgradable: true }) }));
     renderUi(<CopilotCardView card={proposal} />);
-    await screen.findByText('Uses 1 kit; you have 3 left this week.');
+    await screen.findByText('Uses 1 application; you have 3 left this week.');
     fireEvent.click(screen.getByRole('button', { name: 'Prepare application' }));
     await waitFor(() => expect(__outOfCreditsStore.get()).toMatchObject({ bucket: 'tailor', upgradable: true }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Prepare application' })).toBeEnabled());
@@ -161,8 +161,8 @@ describe('prepare_application', () => {
     const { proposal } = await wireApplication('prepare_application', { prepareQuote: async () => quote });
     installFetch(routes());
     renderUi(<CopilotCardView card={proposal} />);
-    await screen.findByText('Uses 1 kit; you have 3 left this week.');
-    expect(screen.getByText('AI writing is off for your account, so kits use your resume as it is.')).toBeInTheDocument();
+    await screen.findByText('Uses 1 application; you have 3 left this week.');
+    expect(screen.getByText('AI writing is off for your account, so applications use your resume as it is.')).toBeInTheDocument();
     expect(screen.queryByText(/tailoring credit/)).not.toBeInTheDocument();
   });
 

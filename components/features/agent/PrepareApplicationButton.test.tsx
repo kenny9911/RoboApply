@@ -128,14 +128,14 @@ describe('PrepareApplicationButton', () => {
 
     await waitFor(() => expect(api.addToQueue).toHaveBeenCalledWith({ jobIds: ['job1'], addedVia: 'suggestions' }));
     const sheet = await screen.findByTestId('prepare-sheet');
-    expect(await within(sheet).findByTestId('cost-ready_kits')).toHaveTextContent('Uses 1 kit; you have 2 left this week.');
+    expect(await within(sheet).findByTestId('cost-ready_kits')).toHaveTextContent('Uses 1 application; you have 2 left this week.');
     expect(within(sheet).getByTestId('cost-tailor')).toHaveTextContent('Uses 1 tailoring credit; you have 2 left today.');
     // The quote spends nothing: no `confirm` has been sent.
     expect(api.prepareKit).toHaveBeenCalledTimes(1);
     expect(api.prepareKit).toHaveBeenCalledWith('q1', {});
     expect(within(sheet).getByText('You submit each application yourself.')).toBeInTheDocument();
 
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare 1 kit' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare 1 application' }));
     await waitFor(() => expect(api.prepareKit).toHaveBeenCalledTimes(2));
     const confirmed = api.prepareKit.mock.calls[1]!;
     expect(confirmed[0]).toBe('q1');
@@ -241,7 +241,7 @@ describe('PrepareApplicationButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Prepare application' }));
     const sheet = await screen.findByTestId('prepare-sheet');
     await within(sheet).findByTestId('cost-tailor');
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare 1 kit' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare 1 application' }));
     await waitFor(() => expect(__outOfCreditsStore.get()).toEqual({ bucket: 'ready_kits', resetsAt: RESETS, upgradable: true }));
     expect(screen.queryByRole('link', { name: 'Being prepared' })).toBeNull();
     expect(toasts()).not.toContain('Being prepared. It shows under Waiting for you when it needs your OK.');

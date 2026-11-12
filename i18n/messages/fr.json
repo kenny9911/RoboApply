@@ -2929,7 +2929,7 @@
           },
           "s2": {
             "body": "Change ce que tu veux avant de l’utiliser.",
-            "title": "Relis chaque kit"
+            "title": "Relis chaque candidature"
           },
           "s3": {
             "body": "Ouvre la page de l’employeur et envoie ta candidature. L’offre passe dans « Envoyées ».",
@@ -2937,7 +2937,7 @@
           },
           "sample": {
             "line1": "5 offres cette semaine · Bien adapté ou mieux",
-            "line2": "Kit prêt : CV adapté, lettre de motivation, 4 réponses",
+            "line2": "Candidature prête : CV adapté, lettre de motivation, 4 réponses",
             "line3": "Ouvrir la candidature → tu la vérifies et tu l’envoies"
           },
           "sub": "Pour les offres adaptées, %BRAND% prépare un CV adapté, une lettre de motivation et des réponses aux questions courantes. Tu ouvres chaque candidature et tu l’envoies toi-même.",
@@ -3187,7 +3187,7 @@
           },
           "s2": {
             "body": "Change ce que tu veux avant de l’utiliser.",
-            "title": "Relis chaque kit"
+            "title": "Relis chaque candidature"
           },
           "s3": {
             "body": "Ouvre la page de l’employeur et envoie ta candidature. L’offre passe dans « Envoyées ».",
@@ -3195,7 +3195,7 @@
           },
           "sample": {
             "line1": "5 offres cette semaine · Bien adapté ou mieux",
-            "line2": "Kit prêt : CV adapté, lettre de motivation, 4 réponses",
+            "line2": "Candidature prête : CV adapté, lettre de motivation, 4 réponses",
             "line3": "Ouvrir la candidature → tu la vérifies et tu l’envoies"
           },
           "sub": "Pour les offres adaptées, %BRAND% prépare un CV adapté, une lettre de motivation et des réponses aux questions courantes. Tu ouvres chaque candidature et tu l’envoies toi-même.",
@@ -6255,7 +6255,7 @@
       "job_import": "Offres que tu ajoutes",
       "outreach": "Brouillons de messages",
       "practice": "Entretiens d’entraînement",
-      "ready_kits": "Kits de candidature prêts",
+      "ready_kits": "Candidatures préparées",
       "resume_check": "Vérifications de CV",
       "rewrite": "Modifications par l’IA",
       "tailor": "CV adaptés",
@@ -8621,7 +8621,7 @@
       "cards": {
         "practice": "S’entraîner à l’entretien",
         "practiceBody": "Réponds à des questions réalistes pour le poste et reçois un retour.",
-        "ready": "Kits de candidature prêts — c’est toi qui envoies",
+        "ready": "Candidatures préparées — c’est toi qui les envoies",
         "readyBody": "Nous préparons les documents ; tu les relis et tu les envoies sur le site de l’entreprise.",
         "tailor": "Un CV adapté à chaque offre",
         "tailorBody": "Ajuste ton CV aux exigences d’une offre, en n’utilisant que ce qui est vrai à ton sujet."
@@ -8822,7 +8822,7 @@
         "fitBody": "Chaque offre montre où ton CV répond aux exigences et où il n’y répond pas.",
         "practice": "S’entraîner à l’entretien",
         "practiceBody": "Exerce-toi sur des questions réalistes pour le poste et reçois un retour.",
-        "ready": "Kits de candidature prêts — c’est toi qui envoies",
+        "ready": "Candidatures préparées — c’est toi qui les envoies",
         "readyBody": "Nous préparons les documents. Tu les relis et tu les envoies sur le site de l’entreprise.",
         "tailor": "Un CV adapté à chaque offre",
         "tailorBody": "Ajuste ton CV à une offre, en n’utilisant que ce qui est vrai à ton sujet."
@@ -8858,7 +8858,7 @@
       },
       "progress": {
         "saving": "Enregistrement de tes réponses…",
-        "searching": "Recherche d’offres en cours. Cela peut prendre une minute ou deux.",
+        "searching": "Lancement de ta recherche…",
         "finishing": "Finalisation de la configuration…"
       },
       "failed": {
@@ -9752,12 +9752,12 @@
   },
   "ready": {
     "allowance": {
-      "bonus": "En plus : {count, plural, one {# kit bonus que tu as reçu} other {# kits bonus que tu as reçus}}.",
-      "left": "Il te reste {left} sur {cap, plural, one {# kit} other {# kits}} cette semaine.",
-      "pro": "Pro : jusqu’à {count} kits par semaine.",
-      "resets": "De nouveaux kits le {date}.",
+      "bonus": "En plus : {count, plural, one {# candidature bonus que tu as reçue} other {# candidatures bonus que tu as reçues}}.",
+      "left": "Il te reste {left} sur {cap, plural, one {# candidature} other {# candidatures}} cette semaine.",
+      "pro": "Pro : prépare jusqu’à {count} candidatures par semaine.",
+      "resets": "De nouvelles candidatures le {date}.",
       "seePro": "Voir Pro",
-      "unknown": "Kits restants cette semaine : —"
+      "unknown": "Candidatures restantes cette semaine : —"
     },
     "answers": {
       "add": "Ajouter la question",
@@ -9772,7 +9772,7 @@
         "work_authorization": "Précise aussi si tu as besoin d’un parrainage de visa, maintenant ou plus tard."
       },
       "inCurrency": "{question} ({currency})",
-      "lead": "Écris tes réponses aux questions que les formulaires posent souvent. Les kits les affichent avec un bouton pour les copier. Il n’y a que toi qui écris ces réponses.",
+      "lead": "Écris tes réponses aux questions que les formulaires posent souvent. Les candidatures les affichent avec un bouton pour les copier. Il n’y a que toi qui écris ces réponses.",
       "loadFailed": "Tes réponses enregistrées n’ont pas pu être chargées.",
       "optional": "(facultatif)",
       "protectedNote": "L’IA ne répond jamais à cette question. Elle est remplie uniquement à partir de ta réponse.",
@@ -9793,10 +9793,10 @@
     },
     "intro": {
       "continue": "Continuer la configuration",
-      "lead": "Chaque semaine, %BRAND% sélectionne des offres à partir de ta recherche. Tu choisis celles pour lesquelles préparer un kit.",
-      "point_kit": "Pour chaque offre que tu choisis, un kit : ton CV adapté à l’annonce, une lettre de motivation quand l’annonce en demande une, et tes réponses enregistrées.",
+      "lead": "Chaque semaine, %BRAND% sélectionne des offres à partir de ta recherche. Tu choisis celles pour lesquelles préparer une candidature.",
+      "point_kit": "Pour chaque offre que tu choisis, une candidature : ton CV adapté à l’annonce, une lettre de motivation quand l’annonce en demande une, et tes réponses enregistrées.",
       "point_list": "Une liste hebdomadaire d’offres qui correspondent à ta recherche. Tu peux ajouter toi-même n’importe quelle offre.",
-      "point_review": "Tu vérifies chaque kit avant de l’utiliser. Tout ce qui est nouveau dans ton CV doit être confirmé par toi.",
+      "point_review": "Tu vérifies chaque candidature avant de l’utiliser. Tout ce qui est nouveau dans ton CV doit être confirmé par toi.",
       "start": "Configurer « Prêt à postuler »",
       "title": "Prépare chaque candidature, puis envoie-la toi-même",
       "point_open": "Tu ouvres la page de candidature et tu envoies la candidature toi-même."
@@ -9812,12 +9812,12 @@
           "title": "Rien à préparer"
         },
         "ready": {
-          "sub": "Prépare un kit depuis l’onglet À préparer. Il apparaît ici quand il est prêt pour ta vérification.",
-          "title": "Aucun kit prêt pour l’instant"
+          "sub": "Prépare une candidature depuis l’onglet À préparer. Elle apparaît ici quand elle est prête pour ta vérification.",
+          "title": "Aucune candidature prête pour l’instant"
         }
       },
       "expiredNote": "{count, plural, one {# offre n’est plus publiée} other {# offres ne sont plus publiées}} par l’entreprise. {count, plural, one {Retire-la} other {Retire-les}} pour garder ta liste en ordre.",
-      "prepareSelected": "Préparer {count, plural, one {# kit} other {# kits}}",
+      "prepareSelected": "Préparer {count, plural, one {# candidature} other {# candidatures}}",
       "selectAll": "Tout sélectionner ({count, plural, one {# offre} other {# offres}})",
       "selected": "{count, plural, one {# offre sélectionnée} other {# offres sélectionnées}}"
     },
@@ -9825,33 +9825,33 @@
     "prepare": {
       "bucket": {
         "cover_letter": "{count, plural, one {# crédit de lettre de motivation} other {# crédits de lettre de motivation}}",
-        "ready_kits": "{count, plural, one {# kit} other {# kits}}",
+        "ready_kits": "{count, plural, one {# candidature} other {# candidatures}}",
         "tailor": "{count, plural, one {# crédit d’adaptation} other {# crédits d’adaptation}}"
       },
       "cancel": "Annuler",
-      "confirm": "Préparer {count, plural, one {# kit} other {# kits}}",
+      "confirm": "Préparer {count, plural, one {# candidature} other {# candidatures}}",
       "cost": "Utilise {what} ; il t’en reste {left} {window, select, day {aujourd’hui} week {cette semaine} other {ce mois-ci}}.",
       "costUnknown": "Utilise {what}. Crédits restants : —",
       "description": "Voici ce que ça utilise, avant que rien ne démarre.",
       "noTailor": "Ton CV est utilisé tel quel (l’adaptation est désactivée dans les Réglages).",
-      "noTailorAi": "La rédaction par IA est désactivée pour ton compte : les kits utilisent donc ton CV tel quel.",
-      "noTailorAsIs": "Aucun crédit d’adaptation n’est utilisé : les kits utilisent ton CV tel quel.",
+      "noTailorAi": "La rédaction par IA est désactivée pour ton compte : les candidatures utilisent donc ton CV tel quel.",
+      "noTailorAsIs": "Aucun crédit d’adaptation n’est utilisé : les candidatures utilisent ton CV tel quel.",
       "notEnough": "Tu ne peux en préparer que {left} pour l’instant.",
       "quoteFailed": "Le coût n’a pas pu être vérifié. Rien n’a été utilisé. Réessaie.",
       "quoting": "Vérification du coût…",
-      "runFailed": "{count, plural, one {# kit n’a pas pu démarrer} other {# kits n’ont pas pu démarrer}}. Réessaie depuis l’onglet À préparer.",
+      "runFailed": "{count, plural, one {# candidature n’a pas pu démarrer} other {# candidatures n’ont pas pu démarrer}}. Réessaie depuis l’onglet À préparer.",
       "running": "Démarrage…",
       "someFailed": "{count, plural, one {# offre n’a pas pu être vérifiée et est laissée de côté} other {# offres n’ont pas pu être vérifiées et sont laissées de côté}}.",
-      "started": "Préparation de {count, plural, one {# kit} other {# kits}}. {count, plural, one {Il apparaît dans l’onglet Prêts une fois terminé} other {Ils apparaissent dans l’onglet Prêts une fois terminés}}.",
-      "title": "Préparer {count, plural, one {# kit} other {# kits}}",
-      "whatHappens": "Les kits sont préparés en arrière-plan. Rien n’est envoyé à aucune entreprise."
+      "started": "Préparation de {count, plural, one {# candidature} other {# candidatures}}. {count, plural, one {Elle apparaît dans l’onglet Prêtes une fois terminée} other {Elles apparaissent dans l’onglet Prêtes une fois terminées}}.",
+      "title": "Préparer {count, plural, one {# candidature} other {# candidatures}}",
+      "whatHappens": "Les candidatures sont préparées en arrière-plan. Rien n’est envoyé à aucune entreprise."
     },
     "progress": {
       "applied": "Candidatures envoyées",
       "label": "Liste de cette semaine",
       "labelAll": "Toute ta liste",
       "preparing": "En préparation",
-      "ready": "Prêts pour toi",
+      "ready": "Prêtes pour toi",
       "toPrepare": "À préparer"
     },
     "questions": {
@@ -9876,7 +9876,7 @@
       "work_model_preference": "Préfères-tu le télétravail, l’hybride ou le travail sur site ?"
     },
     "review": {
-      "aiOff": "La rédaction par IA est désactivée pour ton compte : les kits utilisent donc ton CV tel quel.",
+      "aiOff": "La rédaction par IA est désactivée pour ton compte : les candidatures utilisent donc ton CV tel quel.",
       "answers": {
         "add": "Ajouter des réponses",
         "addToProfile": "Ajouter à ton profil",
@@ -9892,19 +9892,19 @@
       "copyFailed": "Copie impossible. Sélectionne le texte et copie-le.",
       "errors": {
         "aiUnavailable": "La rédaction par IA n’est pas disponible pour ton compte en ce moment.",
-        "changed": "Ce kit a changé entre-temps. La page affiche maintenant son dernier état.",
+        "changed": "Cette candidature a changé entre-temps. La page affiche maintenant son dernier état.",
         "closed": "Cette offre n’est plus publiée par l’entreprise.",
         "full": "Ta liste est pleine. Retire d’abord une offre.",
         "generic": "Ça n’a pas fonctionné. Réessaie.",
-        "preparing": "Ce kit est encore en préparation. Réessaie dans un instant.",
+        "preparing": "Cette candidature est encore en préparation. Réessaie dans un instant.",
         "undoExpired": "Cette action ne peut plus être annulée ici.",
         "unverified": "Avant de l’utiliser, vérifie les détails que le CV adapté a ajoutés."
       },
       "expired": "L’entreprise ne publie plus cette offre.",
-      "failed": "Ce kit n’a pas pu être préparé.",
+      "failed": "Cette candidature n’a pas pu être préparée.",
       "failedReason": {
-        "aiUnavailable": "La rédaction par IA n’était pas disponible pour ce kit. Réessaie plus tard.",
-        "credits": "Tu n’avais plus de crédits pour ce kit. Réessaie quand ils seront renouvelés.",
+        "aiUnavailable": "La rédaction par IA n’était pas disponible pour cette candidature. Réessaie plus tard.",
+        "credits": "Tu n’avais plus de crédits pour cette candidature. Réessaie quand ils seront renouvelés.",
         "jobClosed": "L’entreprise a cessé de publier cette offre.",
         "noResume": "Ajoute d’abord un CV, puis réessaie.",
         "ourSide": "Un problème est survenu de notre côté. Réessaie."
@@ -9934,8 +9934,8 @@
         },
         "loadFailed": "L’historique n’a pas pu être chargé.",
         "moved": "Maintenant : {state}",
-        "none": "Il ne s’est encore rien passé pour ce kit.",
-        "notice": "Rappel : ce kit est prêt et pas encore ouvert",
+        "none": "Il ne s’est encore rien passé pour cette candidature.",
+        "notice": "Rappel : cette candidature est prête et pas encore ouverte",
         "opened": "Candidature ouverte ; déplacée dans « Envoyées »",
         "revised": {
           "letter": "Modifications demandées pour la lettre de motivation",
@@ -9944,27 +9944,27 @@
         "title": "Historique",
         "undone": "Candidature marquée comme non envoyée (Annuler)",
         "used": {
-          "letter": "Lettre de motivation choisie pour ce kit",
-          "resume": "CV choisi pour ce kit"
+          "letter": "Lettre de motivation choisie pour cette candidature",
+          "resume": "CV choisi pour cette candidature"
         }
       },
       "letter": {
         "copyAria": "Copier la lettre de motivation",
         "edit": "Modifier la lettre",
         "loadFailed": "La lettre de motivation n’a pas pu être chargée.",
-        "none": "Pas de lettre de motivation dans ce kit.",
+        "none": "Pas de lettre de motivation dans cette candidature.",
         "off": "Les lettres de motivation sont désactivées dans les Réglages.",
         "title": "Lettre de motivation",
-        "use": "Utiliser dans ce kit"
+        "use": "Utiliser dans cette candidature"
       },
       "notOnList": {
         "add": "Ajouter à « Prêt à postuler »",
         "failed": "Cette offre n’a pas pu être ajoutée. Réessaie.",
         "full": "Ta liste est pleine. Retire ou termine d’abord quelques offres.",
-        "sub": "Ajoute-la pour lui préparer un kit.",
+        "sub": "Ajoute-la pour lui préparer une candidature.",
         "title": "Cette offre n’est pas dans ta liste"
       },
-      "notPrepared": "Ce kit n’est pas encore préparé.",
+      "notPrepared": "Cette candidature n’est pas encore préparée.",
       "open": {
         "again": "Rouvrir la page de candidature",
         "alreadyApplied": "Cette offre était déjà dans Candidatures.",
@@ -9987,18 +9987,18 @@
         "sub": "Un entretien d’entraînement basé sur cette annonce.",
         "title": "S’entraîner pour cette offre"
       },
-      "prepare": "Préparer le kit",
-      "preparing": "Ton kit est en préparation. Cette page se met à jour toute seule.",
+      "prepare": "Préparer la candidature",
+      "preparing": "Ta candidature est en préparation. Cette page se met à jour toute seule.",
       "remove": "Retirer de la liste",
       "removeConfirm": "Retirer cette offre de ta liste ?",
       "removeYes": "Retirer",
       "resume": {
-        "asIs": "Ce kit utilise ton CV tel quel.",
+        "asIs": "Cette candidature utilise ton CV tel quel.",
         "finishBlock": "Enregistre le CV vérifié ci-dessus avant de l’utiliser.",
         "loadFailed": "Le CV adapté n’a pas pu être chargé. Recharge la page pour réessayer.",
         "openAsIs": "Ouvrir le CV",
         "title": "CV",
-        "use": "Utiliser dans ce kit",
+        "use": "Utiliser dans cette candidature",
         "verifyBlock": "Vérifie {count, plural, one {# détail} other {# détails}} ci-dessus avant d’utiliser ce CV.",
         "fitNote": "« Avant » et « Après » montrent ton adéquation au moment où ce CV a été adapté. L’adéquation affichée à côté de l’intitulé de l’offre est celle d’aujourd’hui, donc les deux peuvent différer."
       },
@@ -10009,7 +10009,7 @@
       },
       "reviseSend": "Envoyer",
       "skip": "Ignorer cette offre",
-      "skipped": "Tu as ignoré cette offre. Remets-la dans ta liste pour lui préparer un kit."
+      "skipped": "Tu as ignoré cette offre. Remets-la dans ta liste pour lui préparer une candidature."
     },
     "row": {
       "loading": "Chargement de l’offre…",
@@ -10019,7 +10019,7 @@
       "remove": "Retirer",
       "restore": "Remettre",
       "retry": "Réessayer",
-      "review": "Vérifier le kit",
+      "review": "Vérifier la candidature",
       "reviewOpen": "Vérifier et ouvrir",
       "seeApplication": "Voir dans Candidatures",
       "select": "Sélectionner {title}",
@@ -10108,7 +10108,7 @@
       },
       "extension": {
         "lead": "L’extension de navigateur remplit les formulaires de candidature avec ton profil et tes réponses quand tu le demandes. Tu vérifies le formulaire et tu l’envoies toi-même.",
-        "skipNote": "Tu peux passer cette étape et ajouter l’extension plus tard. Les kits fonctionnent sans elle : copie tes réponses depuis le kit."
+        "skipNote": "Tu peux passer cette étape et ajouter l’extension plus tard. Les candidatures fonctionnent sans elle : copie tes réponses depuis la candidature."
       },
       "finish": "Terminer la configuration",
       "firstList": "Configuration terminée. {count, plural, one {# offre est} other {# offres sont}} dans ta liste pour cette semaine.",
@@ -10116,9 +10116,9 @@
       "profile": {
         "allSet": "Ton profil contient tout ce que les formulaires demandent en général.",
         "complete": "Compléter ton profil",
-        "lead": "Les formulaires de candidature demandent ces informations. Les kits utilisent ce qu’il y a dans ton profil, alors vérifie que tout est exact.",
+        "lead": "Les formulaires de candidature demandent ces informations. Tes candidatures utilisent ce qu’il y a dans ton profil, alors vérifie que tout est exact.",
         "missing": "Manquant",
-        "missingNote": "Tu peux continuer maintenant. Chaque kit liste ce qui manque encore pour que tu puisses le renseigner dans le formulaire.",
+        "missingNote": "Tu peux continuer maintenant. Chaque candidature liste ce qui manque encore pour que tu puisses le renseigner dans le formulaire.",
         "missingTitle": "{count, plural, one {Il manque # information que les formulaires demandent} other {Il manque # informations que les formulaires demandent}}"
       },
       "skip": "Passer pour l’instant",
@@ -10136,13 +10136,13 @@
     },
     "state": {
       "applied": "Candidature envoyée",
-      "approved": "Prêt à ouvrir",
+      "approved": "Prête à ouvrir",
       "expired": "N’est plus publiée",
       "failed": "Échec de la préparation",
       "opened": "Candidature ouverte",
-      "picked": "Pas encore préparé",
+      "picked": "Pas encore préparée",
       "preparing": "En préparation",
-      "ready_for_review": "Prêt pour ta vérification",
+      "ready_for_review": "Prête pour ta vérification",
       "skipped": "Ignorée"
     },
     "suggestions": {
@@ -10150,14 +10150,14 @@
       "addAria": "Ajouter {title} à ta liste",
       "failed": "Cette offre n’a pas pu être ajoutée. Réessaie.",
       "full": "Ta liste est pleine. Retire ou termine d’abord quelques offres.",
-      "sub": "Pas encore dans ta liste. Ajoute celles pour lesquelles tu veux un kit.",
+      "sub": "Pas encore dans ta liste. Ajoute celles pour lesquelles tu veux préparer une candidature.",
       "title": "D’autres offres qui correspondent à ta recherche"
     },
     "tabs": {
-      "done": "Terminés",
-      "label": "Kits par statut",
+      "done": "Terminées",
+      "label": "Candidatures par statut",
       "prepare": "À préparer",
-      "ready": "Prêts"
+      "ready": "Prêtes"
     },
     "title": "Prêt à postuler",
     "unavailable": {
@@ -10190,9 +10190,9 @@
       "saved": "Réglages enregistrés.",
       "saving": "Enregistrement…",
       "tailorEach": "Adapter mon CV à chaque offre",
-      "tailorEachNote": "Utilise un crédit d’adaptation par kit. Tu vérifies chaque modification avant qu’elle soit utilisée.",
+      "tailorEachNote": "Utilise un crédit d’adaptation par candidature. Tu vérifies chaque modification avant qu’elle soit utilisée.",
       "target": "Offres dans ta liste hebdomadaire",
-      "targetNote": "Un objectif pour la liste, pas une promesse : elle peut en contenir moins quand moins d’offres correspondent. Ta formule détermine combien de kits peuvent être préparés.",
+      "targetNote": "Un objectif pour la liste, pas une promesse : elle peut en contenir moins quand moins d’offres correspondent. Ta formule détermine combien de candidatures peuvent être préparées.",
       "targetValue": "{count} par semaine",
       "tierAtLeast": {
         "good": "Au moins",
@@ -11889,6 +11889,7 @@
       "foundUnknown": "Nouvelles offres qui te correspondent depuis ta dernière visite :",
       "picksTitle": "Meilleures offres",
       "picksLoading": "Chargement des meilleures offres…",
+      "searching": "Recherche d’offres qui correspondent à tes réponses. Les meilleures offres s’afficheront ici à la fin de la recherche.",
       "picksNone": "Aucune nouvelle offre à mettre en avant pour l’instant.",
       "picksFailed": "Les meilleures offres n’ont pas pu être chargées.",
       "viewJob": "Voir l’offre",

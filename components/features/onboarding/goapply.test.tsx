@@ -420,7 +420,7 @@ describe('tour fallback in the app shell (GoApply)', () => {
     renderGo(<TourOverlay />, { flags: { 'ai.text': true } });
     expect(await screen.findByRole('heading', { name: "Here's what you can do" })).toBeInTheDocument();
     expect(screen.queryByText("Why you fit and what's missing")).toBeNull();
-    expect(screen.queryByText('Ready-to-apply kits — you submit')).toBeNull();
+    expect(screen.queryByText('Prepared applications — you submit')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
     await waitFor(() => expect(net.to('POST', `${P}/complete`)).toHaveLength(1));
     await waitFor(() => expect(screen.queryByRole('heading', { name: "Here's what you can do" })).toBeNull());

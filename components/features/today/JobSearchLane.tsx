@@ -14,6 +14,11 @@
 //   action    `Prepare application` (it puts the job on the list, shows the
 //             cost before anything is spent, then starts the preparation).
 //             Without Ready to apply the action is the job's own page.
+//   search    while the setup search is still at work (setup is finished
+//             before it, docs/agent-driven/REDESIGN.md §9) the picks wait for
+//             it: the loading state says the search is running, in words, for
+//             as long as the server says it is (ruling C38: progress is
+//             narrated only while it is really running).
 //
 // D1: nothing here applies. Preparing tailors the resume and writes the
 // letter; the user opens the application and submits it.
@@ -215,9 +220,11 @@ export interface JobSearchLaneProps {
    * the primary button, and while the waiting list is still loading.
    */
   leadPrimary?: boolean;
+  /** The setup search is still at work (`TodaySources.searching`): the loading picks say so. */
+  searching?: boolean;
 }
 
-export function JobSearchLane({ flags, newJobs, picks: latestPicks, picksFrom, leadPrimary = false }: JobSearchLaneProps) {
+export function JobSearchLane({ flags, newJobs, picks: latestPicks, picksFrom, leadPrimary = false, searching = false }: JobSearchLaneProps) {
   const t = useTranslations('today');
   const cn = useBrand().market === 'cn';
   const picks = useHeldPicks(latestPicks);
@@ -238,7 +245,13 @@ export function JobSearchLane({ flags, newJobs, picks: latestPicks, picksFrom, l
 
           {picks.status === 'loading' ? (
             <div role="status">
-              <span className={styles.srOnly}>{t('jobSearch.picksLoading')}</span>
+              {searching ? (
+                <p className={styles.note} data-testid="today-picks-searching">
+                  {t('jobSearch.searching')}
+                </p>
+              ) : (
+                <span className={styles.srOnly}>{t('jobSearch.picksLoading')}</span>
+              )}
               <div className={styles.skeletons} aria-hidden="true">
                 <div className={styles.skeletonRow} />
                 <div className={styles.skeletonRow} />

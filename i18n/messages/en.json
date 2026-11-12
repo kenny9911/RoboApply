@@ -2990,7 +2990,7 @@
           "sub": "For jobs that fit, %BRAND% prepares a tailored resume, a cover letter and answers to common questions. You open each application and submit it yourself.",
           "sample": {
             "line1": "5 jobs this week · Good fit or better",
-            "line2": "Kit ready: tailored resume, cover letter, 4 answers",
+            "line2": "Application ready: tailored resume, cover letter, 4 answers",
             "line3": "Open application → you check it and submit"
           },
           "s1": {
@@ -2998,7 +2998,7 @@
             "body": "Choose 5, 10, 20 or 30 jobs and the lowest fit you'll accept."
           },
           "s2": {
-            "title": "Review each kit",
+            "title": "Review each application",
             "body": "Change anything before you use it."
           },
           "s3": {
@@ -3440,7 +3440,7 @@
           "sub": "For jobs that fit, %BRAND% prepares a tailored resume, a cover letter and answers to common questions. You open each application and submit it yourself.",
           "sample": {
             "line1": "5 jobs this week · Good fit or better",
-            "line2": "Kit ready: tailored resume, cover letter, 4 answers",
+            "line2": "Application ready: tailored resume, cover letter, 4 answers",
             "line3": "Open application → you check it and submit"
           },
           "s1": {
@@ -3448,7 +3448,7 @@
             "body": "Choose 5, 10, 20 or 30 jobs and the lowest fit you'll accept."
           },
           "s2": {
-            "title": "Review each kit",
+            "title": "Review each application",
             "body": "Change anything before you use it."
           },
           "s3": {
@@ -6514,7 +6514,7 @@
       "autofill": "Form fills",
       "ai_answer": "AI answers to form questions",
       "job_import": "Jobs you add",
-      "ready_kits": "Ready-to-apply kits",
+      "ready_kits": "Prepared applications",
       "competitiveness": "Competitiveness reports",
       "contact_lookup": "Contact lookups",
       "practice": "Practice interviews",
@@ -9410,7 +9410,7 @@
         "tailorBody": "Adjust your resume to a job's requirements, using only what's true about you.",
         "practice": "Practice the interview",
         "practiceBody": "Answer realistic questions for the role and get feedback.",
-        "ready": "Ready-to-apply kits — you submit",
+        "ready": "Prepared applications — you submit",
         "readyBody": "We prepare the materials; you review them and submit on the company's site."
       }
     },
@@ -9483,7 +9483,7 @@
         "fitBody": "Each job shows where your resume meets the requirements and where it doesn't.",
         "tailor": "A tailored resume for each job",
         "tailorBody": "Adjust your resume to one job, using only what's true about you.",
-        "ready": "Ready-to-apply kits — you submit",
+        "ready": "Prepared applications — you submit",
         "readyBody": "We prepare the materials. You review them and submit on the company's site.",
         "practice": "Practice the interview",
         "practiceBody": "Rehearse realistic questions for the role and get feedback."
@@ -9549,7 +9549,7 @@
       },
       "progress": {
         "saving": "Saving your answers…",
-        "searching": "Searching for jobs. This can take a minute or two.",
+        "searching": "Starting your search…",
         "finishing": "Finishing setup…"
       },
       "failed": {
@@ -10884,21 +10884,21 @@
     },
     "intro": {
       "title": "Get each application ready, then send it yourself",
-      "lead": "Each week %BRAND% picks jobs from your search. You choose which ones to prepare a kit for.",
+      "lead": "Each week %BRAND% picks jobs from your search. You choose which ones to prepare an application for.",
       "point_list": "A weekly list of jobs that fit your search. You can add any job yourself.",
-      "point_kit": "For each job you choose, a kit: your resume tailored to the post, a cover letter when the post asks for one, and your saved answers.",
-      "point_review": "You check every kit before you use it. Anything new in your resume must be confirmed by you.",
+      "point_kit": "For each job you choose, an application: your resume tailored to the post, a cover letter when the post asks for one, and your saved answers.",
+      "point_review": "You check every application before you use it. Anything new in your resume must be confirmed by you.",
       "point_open": "You open the application page and send the application yourself.",
       "start": "Set up Ready to apply",
       "continue": "Continue setup"
     },
     "allowance": {
-      "left": "{left} of {cap, plural, one {# kit} other {# kits}} left this week.",
+      "left": "{left} of {cap, plural, one {# application} other {# applications}} left this week.",
       "resets": "More on {date}.",
-      "unknown": "Kits left this week: —",
+      "unknown": "Applications left this week: —",
       "seePro": "See Pro",
-      "bonus": "Plus {count, plural, one {# bonus kit} other {# bonus kits}} you received.",
-      "pro": "Pro: up to {count} kits a week."
+      "bonus": "Plus {count, plural, one {# bonus application} other {# bonus applications}} you received.",
+      "pro": "Pro: prepare up to {count} applications a week."
     },
     "header": {
       "settings": "Settings",
@@ -10913,7 +10913,7 @@
       "labelAll": "Your whole list"
     },
     "tabs": {
-      "label": "Kits by status",
+      "label": "Applications by status",
       "prepare": "To prepare",
       "ready": "Ready",
       "done": "Done"
@@ -10932,7 +10932,7 @@
     "list": {
       "selectAll": "Select all {count, plural, one {# job} other {# jobs}}",
       "selected": "{count, plural, one {# job selected} other {# jobs selected}}",
-      "prepareSelected": "Prepare {count, plural, one {# kit} other {# kits}}",
+      "prepareSelected": "Prepare {count, plural, one {# application} other {# applications}}",
       "expiredNote": "{count, plural, one {# job is} other {# jobs are}} no longer listed by the company. Remove {count, plural, one {it} other {them}} to keep your list tidy.",
       "empty": {
         "prepare": {
@@ -10940,8 +10940,8 @@
           "sub": "Your next weekly list arrives on Monday morning. You can add jobs from Jobs or from the suggestions below."
         },
         "ready": {
-          "title": "No kits ready yet",
-          "sub": "Prepare a kit from To prepare. It shows here when it's ready for you to check."
+          "title": "No applications ready yet",
+          "sub": "Prepare an application from To prepare. It shows here when it's ready for you to check."
         },
         "done": {
           "title": "Nothing here yet",
@@ -10959,27 +10959,27 @@
       "skip": "Skip",
       "remove": "Remove",
       "preparingNote": "Preparing… this updates by itself.",
-      "review": "Review kit",
+      "review": "Review application",
       "reviewOpen": "Review and open",
       "seeApplication": "See in Applications",
       "restore": "Put back"
     },
     "suggestions": {
       "title": "More jobs that fit your search",
-      "sub": "Not on your list yet. Add the ones you want a kit for.",
+      "sub": "Not on your list yet. Add the ones you want to prepare an application for.",
       "add": "Add",
       "addAria": "Add {title} to your list",
       "full": "Your list is full. Remove or finish a few jobs first.",
       "failed": "That job couldn't be added. Try again."
     },
     "prepare": {
-      "title": "Prepare {count, plural, one {# kit} other {# kits}}",
+      "title": "Prepare {count, plural, one {# application} other {# applications}}",
       "description": "Here's what this uses before anything starts.",
       "quoting": "Checking the cost…",
       "quoteFailed": "The cost couldn't be checked. Nothing was used. Try again.",
       "someFailed": "{count, plural, one {# job couldn't be checked and is left out} other {# jobs couldn't be checked and are left out}}.",
       "bucket": {
-        "ready_kits": "{count, plural, one {# kit} other {# kits}}",
+        "ready_kits": "{count, plural, one {# application} other {# applications}}",
         "tailor": "{count, plural, one {# tailoring credit} other {# tailoring credits}}",
         "cover_letter": "{count, plural, one {# cover letter credit} other {# cover letter credits}}"
       },
@@ -10987,14 +10987,14 @@
       "costUnknown": "Uses {what}. Credits left: —",
       "notEnough": "Only {left} can be prepared now.",
       "noTailor": "Your resume is used as it is (tailoring is off in Settings).",
-      "whatHappens": "Kits are prepared in the background. Nothing is sent to any company.",
+      "whatHappens": "Applications are prepared in the background. Nothing is sent to any company.",
       "cancel": "Cancel",
-      "confirm": "Prepare {count, plural, one {# kit} other {# kits}}",
+      "confirm": "Prepare {count, plural, one {# application} other {# applications}}",
       "running": "Starting…",
-      "started": "Preparing {count, plural, one {# kit} other {# kits}}. {count, plural, one {It shows} other {They show}} under Ready when done.",
-      "runFailed": "{count, plural, one {# kit} other {# kits}} couldn't start. Try again from To prepare.",
-      "noTailorAi": "AI writing is off for your account, so kits use your resume as it is.",
-      "noTailorAsIs": "No tailoring credits are used: kits use your resume as it is."
+      "started": "Preparing {count, plural, one {# application} other {# applications}}. {count, plural, one {It shows} other {They show}} under Ready when done.",
+      "runFailed": "{count, plural, one {# application} other {# applications}} couldn't start. Try again from To prepare.",
+      "noTailorAi": "AI writing is off for your account, so applications use your resume as it is.",
+      "noTailorAsIs": "No tailoring credits are used: applications use your resume as it is."
     },
     "search": {
       "title": "Where your weekly list comes from",
@@ -11051,10 +11051,10 @@
       "skip": "Skip for now",
       "finish": "Finish setup",
       "profile": {
-        "lead": "Application forms ask for these details. Kits use what's in your profile, so check it's right.",
+        "lead": "Application forms ask for these details. Your applications use what's in your profile, so check it's right.",
         "missingTitle": "{count, plural, one {# detail forms ask for is missing} other {# details forms ask for are missing}}",
         "missing": "Missing",
-        "missingNote": "You can continue now. Each kit lists what's still missing so you can fill it in on the form.",
+        "missingNote": "You can continue now. Each application lists what's still missing so you can fill it in on the form.",
         "complete": "Complete your profile",
         "allSet": "Your profile has everything forms usually ask for."
       },
@@ -11091,7 +11091,7 @@
       },
       "extension": {
         "lead": "The browser extension fills in application forms with your profile and answers when you ask. You check the form and send it yourself.",
-        "skipNote": "You can skip this and add the extension later. Kits work without it: copy your answers from the kit."
+        "skipNote": "You can skip this and add the extension later. Applications work without it: copy your answers from the application."
       },
       "errors": {
         "unsaved": "Your changes on this step weren't saved. Save them, or try again.",
@@ -11105,7 +11105,7 @@
       "firstList": "Setup done. {count, plural, one {# job is} other {# jobs are}} on your list for this week."
     },
     "answers": {
-      "lead": "Write answers to questions forms often ask. Kits show them with copy buttons. Only you write these answers.",
+      "lead": "Write answers to questions forms often ask. Applications show them with copy buttons. Only you write these answers.",
       "hints": {
         "salary_expectation": "Include the currency and whether it's per year or per month.",
         "work_authorization": "Also say whether you need visa sponsorship now or later.",
@@ -11130,7 +11130,7 @@
     "weekly": {
       "target": "Jobs on your weekly list",
       "targetValue": "{count} a week",
-      "targetNote": "A goal for the list, not a promise: it may hold fewer when fewer jobs fit. Your plan sets how many kits can be prepared.",
+      "targetNote": "A goal for the list, not a promise: it may hold fewer when fewer jobs fit. Your plan sets how many applications can be prepared.",
       "minTier": "Pick jobs that are at least",
       "tierAtLeast": {
         "great": "Only",
@@ -11138,7 +11138,7 @@
         "possible": "At least"
       },
       "tailorEach": "Tailor my resume for each job",
-      "tailorEachNote": "Uses a tailoring credit per kit. You check every change before it's used.",
+      "tailorEachNote": "Uses a tailoring credit per application. You check every change before it's used.",
       "coverLetter": "Cover letters",
       "coverLetterModes": {
         "when_required": "Only when the post asks for one",
@@ -11164,10 +11164,10 @@
     },
     "review": {
       "back": "Back to Ready to apply",
-      "notPrepared": "This kit isn't prepared yet.",
-      "failed": "This kit couldn't be prepared.",
-      "prepare": "Prepare kit",
-      "preparing": "Preparing your kit. This page updates by itself.",
+      "notPrepared": "This application isn't prepared yet.",
+      "failed": "This application couldn't be prepared.",
+      "prepare": "Prepare application",
+      "preparing": "Preparing your application. This page updates by itself.",
       "expired": "The company no longer lists this job.",
       "skip": "Skip this job",
       "remove": "Remove from list",
@@ -11185,10 +11185,10 @@
       "reviseSend": "Send",
       "errors": {
         "unverified": "Check the details the tailored resume added before you use it.",
-        "changed": "This kit changed in the meantime. The page now shows its latest state.",
+        "changed": "This application changed in the meantime. The page now shows its latest state.",
         "aiUnavailable": "AI writing isn't available for your account right now.",
         "generic": "That didn't work. Try again.",
-        "preparing": "This kit is still being prepared. Try again in a moment.",
+        "preparing": "This application is still being prepared. Try again in a moment.",
         "closed": "This job is no longer listed by the company.",
         "full": "Your list is full. Remove a job first.",
         "undoExpired": "This can't be undone here any more."
@@ -11197,20 +11197,20 @@
         "title": "Resume",
         "verifyBlock": "Check {count, plural, one {# detail} other {# details}} above before you use this resume.",
         "finishBlock": "Save the checked resume above before you use it.",
-        "use": "Use in this kit",
-        "asIs": "This kit uses your resume as it is.",
+        "use": "Use in this application",
+        "asIs": "This application uses your resume as it is.",
         "openAsIs": "Open resume",
         "loadFailed": "The tailored resume couldn't be loaded. Reload the page to try again.",
         "fitNote": "“Before” and “After” show your fit when this resume was tailored. The fit next to the job title is today's, so the two can differ."
       },
       "letter": {
         "title": "Cover letter",
-        "none": "No cover letter in this kit.",
+        "none": "No cover letter in this application.",
         "off": "Cover letters are off in Settings.",
         "loadFailed": "The cover letter couldn't be loaded.",
         "copyAria": "Copy the cover letter",
         "edit": "Edit letter",
-        "use": "Use in this kit"
+        "use": "Use in this application"
       },
       "answers": {
         "title": "Your answers",
@@ -11254,7 +11254,7 @@
       },
       "history": {
         "title": "History",
-        "none": "Nothing has happened to this kit yet.",
+        "none": "Nothing has happened to this application yet.",
         "moved": "Now: {state}",
         "file": "File saved: {name}",
         "actor": {
@@ -11268,14 +11268,14 @@
           "letter": "Cover letter prepared"
         },
         "used": {
-          "resume": "Resume chosen for this kit",
-          "letter": "Cover letter chosen for this kit"
+          "resume": "Resume chosen for this application",
+          "letter": "Cover letter chosen for this application"
         },
         "revised": {
           "resume": "Changes asked for the resume",
           "letter": "Changes asked for the cover letter"
         },
-        "notice": "Reminder: this kit is ready and not opened yet",
+        "notice": "Reminder: this application is ready and not opened yet",
         "undone": "Marked as not applied (Undo)",
         "opened": "Application opened; moved to Applied",
         "applied": "Marked as applied",
@@ -11283,20 +11283,20 @@
       },
       "notOnList": {
         "title": "This job isn't on your list",
-        "sub": "Add it to prepare a kit for it.",
+        "sub": "Add it to prepare an application for it.",
         "add": "Add to Ready to apply",
         "full": "Your list is full. Remove or finish a few jobs first.",
         "failed": "That job couldn't be added. Try again."
       },
-      "aiOff": "AI writing is off for your account, so kits use your resume as it is.",
+      "aiOff": "AI writing is off for your account, so applications use your resume as it is.",
       "failedReason": {
         "noResume": "Add a resume first, then try again.",
-        "aiUnavailable": "AI writing wasn't available for this kit. Try again later.",
-        "credits": "You had no credits left for this kit. Try again when they reset.",
+        "aiUnavailable": "AI writing wasn't available for this application. Try again later.",
+        "credits": "You had no credits left for this application. Try again when they reset.",
         "jobClosed": "The company stopped listing this job.",
         "ourSide": "Something went wrong on our side. Try again."
       },
-      "skipped": "You skipped this job. Put it back on your list to prepare a kit for it."
+      "skipped": "You skipped this job. Put it back on your list to prepare an application for it."
     },
     "questions": {
       "why_this_company": "Why do you want to work at this company?",
@@ -13008,6 +13008,7 @@
       "foundUnknown": "New jobs that fit since your last visit:",
       "picksTitle": "Best picks",
       "picksLoading": "Loading picks…",
+      "searching": "Searching for jobs that fit your answers. The best picks show here when the search is done.",
       "picksNone": "No new picks right now.",
       "picksFailed": "The picks could not be loaded.",
       "viewJob": "View job",

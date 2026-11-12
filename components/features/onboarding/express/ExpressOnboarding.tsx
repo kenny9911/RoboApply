@@ -5,9 +5,11 @@
 //
 //   1. "Start with your resume"            ./ExpressResumeScreen.tsx
 //   2. "Is this what you're looking for?"  ./ExpressCheckScreen.tsx
-//   then "Find my jobs": the answers are saved in the server's step order and
-//   the search runs, on this page (./ExpressProgress.tsx), and the user lands
-//   on Today (hooks/onboarding/useExpressOnboarding.ts has the sequence).
+//   then "Find my jobs": the answers are saved in the server's step order, the
+//   search starts (./ExpressProgress.tsx shows the few seconds that takes),
+//   setup is finished without waiting for the search, and the user lands on
+//   the Dashboard, whose Job search lane shows the search until its picks
+//   arrive (hooks/onboarding/useExpressOnboarding.ts has the sequence).
 //
 // Who sees it (`expressStartExit`, ../flow.ts): a RoboApply user who has saved
 // no step. A finished user goes to Today; anyone else goes to the long screen
@@ -109,7 +111,7 @@ export function ExpressOnboarding() {
     track('onboarding_step_viewed', { stage: SCREEN_EVENT[showing], branch: null });
   }, [showing]);
 
-  // Setup is closed (or left as "finish later" after a failed search): into the product.
+  // Setup is closed (the search may still be running: the Dashboard shows it): into the product.
   useEffect(() => {
     if (express.status !== 'done' || landed.current) return;
     landed.current = true;
@@ -163,7 +165,7 @@ export function ExpressOnboarding() {
   if (exit) return null;
 
   if (express.status === 'running' || express.status === 'done') {
-    return <ExpressProgress stage={express.stage} phases={express.phases} titles={current.titles.map((x) => x.label)} countries={current.countries} />;
+    return <ExpressProgress stage={express.stage} phases={express.phases} />;
   }
 
   if (screen === 'resume') {

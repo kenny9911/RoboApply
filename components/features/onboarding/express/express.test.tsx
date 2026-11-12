@@ -366,7 +366,8 @@ describe('the second screen is filled in from the resume', () => {
 });
 
 describe('"Find my jobs" saves in the server\'s order', () => {
-  it('situation → basics → resume → the search (its real lines) → confirm → complete, then Today', async () => {
+  // docs/agent-driven/REDESIGN.md §9: setup no longer waits for the search; the Dashboard shows it.
+  it('situation → basics → resume → the search starts → confirm → complete once it has the answers, then the Dashboard while it runs on', async () => {
     let push!: (chunk: string) => void;
     let end!: () => void;
     let streaming = false;
@@ -385,7 +386,7 @@ describe('"Find my jobs" saves in the server\'s order', () => {
         );
       },
     });
-    renderWith(<ExpressOnboarding />);
+    const view = renderWith(<ExpressOnboarding />);
     await continueWithResume();
     fireEvent.click(screen.getByRole('button', { name: 'Find my jobs' }));
 
@@ -394,31 +395,26 @@ describe('"Find my jobs" saves in the server\'s order', () => {
     expect(writes(net)).toEqual(['POST /resume', 'PUT /steps/situation', 'PUT /steps/basics', 'PUT /steps/resume', 'POST /match']);
     expect(await screen.findByRole('heading', { level: 1, name: 'Finding jobs' })).toBeInTheDocument();
     const status = screen.getByRole('status');
-    await waitFor(() => expect(status).toHaveTextContent('Searching for jobs. This can take a minute or two.'));
+    await waitFor(() => expect(status).toHaveTextContent('Starting your search…'));
     expect(status).toHaveFocus();
-    expect(screen.getByText('Searching job sources for Backend engineer in United States')).toBeInTheDocument();
 
-    // A line is checked only when the server reports that step.
-    const line = (phase: string) => document.querySelector(`[data-phase="${phase}"]`)?.getAttribute('data-state');
-    expect(PHASES.map(line)).toEqual(['pending', 'pending', 'pending', 'pending', 'pending']);
+    // This page waits for the search's first two lines only (the rest run on after it), each checked when the server reports it.
+    const line = (phase: string) => document.querySelector(`[data-phase="${phase}"]`)?.getAttribute('data-state') ?? null;
+    expect(PHASES.map(line)).toEqual(['pending', 'pending', null, null, null]);
+    expect(screen.getByText('Reading your resume')).toBeInTheDocument();
+    expect(screen.getByText("Saving what you're looking for")).toBeInTheDocument();
     await act(async () => push('event: phase\ndata: {"phase":"reading"}\n\n'));
     await waitFor(() => expect(line('reading')).toBe('done'));
-    expect(PHASES.map(line)).toEqual(['done', 'pending', 'pending', 'pending', 'pending']);
-    await act(async () => push('event: phase\ndata: {"phase":"saving"}\n\nevent: phase\ndata: {"phase":"searching"}\n\n'));
-    await waitFor(() => expect(line('searching')).toBe('done'));
-    expect(line('comparing')).toBe('pending');
-    // Nothing is finished before the search is.
+    expect(line('saving')).toBe('pending');
+    // Nothing is finished before the server has the answers the search uses.
     expect(net.to('POST', `${P}/confirm`)).toEqual([]);
     expect(nav.replace).not.toHaveBeenCalled();
 
-    await act(async () => {
-      push('event: phase\ndata: {"phase":"comparing"}\n\nevent: phase\ndata: {"phase":"ranking"}\n\n');
-      push('event: done\ndata: {"jobCount":4,"topJobIds":["j1"],"continuedInBackground":false}\n\n');
-      end();
-    });
+    // The search has them: setup is finished (the server takes confirm while it runs) and the user lands on the Dashboard.
+    await act(async () => push('event: phase\ndata: {"phase":"saving"}\n\n'));
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/dashboard'));
 
-    // The exact sequence and bodies.
+    // The exact sequence and bodies: confirm and complete went while the search was still open.
     expect(writes(net)).toEqual(['POST /resume', 'PUT /steps/situation', 'PUT /steps/basics', 'PUT /steps/resume', 'POST /match', 'POST /confirm', 'POST /complete']);
     expect(bodyOf(net, 'PUT', '/steps/situation')).toEqual({ timing: 'asap', seekerType: 'experienced' });
     expect(bodyOf(net, 'PUT', '/steps/basics')).toEqual({
@@ -432,13 +428,27 @@ describe('"Find my jobs" saves in the server\'s order', () => {
     expect(bodyOf(net, 'POST', '/confirm')).toEqual({ experienceLevels: ['senior'], alertFrequency: 'daily' });
     expect(bodyOf(net, 'POST', '/complete')).toBeUndefined();
 
-    // The stage moved under the page (GET /state was read again after the search); the user was sent nowhere but Today.
+    // The stage moved under the page (GET /state was read again after setup); the user was sent nowhere but the Dashboard.
     expect(net.to('GET', `${P}/state`).length).toBeGreaterThan(1);
     expect(nav.replace).toHaveBeenCalledTimes(1);
     expect(nav.push).not.toHaveBeenCalled();
     // The session is read again, so the app knows setup is finished.
     expect(auth.refresh).toHaveBeenCalled();
     expect(tracked.at(-1)).toMatchObject(['onboarding_step_completed', { stage: 'start_check', skipped: false }]);
+
+    // The search outlives this page: leaving it does not cancel the request, which ends when the server is done.
+    const matchInit = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith(`${P}/match`))?.[1] as RequestInit | undefined;
+    expect(matchInit?.signal).toBeDefined();
+    view.unmount();
+    expect(matchInit?.signal?.aborted).toBe(false);
+    await act(async () => {
+      push('event: phase\ndata: {"phase":"searching"}\n\nevent: phase\ndata: {"phase":"comparing"}\n\nevent: phase\ndata: {"phase":"ranking"}\n\n');
+      push('event: done\ndata: {"jobCount":4,"topJobIds":["j1"],"continuedInBackground":false}\n\n');
+      end();
+    });
+    expect(matchInit?.signal?.aborted).toBe(false);
+    // Nothing more was sent for setup.
+    expect(writes(net).slice(-2)).toEqual(['POST /confirm', 'POST /complete']);
   });
 
   it('any timing but "as soon as possible" is the explore branch: its two steps are saved as skipped before the resume', async () => {
@@ -637,7 +647,7 @@ describe('a failure in the middle', () => {
     expect(within(screen.getByRole('list', { name: 'Job titles' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Backend engineer']);
   });
 
-  it('a search that goes on in the background still finishes setup and lands on Today', async () => {
+  it('a search that goes on in the background still finishes setup and lands on the Dashboard', async () => {
     const net = server({ [`POST ${P}/match`]: () => sse([['phase', { phase: 'reading' }], ['done', { jobCount: 0, topJobIds: [], continuedInBackground: true }]]) });
     renderWith(<ExpressOnboarding />);
     await continueWithResume();
@@ -646,36 +656,33 @@ describe('a failure in the middle', () => {
     expect(writes(net).slice(-3)).toEqual(['POST /match', 'POST /confirm', 'POST /complete']);
   });
 
-  it('a search that fails does not keep the user: the server refuses confirm at that stage, so setup is left for later and they land on Today', async () => {
+  it('a search that fails does not keep the user: the server takes confirm while the stage is `matching` (and queues a search), so setup is finished and they land on the Dashboard', async () => {
     const net = server({
       [`POST ${P}/match`]: () => sse([['phase', { phase: 'reading' }], ['error', { code: 'internal_error', message: 'x' }]]),
-      // The stage is still `matching`: POST /confirm is a step beyond it.
-      [`POST ${P}/confirm`]: () => fail(409, 'conflict', { reason: 'onboarding_step_not_available' }),
     });
     renderWith(<ExpressOnboarding />);
     await continueWithResume();
     fireEvent.click(screen.getByRole('button', { name: 'Find my jobs' }));
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/dashboard'));
-    expect(writes(net).slice(-3)).toEqual(['POST /match', 'POST /confirm', 'POST /skip']);
-    expect(net.to('POST', `${P}/complete`)).toEqual([]);
+    expect(writes(net).slice(-3)).toEqual(['POST /match', 'POST /confirm', 'POST /complete']);
+    // Never left for later: no "Finish setting up" afterwards.
+    expect(net.to('POST', `${P}/skip`)).toEqual([]);
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('a search that could not start (too many runs this hour) is the same: no dead end', async () => {
-    const net = server({
-      [`POST ${P}/match`]: () => fail(429, 'rate_limited'),
-      [`POST ${P}/confirm`]: () => fail(409, 'conflict', { reason: 'onboarding_step_not_available' }),
-    });
+    const net = server({ [`POST ${P}/match`]: () => fail(429, 'rate_limited') });
     renderWith(<ExpressOnboarding />);
     await continueWithoutResume();
     addTitle('Ops wrangler');
     fireEvent.click(screen.getByRole('button', { name: 'Mid level (2–5 yrs)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Find my jobs' }));
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/dashboard'));
-    expect(writes(net).slice(-3)).toEqual(['POST /match', 'POST /confirm', 'POST /skip']);
+    expect(writes(net).slice(-3)).toEqual(['POST /match', 'POST /confirm', 'POST /complete']);
+    expect(net.to('POST', `${P}/skip`)).toEqual([]);
   });
 
-  it('a refused confirm after a search that DID finish is a failure to show, not a reason to leave setup', async () => {
+  it('a refused confirm is a failure to show, never a reason to leave setup', async () => {
     const net = server({ [`POST ${P}/confirm`]: () => fail(409, 'conflict', { reason: 'onboarding_step_not_available' }) });
     renderWith(<ExpressOnboarding />);
     await continueWithResume();

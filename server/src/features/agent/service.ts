@@ -207,7 +207,7 @@ function unverifiedError(pending: number): HttpError {
   });
 }
 
-function notReady(message = 'This kit is not ready for that step yet.'): HttpError {
+function notReady(message = 'This application is not ready for that step yet.'): HttpError {
   return new HttpError('conflict', message, { reason: AGENT_ERROR_CODES.notReady });
 }
 
@@ -1390,7 +1390,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
         }
         await guardClaims(item);
       } else if (!item.coverLetterId) {
-        throw notReady('There is no cover letter in this kit.');
+        throw notReady('There is no cover letter in this application.');
       }
       await recordKitNote(db, item, 'user', { part: input.part, decision: 'use' });
       item = await maybeApprove(db, item);
@@ -1456,7 +1456,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
   async function open(userId: string, id: string): Promise<OpenApplicationResponse> {
     const db = await deps.getDb();
     let item = await itemOrThrow(db, userId, id);
-    if (!['approved', 'opened', 'applied'].includes(item.state)) throw notReady('Check and approve this kit first.');
+    if (!['approved', 'opened', 'applied'].includes(item.state)) throw notReady('Check and approve this application first.');
     if (item.state === 'approved') await guardClaims(item);
     let click;
     try {
@@ -1611,13 +1611,13 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
       return view(db, userId, next);
     }
     if (item.state === 'applied') return view(db, userId, item);
-    throw notReady('Check and approve this kit first.');
+    throw notReady('Check and approve this application first.');
   }
 
   async function skip(userId: string, id: string): Promise<QueueItemView> {
     const db = await deps.getDb();
     const item = await itemOrThrow(db, userId, id);
-    if (item.state === 'preparing') throw new HttpError('conflict', 'This kit is still being prepared.', { reason: AGENT_ERROR_CODES.busy });
+    if (item.state === 'preparing') throw new HttpError('conflict', 'This application is still being prepared.', { reason: AGENT_ERROR_CODES.busy });
     return view(db, userId, await transitionItem(db, item, 'skipped', { actor: 'user' }));
   }
 
@@ -1633,7 +1633,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
   async function remove(userId: string, id: string): Promise<null> {
     const db = await deps.getDb();
     const item = await itemOrThrow(db, userId, id);
-    if (item.state === 'preparing') throw new HttpError('conflict', 'This kit is still being prepared.', { reason: AGENT_ERROR_CODES.busy });
+    if (item.state === 'preparing') throw new HttpError('conflict', 'This application is still being prepared.', { reason: AGENT_ERROR_CODES.busy });
     await db.$transaction(async (tx) => {
       await tx.rAAgentKitEvent.deleteMany({ where: { queueItemId: item.id } });
       await tx.rAAgentQueueItem.deleteMany({ where: { id: item.id, userId } });

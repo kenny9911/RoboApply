@@ -101,7 +101,7 @@ export function TodayDesk({ sources, check, now: nowProp, variant = 'desk', gree
         </header>
         <WaitingList waiting={waiting} picksBelow={picksBelow} />
         {goals ? goals({ leadPrimary }) : null}
-        <JobSearchLane flags={sources.flags} newJobs={sources.newJobs} picks={sources.picks} picksFrom={sources.picksFrom} leadPrimary={false} />
+        <JobSearchLane flags={sources.flags} newJobs={sources.newJobs} picks={sources.picks} picksFrom={sources.picksFrom} leadPrimary={false} searching={sources.searching} />
         <div className={styles.dashLanes}>
           <ApplicationsLane flags={sources.flags} queue={sources.queue} board={sources.board} now={now} />
           <ResumeLane resumes={sources.resumes} check={check} skills={sources.skills} />
@@ -123,7 +123,14 @@ export function TodayDesk({ sources, check, now: nowProp, variant = 'desk', gree
       <div className={styles.desk} data-testid="today-desk">
         <div className={styles.column}>
           <WaitingList waiting={waiting} picksBelow={picksBelow} />
-          <JobSearchLane flags={sources.flags} newJobs={sources.newJobs} picks={sources.picks} picksFrom={sources.picksFrom} leadPrimary={leadPrimary} />
+          <JobSearchLane
+            flags={sources.flags}
+            newJobs={sources.newJobs}
+            picks={sources.picks}
+            picksFrom={sources.picksFrom}
+            leadPrimary={leadPrimary}
+            searching={sources.searching}
+          />
         </div>
         <div className={styles.column}>
           <ApplicationsLane flags={sources.flags} queue={sources.queue} board={sources.board} now={now} />

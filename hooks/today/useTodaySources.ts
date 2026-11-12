@@ -17,8 +17,18 @@
 //   profileMissing  useProfile                    details application forms ask for (the Profile badge's source)
 //   resumes         useResumeList                 the main resume, versions with details to verify
 //   setupStepsLeft  useOnboardingState            setup left early
+//   searching       useOnboardingState            the setup search is still at work (`searchRunning`)
 //   skills          useSkillsCheckData            what the top jobs ask for that the profile does not list
 //                                                 (asked only once a base resume exists)
+//
+// The setup search: the two-screen start finishes setup while its search runs
+// on (docs/agent-driven/REDESIGN.md §9), so the first visit here usually comes
+// before the first picks exist. The picks are asked for only once the setup
+// state has answered and says no search is at work; while one is, the lane
+// shows its loading state, the state is read again every few seconds, and
+// when the search ends the picks and the new-jobs count are read afresh. The
+// server bounds how long a search counts as at work, so the lane never waits
+// on a search that died.
 //
 // Rules kept here:
 //   • a capability that is off asks nothing and reads `off` (R-04). Flags fail
@@ -29,13 +39,15 @@
 //     others;
 //   • nothing is counted on the client that the server did not send (D3).
 
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getNewCount } from '../../lib/api/feed';
 import type { FeedItem, SkillsCheckResponse } from '../../lib/api/contracts/feed';
 import { BASE_SLOT_KINDS, type ResumeSummary } from '../../lib/api/resumes';
 import { useCapabilities } from '../../lib/flags';
 import { useReadyQueue, useSuggestions, type ReadyQueueItem } from '../agent';
+import { agentKeys } from '../agent/keys';
 import { feedKeys } from '../feed/keys';
 import { useSkillsCheckData } from '../feed/useCalibration';
 import { useFeed } from '../feed/useFeed';
@@ -83,6 +95,8 @@ export interface TodaySources {
   resumes: Loadable<ResumeSummary[]>;
   /** Setup screens left when the user left onboarding early; 0 when nothing is left. */
   setupStepsLeft: Loadable<number>;
+  /** The setup search is still at work (the server says so): the picks wait for it and read `loading`. */
+  searching: boolean;
   skills: Loadable<SkillAsk[]>;
 }
 
@@ -104,7 +118,12 @@ export function useTodaySources(): TodaySources {
 
   const profiles = useActiveSearchProfile();
   const queue = useReadyQueue({ enabled: agent });
-  const suggestions = useSuggestions({ enabled: agent, limit: PICK_LIMIT });
+  // The setup search (see the header): the picks wait until the setup state says none is at work.
+  const onboarding = useOnboardingState({ pollWhileSearching: true });
+  const searching = onboarding.data?.searchRunning === true;
+  const picksMayLoad = (onboarding.data !== undefined || onboarding.isError) && !searching;
+  useFreshPicksAfterSearch(searching);
+  const suggestions = useSuggestions({ enabled: agent && picksMayLoad, limit: PICK_LIMIT });
   // The Jobs nav badge's own request (hooks/feed/useJobsBadge.ts): same key and
   // options, so it is asked once. The badge keeps only a positive count; Today
   // also needs "none", "not known yet" and the date the count starts from.
@@ -130,12 +149,11 @@ export function useTodaySources(): TodaySources {
     version: profiles.profile?.version ?? null,
     sort: 'recommended',
     fitTier: profiles.profile?.filters.fitTier ?? 'all',
-    enabled: useFeedPicks && !profiles.isPending && countSettled,
+    enabled: useFeedPicks && !profiles.isPending && countSettled && picksMayLoad,
   });
   const board = usePipelineBoard();
   const profile = useProfile();
   const resumes = useResumeList();
-  const onboarding = useOnboardingState();
   // The Resume lane shows it under the main resume only, so it is not asked for an account without one.
   const hasBaseResume = resumes.data?.resumes?.some((r) => BASE_SLOT_KINDS.includes(r.kind)) === true;
   const skillsOn = feedOn && hasBaseResume;
@@ -147,11 +165,12 @@ export function useTodaySources(): TodaySources {
     picks = LOADING;
     picksFrom = null;
   } else if (agent) {
-    picks = loadableOf(suggestions, true, (d) => (Array.isArray(d.items) ? d.items.slice(0, PICK_LIMIT) : undefined));
+    picks = picksMayLoad ? loadableOf(suggestions, true, (d) => (Array.isArray(d.items) ? d.items.slice(0, PICK_LIMIT) : undefined)) : LOADING;
     picksFrom = 'suggestions';
   } else if (feedOn) {
     picksFrom = 'feed';
-    if (feed.items.length > 0 || (!feed.isPending && !feed.isError)) picks = { status: 'ready', data: feed.items.slice(0, PICK_LIMIT) };
+    if (!picksMayLoad) picks = LOADING;
+    else if (feed.items.length > 0 || (!feed.isPending && !feed.isError)) picks = { status: 'ready', data: feed.items.slice(0, PICK_LIMIT) };
     else if (feed.isError) picks = isUnavailableError(feed.error) ? OFF : { status: 'error', retry: feed.refetch };
     else picks = LOADING;
   } else {
@@ -176,6 +195,26 @@ export function useTodaySources(): TodaySources {
       const left = progress.leftEarly ? progress.stepsLeft : 0;
       return Number.isFinite(left) && left > 0 ? Math.floor(left) : 0;
     }),
+    searching,
     skills: loadableOf(skills, skillsOn, (d) => (Array.isArray(d.skills) ? d.skills : undefined)),
   };
+}
+
+/**
+ * When the setup search stops being at work, read again what may have been
+ * read before it ended: the suggestions (the picks with `agent`) and the
+ * new-jobs count. The Jobs list is left alone: it is not asked for while the
+ * search is at work, and each fresh read of it opens a feed session the
+ * server rate-limits.
+ */
+function useFreshPicksAfterSearch(searching: boolean): void {
+  const qc = useQueryClient();
+  const was = useRef(searching);
+  useEffect(() => {
+    const ended = was.current && !searching;
+    was.current = searching;
+    if (!ended) return;
+    void qc.invalidateQueries({ queryKey: agentKeys.suggestions() });
+    void qc.invalidateQueries({ queryKey: feedKeys.newCount() });
+  }, [searching, qc]);
 }

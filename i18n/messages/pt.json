@@ -2929,7 +2929,7 @@
           },
           "s2": {
             "body": "Mude o que quiser antes de usar.",
-            "title": "Revise cada kit"
+            "title": "Revise cada candidatura"
           },
           "s3": {
             "body": "Abra a página da empresa e envie. A vaga passa para Enviadas.",
@@ -2937,7 +2937,7 @@
           },
           "sample": {
             "line1": "5 vagas esta semana · Encaixa bem ou melhor",
-            "line2": "Kit pronto: currículo adaptado, carta de apresentação, 4 respostas",
+            "line2": "Candidatura pronta: currículo adaptado, carta de apresentação, 4 respostas",
             "line3": "Abrir candidatura → você confere e envia"
           },
           "sub": "Para as vagas que combinam com você, o %BRAND% prepara um currículo adaptado, uma carta de apresentação e respostas a perguntas comuns. Você abre cada candidatura, e é você quem envia.",
@@ -3187,7 +3187,7 @@
           },
           "s2": {
             "body": "Mude o que quiser antes de usar.",
-            "title": "Revise cada kit"
+            "title": "Revise cada candidatura"
           },
           "s3": {
             "body": "Abra a página da empresa e envie. A vaga passa para Enviadas.",
@@ -3195,7 +3195,7 @@
           },
           "sample": {
             "line1": "5 vagas esta semana · Encaixa bem ou melhor",
-            "line2": "Kit pronto: currículo adaptado, carta de apresentação, 4 respostas",
+            "line2": "Candidatura pronta: currículo adaptado, carta de apresentação, 4 respostas",
             "line3": "Abrir candidatura → você confere e envia"
           },
           "sub": "Para as vagas que combinam com você, o %BRAND% prepara um currículo adaptado, uma carta de apresentação e respostas a perguntas comuns. Você abre cada candidatura, e é você quem envia.",
@@ -6255,7 +6255,7 @@
       "job_import": "Vagas que você adiciona",
       "outreach": "Rascunhos de mensagens",
       "practice": "Entrevistas de treino",
-      "ready_kits": "Kits prontos para a candidatura",
+      "ready_kits": "Candidaturas preparadas",
       "resume_check": "Conferências de currículo",
       "rewrite": "Edições com IA",
       "tailor": "Currículos adaptados",
@@ -8621,7 +8621,7 @@
       "cards": {
         "practice": "Treine a entrevista",
         "practiceBody": "Responda a perguntas realistas para o cargo e receba feedback.",
-        "ready": "Kits prontos para a candidatura — você envia",
+        "ready": "Candidaturas preparadas — você envia",
         "readyBody": "Nós preparamos os materiais; você revisa e envia pelo site da empresa.",
         "tailor": "Um currículo adaptado para cada vaga",
         "tailorBody": "Ajuste seu currículo aos requisitos de uma vaga, usando só o que é verdade sobre você."
@@ -8822,7 +8822,7 @@
         "fitBody": "Cada vaga mostra onde seu currículo atende aos requisitos e onde não atende.",
         "practice": "Treine a entrevista",
         "practiceBody": "Ensaie perguntas realistas para o cargo e receba feedback.",
-        "ready": "Kits prontos para a candidatura — você envia",
+        "ready": "Candidaturas preparadas — você envia",
         "readyBody": "Nós preparamos os materiais. Você revisa e envia pelo site da empresa.",
         "tailor": "Um currículo adaptado para cada vaga",
         "tailorBody": "Ajuste seu currículo a uma vaga, usando só o que é verdade sobre você."
@@ -8858,7 +8858,7 @@
       },
       "progress": {
         "saving": "Salvando suas respostas…",
-        "searching": "Buscando vagas. Isso pode levar um ou dois minutos.",
+        "searching": "Iniciando sua busca…",
         "finishing": "Concluindo a configuração…"
       },
       "failed": {
@@ -9752,12 +9752,12 @@
   },
   "ready": {
     "allowance": {
-      "bonus": "Mais {count, plural, one {# kit bônus} other {# kits bônus}} que você recebeu.",
-      "left": "Disponíveis nesta semana: {left} de {cap, plural, one {# kit} other {# kits}}.",
-      "pro": "Pro: até {count} kits por semana.",
+      "bonus": "Mais {count, plural, one {# candidatura bônus} other {# candidaturas bônus}} que você recebeu.",
+      "left": "Disponíveis nesta semana: {left} de {cap, plural, one {# candidatura} other {# candidaturas}}.",
+      "pro": "Pro: prepare até {count} candidaturas por semana.",
       "resets": "Mais em {date}.",
       "seePro": "Ver o Pro",
-      "unknown": "Kits disponíveis nesta semana: —"
+      "unknown": "Candidaturas disponíveis nesta semana: —"
     },
     "answers": {
       "add": "Adicionar pergunta",
@@ -9772,7 +9772,7 @@
         "work_authorization": "Diga também se você precisa de patrocínio de visto agora ou mais adiante."
       },
       "inCurrency": "{question} ({currency})",
-      "lead": "Escreva respostas para perguntas que os formulários costumam fazer. Os kits mostram essas respostas com botões de copiar. Só você escreve estas respostas.",
+      "lead": "Escreva respostas para perguntas que os formulários costumam fazer. As candidaturas mostram essas respostas com botões de copiar. Só você escreve estas respostas.",
       "loadFailed": "Não foi possível carregar suas respostas salvas.",
       "optional": "(opcional)",
       "protectedNote": "A IA nunca responde a esta pergunta. Ela é preenchida só com a sua resposta.",
@@ -9793,10 +9793,10 @@
     },
     "intro": {
       "continue": "Continuar a configuração",
-      "lead": "Toda semana, o %BRAND% escolhe vagas da sua busca. Você decide para quais delas preparar um kit.",
-      "point_kit": "Para cada vaga que você escolher, um kit: seu currículo adaptado ao anúncio, uma carta de apresentação quando o anúncio pedir e suas respostas salvas.",
+      "lead": "Toda semana, o %BRAND% escolhe vagas da sua busca. Você decide para quais delas preparar uma candidatura.",
+      "point_kit": "Para cada vaga que você escolher, uma candidatura: seu currículo adaptado ao anúncio, uma carta de apresentação quando o anúncio pedir e suas respostas salvas.",
       "point_list": "Uma lista semanal de vagas que combinam com a sua busca. Você também pode adicionar qualquer vaga por conta própria.",
-      "point_review": "Você confere cada kit antes de usar. Tudo o que for novo no seu currículo precisa ser confirmado por você.",
+      "point_review": "Você confere cada candidatura antes de usar. Tudo o que for novo no seu currículo precisa ser confirmado por você.",
       "start": "Configurar “Prontas para candidatura”",
       "title": "Deixe cada candidatura pronta; quem envia é você",
       "point_open": "Você abre a página de candidatura, e é você quem envia a candidatura."
@@ -9812,12 +9812,12 @@
           "title": "Nada a preparar"
         },
         "ready": {
-          "sub": "Prepare um kit em A preparar. Ele aparece aqui quando estiver pronto para você conferir.",
-          "title": "Nenhum kit pronto ainda"
+          "sub": "Prepare uma candidatura em A preparar. Ela aparece aqui quando estiver pronta para você conferir.",
+          "title": "Nenhuma candidatura pronta ainda"
         }
       },
       "expiredNote": "{count, plural, one {# vaga não está mais anunciada} other {# vagas não estão mais anunciadas}} pela empresa. Remova {count, plural, one {essa vaga} other {essas vagas}} para manter sua lista em ordem.",
-      "prepareSelected": "Preparar {count, plural, one {# kit} other {# kits}}",
+      "prepareSelected": "Preparar {count, plural, one {# candidatura} other {# candidaturas}}",
       "selectAll": "Selecionar {count, plural, one {# vaga} other {todas as # vagas}}",
       "selected": "{count, plural, one {# vaga selecionada} other {# vagas selecionadas}}"
     },
@@ -9825,33 +9825,33 @@
     "prepare": {
       "bucket": {
         "cover_letter": "{count, plural, one {# crédito de carta de apresentação} other {# créditos de carta de apresentação}}",
-        "ready_kits": "{count, plural, one {# kit} other {# kits}}",
+        "ready_kits": "{count, plural, one {# candidatura} other {# candidaturas}}",
         "tailor": "{count, plural, one {# crédito de adaptação} other {# créditos de adaptação}}"
       },
       "cancel": "Cancelar",
-      "confirm": "Preparar {count, plural, one {# kit} other {# kits}}",
+      "confirm": "Preparar {count, plural, one {# candidatura} other {# candidaturas}}",
       "cost": "Usa {what}; você ainda tem {left} {window, select, day {hoje} week {nesta semana} other {neste mês}}.",
       "costUnknown": "Usa {what}. Créditos restantes: —",
       "description": "Veja o que isto usa antes de qualquer coisa começar.",
       "noTailor": "Seu currículo é usado como está (a adaptação está desativada em Configurações).",
-      "noTailorAi": "A escrita com IA está desativada na sua conta, então os kits usam seu currículo como está.",
-      "noTailorAsIs": "Nenhum crédito de adaptação é usado: os kits usam seu currículo como está.",
+      "noTailorAi": "A escrita com IA está desativada na sua conta, então as candidaturas usam seu currículo como está.",
+      "noTailorAsIs": "Nenhum crédito de adaptação é usado: as candidaturas usam seu currículo como está.",
       "notEnough": "Dá para preparar só {left} agora.",
       "quoteFailed": "Não foi possível verificar o custo. Nada foi usado. Tente de novo.",
       "quoting": "Verificando o custo…",
-      "runFailed": "{count, plural, one {# kit não pôde começar} other {# kits não puderam começar}}. Tente de novo em A preparar.",
+      "runFailed": "{count, plural, one {# candidatura não pôde começar} other {# candidaturas não puderam começar}}. Tente de novo em A preparar.",
       "running": "Iniciando…",
       "someFailed": "{count, plural, one {# vaga não pôde ser verificada e ficou de fora} other {# vagas não puderam ser verificadas e ficaram de fora}}.",
-      "started": "Preparando {count, plural, one {# kit} other {# kits}}. {count, plural, one {Ele aparece em Prontos quando terminar} other {Eles aparecem em Prontos quando terminarem}}.",
-      "title": "Preparar {count, plural, one {# kit} other {# kits}}",
-      "whatHappens": "Os kits são preparados em segundo plano. Nada é enviado a nenhuma empresa."
+      "started": "Preparando {count, plural, one {# candidatura} other {# candidaturas}}. {count, plural, one {Ela aparece em Prontas quando terminar} other {Elas aparecem em Prontas quando terminarem}}.",
+      "title": "Preparar {count, plural, one {# candidatura} other {# candidaturas}}",
+      "whatHappens": "As candidaturas são preparadas em segundo plano. Nada é enviado a nenhuma empresa."
     },
     "progress": {
       "applied": "Candidaturas enviadas",
       "label": "Lista desta semana",
       "labelAll": "Sua lista inteira",
       "preparing": "Em preparo",
-      "ready": "Prontos para você",
+      "ready": "Prontas para você",
       "toPrepare": "A preparar"
     },
     "questions": {
@@ -9876,7 +9876,7 @@
       "work_model_preference": "Você prefere trabalho remoto, híbrido ou presencial?"
     },
     "review": {
-      "aiOff": "A escrita com IA está desativada na sua conta, então os kits usam seu currículo como está.",
+      "aiOff": "A escrita com IA está desativada na sua conta, então as candidaturas usam seu currículo como está.",
       "answers": {
         "add": "Adicionar respostas",
         "addToProfile": "Adicionar ao seu perfil",
@@ -9892,19 +9892,19 @@
       "copyFailed": "Não foi possível copiar. Selecione o texto e copie.",
       "errors": {
         "aiUnavailable": "A escrita com IA não está disponível para a sua conta agora.",
-        "changed": "Este kit mudou nesse meio-tempo. A página agora mostra o estado mais recente.",
+        "changed": "Esta candidatura mudou nesse meio-tempo. A página agora mostra o estado mais recente.",
         "closed": "Esta vaga não está mais anunciada pela empresa.",
         "full": "Sua lista está cheia. Remova uma vaga primeiro.",
         "generic": "Isso não funcionou. Tente de novo.",
-        "preparing": "Este kit ainda está sendo preparado. Tente de novo daqui a pouco.",
+        "preparing": "Esta candidatura ainda está sendo preparada. Tente de novo daqui a pouco.",
         "undoExpired": "Isto não pode mais ser desfeito aqui.",
         "unverified": "Confira os detalhes que o currículo adaptado acrescentou antes de usar."
       },
       "expired": "A empresa não anuncia mais esta vaga.",
-      "failed": "Não foi possível preparar este kit.",
+      "failed": "Não foi possível preparar esta candidatura.",
       "failedReason": {
-        "aiUnavailable": "A escrita com IA não estava disponível para este kit. Tente de novo mais tarde.",
-        "credits": "Você não tinha mais créditos para este kit. Tente de novo quando eles forem renovados.",
+        "aiUnavailable": "A escrita com IA não estava disponível para esta candidatura. Tente de novo mais tarde.",
+        "credits": "Você não tinha mais créditos para esta candidatura. Tente de novo quando eles forem renovados.",
         "jobClosed": "A empresa deixou de anunciar esta vaga.",
         "noResume": "Adicione um currículo primeiro e tente de novo.",
         "ourSide": "Algo deu errado do nosso lado. Tente de novo."
@@ -9934,8 +9934,8 @@
         },
         "loadFailed": "Não foi possível carregar o histórico.",
         "moved": "Agora: {state}",
-        "none": "Ainda não aconteceu nada com este kit.",
-        "notice": "Lembrete: este kit está pronto e ainda não foi aberto",
+        "none": "Ainda não aconteceu nada com esta candidatura.",
+        "notice": "Lembrete: esta candidatura está pronta e ainda não foi aberta",
         "opened": "Candidatura aberta; movida para Enviadas",
         "revised": {
           "letter": "Mudanças pedidas na carta de apresentação",
@@ -9944,27 +9944,27 @@
         "title": "Histórico",
         "undone": "Marcada como não enviada (Desfazer)",
         "used": {
-          "letter": "Carta de apresentação escolhida para este kit",
-          "resume": "Currículo escolhido para este kit"
+          "letter": "Carta de apresentação escolhida para esta candidatura",
+          "resume": "Currículo escolhido para esta candidatura"
         }
       },
       "letter": {
         "copyAria": "Copiar a carta de apresentação",
         "edit": "Editar carta",
         "loadFailed": "Não foi possível carregar a carta de apresentação.",
-        "none": "Este kit não tem carta de apresentação.",
+        "none": "Esta candidatura não tem carta de apresentação.",
         "off": "As cartas de apresentação estão desativadas em Configurações.",
         "title": "Carta de apresentação",
-        "use": "Usar neste kit"
+        "use": "Usar nesta candidatura"
       },
       "notOnList": {
         "add": "Adicionar a Prontas para candidatura",
         "failed": "Essa vaga não pôde ser adicionada. Tente de novo.",
         "full": "Sua lista está cheia. Remova ou conclua algumas vagas primeiro.",
-        "sub": "Adicione a vaga para preparar um kit para ela.",
+        "sub": "Adicione a vaga para preparar uma candidatura para ela.",
         "title": "Esta vaga não está na sua lista"
       },
-      "notPrepared": "Este kit ainda não foi preparado.",
+      "notPrepared": "Esta candidatura ainda não foi preparada.",
       "open": {
         "again": "Abrir a página de candidatura de novo",
         "alreadyApplied": "Esta vaga já estava em Candidaturas.",
@@ -9987,18 +9987,18 @@
         "sub": "Uma entrevista de treino baseada no anúncio desta vaga.",
         "title": "Treinar para esta vaga"
       },
-      "prepare": "Preparar kit",
-      "preparing": "Preparando seu kit. Esta página se atualiza sozinha.",
+      "prepare": "Preparar candidatura",
+      "preparing": "Preparando sua candidatura. Esta página se atualiza sozinha.",
       "remove": "Remover da lista",
       "removeConfirm": "Remover esta vaga da sua lista?",
       "removeYes": "Remover",
       "resume": {
-        "asIs": "Este kit usa seu currículo como está.",
+        "asIs": "Esta candidatura usa seu currículo como está.",
         "finishBlock": "Salve o currículo conferido acima antes de usar.",
         "loadFailed": "Não foi possível carregar o currículo adaptado. Recarregue a página para tentar de novo.",
         "openAsIs": "Abrir currículo",
         "title": "Currículo",
-        "use": "Usar neste kit",
+        "use": "Usar nesta candidatura",
         "verifyBlock": "Confira {count, plural, one {# detalhe} other {# detalhes}} acima antes de usar este currículo.",
         "fitNote": "“Antes” e “Depois” mostram o seu encaixe quando este currículo foi adaptado. O encaixe ao lado do título da vaga é o de hoje, então os dois podem ser diferentes."
       },
@@ -10009,7 +10009,7 @@
       },
       "reviseSend": "Enviar",
       "skip": "Pular esta vaga",
-      "skipped": "Você pulou esta vaga. Coloque-a de volta na sua lista para preparar um kit para ela."
+      "skipped": "Você pulou esta vaga. Coloque-a de volta na sua lista para preparar uma candidatura para ela."
     },
     "row": {
       "loading": "Carregando vaga…",
@@ -10019,7 +10019,7 @@
       "remove": "Remover",
       "restore": "Colocar de volta",
       "retry": "Tentar de novo",
-      "review": "Revisar kit",
+      "review": "Revisar candidatura",
       "reviewOpen": "Revisar e abrir",
       "seeApplication": "Ver em Candidaturas",
       "select": "Selecionar {title}",
@@ -10108,7 +10108,7 @@
       },
       "extension": {
         "lead": "A extensão do navegador preenche formulários de candidatura com seu perfil e suas respostas quando você pede. Você confere o formulário, e é você quem envia.",
-        "skipNote": "Você pode pular isto e adicionar a extensão depois. Os kits funcionam sem ela: copie suas respostas do kit."
+        "skipNote": "Você pode pular isto e adicionar a extensão depois. As candidaturas funcionam sem ela: copie suas respostas da candidatura."
       },
       "finish": "Concluir a configuração",
       "firstList": "Configuração concluída. {count, plural, one {# vaga está} other {# vagas estão}} na sua lista desta semana.",
@@ -10116,9 +10116,9 @@
       "profile": {
         "allSet": "Seu perfil tem tudo o que os formulários costumam pedir.",
         "complete": "Complete seu perfil",
-        "lead": "Os formulários de candidatura pedem estas informações. Os kits usam o que está no seu perfil, então confira se está certo.",
+        "lead": "Os formulários de candidatura pedem estas informações. Suas candidaturas usam o que está no seu perfil, então confira se está certo.",
         "missing": "Faltando",
-        "missingNote": "Você pode continuar agora. Cada kit lista o que ainda falta, para você preencher no formulário.",
+        "missingNote": "Você pode continuar agora. Cada candidatura lista o que ainda falta, para você preencher no formulário.",
         "missingTitle": "{count, plural, one {Falta # informação que os formulários pedem} other {Faltam # informações que os formulários pedem}}"
       },
       "skip": "Pular por enquanto",
@@ -10136,13 +10136,13 @@
     },
     "state": {
       "applied": "Candidatura enviada",
-      "approved": "Pronto para abrir",
+      "approved": "Pronta para abrir",
       "expired": "Não está mais anunciada",
       "failed": "Não foi possível preparar",
       "opened": "Candidatura aberta",
-      "picked": "Ainda não preparado",
+      "picked": "Ainda não preparada",
       "preparing": "Em preparo",
-      "ready_for_review": "Pronto para sua revisão",
+      "ready_for_review": "Pronta para sua revisão",
       "skipped": "Pulada"
     },
     "suggestions": {
@@ -10150,14 +10150,14 @@
       "addAria": "Adicionar {title} à sua lista",
       "failed": "Essa vaga não pôde ser adicionada. Tente de novo.",
       "full": "Sua lista está cheia. Remova ou conclua algumas vagas primeiro.",
-      "sub": "Ainda não estão na sua lista. Adicione as vagas para as quais você quer um kit.",
+      "sub": "Ainda não estão na sua lista. Adicione as vagas para as quais você quer preparar uma candidatura.",
       "title": "Mais vagas que combinam com a sua busca"
     },
     "tabs": {
-      "done": "Concluídos",
-      "label": "Kits por status",
+      "done": "Concluídas",
+      "label": "Candidaturas por status",
       "prepare": "A preparar",
-      "ready": "Prontos"
+      "ready": "Prontas"
     },
     "title": "Prontas para candidatura",
     "unavailable": {
@@ -10190,9 +10190,9 @@
       "saved": "Configurações salvas.",
       "saving": "Salvando…",
       "tailorEach": "Adaptar meu currículo a cada vaga",
-      "tailorEachNote": "Usa um crédito de adaptação por kit. Você confere cada mudança antes de ela ser usada.",
+      "tailorEachNote": "Usa um crédito de adaptação por candidatura. Você confere cada mudança antes de ela ser usada.",
       "target": "Vagas na sua lista semanal",
-      "targetNote": "Uma meta para a lista, não uma promessa: ela pode ter menos vagas quando menos vagas combinarem. Seu plano define quantos kits podem ser preparados.",
+      "targetNote": "Uma meta para a lista, não uma promessa: ela pode ter menos vagas quando menos vagas combinarem. Seu plano define quantas candidaturas podem ser preparadas.",
       "targetValue": "{count} por semana",
       "tierAtLeast": {
         "good": "Pelo menos",
@@ -11889,6 +11889,7 @@
       "foundUnknown": "Vagas novas que combinam com você desde a sua última visita:",
       "picksTitle": "Melhores escolhas",
       "picksLoading": "Carregando as melhores escolhas…",
+      "searching": "Buscando vagas que combinem com suas respostas. As melhores escolhas aparecem aqui quando a busca terminar.",
       "picksNone": "Nenhuma escolha nova agora.",
       "picksFailed": "Não foi possível carregar as melhores escolhas.",
       "viewJob": "Ver vaga",

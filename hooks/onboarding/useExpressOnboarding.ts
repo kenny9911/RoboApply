@@ -12,30 +12,33 @@
 //   goal          PUT  /onboarding/steps/goal          { skip: true }   explore branch only: these two
 //   preferences   PUT  /onboarding/steps/preferences   { skip: true }   stages come before `resume`
 //   resume        PUT  /onboarding/steps/resume        { resumeVariantId } | { skip: true }
-//   matching      POST /onboarding/match               the real phases, as the server reports them
+//   matching      POST /onboarding/match               started; setup goes on once the server has the
+//                                                      answers for the search (its `saving` line)
 //   confirm       POST /onboarding/confirm             { experienceLevels, alertFrequency }
 //   complete      POST /onboarding/complete            → stage `done`
 //
+// Setup does not wait for the search (docs/agent-driven/REDESIGN.md §9). The
+// server takes `confirm` while the stage is still `matching`, so once the
+// search has started and saved the answers it searches for, setup is
+// finished and the user lands on the Dashboard while the search runs on: the
+// stream outlives this page, and the Dashboard's Job search lane waits for the
+// picks (GET /onboarding/state `searchRunning`). A search that could not start
+// or failed does not stop setup either: confirm is taken all the same, and the
+// server queues a search when none is at work.
+//
 // Failure: the run stops, says which part failed and why, and keeps what was
 // done. `run` again with the same answers goes on from the step that failed
-// (the search is never repeated for the same answers: it is limited per hour);
-// with changed answers it starts over, which the server allows (saving an
-// earlier step again is an idempotent upsert).
-//
-// The search is best effort. A run that goes on in the background has already
-// moved the stage, so setup finishes as usual. A search that failed has not:
-// the server is still at `matching` and refuses `confirm` (409). The user is
-// not kept here for that: setup is left as "finish later" (POST
-// /onboarding/skip), so they land in the product and "Finish setting up"
-// leads back to the search.
+// (the search is never started twice for the same answers: it is limited per
+// hour); with changed answers it starts over, which the server allows (saving
+// an earlier step again is an idempotent upsert).
 
 import { useCallback, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { completeOnboarding, confirmOnboarding, putOnboardingStep, skipOnboarding } from '../../lib/api/onboarding';
+import { completeOnboarding, confirmOnboarding, putOnboardingStep } from '../../lib/api/onboarding';
 import type * as O from '../../lib/api/contracts/onboarding';
-import { apiErrorCode, type In } from '../../lib/api/contracts/wire';
-import { onboardingErrorReason, onboardingKeys, useOnboardingMatch, type MatchRunState } from './useOnboarding';
+import type { In } from '../../lib/api/contracts/wire';
+import { onboardingErrorReason, onboardingKeys, useOnboardingMatch, type MatchOutcome, type MatchRunState } from './useOnboarding';
 
 /** Everything "Find my jobs" saves. */
 export interface ExpressAnswers {
@@ -63,7 +66,7 @@ export interface ExpressRun {
   failure: ExpressFailure | null;
   /**
    * Once `status` is `done`: the route POST /onboarding/complete named, or null
-   * when it named none or setup was left as "finish later".
+   * when it named none.
    */
   nextRoute: string | null;
   run: (answers: ExpressAnswers, steps: readonly string[]) => Promise<void>;
@@ -79,12 +82,13 @@ const PART_OF: Readonly<Record<string, ExpressFailedPart>> = {
   resume: 'resume',
 };
 
+/** The search line after which setup goes on: the server has the answers the search uses. */
+export const EXPRESS_SEARCH_HANDOFF_PHASE: O.OnboardingMatchPhase = 'saving';
+
 interface RunMemory {
   /** The answers these steps were saved for. */
   key: string;
   saved: Set<string>;
-  /** The search ran for these answers and did not finish. */
-  searchFailed: boolean;
 }
 
 export function useExpressOnboarding(): ExpressRun {
@@ -95,7 +99,7 @@ export function useExpressOnboarding(): ExpressRun {
   const [stage, setStage] = useState<ExpressRunStage | null>(null);
   const [failure, setFailure] = useState<ExpressFailure | null>(null);
   const [nextRoute, setNextRoute] = useState<string | null>(null);
-  const memory = useRef<RunMemory>({ key: '', saved: new Set(), searchFailed: false });
+  const memory = useRef<RunMemory>({ key: '', saved: new Set() });
   const running = useRef(false);
 
   const run = useCallback(
@@ -103,7 +107,7 @@ export function useExpressOnboarding(): ExpressRun {
       if (running.current) return;
       running.current = true;
       const key = JSON.stringify(answers);
-      if (memory.current.key !== key) memory.current = { key, saved: new Set(), searchFailed: false };
+      if (memory.current.key !== key) memory.current = { key, saved: new Set() };
       const mem = memory.current;
       setFailure(null);
       setStatus('running');
@@ -111,7 +115,7 @@ export function useExpressOnboarding(): ExpressRun {
       let at = steps[0] ?? '';
       let route: string | null = null;
       try {
-        plan: for (const step of steps) {
+        for (const step of steps) {
           if (mem.saved.has(step)) continue;
           at = step;
           switch (step) {
@@ -135,24 +139,25 @@ export function useExpressOnboarding(): ExpressRun {
               break;
             case 'matching': {
               setStage('searching');
-              const outcome = await startMatch();
-              // Cancelled by leaving the page: nothing more to do or to say.
-              if (outcome.status === 'aborted') return;
-              mem.searchFailed = outcome.status !== 'done';
+              // Started, not awaited to its end: it outlives this page. Setup goes on once the server has
+              // the answers the search uses, or as soon as the run ended without getting there (it could
+              // not start, or failed: the server takes confirm all the same and queues a search).
+              let handedOff: () => void = () => undefined;
+              const handoff = new Promise<'handoff'>((resolve) => (handedOff = () => resolve('handoff')));
+              const ended = startMatch({
+                outliveScreen: true,
+                onPhase: (phase) => {
+                  if (phase === EXPRESS_SEARCH_HANDOFF_PHASE) handedOff();
+                },
+              });
+              const first: 'handoff' | MatchOutcome = await Promise.race([handoff, ended]);
+              // Cancelled by a newer run: nothing more to do or to say.
+              if (first !== 'handoff' && first.status === 'aborted') return;
               break;
             }
             case 'confirm':
               setStage('finishing');
-              try {
-                await confirmOnboarding(answers.confirm);
-              } catch (err) {
-                // The search did not finish, so the server is still at
-                // `matching` and refuses this step. Leave setup as "finish
-                // later" rather than keep the user on this screen.
-                if (!(mem.searchFailed && apiErrorCode(err) === 'conflict')) throw err;
-                await skipOnboarding();
-                break plan;
-              }
+              await confirmOnboarding(answers.confirm);
               break;
             case 'complete':
               setStage('finishing');

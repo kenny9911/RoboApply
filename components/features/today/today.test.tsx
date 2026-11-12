@@ -482,17 +482,17 @@ describe('/today "Job search"', () => {
     });
     const view = renderToday(<TodayDesk sources={sourcesWith({ picks: ready([pick('p1', 'Analytics Engineer'), pick('p2', 'Data Scientist')]) })} check={CHECK_DONE} now={NOW} />, { flags: ALL_ON });
     fireEvent.click(within(screen.getAllByTestId('today-pick')[0]!).getByRole('button', { name: 'Prepare application' }));
-    const sheet = await screen.findByRole('dialog', { name: 'Prepare 1 kit' });
+    const sheet = await screen.findByRole('dialog', { name: 'Prepare 1 application' });
     expect(net.to('POST', '/api/v1/roboapply/agent/queue')[0]!.body).toEqual({ jobIds: ['p1'], addedVia: 'suggestions' });
     // The cost is on screen before anything is spent; nothing has been confirmed.
-    expect(await within(sheet).findByTestId('cost-ready_kits')).toHaveTextContent('Uses 1 kit; you have 2 left this week.');
+    expect(await within(sheet).findByTestId('cost-ready_kits')).toHaveTextContent('Uses 1 application; you have 2 left this week.');
     expect(net.to('POST', '/api/v1/roboapply/agent/queue/q_p1/prepare').map((c) => c.body)).toEqual([{}]);
 
     // The refreshed suggestions no longer hold p1.
     view.rerender(<TodayDesk sources={sourcesWith({ queue: ready([onList]), picks: ready([pick('p2', 'Data Scientist'), pick('p3', 'Insights Lead')]) })} check={CHECK_DONE} now={NOW} />);
-    expect(screen.getByRole('dialog', { name: 'Prepare 1 kit' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Prepare 1 application' })).toBeInTheDocument();
     expect(screen.getAllByTestId('today-pick').map((r) => r.getAttribute('data-job-id'))).toEqual(['p1', 'p2']);
-    expect(within(screen.getByRole('dialog', { name: 'Prepare 1 kit' })).getByRole('button', { name: 'Prepare 1 kit' })).toBeEnabled();
+    expect(within(screen.getByRole('dialog', { name: 'Prepare 1 application' })).getByRole('button', { name: 'Prepare 1 application' })).toBeEnabled();
   });
 
   it('a pick whose list state the server sent says where it is up front; one not on the list keeps `Prepare application` (REDESIGN §9)', () => {
@@ -540,6 +540,16 @@ describe('/today "Job search"', () => {
     expect(screen.getByTestId('today-applications')).toBeInTheDocument();
     expect(screen.getByTestId('today-resume')).toBeInTheDocument();
   });
+
+  // docs/agent-driven/REDESIGN.md §9: setup is finished before its search; the lane waits for the picks in words.
+  it.each(['desk', 'dashboard'] as const)('while the setup search runs (%s), the loading picks say the search is running', (variant) => {
+    renderToday(<TodayDesk variant={variant} sources={sourcesWith({ picks: loading, searching: true })} check={null} now={NOW} />, { flags: ALL_ON });
+    const status = within(screen.getByTestId('today-job-search')).getByRole('status');
+    expect(status).toHaveTextContent('Searching for jobs that fit your answers. The best picks show here when the search is done.');
+    expect(status).not.toHaveTextContent('Loading picks…');
+    expect(screen.getByTestId('today-picks-searching')).toBeVisible();
+    expect(screen.queryByTestId('today-picks-none')).not.toBeInTheDocument();
+  });
 });
 
 // ── Applications ────────────────────────────────────────────────────────────
@@ -551,7 +561,7 @@ describe('/today "Applications"', () => {
     expect(numberOf('waiting')).toHaveTextContent(/^Waiting for you2$/);
     expect(numberOf('sent')).toHaveTextContent(/^Sent this week1$/);
     const lane = screen.getByTestId('today-applications');
-    expect(await within(lane).findByText(/2 of 3 kits left this week\./)).toBeInTheDocument();
+    expect(await within(lane).findByText(/2 of 3 applications left this week\./)).toBeInTheDocument();
     expect(lane.querySelector('[data-honesty="you_submit"]')).toHaveTextContent('You submit each application yourself.');
     expect(within(lane).getByRole('link', { name: 'Open applications' })).toHaveAttribute('href', '/applications');
     expect(net.to('GET', '/api/v1/roboapply/credits')).toHaveLength(1);

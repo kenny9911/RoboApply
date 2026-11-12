@@ -1,10 +1,17 @@
 'use client';
 
-// What the start flow shows after "Find my jobs": one line that says what is
-// running now (saving the answers, searching, finishing), and the search's
-// five lines as the long "Finding jobs" screen shows them
-// (../steps/MatchingStep.tsx: same list, same words). A line is checked only
-// when the server reported that step; there is no timer and no made-up step.
+// What the start flow shows after "Find my jobs", for the few seconds it
+// takes: one line that says what is running now (saving the answers,
+// starting the search, finishing setup), and the search's first two lines
+// as the long "Finding jobs" screen words them (../steps/MatchingStep.tsx):
+// the resume read and the search saved. A line is checked only when the
+// server reported that step; there is no timer and no made-up step.
+//
+// The page does not wait for the rest of the search (docs/agent-driven/
+// REDESIGN.md §9): once the server has saved what the search looks for, setup
+// is finished and the Dashboard's Job search lane shows the search until its
+// picks arrive. So the three lines that would only finish after the user has
+// left (searching, comparing, ranking) are not shown here.
 
 import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
@@ -12,23 +19,20 @@ import { useTranslations } from 'next-intl';
 import type { ExpressRunStage } from '../../../../hooks/onboarding/useExpressOnboarding';
 import type { MatchRunState } from '../../../../hooks/onboarding/useOnboarding';
 import { IconCheck } from '../../../v3/primitives/Iconset';
-import { MATCH_PHASES } from '../options';
 import { StepFrame } from '../StepFrame';
 import styles from '../onboarding.module.css';
 import x from './express.module.css';
 
+/** The search lines this screen waits for (the rest run on after it). */
+export const EXPRESS_PROGRESS_PHASES = ['reading', 'saving'] as const;
+
 export interface ExpressProgressProps {
   stage: ExpressRunStage | null;
   phases: MatchRunState['phases'];
-  /** The job titles being searched, for the "Searching…" line. */
-  titles: string[];
-  /** The chosen countries (codes), for the same line. */
-  countries: string[];
 }
 
-export function ExpressProgress({ stage, phases, titles, countries }: ExpressProgressProps) {
+export function ExpressProgress({ stage, phases }: ExpressProgressProps) {
   const t = useTranslations('onboarding.matching');
-  const tc = useTranslations('onboarding.countries');
   const te = useTranslations('onboarding.express.progress');
   const status = useRef<HTMLParagraphElement | null>(null);
 
@@ -37,13 +41,8 @@ export function ExpressProgress({ stage, phases, titles, countries }: ExpressPro
     status.current?.focus();
   }, []);
 
-  const title = titles.join(', ');
-  const place = countries.map((c) => tc(c)).join(', ');
-  const label = (phase: (typeof MATCH_PHASES)[number]) => {
-    if (phase === 'reading' && phases.reading === 'skipped') return t('phases.readingSkipped');
-    if (phase === 'searching') return title ? t('phases.searching', { title, place: place || t('anywhere') }) : t('phases.searchingGeneric');
-    return t(`phases.${phase}`);
-  };
+  const label = (phase: (typeof EXPRESS_PROGRESS_PHASES)[number]) =>
+    phase === 'reading' && phases.reading === 'skipped' ? t('phases.readingSkipped') : t(`phases.${phase}`);
 
   return (
     <StepFrame title={t('title')} subtitle={t('subtitle')} position={{ current: 2, total: 2 }} busy hideFooter>
@@ -51,7 +50,7 @@ export function ExpressProgress({ stage, phases, titles, countries }: ExpressPro
         {te(stage ?? 'saving')}
       </p>
       <ol className={styles.phases} aria-live="polite">
-        {MATCH_PHASES.map((phase) => {
+        {EXPRESS_PROGRESS_PHASES.map((phase) => {
           const s = phases[phase];
           const done = s === 'done';
           return (

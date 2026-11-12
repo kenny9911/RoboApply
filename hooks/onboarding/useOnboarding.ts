@@ -2,7 +2,8 @@
 
 // hooks/onboarding/useOnboarding.ts — onboarding queries and mutations (WP-30).
 //
-//   useOnboardingState()        GET  /onboarding/state (the stage machine's view)
+//   useOnboardingState()        GET  /onboarding/state (the stage machine's view; `pollWhileSearching`
+//                               reads it again while the setup search is at work)
 //   useSaveStep()               PUT  /onboarding/steps/:step (reseeds the state)
 //   useTitleSuggest(q)          GET  /onboarding/title-suggest (≥2 chars, debounced by the caller)
 //   useMarketSnapshot(q)        GET  /onboarding/market-snapshot (title + country)
@@ -48,12 +49,26 @@ export const onboardingKeys = {
 
 export type OnboardingState = O.OnboardingStateView;
 
-export function useOnboardingState(options: { enabled?: boolean } = {}) {
+/** How often a screen waiting on the setup search reads the state again while the server says it is at work. */
+export const SEARCH_POLL_MS = 5_000;
+
+/**
+ * Read the state again every `SEARCH_POLL_MS` while it says the setup search
+ * is at work (`searchRunning`), and stop once it is not. Pure, for tests.
+ */
+export function searchPollInterval(state: Pick<OnboardingState, 'searchRunning'> | undefined): number | false {
+  return state?.searchRunning === true ? SEARCH_POLL_MS : false;
+}
+
+export function useOnboardingState(options: { enabled?: boolean; pollWhileSearching?: boolean } = {}) {
+  const poll = options.pollWhileSearching === true;
   return useQuery<OnboardingState>({
     queryKey: onboardingKeys.state(),
     queryFn: ({ signal }) => getOnboardingState({ signal }),
     enabled: options.enabled ?? true,
     staleTime: 60_000,
+    // Only a screen that waits on the search asks again (the Dashboard's Job search lane); the setup screens never do.
+    refetchInterval: poll ? (q) => searchPollInterval(q.state.data) : false,
   });
 }
 
@@ -175,6 +190,17 @@ export type MatchOutcome =
   | { status: 'error' }
   | { status: 'aborted' };
 
+export interface MatchStartOptions {
+  /**
+   * The search outlives this screen: leaving the page does not cancel it (the
+   * start flow finishes setup while the search runs on, and the Dashboard
+   * waits for its picks). Only a newer `start()` cancels it.
+   */
+  outliveScreen?: boolean;
+  /** Each line as the server reports it, for a caller that goes on before the run ends. */
+  onPhase?: (phase: O.OnboardingMatchPhase, skipped: boolean) => void;
+}
+
 const PHASES = ['reading', 'saving', 'searching', 'comparing', 'ranking'] as const;
 const freshPhases = (): MatchRunState['phases'] =>
   Object.fromEntries(PHASES.map((p) => [p, 'pending'])) as MatchRunState['phases'];
@@ -182,19 +208,28 @@ const freshPhases = (): MatchRunState['phases'] =>
 /**
  * Runs O6 once per `start()`; a line is checked only when the server says that
  * step finished. `start()` resolves with how the run ended (the state says the
- * same; the returned value is for a caller that goes on after the run).
+ * same; the returned value is for a caller that goes on after the run). When
+ * the stream ends the state is read again, wherever the user is by then.
  */
 export function useOnboardingMatch() {
   const qc = useQueryClient();
   const [state, setState] = useState<MatchRunState>({ status: 'idle', phases: freshPhases(), result: null });
   const controller = useRef<AbortController | null>(null);
+  /** The current run goes on after this screen is gone (`outliveScreen`). */
+  const outlives = useRef(false);
 
-  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(
+    () => () => {
+      if (!outlives.current) controller.current?.abort();
+    },
+    [],
+  );
 
-  const start = useCallback(async (): Promise<MatchOutcome> => {
+  const start = useCallback(async (options: MatchStartOptions = {}): Promise<MatchOutcome> => {
     controller.current?.abort();
     const ac = new AbortController();
     controller.current = ac;
+    outlives.current = options.outliveScreen === true;
     setState({ status: 'running', phases: freshPhases(), result: null });
     // What the stream said last (set from its callback).
     const ended: { outcome: MatchOutcome | null } = { outcome: null };
@@ -205,6 +240,7 @@ export function useOnboardingMatch() {
           if (e.event === 'phase') {
             const { phase, skipped } = e.data;
             setState((s) => ({ ...s, phases: { ...s.phases, [phase]: skipped ? 'skipped' : 'done' } }));
+            options.onPhase?.(phase, skipped === true);
           } else if (e.event === 'done') {
             ended.outcome = { status: 'done', result: e.data };
             setState((s) => ({ ...s, status: 'done', result: e.data }));

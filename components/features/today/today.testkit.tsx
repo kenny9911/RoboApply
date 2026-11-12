@@ -175,6 +175,7 @@ export function sourcesWith(over: Partial<TodaySources> = {}): TodaySources {
     profileMissing: ready(0),
     resumes: ready([resume()]),
     setupStepsLeft: ready(0),
+    searching: false,
     skills: ready([]),
     ...over,
   };

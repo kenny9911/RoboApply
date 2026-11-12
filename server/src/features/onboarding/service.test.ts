@@ -630,3 +630,128 @@ describe('default wiring: the resume seed and the AI consent', () => {
     }
   });
 });
+
+// ── docs/agent-driven/REDESIGN.md §9: setup finishes without waiting for the search ──
+
+describe('RoboApply confirms while the search runs', () => {
+  // The service clock of `setup()` is 2026-10-10T12:00:00Z.
+  const NOW = '2026-10-10T12:00:00.000Z';
+  const BASICS = { ...SAMPLE_BASICS, jobFunctions: [...SAMPLE_BASICS.jobFunctions], jobTypes: ['full_time'], countries: ['US'] };
+  const atMatching = (answers: Record<string, unknown> = {}) => ({ u1: { step: 'matching', path: 'urgent', answers: { basics: BASICS, resume: { resumeVariantId: 'rv1' }, ...answers } } });
+  const RESULT = { jobCount: 2, compared: 4, topJobIds: ['j1'], continuedInBackground: false, finishedAt: '2026-10-10T11:59:00.000Z' };
+
+  it('confirm at `matching` is taken (with what it needs: the basics saved before it), moves to the tour, and complete finishes setup', async () => {
+    const queueMatch = vi.fn(async () => undefined);
+    const { svc, mem, sp } = setup({ queueMatch }, atMatching({ matchRun: { startedAt: '2026-10-10T11:59:30.000Z' } }));
+    expect(await svc.confirm('u1', { experienceLevels: ['senior'], extraFunctions: ['data_engineer'], alertFrequency: 'weekly' }, RA)).toEqual({ stage: 'tour', nextRoute: '/jobs' });
+    // The confirmed filters are written over the basics, extra titles added to them.
+    expect(sp.state.filters).toMatchObject({ seniority: ['senior'], taxonomyIds: ['backend_engineer', 'data_engineer'] });
+    expect(sp.state.alertDigest).toBe('weekly');
+    expect(await svc.complete('u1', RA)).toEqual({ stage: 'done', nextRoute: '/jobs' });
+    expect(mem.rows.get('u1')).toMatchObject({ step: 'done', answers: { confirm: { experienceLevels: ['senior'] } } });
+    expect(mem.rows.get('u1')!.completedAt).toBeInstanceOf(Date);
+    // A search at work is left to finish: nothing more is queued.
+    expect(queueMatch).not.toHaveBeenCalled();
+    expect((await svc.getState('u1', RA)).searchRunning).toBe(true);
+  });
+
+  it('PUT /steps/confirm takes it the same way', async () => {
+    const { svc } = setup({}, atMatching());
+    expect(await svc.saveStep('u1', 'confirm', { experienceLevels: ['mid'] }, RA)).toEqual({ stage: 'tour', nextStage: 'tour', nextRoute: '/jobs' });
+  });
+
+  it('no search at work and no result (it failed, was cut off or never started): one is queued, and the state says it is at work', async () => {
+    const queueMatch = vi.fn(async () => undefined);
+    const failed = setup({ queueMatch }, atMatching({ matchRun: { startedAt: '2026-10-10T11:58:00.000Z', failedAt: '2026-10-10T11:58:30.000Z' } }));
+    expect((await failed.svc.getState('u1', RA)).searchRunning).toBe(false);
+    await failed.svc.confirm('u1', { experienceLevels: ['mid'] }, RA);
+    expect(queueMatch).toHaveBeenCalledTimes(1);
+    expect(queueMatch).toHaveBeenCalledWith('u1', RA.brand);
+    expect(failed.mem.rows.get('u1')!.answers.matchRun).toEqual({ startedAt: NOW, queuedAt: NOW });
+    expect(await failed.svc.getState('u1', RA)).toMatchObject({ stage: 'tour', searchRunning: true });
+
+    const never = setup({ queueMatch: vi.fn(async () => undefined) }, atMatching());
+    await never.svc.confirm('u1', { experienceLevels: ['mid'] }, RA);
+    expect(never.deps.queueMatch).toHaveBeenCalledTimes(1);
+    // A search that died long ago without a word is no search at work either.
+    const stale = setup({ queueMatch: vi.fn(async () => undefined) }, atMatching({ matchRun: { startedAt: '2026-10-10T11:00:00.000Z' } }));
+    await stale.svc.confirm('u1', { experienceLevels: ['mid'] }, RA);
+    expect(stale.deps.queueMatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('a search that already stored a result is not run again', async () => {
+    const queueMatch = vi.fn(async () => undefined);
+    const { svc } = setup({ queueMatch }, atMatching({ matching: RESULT }));
+    await svc.confirm('u1', { experienceLevels: ['mid'] }, RA);
+    expect(queueMatch).not.toHaveBeenCalled();
+    expect((await svc.getState('u1', RA)).searchRunning).toBe(false);
+  });
+
+  it('only a confirm saved at `matching` queues a search (a re-saved confirm after the search does not)', async () => {
+    const queueMatch = vi.fn(async () => undefined);
+    const atConfirm = setup({ queueMatch }, { u1: { step: 'confirm', path: 'urgent' } });
+    await atConfirm.svc.confirm('u1', { experienceLevels: ['mid'] }, RA);
+    const finished = setup({ queueMatch }, { u1: { step: 'done', path: 'urgent', completedAt: new Date('2026-10-01T00:00:00Z') } });
+    await finished.svc.confirm('u1', { experienceLevels: ['mid'] }, RA);
+    expect(queueMatch).not.toHaveBeenCalled();
+  });
+
+  it('a search that cannot be queued is recorded as failed (nothing waits for it); setup still moves on', async () => {
+    const warn = vi.fn();
+    const queueMatch = vi.fn(async () => {
+      throw new Error('queue down');
+    });
+    const { svc, mem } = setup({ queueMatch, warn }, atMatching());
+    await expect(svc.confirm('u1', { experienceLevels: ['mid'] }, RA)).resolves.toEqual({ stage: 'tour', nextRoute: '/jobs' });
+    expect(mem.rows.get('u1')!.answers.matchRun).toEqual({ startedAt: NOW, queuedAt: NOW, failedAt: NOW });
+    expect((await svc.getState('u1', RA)).searchRunning).toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('could not be queued'), expect.objectContaining({ userId: 'u1', error: 'queue down' }));
+  });
+
+  it('the search is queued even when writing the confirmed filters failed (it was recorded as queued)', async () => {
+    const queueMatch = vi.fn(async () => undefined);
+    const { svc, sp } = setup({ queueMatch }, atMatching());
+    sp.api.update = async () => {
+      throw new Error('search store down');
+    };
+    await expect(svc.confirm('u1', { experienceLevels: ['mid'] }, RA)).rejects.toThrow('search store down');
+    expect(queueMatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('complete still needs the confirm: at `matching` it is refused', async () => {
+    const { svc } = setup({}, atMatching());
+    await expect(svc.complete('u1', RA)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'onboarding_not_finished' } });
+  });
+
+  it('every other step keeps its order: confirm before the search, or a step beyond the stage, is refused', async () => {
+    const queueMatch = vi.fn(async () => undefined);
+    const atResume = setup({ queueMatch }, { u1: { step: 'resume', path: 'urgent', answers: { basics: BASICS } } });
+    await expect(atResume.svc.confirm('u1', { experienceLevels: ['mid'] }, RA)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'onboarding_step_not_available' } });
+    const atBasics = setup({}, { u1: { step: 'basics', path: 'urgent' } });
+    await expect(atBasics.svc.saveStep('u1', 'resume', { skip: true }, RA)).rejects.toMatchObject({ code: 'conflict' });
+    expect(queueMatch).not.toHaveBeenCalled();
+    expect(atResume.mem.rows.get('u1')!.step).toBe('resume');
+  });
+
+  it('GoApply keeps its own order: its confirm waits for the search, and nothing is queued', async () => {
+    const queueMatch = vi.fn(async () => undefined);
+    const cn = createOnboardingCnService({ recordConsent: vi.fn(async () => ({})), patchCnFields: vi.fn(async () => ({})), patchDefaultFilters: vi.fn(async () => ({})) });
+    const { svc, mem } = setup(
+      { queueMatch, validateCnStep: (step, body, ctx) => cn.validateCnStep(step, body, ctx), applyCnStep: (u, b, r, o) => cn.applyCnStep(u, b, r, o) },
+      {
+        u1: {
+          step: 'matching',
+          answers: { identity: { cnIdentity: 'yingjie', graduationClass: 2027 }, intent: { targetRoles: [{ taxonomyId: 'product_manager', label: '产品经理' }], cities: ['上海'], workType: 'full_time' } },
+        },
+      },
+    );
+    await expect(svc.confirm('u1', { heardFrom: 'friend' }, GO)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'onboarding_step_not_available' } });
+    await expect(svc.saveStep('u1', 'confirm', { heardFrom: 'friend' }, GO)).rejects.toMatchObject({ code: 'conflict' });
+    expect(mem.rows.get('u1')!.step).toBe('matching');
+    expect(queueMatch).not.toHaveBeenCalled();
+  });
+
+  it('a fresh account has no search at work', async () => {
+    expect((await setup().svc.getState('u1', RA)).searchRunning).toBe(false);
+  });
+});
