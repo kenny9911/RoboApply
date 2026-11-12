@@ -155,3 +155,12 @@ Built on `feat/agent-driven`, checked in the fixture preview (`node scripts/desi
 ## 10. Open decision for the owner
 
 "Apply jobs for the user" was built inside D1: the agents prepare and fill, the user submits. Submitting for the user would reverse a ruling confirmed in July and October 2026, needs server-side submission that does not exist, and changes the copy gate and the extension gate. It is a product and legal decision, not a design detail.
+
+## 11. In the resume.io layout (branch `feat/resumeio-clone`)
+
+In November 2026 this redesign was merged into the resume.io clone (`docs/resume-io/TEARDOWN.md` on the teardown branch; the Desk design system in `docs/design-system.md`). Both branches had added a signed-in home, so they now share one:
+
+- **The home is the Dashboard (`/dashboard`)**, first in the rail on both brands. `/today` and `/home` redirect to it, the server's `homeRoute()` and the two-screen setup land there, and the ready-not-opened count sits on its nav entry.
+- **The desk is drawn inside the Dashboard** (`TodayDesk` with `variant="dashboard"`): the greeting with the count of what waits and the goal line, Waiting for you, then resume.io's "What do you want to move forward today?" goal tabs with the Progress and hero cards, then the Job search picks (each with Prepare application) as cards, then the Applications and Resume lanes side by side, and a floating ask bar instead of the Ask box.
+- **One primary button still holds**: the first waiting card's; when nothing waits, the hero card's call to action (no pick takes it on the Dashboard).
+- The resume.io job-match grid was replaced by the agent's picks, so the home shows one list of jobs, with the gap first (R2) and the honesty line (C5).
