@@ -36,6 +36,12 @@ export interface ReviewPanelProps {
   onCustomize: () => void;
 }
 
+/** Issues the check counted; 0 when it sent no counts (an old check). */
+function countsTotal(counts: { urgent?: number; critical?: number; optional?: number } | null | undefined): number {
+  if (!counts) return 0;
+  return (counts.urgent ?? 0) + (counts.critical ?? 0) + (counts.optional ?? 0);
+}
+
 export function ReviewPanel({ resumeId, onShowSection, onCustomize }: ReviewPanelProps) {
   const t = useTranslations('resumeCheck');
   const te = useTranslations('resume.editor_tabs.check');
@@ -161,7 +167,8 @@ function Summary({
       </section>
 
       {grade.issues.length === 0 ? (
-        <p className={styles.body}>{t('noIssues')}</p>
+        // "Nothing to fix" only when the counts agree; otherwise the list is not here, and the full check has it.
+        countsTotal(grade.counts) === 0 ? <p className={styles.body}>{t('noIssues')}</p> : null
       ) : (
         groups.map((g) => {
           const titleId = `${id}-${g.section}`;

@@ -309,6 +309,20 @@ describe('resume editor tabs', () => {
     expect(messageErrors(errors)).toEqual([]);
   });
 
+  it('Review: says there is nothing to fix only when the counts agree, never over counted issues it was not sent', async () => {
+    nav.params = new URLSearchParams('tab=review');
+    state.latest = latest({ grade: { ...GRADE, issues: [] } });
+    const first = await renderEditor();
+    const review = screen.getByRole('tabpanel', { name: 'Review' });
+    expect(within(review).queryByText('Nothing to fix on this checklist.')).toBeNull();
+    expect(within(review).getByRole('link', { name: 'Open the full check' })).toBeInTheDocument();
+    first.unmount();
+
+    state.latest = latest({ grade: { ...GRADE, counts: { urgent: 0, critical: 0, optional: 0 }, issues: [] } });
+    await renderEditor();
+    expect(within(screen.getByRole('tabpanel', { name: 'Review' })).getByText('Nothing to fix on this checklist.')).toBeInTheDocument();
+  });
+
   it('Review: Check again is the check call with the same role, and its cost shows before the click', async () => {
     nav.params = new URLSearchParams('tab=review');
     await renderEditor();
