@@ -31,6 +31,7 @@ import {
 } from '../../lib/api/search';
 import { apiErrorCode, apiErrorDetails } from '../../lib/api/contracts/wire';
 import type * as S from '../../lib/api/contracts/search';
+import { agentKeys } from '../agent/keys';
 import { LEGACY_PREFERENCES_KEY, searchKeys } from './keys';
 
 export type SearchProfile = S.SearchProfileWire;
@@ -129,6 +130,10 @@ export function changesPreferencesProjection(write: SearchProfileWrite): boolean
 function afterWrite(qc: QueryClient, write: SearchProfileWrite) {
   void qc.invalidateQueries({ queryKey: searchKeys.profiles() });
   if (changesPreferencesProjection(write)) void qc.invalidateQueries({ queryKey: LEGACY_PREFERENCES_KEY });
+  // The Job search agent's picks (the Dashboard) come from the saved searches: whichever page changed one, they
+  // are asked for afresh. Reset, not refreshed in place: the Dashboard keeps the rows it shows until the picks
+  // pass through loading (components/features/today/JobSearchLane.tsx, useHeldPicks).
+  void qc.resetQueries({ queryKey: agentKeys.suggestions() });
 }
 
 export function useCreateSearchProfile() {
