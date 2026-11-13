@@ -699,7 +699,13 @@ function CompanyList({ draft, set, field }: EditorProps & { field: 'companies' |
 }
 export const CompaniesEditor = (p: EditorProps) => <CompanyList {...p} field="companies" />;
 export const ExcludedCompaniesEditor = (p: EditorProps) => <CompanyList {...p} field="excludedCompanies" />;
-/** Boost only, never a filter (the legacy "target companies"). */
+/**
+ * "Companies you want to work at" (target companies; the search's
+ * `preferredCompanies`): typed with the company suggestions (GET /companies),
+ * removed with ×, saved with the rest of the draft in the drawer's one PATCH.
+ * Boost only, never a filter: a job at one of them ranks ahead of an otherwise
+ * equal job in Recommended and in the picks (server search/targetCompanies.ts).
+ */
 export const PreferredCompaniesEditor = (p: EditorProps) => <CompanyList {...p} field="preferredCompanies" />;
 
 /** Company size (when known), on both brands; GoApply shows it beside employer type. No funding-stage filter. */

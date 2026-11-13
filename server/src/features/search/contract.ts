@@ -16,7 +16,10 @@
 //     city have no country, and inventing one would be fabricated data (D3).
 //   - `preferredCompanies` (boost only, never a filter) carries the legacy
 //     `targetCompanies`, which boosted the feed; turning it into the
-//     include-only `companies` filter would silently narrow the feed.
+//     include-only `companies` filter would silently narrow the feed. It is
+//     the "Companies you want to work at" list (target companies,
+//     docs/agent-driven/REDESIGN.md §8 scenario 4); targetCompanies.ts holds
+//     the rule (a bounded boost in Recommended and in the agent's picks).
 //   - GoApply fields (CN plan; PRODUCT F-FILT-01/02 cn column): `classYear`,
 //     `degree`, `employmentType`, `internDays`, `dailyPay`, `salaryMonthsMin`
 //     (K·N薪, added by WP-20), `hukouTag`, `schoolTiers`. School tier is a user-side filter on postings that state
@@ -66,6 +69,8 @@ export const SCHOOL_TIERS = ['985', '211', 'double_first_class'] as const;
 export const WORK_SHIFT_FILTERS = ['day', 'evening', 'night', 'rotating', 'part_time'] as const;
 /** Districts one search can name (Taiwan; `twDistricts`). */
 export const TW_DISTRICTS_MAX = 20;
+/** Names one company list of a search holds ("Only these companies", "Companies you want to work at"). */
+export const COMPANY_LIST_MAX = 50;
 
 /** Instant-alert frequency options (per day). 100 = "as they arrive" (Pro); never called unlimited. */
 export const ALERT_INSTANT_OPTIONS = [0, 1, 2, 5, 100] as const;
@@ -134,9 +139,14 @@ export const FilterSetV1Schema = z
     roleType: z.enum(ROLE_TYPES).optional(),
     // Companies (F-FILT-04)
     /** Include-only: when set, only these companies. */
-    companies: list(text(160), 50).optional(),
-    /** Boost only, never a filter (legacy `targetCompanies`). */
-    preferredCompanies: list(text(160), 50).optional(),
+    companies: list(text(160), COMPANY_LIST_MAX).optional(),
+    /**
+     * "Companies you want to work at" (target companies; legacy
+     * `targetCompanies`). Boost only, never a filter: a job at one of them
+     * ranks ahead of an otherwise equal job, by a bounded amount
+     * (targetCompanies.ts; feed ORDERING_RULES `target_companies`).
+     */
+    preferredCompanies: list(text(160), COMPANY_LIST_MAX).optional(),
     excludedCompanies: list(text(160), 200).optional(),
     companySizes: list(z.enum(COMPANY_SIZES), 6).optional(),
     excludeAgencies: z.boolean().optional(),
@@ -315,6 +325,34 @@ export const SearchProfileParamsSchema = z.object({ id: z.string().min(1).max(64
 
 /** POST /search-profiles/count → `FeedCountResult` (count capped at 5,000; `{count:null}` until the feed counts). */
 export const CountFiltersBodySchema = z.object({ filters: z.unknown() }).strict();
+
+/**
+ * POST /search-profiles/target-companies: put a company on the ACTIVE saved
+ * search's "Companies you want to work at" list (`on: true`) or take it off
+ * (`on: false`); the job page's control. Names are compared as the feed
+ * compares companies (the normalized company name, targetCompanies.ts), so
+ * "Stripe, Inc." is already on a list that holds "Stripe", and taking a
+ * company off removes every spelling of it. No `baseVersion`: a membership
+ * change is applied to the search as it is now (the server reads it again and
+ * retries on a concurrent write), so the page needs no profile read first. A
+ * list that already says so is not written. A full list (COMPANY_LIST_MAX)
+ * refuses an addition: 422 invalid_request `{ reason: 'invalid_filters' }`.
+ */
+export const SetTargetCompanyBodySchema = z
+  .object({
+    company: z.string().trim().min(1).max(160),
+    on: z.boolean(),
+  })
+  .strict();
+
+export type SetTargetCompanyBody = z.infer<typeof SetTargetCompanyBodySchema>;
+
+export interface SetTargetCompanyResponse {
+  /** The active saved search after the change (as it was, when its list already said so). */
+  profile: SearchProfileWire;
+  /** The company is on the list now. */
+  on: boolean;
+}
 
 /** GET /taxonomy?locale&q */
 export const TaxonomyQuerySchema = z.object({ locale: z.string().max(8).optional(), q: z.string().trim().max(80).optional() });

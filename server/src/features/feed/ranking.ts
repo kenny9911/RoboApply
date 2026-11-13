@@ -15,7 +15,18 @@
 //   sourceQuality = 0–100: pay listed, known application system, real posting date, detailed description
 //   Recommended rank = 0.55·fit + 0.20·freshness + 0.15·affinity + 0.10·sourceQuality + goal adjustment
 //                      + skills boost (only when skills is the only narrowing filter)
+//                      + 5 for a job at a company the search lists as wanted (target companies)
 //                      − seen and skipped (shown on 3+ visits, never opened: 5 / 7.5 / 10)
+//   Target companies ("Companies you want to work at", the search's
+//   `preferredCompanies`; search/targetCompanies.ts has the whole rule): a
+//   bounded boost and never a filter. Recommended adds TARGET_COMPANY_POINTS
+//   to the rank, so such a job passes an otherwise equal job and any job whose
+//   rank was less than 5 points higher, and no other. The agent's picks are
+//   Best fit with `favorTargetCompanies`: the job is ordered as if its fit were
+//   5 points higher (a job with no fit gets no points and stays after every
+//   job with one; among those, a listed company comes first). Ties after the
+//   points fall to the usual tie-breaks, and the company spread runs after.
+//   The /jobs Best fit sort itself is unchanged: it sorts by fit only.
 //   Sponsorship first: with "I need visa sponsorship", jobs whose posting
 //   mentions sponsorship lead under every sort (ORDERING_RULES).
 //   Same role, several places: one card per (company, title), the best ranked;
@@ -37,10 +48,10 @@
 
 import { toWireKind, type Fit, type MatchTiers } from '../match/index.js';
 import { normalizeSkills, payPlausible } from '../jobs/normalize/index.js';
-import { SENIORITY_LEVELS, type FilterSet } from '../search/index.js';
+import { SENIORITY_LEVELS, isTargetCompany, targetCompanyKeys, type FilterSet } from '../search/index.js';
 import { affinityKeys, affinityScore, type AffinityState } from './affinity.js';
 import { FEED_LIMITS, GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS, type FeedSort, type FitBadge } from './contract.js';
-import { FRESHNESS_CURVE, SEEN_SKIPPED } from './rankingText.js';
+import { FRESHNESS_CURVE, SEEN_SKIPPED, TARGET_COMPANY_POINTS } from './rankingText.js';
 import { ANNUAL_FACTOR, annualFloor } from './sql.js';
 import { statedApplyClose, type FeedJobRow } from './types.js';
 
@@ -206,6 +217,12 @@ export function goalAdjustment(row: Pick<FeedJobRow, 'roleType' | 'title' | 'sen
 export interface RankContext {
   now: Date;
   affinity: AffinityState;
+  /**
+   * The search's "Companies you want to work at" (`preferredCompanies`) as
+   * comparison keys (`targetKeysOf`); empty for a list that is not
+   * personalised (it is ordered by date). A job at one of them gets
+   * TARGET_COMPANY_POINTS in Recommended.
+   */
   preferredCompanyKeys: ReadonlySet<string>;
   goal: GoalContext;
   /** Normalized chosen skills when skills is the only narrowing filter (ORDERING_RULES skills_boost); else absent. */
@@ -226,10 +243,25 @@ export function skillsBoost(row: Pick<FeedJobRow, 'skills'>, chosen: ReadonlySet
   return Math.round(((SKILLS_BOOST_POINTS * hit) / chosen.size) * 1000) / 1000;
 }
 
+/** The comparison keys of a search's "Companies you want to work at" (search/targetCompanies.ts). */
+export function targetKeysOf(filters: Pick<FilterSet, 'preferredCompanies'>): Set<string> {
+  return targetCompanyKeys(filters.preferredCompanies);
+}
+
+/** The job's company is on the search's "Companies you want to work at" (`keys` from `targetKeysOf`). */
+export function atTargetCompany(row: Pick<FeedJobRow, 'companyName' | 'companyNameNormalized'>, keys: ReadonlySet<string> | null | undefined): boolean {
+  return isTargetCompany(row, keys);
+}
+
+/** TARGET_COMPANY_POINTS for a job at a company on the list, else 0 (ORDERING_RULES `target_companies`). */
+export function targetCompanyBoost(row: Pick<FeedJobRow, 'companyName' | 'companyNameNormalized'>, keys: ReadonlySet<string> | null | undefined): number {
+  return atTargetCompany(row, keys) ? TARGET_COMPANY_POINTS : 0;
+}
+
 /** The Recommended rank of one candidate (unknown fit contributes 0). */
 export function recommendedRank(row: FeedJobRow, fit: number | null, ctx: RankContext): number {
   const fresh = freshness(row.postedAt, row.firstSeenAt, ctx.now, row.lastSeenAt);
-  const aff = affinityScore(ctx.affinity, affinityKeys(row), ctx.preferredCompanyKeys);
+  const aff = affinityScore(ctx.affinity, affinityKeys(row));
   const quality = sourceQuality(row);
   const rank =
     W.fit * (fit ?? 0) +
@@ -237,7 +269,8 @@ export function recommendedRank(row: FeedJobRow, fit: number | null, ctx: RankCo
     W.affinity * aff +
     W.source_quality * quality +
     goalAdjustment(row, ctx.goal) +
-    skillsBoost(row, ctx.skillsBoost) -
+    skillsBoost(row, ctx.skillsBoost) +
+    targetCompanyBoost(row, ctx.preferredCompanyKeys) -
     seenSkippedPenalty(ctx.seenSkipped?.get(row.id));
   return Math.round(rank * 1000) / 1000;
 }
@@ -272,13 +305,26 @@ export function annualPay(row: Pick<FeedJobRow, 'salaryDisclosed' | 'salaryAnnua
   return v === null ? null : v * (ANNUAL_FACTOR[row.salaryPeriod ?? 'year'] ?? 1);
 }
 
+export interface SortOptions {
+  currency: string | null;
+  today?: string;
+  /**
+   * The agent's picks (`favorTargetCompanies`): under `best_fit`, a job at a
+   * company of these keys is ordered as if its fit were TARGET_COMPANY_POINTS
+   * higher. A job with no fit gets no points (it stays after every job with
+   * one); among jobs with no fit, a listed company comes first. Absent or
+   * empty: Best fit sorts by fit only, as on /jobs. Other sorts ignore it.
+   */
+  targetKeys?: ReadonlySet<string> | null;
+}
+
 /**
  * Sort candidates in place for a sort (ties: newest, then the fused retrieval
  * position, then id). `deadline`:
  * a stated upcoming 网申 close date first (soonest first; `today` is the
  * China date), then every other job newest first.
  */
-export function sortCandidates(cands: Candidate[], sort: FeedSort, opts: { currency: string | null; today?: string } = { currency: null }): Candidate[] {
+export function sortCandidates(cands: Candidate[], sort: FeedSort, opts: SortOptions = { currency: null }): Candidate[] {
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
   const closes = new Map<string, string | null>();
   const closeOf = (c: Candidate) => {
@@ -298,10 +344,26 @@ export function sortCandidates(cands: Candidate[], sort: FeedSort, opts: { curre
     if (fa !== fb) return fa < fb ? -1 : 1;
     return a.row.id < b.row.id ? 1 : a.row.id > b.row.id ? -1 : 0;
   };
+  // The picks' order (`targetKeys`): fit plus the target points; no fit stays last. Read once per row.
+  const keys = opts.targetKeys?.size ? opts.targetKeys : null;
+  const targets = new Map<string, boolean>();
+  const isTarget = (c: Candidate) => {
+    if (!targets.has(c.row.id)) targets.set(c.row.id, atTargetCompany(c.row, keys));
+    return targets.get(c.row.id)!;
+  };
+  const byFitFavoringTargets = (a: Candidate, b: Candidate) => {
+    if (a.fit === null || b.fit === null) {
+      if (a.fit !== b.fit) return a.fit === null ? 1 : -1;
+      return Number(isTarget(b)) - Number(isTarget(a)) || byNewest(a, b);
+    }
+    const pa = a.fit + (isTarget(a) ? TARGET_COMPANY_POINTS : 0);
+    const pb = b.fit + (isTarget(b) ? TARGET_COMPANY_POINTS : 0);
+    return pb - pa || byNewest(a, b);
+  };
   const cmp: Record<FeedSort, (a: Candidate, b: Candidate) => number> = {
     recommended: (a, b) => b.rank - a.rank || byNewest(a, b),
     newest: byNewest,
-    best_fit: (a, b) => (b.fit ?? -1) - (a.fit ?? -1) || byNewest(a, b),
+    best_fit: keys ? byFitFavoringTargets : (a, b) => (b.fit ?? -1) - (a.fit ?? -1) || byNewest(a, b),
     highest_pay: (a, b) => {
       const pa = annualPay(a.row);
       const pb = annualPay(b.row);

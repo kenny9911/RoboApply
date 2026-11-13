@@ -247,7 +247,8 @@
       "alsoIn": "另有 {count, plural, other {# 个地点}}",
       "alsoInList": "{company} 的 {title} 在其他地点的职位",
       "alsoInMore": "{count, plural, other {还有 # 个地点未在此列出。}}",
-      "firstSeen": "首次发现于 {date}"
+      "firstSeen": "首次发现于 {date}",
+      "targetCompany": "在你的目标公司名单中"
     },
     "explore": {
       "back": "全部职位类别",
@@ -3586,6 +3587,10 @@
         "wrongTitle": {
           "body": "如果你把一个职位标为“不感兴趣：职位名称不对”，该职位所属岗位的权重和该职位名称的权重会各降低 0.25（权重范围为 -1 到 1）。“你表现出的兴趣”是一个职位的岗位、公司和技能权重的平均值；当它的职位名称权重低于零时，也计入平均。所以一次标记会让其他同岗位或同名称的职位略微靠后，之后每多标一次，就降得更多。这个影响每天衰减 2%。你的筛选条件保持不变。",
           "title": "你标为不对的职位名称"
+        },
+        "targetCompanies": {
+          "title": "想去的公司",
+          "body": "如果你的搜索列出了想去的公司，这些公司的职位在“推荐”排序中加 5 分，在精选职位中按匹配度高 5 分来排序。这不是筛选条件：其他公司的职位仍会显示。"
         }
       },
       "goalTitle": "你的目标",
@@ -9215,7 +9220,7 @@
       "locations": "工作地点",
       "needsSponsorship": "签证担保",
       "postedWithinDays": "发布时间",
-      "preferredCompanies": "你喜欢的公司",
+      "preferredCompanies": "想去的公司",
       "q": "关键词",
       "recruiterJobsOnly": "招聘方发布的职位",
       "roleType": "岗位类型",
@@ -9246,7 +9251,7 @@
       "includeUndisclosedPay": "关闭时，没有写明薪资的职位仍会保留在列表中。",
       "locations": "远程职位仍会保留在列表中。",
       "needsSponsorship": "优先显示提到签证担保的职位，并隐藏写明不提供担保的职位。这个回答也会保存到你的个人资料。",
-      "preferredCompanies": "这些公司的职位会排在前面。其他职位仍会显示。",
+      "preferredCompanies": "这些公司的职位在“推荐”排序和精选职位中，会排在相似职位前面。其他职位仍会显示。",
       "recruiterJobsOnly": "只看招聘方在 {sourceName} 上发布的职位。",
       "salaryMonthsMin": "没有写明每年发几薪的职位仍会保留在列表中。",
       "schoolTiers": "隐藏要求特定院校层次而你不符合的职位。不会用于职位排序。",
@@ -9956,6 +9961,16 @@
       "label": "职位详情",
       "overview": "概览",
       "people": "人脉"
+    },
+    "targets": {
+      "on": "在你的目标公司名单中",
+      "add": "把{company}加入想去的公司",
+      "remove": "移除",
+      "removeLabel": "从想去的公司中移除{company}",
+      "added": "{company}已加入名单。这家公司的职位在“推荐”排序和精选职位中，会排在相似职位前面。",
+      "removed": "{company}已从目标公司名单中移除。",
+      "failed": "未能修改你的目标公司名单，请重试。",
+      "full": "你的目标公司名单已满。请先在搜索条件中移除一家公司，再添加这一家。"
     }
   },
   "jobImport": {
@@ -13010,7 +13025,9 @@
       "loading": "正在加载你的搜索…",
       "failed": "你的搜索没有加载出来。",
       "none": "还没有订阅搜索。",
-      "setUp": "设置搜索"
+      "setUp": "设置搜索",
+      "companies": "目标公司：{list}",
+      "anyWithCompanies": "任何职位都在范围内，目标公司：{list}"
     },
     "agentTag": "智能体",
     "retry": "重试",

@@ -83,11 +83,13 @@ export function sectionEditors(market: Market): Array<{ id: DrawerSection; edito
       : [TaxonomyEditor, TitlesEditor, ExcludedTitlesEditor, JobTypeEditor, WorkModelEditor, LocationEditor, WorkShiftEditor, SeniorityEditor, YearsEditor, PostedEditor];
   const pay: Editor[] = market === 'cn' ? [PayEditor, ListedPayEditor] : [PayEditor, ListedPayEditor, SponsorshipEditor, ExcludeRequirementsEditor];
   const interests: Editor[] = [IndustriesEditor, ExcludedIndustriesEditor, SkillsEditor, ExcludedSkillsEditor, RoleTypeEditor];
+  // "Companies you want to work at" leads the section (the goal line's `Change` comes here for it: REDESIGN §8
+  // scenario 4). It only orders jobs; "Only these companies" and "Companies to leave out" keep their meaning.
   const companies: Editor[] =
     market === 'cn'
       ? // GoApply keeps company size beside its employer tags (D5: the server accepts `companySizes` for both markets).
-        [CompaniesEditor, ExcludedCompaniesEditor, PreferredCompaniesEditor, CompanySizeEditor, EmployerTagsEditor, AgencyEditor, RecruiterEditor]
-      : [CompaniesEditor, ExcludedCompaniesEditor, PreferredCompaniesEditor, CompanySizeEditor, AgencyEditor, RecruiterEditor];
+        [PreferredCompaniesEditor, CompaniesEditor, ExcludedCompaniesEditor, CompanySizeEditor, EmployerTagsEditor, AgencyEditor, RecruiterEditor]
+      : [PreferredCompaniesEditor, CompaniesEditor, ExcludedCompaniesEditor, CompanySizeEditor, AgencyEditor, RecruiterEditor];
   const out: Array<{ id: DrawerSection; editors: Editor[] }> = [
     { id: 'basic', editors: basic },
     { id: 'pay', editors: pay },

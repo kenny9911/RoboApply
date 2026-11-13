@@ -97,7 +97,13 @@ export interface AgentDeps {
 
   profileMissing(userId: string): Promise<Array<{ key: string; label: string }>>;
 
-  feedPreview(userId: string, input: { filters?: Partial<FilterSet>; sort?: FeedSort; limit: number }): Promise<FeedItem[]>;
+  /**
+   * The top of the user's search (`feedService.preview`). `favorTargetCompanies`
+   * (the suggestions and the weekly list): under Best fit, a job at a company
+   * on the search's "Companies you want to work at" is ordered as if its fit
+   * were 5 points higher; a bounded boost, never a filter.
+   */
+  feedPreview(userId: string, input: { filters?: Partial<FilterSet>; sort?: FeedSort; limit: number; favorTargetCompanies?: boolean }): Promise<FeedItem[]>;
   activeSearch(userId: string): Promise<SearchProfileWire>;
   patchSearch(userId: string, id: string, version: number, patch: unknown): Promise<SearchProfileWire>;
   /** True when `overrides` change the effective filters of `base`. */

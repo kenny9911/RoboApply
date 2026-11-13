@@ -247,7 +247,8 @@
       "alsoInList": "Autres lieux pour {title} chez {company}",
       "alsoInMore": "{count, plural, one {# autre lieu n’est pas listé ici.} other {# autres lieux ne sont pas listés ici.}}",
       "firstSeen": "Vue pour la première fois le {date}",
-      "leadLabel": "{label} :"
+      "leadLabel": "{label} :",
+      "targetCompany": "Dans ta liste d’entreprises"
     },
     "explore": {
       "back": "Tous les types de métier",
@@ -3564,6 +3565,10 @@
         "wrongTitle": {
           "body": "Si tu marques une offre « Ça ne m’intéresse pas : pas le bon intitulé de poste », le poids de ce type de poste et le poids de cet intitulé baissent chacun de 0,25, sur une échelle qui va de -1 à 1. « Ce qui t’a intéressé » est la moyenne des poids du type de poste, de l’entreprise et des compétences d’une offre, ainsi que de son poids d’intitulé lorsqu’il est inférieur à zéro. Marquer une seule offre fait donc baisser un peu les autres offres qui ont le même type de poste ou le même intitulé, et chaque offre marquée en plus les fait baisser davantage. L’effet diminue de 2 % par jour. Tes filtres ne changent pas.",
           "title": "Intitulés que tu as marqués comme incorrects"
+        },
+        "targetCompanies": {
+          "title": "Entreprises où tu veux travailler",
+          "body": "Si ta recherche indique des entreprises où tu veux travailler, une offre de l’une d’elles reçoit 5 points de plus dans « Recommandées », et tes meilleures offres la classent comme si son adéquation avait 5 points de plus. Ce n’est jamais un filtre : les offres des autres entreprises restent visibles."
         }
       },
       "rulesTitle": "{count, plural, one {Une règle de plus} other {Autres règles}}",
@@ -6805,7 +6810,7 @@
       "locations": "Lieux",
       "needsSponsorship": "Parrainage de visa",
       "postedWithinDays": "Date de publication",
-      "preferredCompanies": "Entreprises qui te plaisent",
+      "preferredCompanies": "Entreprises où tu veux travailler",
       "q": "Mots-clés",
       "recruiterJobsOnly": "Offres publiées par des recruteurs",
       "roleType": "Type de rôle",
@@ -6836,7 +6841,7 @@
       "includeUndisclosedPay": "Désactivé : les offres qui n’indiquent pas le salaire restent dans ta liste.",
       "locations": "Les offres en télétravail restent dans ta liste.",
       "needsSponsorship": "Affiche d’abord les offres qui mentionnent un parrainage de visa et masque celles dont l’annonce dit qu’il n’y en a pas. Cette réponse est aussi enregistrée dans ton profil.",
-      "preferredCompanies": "Les offres de ces entreprises sont classées plus haut. Les autres offres restent visibles.",
+      "preferredCompanies": "Les offres de ces entreprises passent devant les offres similaires dans « Recommandées » et dans tes meilleures offres. Les autres offres restent visibles.",
       "recruiterJobsOnly": "Uniquement les offres que des recruteurs ont publiées sur {sourceName}.",
       "salaryMonthsMin": "Les offres qui n’indiquent pas le nombre de mois payés restent dans ta liste.",
       "schoolTiers": "Masque les annonces qui exigent une catégorie d’école que tu n’as pas. Ne sert jamais à classer les offres.",
@@ -7726,6 +7731,16 @@
       "label": "Détails de l’offre",
       "overview": "Aperçu",
       "people": "Personnes"
+    },
+    "targets": {
+      "on": "Dans ta liste d’entreprises",
+      "add": "Ajouter {company} aux entreprises où tu veux travailler",
+      "remove": "Retirer",
+      "removeLabel": "Retirer {company} des entreprises où tu veux travailler",
+      "added": "{company} est dans ta liste. Ses offres passent devant les offres similaires dans « Recommandées » et dans tes meilleures offres.",
+      "removed": "{company} n’est plus dans ta liste d’entreprises.",
+      "failed": "Ta liste d’entreprises n’a pas pu être modifiée. Réessaie.",
+      "full": "Ta liste d’entreprises est pleine. Retires-en une dans ta recherche pour ajouter celle-ci."
     }
   },
   "jobImport": {
@@ -11891,7 +11906,9 @@
       "loading": "Chargement de ta recherche…",
       "failed": "Ta recherche n’a pas pu être chargée.",
       "none": "Pas encore de recherche enregistrée.",
-      "setUp": "Configurer ta recherche"
+      "setUp": "Configurer ta recherche",
+      "companies": "chez {list}",
+      "anyWithCompanies": "Tu recherches : n’importe quelle offre, idéalement chez {list}"
     },
     "agentTag": "Agent",
     "retry": "Réessayer",

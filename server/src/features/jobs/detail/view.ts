@@ -66,6 +66,7 @@ export const JOB_ROW_SELECT = {
   titleNormalized: true,
   companyId: true,
   companyName: true,
+  companyNameNormalized: true,
   companyLogoUrl: true,
   location: true,
   locationCountry: true,
@@ -130,6 +131,8 @@ export interface JobRow {
   titleNormalized: string;
   companyId: string | null;
   companyName: string;
+  /** The key the feed compares companies by ("Companies you want to work at"); may be absent in an older row read. */
+  companyNameNormalized?: string | null;
   companyLogoUrl: string | null;
   location: string | null;
   locationCountry: string | null;

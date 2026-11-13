@@ -274,7 +274,8 @@
       "leadLabel": "{label}:",
       "alsoIn": "Also in {count, plural, one {# more location} other {# more locations}}",
       "alsoInList": "Other locations for {title} at {company}",
-      "alsoInMore": "{count, plural, one {# more location is not listed here.} other {# more locations are not listed here.}}"
+      "alsoInMore": "{count, plural, one {# more location is not listed here.} other {# more locations are not listed here.}}",
+      "targetCompany": "On your list of companies"
     },
     "hide": {
       "title": "Not interested",
@@ -3714,6 +3715,10 @@
         "seenSkipped": {
           "title": "Jobs you keep passing over",
           "body": "A job that was in your list on three or more visits and that you never opened ranks lower: 5 points after three visits, 7.5 after four, and 10 from five on."
+        },
+        "targetCompanies": {
+          "title": "Companies you want to work at",
+          "body": "If your search lists companies you want to work at, a job at one of them gets 5 more points in Recommended, and your best picks count its fit as 5 points higher. It is never a filter: jobs at other companies still show."
         }
       },
       "goalTitle": "Your goal",
@@ -7282,7 +7287,7 @@
       "excludedSkills": "Skills to leave out",
       "roleType": "Role type",
       "companies": "Only these companies",
-      "preferredCompanies": "Companies you like",
+      "preferredCompanies": "Companies you want to work at",
       "excludedCompanies": "Companies to leave out",
       "companySizes": "Company size",
       "excludeAgencies": "Staffing agencies",
@@ -7317,7 +7322,7 @@
       "schoolTiers": "Hides posts that require a school tier you don't have. Never used to rank jobs.",
       "hukouTag": "Only posts whose official text says hukou is offered.",
       "salaryMonthsMin": "Jobs that don't say how many months they pay stay in your list.",
-      "preferredCompanies": "Jobs at these companies rank higher. Other jobs still show.",
+      "preferredCompanies": "Jobs at these companies move ahead of similar jobs in Recommended and in your best picks. Other jobs still show.",
       "companies": "When you add companies here, only their jobs show.",
       "twDistricts": "Shows only jobs whose posting says which district it is in. Jobs that name no district are left out.",
       "twDistrictsFull": "You can pick up to {max} districts. Take one off to add another.",
@@ -8257,6 +8262,16 @@
         "loading": "Searching for news…",
         "undated": "Date not listed"
       }
+    },
+    "targets": {
+      "on": "On your list of companies",
+      "add": "Add {company} to companies you want to work at",
+      "remove": "Remove",
+      "removeLabel": "Remove {company} from companies you want to work at",
+      "added": "{company} is on your list. Its jobs move ahead of similar jobs in Recommended and in your best picks.",
+      "removed": "{company} is off your list of companies.",
+      "failed": "Your list of companies could not be changed. Try again.",
+      "full": "Your list of companies is full. Remove one in your search to add this one."
     }
   },
   "jobImport": {
@@ -13010,7 +13025,9 @@
       "loading": "Loading your search…",
       "failed": "Your search could not be loaded.",
       "none": "No saved search yet.",
-      "setUp": "Set up your search"
+      "setUp": "Set up your search",
+      "companies": "at {list}",
+      "anyWithCompanies": "Looking for any job, ideally at {list}"
     },
     "agentTag": "Agent",
     "retry": "Try again",

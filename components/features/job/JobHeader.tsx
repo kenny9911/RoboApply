@@ -39,6 +39,8 @@ export interface JobHeaderProps {
   onClose?: () => void;
   /** The actions row (built by the panel, which owns the action state). */
   actions: ReactNode;
+  /** One line under the company and title: "Companies you want to work at" (TargetCompanyToggle). */
+  companyLine?: ReactNode;
 }
 
 const DAY_MS = 86_400_000;
@@ -60,7 +62,7 @@ export function headerDates(job: Pick<JobDetailResponse['job'], 'postedAt' | 'po
 const KNOWN_EMPLOYMENT = new Set(['full_time', 'part_time', 'contract', 'internship']);
 const KNOWN_SENIORITY = new Set(['intern_newgrad', 'entry', 'mid', 'senior', 'lead_staff', 'director_exec']);
 
-export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
+export function JobHeader({ detail, mode, onClose, actions, companyLine }: JobHeaderProps) {
   const t = useTranslations('jobDetail');
   const format = useFormatter();
   const locale = useLocale();
@@ -136,6 +138,8 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
           </button>
         ) : null}
       </div>
+
+      {companyLine}
 
       {chips.length ? (
         <ul className={styles.chips}>

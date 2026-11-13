@@ -247,7 +247,8 @@
       "alsoInList": "{company} 的 {title}：其他地點",
       "alsoInMore": "{count, plural, other {還有 # 個地點沒有列在這裡。}}",
       "firstSeen": "首次出現於 {date}",
-      "leadLabel": "{label}："
+      "leadLabel": "{label}：",
+      "targetCompany": "在你的目標公司清單中"
     },
     "explore": {
       "back": "所有工作類別",
@@ -3564,6 +3565,10 @@
         "wrongTitle": {
           "body": "如果你把一個職缺標記為「沒有興趣：職稱不符」，該職務的權重和該職稱的權重都會各降低 0.25，權重的範圍是 -1 到 1。「你表現出興趣的內容」是這個職缺的職務、公司和技能權重的平均值；如果職稱權重低於零，也會一併計入。所以標記一次，會讓其他相同職務或職稱的職缺稍微往後，每多標記一次，就往後更多。這個影響每天減弱 2%。你的篩選條件維持不變。",
           "title": "你標記為不符的職稱"
+        },
+        "targetCompanies": {
+          "title": "想去的公司",
+          "body": "如果你的搜尋列出想去的公司，這些公司的職缺在「推薦」排序中加 5 分，在精選職缺中則以適合度高 5 分來排序。這不是篩選條件：其他公司的職缺仍會顯示。"
         }
       },
       "rulesTitle": "{count, plural, =1 {另一條規則} other {其他規則}}",
@@ -6805,7 +6810,7 @@
       "locations": "地點",
       "needsSponsorship": "簽證贊助",
       "postedWithinDays": "刊登時間",
-      "preferredCompanies": "你喜歡的公司",
+      "preferredCompanies": "想去的公司",
       "q": "關鍵字",
       "recruiterJobsOnly": "招募人員刊登的職缺",
       "roleType": "職務類型",
@@ -6836,7 +6841,7 @@
       "includeUndisclosedPay": "關閉時：沒有標示薪資的職缺仍會留在清單中。",
       "locations": "遠端職缺仍會留在清單中。",
       "needsSponsorship": "優先顯示有提到簽證贊助的職缺，並隱藏職缺說明寫明不提供贊助的職缺。這個回答也會儲存到你的個人檔案。",
-      "preferredCompanies": "這些公司的職缺會排在比較前面。其他職缺仍會顯示。",
+      "preferredCompanies": "這些公司的職缺在「推薦」排序和精選職缺中，會排在相似職缺前面。其他職缺仍會顯示。",
       "recruiterJobsOnly": "只顯示招募人員在 {sourceName} 刊登的職缺。",
       "salaryMonthsMin": "沒有寫明每年發薪月數的職缺仍會留在清單中。",
       "schoolTiers": "隱藏對學校層級有要求、而你不符合的職缺。絕不會用來排序職缺。",
@@ -7726,6 +7731,16 @@
       "label": "職缺詳細資訊",
       "overview": "總覽",
       "people": "人員"
+    },
+    "targets": {
+      "on": "在你的目標公司清單中",
+      "add": "將{company}加入想去的公司",
+      "remove": "移除",
+      "removeLabel": "從想去的公司中移除{company}",
+      "added": "{company}已加入清單。這家公司的職缺在「推薦」排序和精選職缺中，會排在相似職缺前面。",
+      "removed": "{company}已從目標公司清單中移除。",
+      "failed": "無法修改你的目標公司清單，請重試。",
+      "full": "你的目標公司清單已滿。請先在搜尋條件中移除一家公司，再加入這一家。"
     }
   },
   "jobImport": {
@@ -11891,7 +11906,9 @@
       "loading": "正在載入你的搜尋…",
       "failed": "你的搜尋沒有載入出來。",
       "none": "還沒有已儲存的搜尋。",
-      "setUp": "設定你的搜尋"
+      "setUp": "設定你的搜尋",
+      "companies": "目標公司：{list}",
+      "anyWithCompanies": "任何職缺都在範圍內，目標公司：{list}"
     },
     "agentTag": "AI 代理",
     "retry": "重試",

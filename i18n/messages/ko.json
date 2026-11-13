@@ -247,7 +247,8 @@
       "alsoInList": "{company}의 {title} 공고가 있는 다른 근무지",
       "alsoInMore": "{count, plural, other {다른 근무지 #곳은 여기에 표시되지 않았어요.}}",
       "firstSeen": "처음 발견: {date}",
-      "leadLabel": "{label}:"
+      "leadLabel": "{label}:",
+      "targetCompany": "일하고 싶은 회사 목록에 있어요"
     },
     "explore": {
       "back": "모든 직종",
@@ -3564,6 +3565,10 @@
         "wrongTitle": {
           "body": "공고를 ‘관심 없음: 직무 이름이 안 맞음’으로 표시하면, 그 직무의 비중과 그 직무 이름의 비중이 각각 0.25씩 내려가요. 비중은 -1에서 1까지의 범위예요. ‘내가 관심을 보인 공고’는 공고의 직무, 회사, 기술 비중의 평균이고, 직무 이름 비중이 0보다 낮을 때는 그 비중도 평균에 들어가요. 그래서 한 번 표시하면 같은 직무나 직무 이름의 다른 공고가 조금 내려가고, 표시할 때마다 더 많이 내려가요. 이 효과는 하루에 2%씩 줄어들어요. 필터는 그대로예요.",
           "title": "맞지 않는다고 표시한 직무 이름"
+        },
+        "targetCompanies": {
+          "title": "일하고 싶은 회사",
+          "body": "검색 조건에 일하고 싶은 회사를 넣으면, 그 회사의 공고는 ‘추천순’에서 5점이 더해지고 추천 공고에서는 적합도를 5점 높게 보고 순서를 정해요. 필터가 아니라서 다른 회사의 공고도 계속 보여요."
         }
       },
       "rulesTitle": "{count, plural, other {추가 규칙}}",
@@ -6805,7 +6810,7 @@
       "locations": "근무지",
       "needsSponsorship": "비자 스폰서십",
       "postedWithinDays": "게시일",
-      "preferredCompanies": "선호하는 회사",
+      "preferredCompanies": "일하고 싶은 회사",
       "q": "키워드",
       "recruiterJobsOnly": "채용 담당자가 올린 공고",
       "roleType": "역할 유형",
@@ -6836,7 +6841,7 @@
       "includeUndisclosedPay": "끄면 급여를 공개하지 않은 공고도 목록에 그대로 남아요.",
       "locations": "원격 근무 공고는 목록에 그대로 남아요.",
       "needsSponsorship": "스폰서십을 언급한 공고를 먼저 보여주고, 스폰서십을 제공하지 않는다고 적힌 공고는 숨겨요. 이 답변은 프로필에도 저장돼요.",
-      "preferredCompanies": "이 회사들의 공고가 더 위에 나와요. 다른 공고도 계속 보여요.",
+      "preferredCompanies": "이 회사들의 공고는 ‘추천순’과 추천 공고에서 비슷한 공고보다 앞에 나와요. 다른 공고도 계속 보여요.",
       "recruiterJobsOnly": "채용 담당자가 {sourceName}에 올린 공고만 보여요.",
       "salaryMonthsMin": "급여 개월 수를 밝히지 않은 공고는 목록에 그대로 남아요.",
       "schoolTiers": "내 학교에 해당하지 않는 학교 등급을 요구하는 공고를 숨겨요. 공고 순위를 매기는 데는 쓰지 않아요.",
@@ -7726,6 +7731,16 @@
       "label": "공고 상세",
       "overview": "개요",
       "people": "사람들"
+    },
+    "targets": {
+      "on": "일하고 싶은 회사 목록에 있어요",
+      "add": "{company}을(를) 일하고 싶은 회사에 추가",
+      "remove": "삭제",
+      "removeLabel": "{company}을(를) 일하고 싶은 회사에서 삭제",
+      "added": "{company}을(를) 목록에 추가했어요. 이 회사의 공고는 ‘추천순’과 추천 공고에서 비슷한 공고보다 앞에 나와요.",
+      "removed": "{company}을(를) 회사 목록에서 삭제했어요.",
+      "failed": "회사 목록을 바꾸지 못했어요. 다시 시도해 주세요.",
+      "full": "회사 목록이 가득 찼어요. 이 회사를 추가하려면 검색 조건에서 다른 회사를 삭제해 주세요."
     }
   },
   "jobImport": {
@@ -11891,7 +11906,9 @@
       "loading": "검색 조건을 불러오는 중…",
       "failed": "검색 조건을 불러오지 못했어요.",
       "none": "아직 저장한 검색이 없어요.",
-      "setUp": "검색 설정하기"
+      "setUp": "검색 설정하기",
+      "companies": "희망 회사: {list}",
+      "anyWithCompanies": "모든 공고가 검색 대상이에요 (희망 회사: {list})"
     },
     "agentTag": "에이전트",
     "retry": "다시 시도",

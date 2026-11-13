@@ -429,6 +429,42 @@ describe("a job already on the user's list says where it is up front (redesign ย
   });
 });
 
+// docs/agent-driven/REDESIGN.md ยง8 scenario 4: a job at a company the search wants to work at.
+describe('"On your list of companies": a job at one of the companies the search wants to work at', () => {
+  it('says so in one line under the job, only when the server sent `atTargetCompany: true`', () => {
+    installFetch({});
+    const view = renderFeed(card(feedItem(1, { atTargetCompany: true })));
+    const note = screen.getByTestId('job-card-target');
+    expect(note).toHaveTextContent(/^On your list of companies$/);
+    expect(note.tagName).toBe('P');
+    // A plain line: no control, no link, and the card's one primary button is unchanged.
+    expect(within(note).queryAllByRole('button')).toHaveLength(0);
+    expect(within(note).queryAllByRole('link')).toHaveLength(0);
+    view.unmount();
+    for (const item of [feedItem(1), feedItem(1, { atTargetCompany: false })]) {
+      const other = renderFeed(card(item));
+      expect(screen.queryByTestId('job-card-target')).toBeNull();
+      expect(screen.getByTestId('job-card')).not.toHaveTextContent('On your list of companies');
+      other.unmount();
+    }
+  });
+
+  it('keeps the gap first and the honesty line under the score (R2, C5); the note comes after them, with the job', () => {
+    installFetch({});
+    renderFeed(card(feedItem(1, { atTargetCompany: true })), { flags: { agent: true } });
+    const text = screen.getByTestId('job-card').textContent ?? '';
+    const order = ['Kubernetes', '72 / 100', 'This is not your chance of getting hired.', 'Backend engineer 1', 'On your list of companies'].map((s) => text.indexOf(s));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it('GoApply (D5): the same note', () => {
+    installFetch({});
+    renderFeed(card(feedItem(1, { atTargetCompany: true }), 'cn'), { brand: 'goapply' });
+    expect(screen.getByTestId('job-card-target')).toHaveTextContent('On your list of companies');
+  });
+});
+
 describe('the job open in the split view is the selected card (resume.io look)', () => {
   it('marks only the active card, and its title link says so to assistive tech', () => {
     installFetch({});

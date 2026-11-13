@@ -157,6 +157,16 @@ const ANSWER_SELECT = { id: true, questionKey: true, questionText: true, answer:
 const EXPIRABLE: readonly QueueState[] = ['picked', 'ready_for_review', 'approved', 'failed'];
 const LIST_LIMIT = 200;
 const PREVIEW_LIMIT = 50;
+/**
+ * The order the suggestions and the weekly list read the search in: best fit
+ * first, and a job at a company on the search's "Companies you want to work
+ * at" (target companies) ordered as if its fit were 5 points higher
+ * (feed ranking.ts `sortCandidates`; search/targetCompanies.ts). A bounded
+ * boost, never a filter: the minimum tier, the "Not right" ratings and the
+ * list's own checks apply to such a job as to any other, and its card shows
+ * its own score with the gap first.
+ */
+export const PICKS_ORDER = { sort: 'best_fit', favorTargetCompanies: true } as const;
 /** Posting checks (`deps.checkJobLive`) that run at once when jobs enter the list. */
 const LIVE_CHECKS_AT_ONCE = 5;
 /** How long a list waits for those checks in all; a job not checked by then enters as it did before the check existed. */
@@ -616,6 +626,8 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
    * the Dashboard's picks). Each carries `application: null`, the feed card's
    * list state: a job with any item on the list, whatever its state, is never
    * suggested (`excludedJobIds`), so that is known without another read.
+   * Picks favour the search's "Companies you want to work at": a job at one
+   * of them is ordered as if its fit were 5 points higher (PICKS_ORDER).
    */
   async function suggestions(userId: string, input: { limit?: number; exclude?: string }) {
     const db = await deps.getDb();
@@ -625,7 +637,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     const row = await settingsRow(db, userId);
     const ex = await excludedJobIds(db, userId, row);
     const dislikes = await dislikesOf(db, row);
-    const preview = await deps.feedPreview(userId, { sort: 'best_fit', limit: PREVIEW_LIMIT });
+    const preview = await deps.feedPreview(userId, { ...PICKS_ORDER, limit: PREVIEW_LIMIT });
     const items = applyDislikes(
       preview
         .filter((j) => !skip.has(j.jobId) && !ex.queued.has(j.jobId) && !ex.rated.has(j.jobId))
@@ -732,7 +744,8 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
 
     const ex = await excludedJobIds(db, userId, row);
     const dislikes = await dislikesOf(db, row);
-    const preview = await deps.feedPreview(userId, { filters: overrides as never, sort: 'best_fit', limit: PREVIEW_LIMIT });
+    // The companies the list favours are those of the filters it is built with (the overrides' own, when they set some).
+    const preview = await deps.feedPreview(userId, { filters: overrides as never, ...PICKS_ORDER, limit: PREVIEW_LIMIT });
     const candidates = applyDislikes(
       preview
         .filter((j) => j.fit && meetsMinTier(j.fit.tier, settings.minTier))

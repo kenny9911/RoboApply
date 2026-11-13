@@ -133,6 +133,27 @@ describe('/today header', () => {
     expect(screen.getByTestId('today-goal')).toHaveTextContent('Your search is open to any job.');
   });
 
+  // docs/agent-driven/REDESIGN.md §8 scenario 4: target companies close the goal line, and `Change` edits them.
+  it('closes the line with the companies the search wants to work at: two named, then "and N more"', () => {
+    const base = searchProfile().filters;
+    const four = renderToday(
+      <TodayDesk sources={sourcesWith({ search: ready(searchProfile({ filters: { ...base, preferredCompanies: ['Stripe', 'Figma', 'Linear', 'Ramp'] } })) })} check={null} now={NOW} />,
+      { flags: ALL_ON },
+    );
+    expect(screen.getByTestId('today-goal')).toHaveTextContent('Looking for Product designer · Senior · Remote or London · at Stripe, Figma and 2 more');
+    expect(screen.getByRole('button', { name: 'Change what you are looking for' })).toBeInTheDocument();
+    four.unmount();
+
+    const two = renderToday(<TodayDesk sources={sourcesWith({ search: ready(searchProfile({ filters: { ...base, preferredCompanies: ['Stripe', 'Figma'] } })) })} check={null} now={NOW} />, { flags: ALL_ON });
+    expect(screen.getByTestId('today-goal')).toHaveTextContent('Looking for Product designer · Senior · Remote or London · at Stripe or Figma');
+    two.unmount();
+
+    // Only companies: the search is still open to any job (they narrow nothing), and the line says it favours them.
+    renderToday(<TodayDesk sources={sourcesWith({ search: ready(searchProfile({ filters: { preferredCompanies: ['Stripe'] } })) })} check={null} now={NOW} />, { flags: ALL_ON });
+    expect(screen.getByTestId('today-goal')).toHaveTextContent('Looking for any job, ideally at Stripe');
+    expect(screen.getByTestId('today-goal')).not.toHaveTextContent('open to any job.');
+  });
+
   it('`Change` opens the shared filters editor on the search Jobs uses', async () => {
     renderToday(<TodayDesk sources={sourcesWith()} check={null} now={NOW} />, { flags: ALL_ON });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -374,6 +395,30 @@ describe('/today "Job search"', () => {
     expect(within(row).getAllByRole('button')).toHaveLength(1);
     expect(within(row).getByRole('group', { name: 'Actions for Analytics Engineer' })).toContainElement(within(row).getByRole('button', { name: 'Prepare application' }));
     expect(screen.getByRole('link', { name: 'See all jobs' })).toHaveAttribute('href', '/jobs');
+  });
+
+  // docs/agent-driven/REDESIGN.md §8 scenario 4: a pick at a company the search wants to work at says so, after the gap and the score.
+  it('a pick at a company on the list says "On your list of companies", after the gap, the score and the honesty line (R2, C5)', () => {
+    renderToday(
+      <TodayDesk
+        sources={sourcesWith({ picks: ready([pick('p1', 'Analytics Engineer', { atTargetCompany: true }), pick('p2', 'Data Scientist'), pick('p3', 'Insights Lead', { atTargetCompany: false })]) })}
+        check={CHECK_DONE}
+        now={NOW}
+      />,
+      { flags: ALL_ON },
+    );
+    const [listed, other, notListed] = screen.getAllByTestId('today-pick');
+    const note = within(listed!).getByTestId('pick-target');
+    expect(note).toHaveTextContent('On your list of companies');
+    const text = listed!.textContent ?? '';
+    const order = ["What's missing:", '74 / 100', 'This is not your chance of getting hired.', 'On your list of companies', 'Globex', 'Analytics Engineer'].map((s) => text.indexOf(s));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Only where the server said so (D3).
+    expect(within(other!).queryByTestId('pick-target')).toBeNull();
+    expect(within(notListed!).queryByTestId('pick-target')).toBeNull();
+    // A note, not a second action: the row keeps its one button.
+    expect(within(listed!).getAllByRole('button')).toHaveLength(1);
   });
 
   it('no pick shows a tier or a score without the honesty line (C5)', () => {

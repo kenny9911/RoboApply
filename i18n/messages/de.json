@@ -247,7 +247,8 @@
       "alsoInList": "Weitere Orte für {title} bei {company}",
       "alsoInMore": "{count, plural, one {# weiterer Ort ist hier nicht aufgeführt.} other {# weitere Orte sind hier nicht aufgeführt.}}",
       "firstSeen": "Zuerst gesehen am {date}",
-      "leadLabel": "{label}:"
+      "leadLabel": "{label}:",
+      "targetCompany": "Auf deiner Unternehmensliste"
     },
     "explore": {
       "back": "Alle Berufsfelder",
@@ -3564,6 +3565,10 @@
         "wrongTitle": {
           "body": "Wenn du einen Job mit „Kein Interesse: Falsche Jobbezeichnung“ markierst, sinken das Gewicht dieser Position und das Gewicht dieser Jobbezeichnung um jeweils 0,25, auf einer Skala von -1 bis 1. „Woran du Interesse gezeigt hast“ ist der Durchschnitt aus den Gewichten für Position, Unternehmen und Fähigkeiten eines Jobs sowie aus dem Gewicht seiner Jobbezeichnung, wenn dieses unter null liegt. Eine Markierung senkt also andere Jobs mit derselben Position oder Jobbezeichnung ein wenig, und jede weitere Markierung senkt sie stärker. Der Effekt lässt um 2 % pro Tag nach. Deine Filter bleiben unverändert.",
           "title": "Jobbezeichnungen, die du als falsch markiert hast"
+        },
+        "targetCompanies": {
+          "title": "Unternehmen, bei denen du arbeiten möchtest",
+          "body": "Wenn deine Suche Unternehmen nennt, bei denen du arbeiten möchtest, bekommt ein Job bei einem davon bei „Empfohlen“ 5 Punkte mehr, und deine besten Treffer rechnen seine Passung 5 Punkte höher. Es ist nie ein Filter: Jobs bei anderen Unternehmen siehst du weiterhin."
         }
       },
       "rulesTitle": "{count, plural, one {Eine weitere Regel} other {Weitere Regeln}}",
@@ -6805,7 +6810,7 @@
       "locations": "Orte",
       "needsSponsorship": "Visa-Sponsoring",
       "postedWithinDays": "Veröffentlicht",
-      "preferredCompanies": "Unternehmen, die dir gefallen",
+      "preferredCompanies": "Unternehmen, bei denen du arbeiten möchtest",
       "q": "Suchbegriffe",
       "recruiterJobsOnly": "Von Recruitern veröffentlichte Jobs",
       "roleType": "Art der Rolle",
@@ -6836,7 +6841,7 @@
       "includeUndisclosedPay": "Aus: Jobs ohne Gehaltsangabe bleiben in deiner Liste.",
       "locations": "Remote-Jobs bleiben in deiner Liste.",
       "needsSponsorship": "Zeigt zuerst Jobs, die Sponsoring erwähnen, und blendet Jobs aus, deren Anzeige Sponsoring ausschließt. Diese Angabe wird auch in deinem Profil gespeichert.",
-      "preferredCompanies": "Jobs bei diesen Unternehmen stehen weiter oben. Andere Jobs siehst du weiterhin.",
+      "preferredCompanies": "Jobs bei diesen Unternehmen stehen bei „Empfohlen“ und in deinen besten Treffern vor ähnlichen Jobs. Andere Jobs siehst du weiterhin.",
       "recruiterJobsOnly": "Nur Jobs, die Recruiter auf {sourceName} veröffentlicht haben.",
       "salaryMonthsMin": "Jobs ohne Angabe, wie viele Monatsgehälter gezahlt werden, bleiben in deiner Liste.",
       "schoolTiers": "Blendet Anzeigen aus, die eine Hochschulkategorie verlangen, die du nicht hast. Wird nie für die Reihenfolge der Jobs verwendet.",
@@ -7726,6 +7731,16 @@
       "label": "Jobdetails",
       "overview": "Überblick",
       "people": "Personen"
+    },
+    "targets": {
+      "on": "Auf deiner Unternehmensliste",
+      "add": "{company} zu den Unternehmen hinzufügen, bei denen du arbeiten möchtest",
+      "remove": "Entfernen",
+      "removeLabel": "{company} aus den Unternehmen entfernen, bei denen du arbeiten möchtest",
+      "added": "{company} steht auf deiner Liste. Jobs dort stehen bei „Empfohlen“ und in deinen besten Treffern vor ähnlichen Jobs.",
+      "removed": "{company} steht nicht mehr auf deiner Unternehmensliste.",
+      "failed": "Deine Unternehmensliste konnte nicht geändert werden. Versuch es erneut.",
+      "full": "Deine Unternehmensliste ist voll. Entferne in deiner Suche ein Unternehmen, um dieses hinzuzufügen."
     }
   },
   "jobImport": {
@@ -11891,7 +11906,9 @@
       "loading": "Deine Suche wird geladen…",
       "failed": "Deine Suche konnte nicht geladen werden.",
       "none": "Noch keine gespeicherte Suche.",
-      "setUp": "Suche einrichten"
+      "setUp": "Suche einrichten",
+      "companies": "bei {list}",
+      "anyWithCompanies": "Du suchst: jeden Job, am liebsten bei {list}"
     },
     "agentTag": "Agent",
     "retry": "Erneut versuchen",

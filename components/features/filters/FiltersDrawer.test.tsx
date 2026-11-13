@@ -5,7 +5,7 @@
 // is km or mi by country, and the count never invents a number.
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { TW_DISTRICTS_MAX as CONTRACT_TW_DISTRICTS_MAX, WORK_SHIFT_FILTERS } from '../../../server/src/features/search/contract';
@@ -13,7 +13,7 @@ import { twDistrictsResponse } from '../../../server/src/features/tw/districts';
 import { TW_PAY_RULE_DEFAULT } from '../../../server/src/features/tw/payRule';
 import { ActiveFilterChips } from './ActiveFilterChips';
 import { FiltersDrawer } from './FiltersDrawer';
-import { TW_DISTRICTS_MAX, WORK_SHIFTS, districtsLeaveOutOtherPlaces, draftCounties, mayBeTaiwanSearch, showsTaiwanPayHelper, showsTaiwanPayNote } from './FilterEditors';
+import { PreferredCompaniesEditor, TW_DISTRICTS_MAX, WORK_SHIFTS, districtsLeaveOutOtherPlaces, draftCounties, mayBeTaiwanSearch, showsTaiwanPayHelper, showsTaiwanPayNote } from './FilterEditors';
 import { sectionEditors } from './FilterSections';
 import { TAXONOMY_TREE, fail, installFetch, ok, profile, renderWith, type RecordedCall } from './filters.testkit';
 
@@ -113,6 +113,74 @@ describe('FiltersDrawer — RoboApply', () => {
     const radii = await screen.findAllByLabelText('Distance');
     expect((radii[0] as HTMLSelectElement).selectedOptions[0].textContent).toBe('Within 25 mi');
     expect((radii[1] as HTMLSelectElement).selectedOptions[0].textContent).toBe('Within 40 km');
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §8 scenario 4: "Companies you want to work at" (the search's preferredCompanies).
+describe('FiltersDrawer — "Companies you want to work at"', () => {
+  const COMPANIES = '/api/v1/roboapply/companies';
+
+  function setupTargets(filters: Record<string, unknown>) {
+    const sp = profile({ filters });
+    const net = installFetch({
+      'GET /api/v1/roboapply/taxonomy': () => ok(TAXONOMY_TREE),
+      [`POST ${P}/count`]: () => ok({ count: null, capped: false }),
+      [`GET ${COMPANIES}`]: () => ok({ items: [{ id: 'c1', name: 'Stripe', slug: 'stripe', logoUrl: null, domain: 'stripe.com' }] }),
+      [`PATCH ${P}/sp_main`]: (c) => ok({ ...sp, version: sp.version + 1, filters: (c.body as { filters: object }).filters }),
+      'GET /api/v1/roboapply/profile': () => ok({ workAuth: [] }),
+    });
+    const onClose = vi.fn();
+    renderWith(<FiltersDrawer open onClose={onClose} profile={sp} />);
+    return { net, onClose };
+  }
+
+  const names = (list: HTMLElement) => within(list).getAllByRole('listitem').map((li) => li.querySelector('span')?.textContent);
+
+  it('leads the Companies section with its help line; "Only these companies" and "Companies to leave out" follow, unchanged', async () => {
+    setupTargets({});
+    const dialog = await screen.findByRole('dialog');
+    const section = dialog.querySelector('[data-section="companies"]') as HTMLElement;
+    const labels = within(section)
+      .getAllByRole('combobox')
+      .map((input) => section.querySelector(`label[for="${input.id}"]`)?.textContent);
+    expect(labels).toEqual(['Companies you want to work at', 'Only these companies', 'Companies to leave out']);
+    expect(within(section).getByText('Jobs at these companies move ahead of similar jobs in Recommended and in your best picks. Other jobs still show.')).toBeInTheDocument();
+    expect(within(section).getByText('When you add companies here, only their jobs show.')).toBeInTheDocument();
+    for (const market of ['intl', 'cn'] as const) expect(sectionEditors(market).find((s) => s.id === 'companies')!.editors[0]).toBe(PreferredCompaniesEditor);
+  });
+
+  it('adds a company from the suggestions, takes one off with ×, and saves the list with the draft in the one PATCH', async () => {
+    const { net, onClose } = setupTargets({ titles: ['Analyst'], preferredCompanies: ['Figma', 'Linear'] });
+    const input = await screen.findByRole('combobox', { name: 'Companies you want to work at' });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'st' } });
+    fireEvent.mouseDown(await screen.findByRole('option', { name: /Stripe/ }));
+    expect(net.calls.some((c) => c.path === COMPANIES && c.search.includes('q=st'))).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Linear' }));
+    expect(names(screen.getByRole('list', { name: 'Companies you want to work at' }))).toEqual(['Figma', 'Stripe']);
+    fireEvent.click(screen.getByRole('button', { name: /^Show/ }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(net.to('PATCH', `${P}/sp_main`).map((c) => c.body)).toEqual([{ baseVersion: 3, filters: { titles: ['Analyst'], preferredCompanies: ['Figma', 'Stripe'] } }]);
+  });
+
+  it('a company the index does not know is added as typed (Enter); the last one taken off clears the list', async () => {
+    const first = setupTargets({});
+    const input = await screen.findByRole('combobox', { name: 'Companies you want to work at' });
+    fireEvent.change(input, { target: { value: 'Tiny Startup Co' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(names(screen.getByRole('list', { name: 'Companies you want to work at' }))).toEqual(['Tiny Startup Co']);
+    fireEvent.click(screen.getByRole('button', { name: /^Show/ }));
+    await waitFor(() => expect(first.onClose).toHaveBeenCalled());
+    expect(first.net.to('PATCH', `${P}/sp_main`)[0]!.body).toEqual({ baseVersion: 3, filters: { preferredCompanies: ['Tiny Startup Co'] } });
+    cleanup();
+    vi.unstubAllGlobals();
+
+    const second = setupTargets({ preferredCompanies: ['Figma'] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Figma' }));
+    expect(screen.queryByRole('list', { name: 'Companies you want to work at' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Show/ }));
+    await waitFor(() => expect(second.onClose).toHaveBeenCalled());
+    expect(second.net.to('PATCH', `${P}/sp_main`)[0]!.body).toEqual({ baseVersion: 3, filters: {} });
   });
 });
 

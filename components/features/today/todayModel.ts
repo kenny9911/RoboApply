@@ -170,6 +170,8 @@ export function applicationNumbers(sources: Pick<TodaySources, 'queue' | 'board'
 
 /** Values of a group the goal line prints before it says "and N more". */
 export const GOAL_GROUP_LIMIT = 3;
+/** Companies the goal line names before "and N more" ("… · at Stripe, Figma and 2 more"). */
+export const GOAL_COMPANY_LIMIT = 2;
 
 export interface GoalFacts {
   /** Job titles as the user wrote them; the search words when there is no title. */
@@ -182,6 +184,12 @@ export interface GoalFacts {
   workModels: string[];
   /** Place labels as the user saved them. */
   places: string[];
+  /**
+   * "Companies you want to work at" (the search's `preferredCompanies`), as
+   * the user saved them. A preference, not a filter: it is not part of
+   * `goalIsEmpty` (a search with only these is still open to any job).
+   */
+  companies: string[];
 }
 
 const texts = (list: readonly unknown[] | undefined): string[] =>
@@ -198,10 +206,11 @@ export function goalFacts(filters: FilterSet | null | undefined): GoalFacts {
     seniority: texts(filters?.seniority),
     workModels: texts(filters?.workModels),
     places: texts((filters?.locations ?? []).map((l) => l?.label)),
+    companies: texts(filters?.preferredCompanies),
   };
 }
 
-/** True when the search states nothing the goal line prints. */
+/** True when the search narrows nothing the goal line prints (companies you want to work at narrow nothing). */
 export function goalIsEmpty(facts: GoalFacts): boolean {
   return !facts.roles.length && !facts.roleIds.length && !facts.seniority.length && !facts.workModels.length && !facts.places.length;
 }

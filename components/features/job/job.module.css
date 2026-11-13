@@ -284,6 +284,63 @@
   color: var(--danger);
 }
 
+/* "Companies you want to work at": one line under the company and title (TargetCompanyToggle). */
+.target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-2);
+}
+
+.targetOn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 500;
+  color: var(--action);
+}
+
+.targetOn::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
+
+.targetBtn {
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-1);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--action);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.targetBtn:hover {
+  color: var(--action-hover);
+}
+
+.targetBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.targetBtn:disabled {
+  cursor: default;
+  color: var(--text-muted);
+}
+
 .shareBox {
   display: flex;
   flex-wrap: wrap;

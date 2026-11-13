@@ -3,7 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { diffForOps, type FilterOp } from '../copilot/tools/filters.js';
 import type { CopilotAreas } from '../copilot/types.js';
 import { WORK_SHIFTS } from '../jobs/normalize/index.js';
-import { CN_ONLY_FIELDS, FILTER_FIELDS, FilterSetV1Schema, INTL_ONLY_FIELDS, TAIWAN_ONLY_FIELDS, TW_DISTRICTS_MAX, WORK_SHIFT_FILTERS, type FilterSet, type SearchProfileWire } from './contract.js';
+import {
+  CN_ONLY_FIELDS,
+  COMPANY_LIST_MAX,
+  FILTER_FIELDS,
+  FilterSetV1Schema,
+  INTL_ONLY_FIELDS,
+  TAIWAN_ONLY_FIELDS,
+  TW_DISTRICTS_MAX,
+  WORK_SHIFT_FILTERS,
+  type FilterSet,
+  type SearchProfileWire,
+} from './contract.js';
 import {
   FILTER_FIELD_SPECS,
   coerceFilterSet,
@@ -126,6 +137,56 @@ describe('FilterSet v1 contract', () => {
   it('defaults includeUndisclosedPay to true', () => {
     expect(includesUndisclosedPay({})).toBe(true);
     expect(includesUndisclosedPay({ includeUndisclosedPay: false })).toBe(false);
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §8 scenario 4: "Companies you want to work at" is the FilterSet's existing optional
+// `preferredCompanies` (no new field, no new FilterSet version), so old saved searches and old clients keep working.
+describe('"Companies you want to work at" (preferredCompanies), an optional FilterSet v1 field', () => {
+  const OLD = { titles: ['Analyst'], companies: ['Acme'], excludedCompanies: ['Globex'] };
+
+  it('a saved search without the list is valid as it was, and one with it round-trips through parse and coerce', () => {
+    expect(parseFilterSet(OLD, { market: 'intl' })).toEqual({ ok: true, value: OLD, dropped: [], droppedForPlace: [] });
+    expect(coerceFilterSet(OLD, { market: 'intl' })).toEqual({ value: OLD, dropped: [], droppedForPlace: [] });
+    const withTargets = { ...OLD, preferredCompanies: ['Stripe', 'Figma'] };
+    expect(parseFilterSet(JSON.parse(JSON.stringify(withTargets)), { market: 'intl' })).toEqual({ ok: true, value: withTargets, dropped: [], droppedForPlace: [] });
+    expect(coerceFilterSet(JSON.parse(JSON.stringify(withTargets)), { market: 'intl' })).toEqual({ value: withTargets, dropped: [], droppedForPlace: [] });
+    // Both brands keep it (D5): it is not a field of one market.
+    expect(parseFilterSet(withTargets, { market: 'cn' })).toMatchObject({ ok: true, value: { preferredCompanies: ['Stripe', 'Figma'] }, dropped: [] });
+    expect(CN_ONLY_FIELDS).not.toContain('preferredCompanies');
+    expect(INTL_ONLY_FIELDS).not.toContain('preferredCompanies');
+  });
+
+  it('a patch sets it, null clears it, and a patch of another field leaves it as it is', () => {
+    const withTargets: FilterSet = { ...OLD, preferredCompanies: ['Stripe', 'Figma'] };
+    expect(parseFilterSetPatch({ preferredCompanies: ['Linear'] })).toEqual({ ok: true, value: { preferredCompanies: ['Linear'] } });
+    expect(parseFilterSetPatch({ preferredCompanies: null })).toEqual({ ok: true, value: { preferredCompanies: null } });
+    expect(mergeFilterSet(OLD, { preferredCompanies: ['Linear'] })).toEqual({ ...OLD, preferredCompanies: ['Linear'] });
+    expect(mergeFilterSet(withTargets, { preferredCompanies: null })).toEqual(OLD);
+    expect(mergeFilterSet(withTargets, { titles: ['Data analyst'] }).preferredCompanies).toEqual(['Stripe', 'Figma']);
+    expect(diffFilterSets(OLD, withTargets)).toEqual([{ field: 'preferredCompanies', kind: 'added', addedItems: ['Stripe', 'Figma'], removedItems: [] }]);
+  });
+
+  it('is normalized like the other company lists: trimmed, case-insensitive duplicates dropped, order kept, an empty list removed', () => {
+    expect(normalizeFilterSet({ preferredCompanies: [' Stripe ', 'stripe', 'Figma', ''] })).toEqual({ preferredCompanies: ['Stripe', 'Figma'] });
+    expect(normalizeFilterSet({ preferredCompanies: [] })).toEqual({});
+    expect(filterSetKey({ preferredCompanies: ['Stripe'] })).not.toBe(filterSetKey({}));
+  });
+
+  it('holds at most COMPANY_LIST_MAX names of at most 160 characters', () => {
+    const names = (n: number) => Array.from({ length: n }, (_, i) => `Company ${i}`);
+    expect(COMPANY_LIST_MAX).toBe(50);
+    expect(parseFilterSet({ preferredCompanies: names(COMPANY_LIST_MAX) }, { market: 'intl' }).ok).toBe(true);
+    expect(parseFilterSet({ preferredCompanies: names(COMPANY_LIST_MAX + 1) }, { market: 'intl' }).ok).toBe(false);
+    expect(parseFilterSet({ preferredCompanies: ['x'.repeat(161)] }, { market: 'intl' }).ok).toBe(false);
+    // The include-only list keeps its own cap.
+    expect(parseFilterSet({ companies: names(COMPANY_LIST_MAX + 1) }, { market: 'intl' }).ok).toBe(false);
+  });
+
+  it('is a preference, never a filter; "Only these companies" and "Companies to leave out" keep their meaning', () => {
+    expect(FILTER_FIELD_SPECS.preferredCompanies.predicate).toBe('ranking boost only; never filters');
+    expect(FILTER_FIELD_SPECS.companies.predicate).toBe('company is one of these (include-only)');
+    expect(FILTER_FIELD_SPECS.excludedCompanies.predicate).toBe('company is none of these');
   });
 });
 

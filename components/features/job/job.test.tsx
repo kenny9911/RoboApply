@@ -37,6 +37,7 @@ const api = vi.hoisted(() => ({
   dismiss: vi.fn(),
   setUiValues: vi.fn(),
   addToQueue: vi.fn(),
+  setTargetCompany: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
 }));
@@ -66,6 +67,7 @@ vi.mock('../../../lib/api/match', () => ({ getKeywordCheck: api.getKeywordCheck,
 vi.mock('../../../lib/api/credits', () => ({ getCredits: api.getCredits }));
 vi.mock('../../../lib/api/uiState', () => ({ getUiState: api.getUiState, dismiss: api.dismiss, setUiValues: api.setUiValues }));
 vi.mock('../../../lib/api/agent', () => ({ addToQueue: api.addToQueue }));
+vi.mock('../../../lib/api/search', async (orig) => ({ ...(await orig<Record<string, unknown>>()), setTargetCompany: api.setTargetCompany }));
 // The share card renders nothing by design; a marker stands in so the tests can read what it is given.
 vi.mock('../notify-cn', () => ({
   WechatShareCard: (p: { title: string; description?: string | null; path?: string | null }) => (
@@ -74,6 +76,7 @@ vi.mock('../notify-cn', () => ({
 }));
 
 import { RoboApiError } from '../../../lib/api/client';
+import { __toastStore } from '../../v3/primitives/Toast';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
 import type { MatchFitView } from '../../../lib/api/contracts/match';
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
@@ -944,6 +947,78 @@ describe('apply flow (D1, R1/C11)', () => {
     await waitFor(() => expect(api.saveJob).toHaveBeenCalledWith('j1'));
     fireEvent.click(screen.getByRole('button', { name: 'Share' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://www.roboapply.io/jobs/j1'));
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §8 scenario 4: add the company to the search's "Companies you want to work at", or take it off.
+describe('"Companies you want to work at" on the job page', () => {
+  const savedSearch = (preferredCompanies: string[] | undefined) => ({
+    profile: { id: 'sp_main', name: '', isDefault: true, isActive: true, version: 4, schemaVersion: 1, filters: preferredCompanies ? { preferredCompanies } : {}, alertInstantMax: 0, alertDigest: null, createdAt: NOW, updatedAt: NOW },
+    on: !!preferredCompanies?.length,
+  });
+
+  /** The server: the page reads the list as it is now, and the change is kept. */
+  function server(onList: boolean) {
+    let on = onList;
+    api.getJob.mockImplementation(async () => detail({ atTargetCompany: on }));
+    api.setTargetCompany.mockImplementation(async (body: { on: boolean }) => {
+      on = body.on;
+      return savedSearch(on ? ['Figma', 'Acme'] : ['Figma']);
+    });
+  }
+
+  it('off the list: one line under the company offers to add it; adding sends the company and the line turns to "On your list of companies"', async () => {
+    server(false);
+    render();
+    const line = await screen.findByTestId('job-target-company');
+    expect(line).toHaveAttribute('data-on', 'false');
+    // Under the company and the title, above the actions.
+    const header = screen.getByTestId('job-header');
+    expect(header).toContainElement(line);
+    expect(screen.getByRole('heading', { level: 1, name: 'Backend Engineer' }).compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(within(line).getByRole('button', { name: 'Add Acme to companies you want to work at' }));
+    await waitFor(() => expect(api.setTargetCompany).toHaveBeenCalledWith({ company: 'Acme', on: true }));
+    await waitFor(() => expect(screen.getByTestId('job-target-company')).toHaveAttribute('data-on', 'true'));
+    expect(screen.getByTestId('job-target-company')).toHaveTextContent('On your list of companies');
+    expect(__toastStore.get().map((x) => `${x.tone}: ${x.message}`)).toContain('ok: Acme is on your list. Its jobs move ahead of similar jobs in Recommended and in your best picks.');
+    // The page is read again after the change, and the line holds.
+    await waitFor(() => expect(api.getJob.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(screen.getByTestId('job-target-company')).toHaveAttribute('data-on', 'true');
+    expect(api.setTargetCompany).toHaveBeenCalledTimes(1);
+    // A note and a text button: it never takes the page's one primary button.
+    expect(within(screen.getByTestId('job-target-company')).getByRole('button')).not.toHaveClass('primary');
+  });
+
+  it('on the list: "On your list of companies" with Remove, which takes it off', async () => {
+    server(true);
+    render();
+    const line = await screen.findByTestId('job-target-company');
+    expect(line).toHaveTextContent('On your list of companies');
+    fireEvent.click(within(line).getByRole('button', { name: 'Remove Acme from companies you want to work at' }));
+    await waitFor(() => expect(api.setTargetCompany).toHaveBeenCalledWith({ company: 'Acme', on: false }));
+    await waitFor(() => expect(screen.getByTestId('job-target-company')).toHaveAttribute('data-on', 'false'));
+    expect(within(screen.getByTestId('job-target-company')).getByRole('button', { name: 'Add Acme to companies you want to work at' })).toBeEnabled();
+  });
+
+  it('a full list, or any other failure, says so in the line and changes nothing', async () => {
+    server(false);
+    api.setTargetCompany
+      .mockRejectedValueOnce(new RoboApiError('full', { code: 'invalid_request', status: 422, payload: { success: false, code: 'invalid_request', details: { reason: 'invalid_filters' } } }))
+      .mockRejectedValueOnce(new RoboApiError('x', { code: 'internal_error', status: 500 }));
+    render();
+    const add = await screen.findByRole('button', { name: 'Add Acme to companies you want to work at' });
+    fireEvent.click(add);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your list of companies is full. Remove one in your search to add this one.');
+    fireEvent.click(add);
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Your list of companies could not be changed. Try again.'));
+    expect(screen.getByTestId('job-target-company')).toHaveAttribute('data-on', 'false');
+  });
+
+  it('nothing is offered when the server did not say (D3)', async () => {
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.queryByTestId('job-target-company')).toBeNull();
+    expect(screen.queryByText(/companies you want to work at/i)).toBeNull();
   });
 });
 

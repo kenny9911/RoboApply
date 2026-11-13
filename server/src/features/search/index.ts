@@ -45,3 +45,5 @@ export {
 export type { CreateProfileInput, SearchProfileError, SearchProfileService, UpdateProfileInput } from './SearchProfileService.js';
 export { SEARCH_BACKED_PREFERENCE_KEYS, preferencePatchToFilterPatch, projectFiltersToPreferences } from './legacyBridge.js';
 export type { BridgeContext, ProjectedPreferences, SearchBackedPreferenceKey } from './legacyBridge.js';
+// "Companies you want to work at" (the FilterSet's `preferredCompanies`): how names compare, and the rule.
+export { isTargetCompany, targetCompanyKey, targetCompanyKeys, withTargetCompany } from './targetCompanies.js';

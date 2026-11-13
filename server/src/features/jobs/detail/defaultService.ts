@@ -96,6 +96,12 @@ function createDefault(): JobDetailServiceImpl {
       return { pastCompanies: p.experience.map((e) => e.company), schools: p.education.map((e) => e.school) };
     },
     practicedForJob: practicedForJobFrom(defaultPracticedJobs),
+    // The active saved search's "Companies you want to work at": one read, no migration (null: no search yet).
+    targetCompanies: async (userId, market) => {
+      const { searchProfileService } = await import('../../search/index.js');
+      const filters = await searchProfileService.activeFilters(userId, market);
+      return filters ? (filters.preferredCompanies ?? []) : null;
+    },
     markChecklistStep: async (userId, step) => (await import('../../growth/index.js')).markChecklistStep(userId, step),
     recordInteraction: async (userId, jobId, kind) => (await import('../../feed/index.js')).feedService.recordInteraction(userId, jobId, kind),
     isEnabled: detailFlag,

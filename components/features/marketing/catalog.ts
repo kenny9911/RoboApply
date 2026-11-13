@@ -152,6 +152,7 @@ export const RANKING_FACTORS = [
 export const ORDERING_RULES = [
   { key: 'sponsorshipFirst', server: 'sponsorship_first', points: null, markets: ['intl'], block: 'rules' },
   { key: 'skillsBoost', server: 'skills_boost', points: 10, markets: ['intl', 'cn'], block: 'rules' },
+  { key: 'targetCompanies', server: 'target_companies', points: 5, markets: ['intl', 'cn'], block: 'rules' },
   { key: 'wrongTitle', server: 'wrong_title', points: null, markets: ['intl', 'cn'], block: 'rules' },
   { key: 'seenSkipped', server: 'seen_skipped', points: -10, markets: ['intl', 'cn'], block: 'rules' },
   { key: 'sameRole', server: 'same_role_collapse', points: null, markets: ['intl', 'cn'], block: 'variety' },

@@ -242,6 +242,18 @@ export interface FeedItem {
    */
   application?: FeedApplication | null;
   /**
+   * The job's company is on the reader's "Companies you want to work at"
+   * (the saved search's `preferredCompanies`, compared by normalized company
+   * name: search/targetCompanies.ts), so the card says "On your list of
+   * companies". Sent as `true` only, on the /jobs list's cards and on the
+   * lists other areas read through `preview` (the Dashboard's picks); left
+   * off for every other job and on lists that never read a search. It
+   * describes the reader's own list and filters nothing; in Recommended and
+   * in the picks such a job ranks ahead of an otherwise equal one by a
+   * bounded amount (ORDERING_RULES `target_companies`).
+   */
+  atTargetCompany?: boolean;
+  /**
    * GoApply 网申 close date / 届别, only as the posting states them.
    * `applyClosesAt` is the stated date (yyyy-mm-dd, China time) with its
    * quote; null when the posting states none (RAJob.expiresAt is never shown:

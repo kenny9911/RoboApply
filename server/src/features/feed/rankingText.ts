@@ -19,7 +19,7 @@
 export const RANKING_FACTORS = [
   { key: 'fit', weight: 0.55, what: 'Fit score: the AI score when one exists, otherwise the quick estimate. Both are on the same scale. Until a market has enough scored jobs to line the two up, a job with an AI score is ranked halfway between its quick estimate and its AI score.' },
   { key: 'freshness', weight: 0.2, what: 'How recently the job was posted: 100 × (0.7 × e^(−hours / 48) + 0.3 × e^(−hours / 336)); a post no longer listed by its source counts from when it was last seen.' },
-  { key: 'affinity', weight: 0.15, what: 'Your own actions: saving, applying and hiding jobs, and companies you marked as preferred; fades 2% a day.' },
+  { key: 'affinity', weight: 0.15, what: 'Your own actions: saving, applying and hiding jobs; fades 2% a day.' },
   { key: 'source_quality', weight: 0.1, what: 'How complete the posting is: pay listed, a known application system, a real posting date, a detailed description.' },
 ] as const;
 
@@ -45,6 +45,12 @@ export const ORDERING_RULES = [
     what: 'Jobs that require more of your chosen skills rank higher in Recommended: up to 10 points, in proportion to how many of them the job asks for.',
   },
   {
+    key: 'target_companies',
+    points: 5,
+    when: 'Your search lists companies you want to work at.',
+    what: 'A job at one of those companies gets 5 points in Recommended, and the picks count its fit as 5 points higher. It is never a filter: jobs at other companies still show.',
+  },
+  {
     key: 'wrong_title',
     points: null,
     when: 'You marked a job "Not interested: wrong title".',
@@ -63,6 +69,16 @@ export const ORDERING_RULES = [
     what: 'You see one card, the best ranked of those postings, and it lists the other places, at most ten. A posting for the same place, or for an eleventh other place, stays a card of its own.',
   },
 ] as const;
+
+/**
+ * "Companies you want to work at" (ORDERING_RULES `target_companies`; the
+ * saved search's `preferredCompanies`, search/targetCompanies.ts): the points
+ * a job at a listed company gets. Recommended adds them to the rank; the
+ * agent's picks (Best fit with `favorTargetCompanies`) add them to the fit the
+ * job is ordered on, never to the score on its card. A bounded boost, not a
+ * filter: such a job passes a job that ranked at most this much higher.
+ */
+export const TARGET_COMPANY_POINTS = 5;
 
 /**
  * "Seen and skipped" (ORDERING_RULES `seen_skipped`): a job the person was

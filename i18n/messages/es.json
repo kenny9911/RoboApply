@@ -247,7 +247,8 @@
       "alsoInList": "Otras ubicaciones de {title} en {company}",
       "alsoInMore": "{count, plural, one {# ubicación más no aparece aquí.} other {# ubicaciones más no aparecen aquí.}}",
       "firstSeen": "Visto por primera vez el {date}",
-      "leadLabel": "{label}:"
+      "leadLabel": "{label}:",
+      "targetCompany": "En tu lista de empresas"
     },
     "explore": {
       "back": "Todos los tipos de trabajo",
@@ -3564,6 +3565,10 @@
         "wrongTitle": {
           "body": "Si marcas un empleo como «No me interesa: puesto equivocado», el peso de ese tipo de puesto y el peso de ese título bajan 0.25 cada uno, en una escala que va de -1 a 1. «Lo que te ha interesado» es el promedio de los pesos del tipo de puesto, la empresa y las habilidades de un empleo, y del peso de su título cuando es menor que cero. Así, una marca baja un poco otros empleos con el mismo tipo de puesto o el mismo título, y cada marca adicional los baja más. El efecto se debilita un 2% cada día. Tus filtros no cambian.",
           "title": "Títulos que marcaste como equivocados"
+        },
+        "targetCompanies": {
+          "title": "Empresas en las que quieres trabajar",
+          "body": "Si tu búsqueda incluye empresas en las que quieres trabajar, un empleo en una de ellas recibe 5 puntos más en Recomendados, y tus mejores opciones cuentan su encaje como 5 puntos más alto. Nunca es un filtro: los empleos de otras empresas se siguen mostrando."
         }
       },
       "rulesTitle": "{count, plural, one {Una regla más} other {Más reglas}}",
@@ -6805,7 +6810,7 @@
       "locations": "Ubicaciones",
       "needsSponsorship": "Patrocinio de visa",
       "postedWithinDays": "Fecha de publicación",
-      "preferredCompanies": "Empresas que te gustan",
+      "preferredCompanies": "Empresas en las que quieres trabajar",
       "q": "Palabras clave",
       "recruiterJobsOnly": "Empleos publicados por reclutadores",
       "roleType": "Tipo de puesto",
@@ -6836,7 +6841,7 @@
       "includeUndisclosedPay": "Desactivado: los empleos que no indican el sueldo siguen en tu lista.",
       "locations": "Los empleos remotos siguen en tu lista.",
       "needsSponsorship": "Muestra primero los empleos que mencionan el patrocinio y oculta aquellos cuyo anuncio dice que no patrocinan. Esta respuesta también se guarda en tu perfil.",
-      "preferredCompanies": "Los empleos de estas empresas aparecen más arriba. Los demás empleos se siguen mostrando.",
+      "preferredCompanies": "Los empleos de estas empresas aparecen antes que otros similares en Recomendados y en tus mejores opciones. Los demás empleos se siguen mostrando.",
       "recruiterJobsOnly": "Solo empleos que los reclutadores publicaron en {sourceName}.",
       "salaryMonthsMin": "Los empleos que no indican cuántos meses pagan siguen en tu lista.",
       "schoolTiers": "Oculta los anuncios que exigen una categoría de universidad que no tienes. Nunca se usa para ordenar los empleos.",
@@ -7726,6 +7731,16 @@
       "label": "Detalles del empleo",
       "overview": "Vista general",
       "people": "Personas"
+    },
+    "targets": {
+      "on": "En tu lista de empresas",
+      "add": "Agregar {company} a las empresas en las que quieres trabajar",
+      "remove": "Quitar",
+      "removeLabel": "Quitar {company} de las empresas en las que quieres trabajar",
+      "added": "{company} está en tu lista. Sus empleos aparecen antes que otros similares en Recomendados y en tus mejores opciones.",
+      "removed": "{company} ya no está en tu lista de empresas.",
+      "failed": "No se pudo cambiar tu lista de empresas. Inténtalo otra vez.",
+      "full": "Tu lista de empresas está llena. Quita una en tu búsqueda para agregar esta."
     }
   },
   "jobImport": {
@@ -11891,7 +11906,9 @@
       "loading": "Cargando tu búsqueda…",
       "failed": "No se pudo cargar tu búsqueda.",
       "none": "Todavía no hay ninguna búsqueda guardada.",
-      "setUp": "Configurar tu búsqueda"
+      "setUp": "Configurar tu búsqueda",
+      "companies": "en {list}",
+      "anyWithCompanies": "Buscas cualquier empleo, idealmente en {list}"
     },
     "agentTag": "Agente",
     "retry": "Reintentar",
