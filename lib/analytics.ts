@@ -17,7 +17,10 @@
 //     functional part of the entry attribution (referral and job), never the
 //     marketing part (utm_*, from, alert, landing page);
 //   - after "Allow": a first-party `ra_anon` cookie (≈13 months) and events
-//     are linked to it, and to the account at signup.
+//     are linked to it, and to the account at signup. When pages of this
+//     page load were already sent without an id, one `visit_entry` event
+//     says how the visit began (first page, referring site, campaign labels)
+//     so the visitor record starts with its real source.
 // Everywhere else (and on GoApply, which lists this collection in its
 // personal-information list) the cookie is set at once.
 //
@@ -161,10 +164,30 @@ interface State {
   listening: boolean;
   /** Attribution seen this page load (kept in memory even before consent). */
   sessionAttribution: StoredAttribution | null;
+  /**
+   * The id created this page load. A browser that refuses the cookie would
+   * otherwise get a new id on every send, and look like a new visitor each time.
+   */
+  anonId: string | null;
+  /** The first page view of this page load (in memory only): how the visit began. */
+  entry: QueuedEvent | null;
+  /** Page views of this page load already sent without an id. */
+  unlinkedPages: number;
 }
 
 function freshState(): State {
-  return { configured: false, consentRequired: true, queue: [], timer: null, sessionId: randomId(), listening: false, sessionAttribution: null };
+  return {
+    configured: false,
+    consentRequired: true,
+    queue: [],
+    timer: null,
+    sessionId: randomId(),
+    listening: false,
+    sessionAttribution: null,
+    anonId: null,
+    entry: null,
+    unlinkedPages: 0,
+  };
 }
 
 let state: State = freshState();
@@ -188,7 +211,8 @@ export function getAnonId(): string | null {
   if (!analyticsLinkAllowed()) return null;
   const existing = readCookie(ANON_ID_COOKIE);
   if (existing && ANON_ID_RE.test(existing)) return existing;
-  const id = randomId();
+  const id = state.anonId ?? randomId();
+  state.anonId = id;
   writeCookie(ANON_ID_COOKIE, id, ANALYTICS_COOKIE_MAX_AGE_SEC);
   return id;
 }
@@ -205,8 +229,10 @@ export function setAnalyticsConsent(choice: AnalyticsConsentChoice): void {
   if (choice === 'granted') {
     getAnonId();
     if (state.sessionAttribution) storageSet(ATTRIBUTION_STORAGE_KEY, JSON.stringify(state.sessionAttribution));
+    sendVisitEntry();
   } else {
     deleteCookie(ANON_ID_COOKIE);
+    state.anonId = null;
     storageSet(ATTRIBUTION_STORAGE_KEY, null);
     state.sessionAttribution = functionalAttribution(state.sessionAttribution);
   }
@@ -285,6 +311,28 @@ export function pauseAnalytics(on: boolean): void {
   }
 }
 
+/**
+ * After "Allow": if page views of this page load already went out without an
+ * id, say once how the visit began (the first view's page, referring site and
+ * campaign labels, at its own time) and how many pages that was. Views still
+ * waiting in the buffer need nothing: they are sent with the id.
+ */
+function sendVisitEntry(): void {
+  const first = state.entry;
+  const pages = state.unlinkedPages;
+  if (!first || pages <= 0 || paused) return;
+  state.unlinkedPages = 0;
+  const { referrerHost, locale, utmSource, utmMedium, utmCampaign } = first.props ?? {};
+  const props: NonNullable<QueuedEvent['props']> = { pages };
+  for (const [key, value] of Object.entries({ referrerHost, locale, utmSource, utmMedium, utmCampaign })) {
+    if (value !== undefined && value !== null) props[key] = value;
+  }
+  const event: QueuedEvent = { name: 'visit_entry', at: first.at, props };
+  if (first.path) event.path = first.path;
+  state.queue.push(event);
+  schedule();
+}
+
 /** Queue one event. Never throws and never blocks the caller. */
 export function track<N extends ProductEventName>(name: N, props?: ProductEventProps<N>, options: { path?: string } = {}): void {
   if (paused) return;
@@ -293,6 +341,7 @@ export function track<N extends ProductEventName>(name: N, props?: ProductEventP
     const event: QueuedEvent = { name, at: new Date().toISOString() };
     if (props && Object.keys(props).length) event.props = props as QueuedEvent['props'];
     if (path) event.path = safePath(path);
+    if (name === 'page_viewed' && !state.entry) state.entry = event;
     state.queue.push(event);
     if (state.queue.length > MAX_BUFFER) state.queue.splice(0, state.queue.length - MAX_BUFFER);
     schedule();
@@ -315,6 +364,7 @@ export async function flush(mode: 'fetch' | 'beacon' = 'fetch'): Promise<void> {
   while (state.queue.length) {
     const events = state.queue.splice(0, MAX_BATCH);
     const anonId = getAnonId();
+    if (!anonId) state.unlinkedPages += events.filter((e) => e.name === 'page_viewed').length;
     const body = { ...(anonId ? { anonId } : {}), sessionId: state.sessionId, events };
     if (mode === 'beacon') {
       sendEventsBeacon(body);

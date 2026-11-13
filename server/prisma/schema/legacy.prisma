@@ -420,6 +420,7 @@ model User {
   raCnReferralReports    RACnReferralReport[] // SCHEMA-4 (SR-54-1)
   raPersonalInfoRequests RAPersonalInfoRequest[]
   raReferralSignals      RAReferralSignal[] // SCHEMA-5 (SR-60-1)
+  raVisitors             RAVisitor[] // SCHEMA-9: visitor conversion records
   raTwoFactor            RATwoFactor? // SCHEMA-5 (SR-79-1)
   raStudentVerification  RAStudentVerification? // SCHEMA-5 (SR-79-2)
   raCancelSurveys        RACancelSurvey[] // SCHEMA-6 (SR-INT-1)

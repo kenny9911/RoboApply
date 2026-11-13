@@ -3998,6 +3998,10 @@
         "system": {
           "sub": "求人ソース、バックグラウンド処理、メール、アシスタント、コストをリアルタイムで集計。",
           "title": "システム"
+        },
+        "visitors": {
+          "title": "訪問者と登録",
+          "sub": "誰が訪れ、どこから来て、何人がアカウントを作成したか。"
         }
       },
       "overrides": {
@@ -4507,6 +4511,148 @@
           "off": "未接続",
           "rapidapi": "検索サービス",
           "syndication": "求人フィードから読み取り"
+        }
+      },
+      "visitors": {
+        "eyebrow": "管理",
+        "title": "訪問者と登録",
+        "sub": "サイトを訪れた人、その流入元、アカウントを作成した人数を確認できます。",
+        "loading": "読み込み中…",
+        "refresh": "更新",
+        "refreshing": "更新中…",
+        "site": "サイト",
+        "allSites": "両方のサイト",
+        "timezone": "日付は {tz} で集計しています。",
+        "empty": "この期間に記録された訪問者はいません。",
+        "notReady": {
+          "title": "訪問者の記録はまだ始まっていません",
+          "body": "訪問者テーブルがまだデータベースに追加されていません。追加された時点から訪問者を記録します。それ以前の訪問をさかのぼって記録することはできません。"
+        },
+        "kpi": {
+          "visitors": "新規訪問者",
+          "visitorsDetail": "閲覧ページ数 {pages}",
+          "signedUp": "作成されたアカウント",
+          "signedUpDetail": "この訪問者によるもの",
+          "rate": "訪問者からアカウントへ",
+          "rateDetail": "訪問者 {visitors} 人中 {signedUp} 人",
+          "onboarded": "初期設定を完了",
+          "onboardedDetail": "新規アカウントの {rate}"
+        },
+        "steps": {
+          "title": "初回訪問からアカウント作成まで",
+          "sub": "この期間に初めて訪れた訪問者が、その後どこまで進んだかを示します。",
+          "stages": {
+            "visitors": "サイトを訪問",
+            "signupViewed": "登録またはログインページを開いた",
+            "signupStarted": "登録を始めた",
+            "signedUp": "アカウントを作成",
+            "onboarded": "初期設定を完了"
+          },
+          "ofVisitors": "訪問者の {rate}",
+          "ofPrevious": "前のステップの {rate}",
+          "median": "登録した人の半数は、初回訪問から {time} 以内に登録しています。",
+          "accounts": "{count, plural, other {この期間に作成されたアカウントは合計 {formatted} 件です（訪問者の記録と一致しないものを含みます）。}}",
+          "knownUsers": "{count, plural, other {このほか {formatted} 人の訪問者は、初めて記録された時点ですでにアカウントを持っていたため、上の数には含まれていません。}}",
+          "untracked": "{count, plural, other {このほか {formatted} 回のページ読み込みは、訪問者の記録なしで回数のみ数えています（EEA・英国・スイスで利用統計を許可していない方）。上の数には含まれていません。}}"
+        },
+        "daily": {
+          "title": "日別",
+          "sub": "各列はその日に初めて訪れた訪問者です。塗りつぶした部分はアカウントを作成した割合です。",
+          "visitors": "新規訪問者",
+          "signedUp": "アカウントを作成",
+          "summary": "{from}〜{to}：新規訪問者 {visitors} 人、アカウント作成 {signedUp} 人。"
+        },
+        "breakdown": {
+          "visitors": "訪問者",
+          "signedUp": "アカウント",
+          "rate": "割合",
+          "empty": "この期間の記録はありません。",
+          "none": "記録なし",
+          "direct": "参照元サイトなし",
+          "channels": {
+            "title": "流入経路",
+            "sub": "各訪問者の初回訪問の経路です。",
+            "column": "経路"
+          },
+          "sources": {
+            "title": "流入元",
+            "sub": "リンクのキャンペーンソース、なければリンク元のサイトです。",
+            "column": "流入元"
+          },
+          "landing": {
+            "title": "最初のページ",
+            "sub": "各訪問者が最初に開いたページです。",
+            "column": "ページ"
+          },
+          "countries": {
+            "title": "国・地域",
+            "sub": "初めて記録された時点の所在地です。",
+            "column": "国・地域"
+          },
+          "devices": {
+            "title": "デバイス",
+            "sub": "初回訪問で使われたデバイスです。",
+            "column": "デバイス"
+          },
+          "methods": {
+            "title": "登録方法",
+            "sub": "登録を始めた訪問者の内訳です。",
+            "column": "方法"
+          }
+        },
+        "channel": {
+          "direct": "直接アクセス",
+          "search": "検索",
+          "ai": "AIアシスタント",
+          "social": "SNS",
+          "email": "メール",
+          "paid": "有料広告",
+          "campaign": "キャンペーンリンク",
+          "invite": "招待リンク",
+          "referral": "その他のサイト"
+        },
+        "device": {
+          "desktop": "パソコン",
+          "mobile": "スマートフォン",
+          "tablet": "タブレット"
+        },
+        "method": {
+          "email": "メール",
+          "google": "Google",
+          "line": "LINE",
+          "phone": "電話番号",
+          "wechat": "WeChat"
+        },
+        "status": {
+          "browsing": "閲覧中",
+          "signup_viewed": "登録ページを開いた",
+          "signup_started": "登録を始めた",
+          "signed_up": "アカウントを作成",
+          "onboarded": "初期設定を完了",
+          "known_user": "すでにアカウントあり"
+        },
+        "list": {
+          "title": "訪問者",
+          "sub": "最近訪れた順に表示しています。",
+          "statusFilter": "段階",
+          "allStatuses": "すべての段階",
+          "channelFilter": "経路",
+          "allChannels": "すべての経路",
+          "empty": "条件に合う訪問者はいません。",
+          "firstSeen": "初回：{time}",
+          "signupFrom": "登録ページを開いた元：{from}",
+          "visits": "{count, plural, other {# 回の訪問}}",
+          "next": "次のページ",
+          "first": "最初のページに戻る",
+          "col": {
+            "lastSeen": "最終訪問",
+            "status": "段階",
+            "source": "流入元",
+            "landing": "最初のページ",
+            "where": "国とデバイス",
+            "pages": "ページ数",
+            "account": "アカウント"
+          }
         }
       }
     }

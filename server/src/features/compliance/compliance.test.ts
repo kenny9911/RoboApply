@@ -929,7 +929,7 @@ describe('data export: People, 内推码, referrals, two-step sign-in, student d
   }
 
   it('registers the sections', () => {
-    for (const name of ['outreachDrafts', 'referralCodes', 'referrals', 'twoStepSignIn', 'studentVerification', 'jobInteractions']) {
+    for (const name of ['outreachDrafts', 'referralCodes', 'referrals', 'twoStepSignIn', 'studentVerification', 'jobInteractions', 'productEvents', 'visitRecords']) {
       expect(exportSectionNames(), name).toContain(name);
     }
   });

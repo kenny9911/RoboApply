@@ -3984,6 +3984,10 @@
         "invites": {
           "title": "Invite codes",
           "sub": "Codes for the invite-only beta."
+        },
+        "visitors": {
+          "title": "Visitors and sign-ups",
+          "sub": "Who came, where from, and how many created an account."
         }
       },
       "system": {
@@ -4597,6 +4601,148 @@
             "duplicate": "This board is already in the list.",
             "invalid": "Check the board ID and the company name.",
             "generic": "That did not work. Try again."
+          }
+        }
+      },
+      "visitors": {
+        "eyebrow": "Admin",
+        "title": "Visitors and sign-ups",
+        "sub": "Who came to the site, where from, and how many created an account.",
+        "loading": "Loading…",
+        "refresh": "Refresh",
+        "refreshing": "Refreshing…",
+        "site": "Site",
+        "allSites": "Both sites",
+        "timezone": "Days are counted in {tz}.",
+        "empty": "No visitors were recorded in this period.",
+        "notReady": {
+          "title": "Visitors are not being recorded yet",
+          "body": "The visitor table has not been added to the database. Once it is, visitors are recorded from that moment on; earlier visits cannot be filled in."
+        },
+        "kpi": {
+          "visitors": "New visitors",
+          "visitorsDetail": "{pages} pages viewed",
+          "signedUp": "Accounts created",
+          "signedUpDetail": "By these visitors",
+          "rate": "Visitor to account",
+          "rateDetail": "{signedUp} of {visitors} visitors",
+          "onboarded": "Finished setup",
+          "onboardedDetail": "{rate} of the new accounts"
+        },
+        "steps": {
+          "title": "From first visit to account",
+          "sub": "Visitors first seen in this period, and how far each has got since.",
+          "stages": {
+            "visitors": "Visited the site",
+            "signupViewed": "Opened sign-up or sign-in",
+            "signupStarted": "Started signing up",
+            "signedUp": "Created an account",
+            "onboarded": "Finished setup"
+          },
+          "ofVisitors": "{rate} of visitors",
+          "ofPrevious": "{rate} of the step before",
+          "median": "Half of the people who signed up did so within {time} of their first visit.",
+          "accounts": "{count, plural, one {{formatted} account was created in this period in total, counting any that no visitor record matches.} other {{formatted} accounts were created in this period in total, counting any that no visitor record matches.}}",
+          "knownUsers": "{count, plural, one {{formatted} more visitor already had an account when first seen here and is not counted above.} other {{formatted} more visitors already had an account when first seen here and are not counted above.}}",
+          "untracked": "{count, plural, one {{formatted} page load was counted without a visitor record (people in the EEA, the UK and Switzerland who have not allowed usage statistics). It is not counted above.} other {{formatted} page loads were counted without a visitor record (people in the EEA, the UK and Switzerland who have not allowed usage statistics). They are not counted above.}}"
+        },
+        "daily": {
+          "title": "By day",
+          "sub": "Each column is the visitors first seen that day. The filled part is the share that created an account.",
+          "visitors": "New visitors",
+          "signedUp": "Created an account",
+          "summary": "{from} to {to}: {visitors} new visitors, {signedUp} created an account."
+        },
+        "breakdown": {
+          "visitors": "Visitors",
+          "signedUp": "Accounts",
+          "rate": "Rate",
+          "empty": "Nothing recorded in this period.",
+          "none": "Not recorded",
+          "direct": "No referring site",
+          "channels": {
+            "title": "How they arrived",
+            "sub": "The channel of each visitor's first visit.",
+            "column": "Channel"
+          },
+          "sources": {
+            "title": "Where they came from",
+            "sub": "The campaign source in the link, or else the site that linked here.",
+            "column": "Source"
+          },
+          "landing": {
+            "title": "First page",
+            "sub": "The page each visitor opened first.",
+            "column": "Page"
+          },
+          "countries": {
+            "title": "Countries",
+            "sub": "Where visitors were when first seen.",
+            "column": "Country"
+          },
+          "devices": {
+            "title": "Devices",
+            "sub": "What visitors used on their first visit.",
+            "column": "Device"
+          },
+          "methods": {
+            "title": "Sign-up method",
+            "sub": "Of the visitors who started signing up.",
+            "column": "Method"
+          }
+        },
+        "channel": {
+          "direct": "Direct",
+          "search": "Search",
+          "ai": "AI assistants",
+          "social": "Social",
+          "email": "Email",
+          "paid": "Paid ads",
+          "campaign": "Campaign link",
+          "invite": "Invite link",
+          "referral": "Other sites"
+        },
+        "device": {
+          "desktop": "Computer",
+          "mobile": "Phone",
+          "tablet": "Tablet"
+        },
+        "method": {
+          "email": "Email",
+          "google": "Google",
+          "line": "LINE",
+          "phone": "Phone number",
+          "wechat": "WeChat"
+        },
+        "status": {
+          "browsing": "Browsing",
+          "signup_viewed": "Opened sign-up",
+          "signup_started": "Started signing up",
+          "signed_up": "Created an account",
+          "onboarded": "Finished setup",
+          "known_user": "Already had an account"
+        },
+        "list": {
+          "title": "Visitors",
+          "sub": "Most recently seen first.",
+          "statusFilter": "Stage",
+          "allStatuses": "All stages",
+          "channelFilter": "Channel",
+          "allChannels": "All channels",
+          "empty": "No visitors match these filters.",
+          "firstSeen": "First seen {time}",
+          "signupFrom": "Sign-up opened from: {from}",
+          "visits": "{count, plural, one {# visit} other {# visits}}",
+          "next": "Next page",
+          "first": "Back to the first page",
+          "col": {
+            "lastSeen": "Last seen",
+            "status": "Stage",
+            "source": "Came from",
+            "landing": "First page",
+            "where": "Country and device",
+            "pages": "Pages",
+            "account": "Account"
           }
         }
       }

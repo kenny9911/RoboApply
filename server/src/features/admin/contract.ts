@@ -14,6 +14,8 @@
 //   GET  /copilot-feedback            Assistant feedback (copilot.listFeedback(), PII-redacted excerpt)
 //   POST /referrals/:id/moderate      GoApply referral-code moderation (cn/referrals service, audited)
 //   POST /view-as · POST /view-as/stop  read-only "view as" one user (platform/viewAs, audited)
+//   GET  /visitors                    visitors and how many became accounts (RAVisitor): funnel, by day, by source
+//   GET  /visitors/list               the visitors themselves, newest first, with the stage each one reached
 // Area-specific admin routers are mounted at /admin/<area> by their owners
 // (credits, compliance, prep, coaching, announcements, cn/jobs, cn/campus,
 // cn/referrals, auth-cn, career-sources).
@@ -608,4 +610,138 @@ export interface ViewAsStartResponse extends ViewAsSessionView {
 export interface ViewAsStopResponse {
   /** True when a grant was in place and is now ended. */
   ended: boolean;
+}
+
+// ── Visitors and sign-ups (RAVisitor; growth/visitors.ts) ─────────────────
+//
+//   GET /visitors        the visitors first seen in the range and how far they
+//                        got: opened sign-up, started, created an account,
+//                        finished setup; by day, channel, source, landing
+//                        page, country, device and sign-up method.
+//   GET /visitors/list   those visitors, most recently seen first.
+//
+// A visitor is one browser that carries the first-party `ra_anon` id. Where
+// linking is not allowed (a RoboApply visitor in the EEA, the UK or
+// Switzerland who was not asked yet or said no) there is no visitor row:
+// those page loads are counted as `untrackedVisits` and followed no further.
+// `newAccounts` is every account created in the range, matched to a visitor
+// or not, so the two can be compared. Visitors who already had an account
+// when first seen (`knownUsers`) are left out of the funnel.
+
+/** `from`/`to`: a day (YYYY-MM-DD, in `tz`, both inclusive) or an ISO instant (`to` exclusive). Default: the last 30 days. */
+const RangeBound = z.string().min(8).max(40);
+const VisitorRange = {
+  from: RangeBound.optional(),
+  to: RangeBound.optional(),
+  /** IANA time zone for day buckets; anything unusable falls back to UTC. */
+  tz: z.string().max(64).optional(),
+  brand: z.enum(['roboapply', 'goapply']).optional(),
+};
+
+/** How a visitor first arrived (growth/visitors.ts VISITOR_CHANNELS; a test keeps the two lists equal). */
+export const VISITOR_CHANNEL_IDS = ['direct', 'search', 'ai', 'social', 'email', 'paid', 'campaign', 'invite', 'referral'] as const;
+export type VisitorChannelId = (typeof VISITOR_CHANNEL_IDS)[number];
+
+/**
+ * The furthest stage a visitor reached. `known_user`: they already had an
+ * account when first seen (not a conversion).
+ */
+export const VISITOR_STATUSES = ['browsing', 'signup_viewed', 'signup_started', 'signed_up', 'onboarded', 'known_user'] as const;
+export type VisitorStatus = (typeof VISITOR_STATUSES)[number];
+
+/** Days a visitor report may span. */
+export const MAX_VISITOR_DAYS = 366;
+
+export const VisitorsQuerySchema = z.object(VisitorRange);
+export const VisitorListQuerySchema = z.object({
+  ...VisitorRange,
+  status: z.enum(VISITOR_STATUSES).optional(),
+  channel: z.enum(VISITOR_CHANNEL_IDS).optional(),
+  cursor: z.string().max(32).optional(),
+});
+
+/**
+ * Funnel counts. Each stage includes everyone who went further, so the
+ * numbers never grow from one stage to the next.
+ */
+export interface VisitorFunnel {
+  /** New visitors first seen in the range (not already a user). */
+  visitors: number;
+  /** Opened the sign-up or sign-in page. */
+  signupViewed: number;
+  /** Sent the form or chose a provider. */
+  signupStarted: number;
+  /** Created an account. */
+  signedUp: number;
+  /** Finished setup (onboarding done). */
+  onboarded: number;
+}
+export interface VisitorDayRow extends VisitorFunnel {
+  /** YYYY-MM-DD in the report's time zone: the day the visitors were first seen. */
+  day: string;
+}
+export interface VisitorBreakdownRow {
+  /** The value; null = not recorded. */
+  key: string | null;
+  visitors: number;
+  signedUp: number;
+}
+export interface VisitorsReportResponse {
+  /** False while the visitor table is not in the database yet (nothing is recorded; every count is 0). */
+  ready: boolean;
+  from: string;
+  to: string;
+  tz: string;
+  funnel: VisitorFunnel;
+  /** First seen in the range but already had an account (left out of `funnel`). */
+  knownUsers: number;
+  /** Pages viewed by the visitors in `funnel`. */
+  pageViews: number;
+  /** Median time from first visit to account, in seconds; null when nobody signed up. */
+  medianSecondsToSignup: number | null;
+  /** Page loads in the range that were counted without a visitor id (no analytics consent). */
+  untrackedVisits: number;
+  /** Accounts created in the range, whether or not a visitor record matches. */
+  newAccounts: number;
+  /** One row per day of the range, oldest first. */
+  daily: VisitorDayRow[];
+  channels: VisitorBreakdownRow[];
+  /** Campaign source, else the referring site; null = direct. */
+  sources: VisitorBreakdownRow[];
+  landingPages: VisitorBreakdownRow[];
+  countries: VisitorBreakdownRow[];
+  devices: VisitorBreakdownRow[];
+  /** Sign-up method of those who started. */
+  methods: VisitorBreakdownRow[];
+}
+
+export interface VisitorView {
+  id: string;
+  brand: string;
+  status: VisitorStatus;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  channel: string;
+  /** Campaign source, else the referring site; null = direct. */
+  source: string | null;
+  campaign: string | null;
+  landingPath: string | null;
+  country: string | null;
+  device: string | null;
+  locale: string | null;
+  pageViews: number;
+  visits: number;
+  /** The `from` label of the sign-up page view (which page's button sent them). */
+  signupFrom: string | null;
+  signupMethod: string | null;
+  signupViewedAt: string | null;
+  signupStartedAt: string | null;
+  signedUpAt: string | null;
+  /** The linked account; null while the visitor has none. */
+  user: { id: string; email: string; name: string | null } | null;
+}
+export interface VisitorListResponse {
+  ready: boolean;
+  items: VisitorView[];
+  cursor: string | null;
 }

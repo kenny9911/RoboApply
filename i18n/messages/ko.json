@@ -3998,6 +3998,10 @@
         "system": {
           "sub": "공고 출처, 백그라운드 작업, 이메일, 어시스턴트, 비용을 실시간으로 집계해요.",
           "title": "시스템"
+        },
+        "visitors": {
+          "title": "방문자와 가입",
+          "sub": "누가 왔는지, 어디서 왔는지, 몇 명이 계정을 만들었는지."
         }
       },
       "overrides": {
@@ -4507,6 +4511,148 @@
           "off": "연결되지 않음",
           "rapidapi": "검색 서비스",
           "syndication": "채용 피드에서 읽음"
+        }
+      },
+      "visitors": {
+        "eyebrow": "관리자",
+        "title": "방문자와 가입",
+        "sub": "누가 사이트에 왔는지, 어디서 왔는지, 몇 명이 계정을 만들었는지 보여 줘요.",
+        "loading": "불러오는 중…",
+        "refresh": "새로고침",
+        "refreshing": "새로고침 중…",
+        "site": "사이트",
+        "allSites": "두 사이트 모두",
+        "timezone": "날짜는 {tz} 기준으로 집계해요.",
+        "empty": "이 기간에 기록된 방문자가 없어요.",
+        "notReady": {
+          "title": "아직 방문자를 기록하지 않고 있어요",
+          "body": "방문자 테이블이 아직 데이터베이스에 추가되지 않았어요. 추가된 시점부터 방문자를 기록하며, 그 이전 방문은 채울 수 없어요."
+        },
+        "kpi": {
+          "visitors": "신규 방문자",
+          "visitorsDetail": "페이지 {pages}회 조회",
+          "signedUp": "생성된 계정",
+          "signedUpDetail": "이 방문자들이 만든 계정",
+          "rate": "방문자에서 계정으로",
+          "rateDetail": "방문자 {visitors}명 중 {signedUp}명",
+          "onboarded": "초기 설정 완료",
+          "onboardedDetail": "새 계정의 {rate}"
+        },
+        "steps": {
+          "title": "첫 방문부터 계정 생성까지",
+          "sub": "이 기간에 처음 온 방문자가 그 뒤로 어디까지 진행했는지 보여 줘요.",
+          "stages": {
+            "visitors": "사이트 방문",
+            "signupViewed": "가입 또는 로그인 페이지 열기",
+            "signupStarted": "가입 시작",
+            "signedUp": "계정 생성",
+            "onboarded": "초기 설정 완료"
+          },
+          "ofVisitors": "방문자의 {rate}",
+          "ofPrevious": "이전 단계의 {rate}",
+          "median": "가입한 사람의 절반은 첫 방문 후 {time} 안에 가입했어요.",
+          "accounts": "{count, plural, other {이 기간에 생성된 계정은 모두 {formatted}개예요. 방문자 기록과 연결되지 않은 계정도 포함해요.}}",
+          "knownUsers": "{count, plural, other {이 밖에 방문자 {formatted}명은 처음 기록될 때 이미 계정이 있어서 위 숫자에 포함하지 않았어요.}}",
+          "untracked": "{count, plural, other {이 밖에 페이지 로드 {formatted}회는 방문자 기록 없이 횟수만 셌어요(EEA, 영국, 스위스에서 이용 통계를 허용하지 않은 분). 위 숫자에 포함하지 않았어요.}}"
+        },
+        "daily": {
+          "title": "일별",
+          "sub": "각 막대는 그날 처음 온 방문자예요. 채워진 부분은 계정을 만든 비율이에요.",
+          "visitors": "신규 방문자",
+          "signedUp": "계정 생성",
+          "summary": "{from}~{to}: 신규 방문자 {visitors}명, 계정 생성 {signedUp}명."
+        },
+        "breakdown": {
+          "visitors": "방문자",
+          "signedUp": "계정",
+          "rate": "비율",
+          "empty": "이 기간에 기록된 내용이 없어요.",
+          "none": "기록 없음",
+          "direct": "유입 사이트 없음",
+          "channels": {
+            "title": "유입 경로",
+            "sub": "각 방문자의 첫 방문 채널이에요.",
+            "column": "채널"
+          },
+          "sources": {
+            "title": "유입 출처",
+            "sub": "링크의 캠페인 출처, 없으면 이곳으로 연결한 사이트예요.",
+            "column": "출처"
+          },
+          "landing": {
+            "title": "첫 페이지",
+            "sub": "각 방문자가 처음 연 페이지예요.",
+            "column": "페이지"
+          },
+          "countries": {
+            "title": "국가",
+            "sub": "처음 기록될 때 방문자가 있던 곳이에요.",
+            "column": "국가"
+          },
+          "devices": {
+            "title": "기기",
+            "sub": "첫 방문에 사용한 기기예요.",
+            "column": "기기"
+          },
+          "methods": {
+            "title": "가입 방법",
+            "sub": "가입을 시작한 방문자 기준이에요.",
+            "column": "방법"
+          }
+        },
+        "channel": {
+          "direct": "직접 방문",
+          "search": "검색",
+          "ai": "AI 어시스턴트",
+          "social": "소셜",
+          "email": "이메일",
+          "paid": "유료 광고",
+          "campaign": "캠페인 링크",
+          "invite": "초대 링크",
+          "referral": "다른 사이트"
+        },
+        "device": {
+          "desktop": "컴퓨터",
+          "mobile": "휴대폰",
+          "tablet": "태블릿"
+        },
+        "method": {
+          "email": "이메일",
+          "google": "Google",
+          "line": "LINE",
+          "phone": "전화번호",
+          "wechat": "WeChat"
+        },
+        "status": {
+          "browsing": "둘러보는 중",
+          "signup_viewed": "가입 페이지 열기",
+          "signup_started": "가입 시작",
+          "signed_up": "계정 생성",
+          "onboarded": "초기 설정 완료",
+          "known_user": "이미 계정 있음"
+        },
+        "list": {
+          "title": "방문자",
+          "sub": "최근에 온 순서로 보여 줘요.",
+          "statusFilter": "단계",
+          "allStatuses": "모든 단계",
+          "channelFilter": "채널",
+          "allChannels": "모든 채널",
+          "empty": "조건에 맞는 방문자가 없어요.",
+          "firstSeen": "첫 방문: {time}",
+          "signupFrom": "가입 페이지를 연 곳: {from}",
+          "visits": "{count, plural, other {방문 #회}}",
+          "next": "다음 페이지",
+          "first": "첫 페이지로 돌아가기",
+          "col": {
+            "lastSeen": "최근 방문",
+            "status": "단계",
+            "source": "유입",
+            "landing": "첫 페이지",
+            "where": "국가와 기기",
+            "pages": "페이지 수",
+            "account": "계정"
+          }
         }
       }
     }

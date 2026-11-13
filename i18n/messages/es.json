@@ -3998,6 +3998,10 @@
         "system": {
           "sub": "Fuentes de empleos, trabajo en segundo plano, correos, Asistente y costos, contados en vivo.",
           "title": "Sistema"
+        },
+        "visitors": {
+          "title": "Visitantes y registros",
+          "sub": "Quién llegó, desde dónde y cuántos crearon una cuenta."
         }
       },
       "overrides": {
@@ -4507,6 +4511,148 @@
           "off": "Sin conexión",
           "rapidapi": "Servicio de búsqueda",
           "syndication": "Se lee de su listado de empleos"
+        }
+      },
+      "visitors": {
+        "eyebrow": "Admin",
+        "title": "Visitantes y registros",
+        "sub": "Quién llegó al sitio, desde dónde y cuántos crearon una cuenta.",
+        "loading": "Cargando…",
+        "refresh": "Actualizar",
+        "refreshing": "Actualizando…",
+        "site": "Sitio",
+        "allSites": "Ambos sitios",
+        "timezone": "Los días se cuentan en {tz}.",
+        "empty": "No se registraron visitantes en este período.",
+        "notReady": {
+          "title": "Aún no se registran visitantes",
+          "body": "La tabla de visitantes todavía no está en la base de datos. Cuando se agregue, los visitantes se registrarán desde ese momento; las visitas anteriores no se pueden recuperar."
+        },
+        "kpi": {
+          "visitors": "Visitantes nuevos",
+          "visitorsDetail": "{pages} páginas vistas",
+          "signedUp": "Cuentas creadas",
+          "signedUpDetail": "Por estos visitantes",
+          "rate": "De visitante a cuenta",
+          "rateDetail": "{signedUp} de {visitors} visitantes",
+          "onboarded": "Configuración inicial terminada",
+          "onboardedDetail": "{rate} de las cuentas nuevas"
+        },
+        "steps": {
+          "title": "De la primera visita a la cuenta",
+          "sub": "Visitantes vistos por primera vez en este período y hasta dónde llegó cada uno desde entonces.",
+          "stages": {
+            "visitors": "Visitó el sitio",
+            "signupViewed": "Abrió el registro o el inicio de sesión",
+            "signupStarted": "Empezó a registrarse",
+            "signedUp": "Creó una cuenta",
+            "onboarded": "Terminó la configuración inicial"
+          },
+          "ofVisitors": "{rate} de los visitantes",
+          "ofPrevious": "{rate} del paso anterior",
+          "median": "La mitad de quienes se registraron lo hizo en un plazo de {time} desde su primera visita.",
+          "accounts": "{count, plural, one {En total se creó {formatted} cuenta en este período, incluidas las que no coinciden con ningún registro de visitante.} other {En total se crearon {formatted} cuentas en este período, incluidas las que no coinciden con ningún registro de visitante.}}",
+          "knownUsers": "{count, plural, one {{formatted} visitante más ya tenía una cuenta cuando se le vio aquí por primera vez y no se cuenta arriba.} other {{formatted} visitantes más ya tenían una cuenta cuando se les vio aquí por primera vez y no se cuentan arriba.}}",
+          "untracked": "{count, plural, one {{formatted} carga de página se contó sin registro de visitante (personas del EEE, el Reino Unido y Suiza que no han permitido las estadísticas de uso). No se cuenta arriba.} other {{formatted} cargas de página se contaron sin registro de visitante (personas del EEE, el Reino Unido y Suiza que no han permitido las estadísticas de uso). No se cuentan arriba.}}"
+        },
+        "daily": {
+          "title": "Por día",
+          "sub": "Cada columna son los visitantes vistos por primera vez ese día. La parte rellena es la proporción que creó una cuenta.",
+          "visitors": "Visitantes nuevos",
+          "signedUp": "Crearon una cuenta",
+          "summary": "Del {from} al {to}: {visitors} visitantes nuevos, {signedUp} crearon una cuenta."
+        },
+        "breakdown": {
+          "visitors": "Visitantes",
+          "signedUp": "Cuentas",
+          "rate": "Tasa",
+          "empty": "No hay registros en este período.",
+          "none": "Sin registrar",
+          "direct": "Sin sitio de origen",
+          "channels": {
+            "title": "Cómo llegaron",
+            "sub": "El canal de la primera visita de cada visitante.",
+            "column": "Canal"
+          },
+          "sources": {
+            "title": "De dónde vinieron",
+            "sub": "La fuente de campaña del enlace o, si no hay, el sitio que enlazó aquí.",
+            "column": "Fuente"
+          },
+          "landing": {
+            "title": "Primera página",
+            "sub": "La página que cada visitante abrió primero.",
+            "column": "Página"
+          },
+          "countries": {
+            "title": "Países",
+            "sub": "Dónde estaban los visitantes cuando se les vio por primera vez.",
+            "column": "País"
+          },
+          "devices": {
+            "title": "Dispositivos",
+            "sub": "Lo que usaron los visitantes en su primera visita.",
+            "column": "Dispositivo"
+          },
+          "methods": {
+            "title": "Método de registro",
+            "sub": "Entre los visitantes que empezaron a registrarse.",
+            "column": "Método"
+          }
+        },
+        "channel": {
+          "direct": "Directo",
+          "search": "Búsqueda",
+          "ai": "Asistentes de IA",
+          "social": "Redes sociales",
+          "email": "Correo",
+          "paid": "Anuncios pagados",
+          "campaign": "Enlace de campaña",
+          "invite": "Enlace de invitación",
+          "referral": "Otros sitios"
+        },
+        "device": {
+          "desktop": "Computadora",
+          "mobile": "Teléfono",
+          "tablet": "Tableta"
+        },
+        "method": {
+          "email": "Correo",
+          "google": "Google",
+          "line": "LINE",
+          "phone": "Número de teléfono",
+          "wechat": "WeChat"
+        },
+        "status": {
+          "browsing": "Navegando",
+          "signup_viewed": "Abrió el registro",
+          "signup_started": "Empezó a registrarse",
+          "signed_up": "Creó una cuenta",
+          "onboarded": "Terminó la configuración inicial",
+          "known_user": "Ya tenía una cuenta"
+        },
+        "list": {
+          "title": "Visitantes",
+          "sub": "Primero los vistos más recientemente.",
+          "statusFilter": "Etapa",
+          "allStatuses": "Todas las etapas",
+          "channelFilter": "Canal",
+          "allChannels": "Todos los canales",
+          "empty": "Ningún visitante coincide con estos filtros.",
+          "firstSeen": "Primera visita: {time}",
+          "signupFrom": "Registro abierto desde: {from}",
+          "visits": "{count, plural, one {# visita} other {# visitas}}",
+          "next": "Página siguiente",
+          "first": "Volver a la primera página",
+          "col": {
+            "lastSeen": "Última visita",
+            "status": "Etapa",
+            "source": "Vino de",
+            "landing": "Primera página",
+            "where": "País y dispositivo",
+            "pages": "Páginas",
+            "account": "Cuenta"
+          }
         }
       }
     }

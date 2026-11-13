@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { track } from '../../../lib/analytics';
 import { oauthStartUrl, type OAuthProvider } from '../../../lib/api/auth';
 import { detectInAppBrowser } from '../../../lib/auth/inAppBrowser';
 import { browserTimeZone } from '../../../lib/auth/entry';
@@ -72,6 +73,8 @@ export function OAuthButton({ provider, mode, next }: OAuthButtonProps) {
       entry?.onAgreementsMissing?.();
       return;
     }
+    // Visitor conversion: the provider was chosen (sent as the page is left).
+    track('signup_started', { method: provider, mode });
     const url = oauthStartUrl(provider, {
       next: next ?? entry?.next ?? null,
       age: signup ? agreements!.age : undefined,

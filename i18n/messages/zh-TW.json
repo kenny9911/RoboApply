@@ -3998,6 +3998,10 @@
         "system": {
           "sub": "職缺來源、背景工作、電子郵件、助理和成本，即時統計。",
           "title": "系統"
+        },
+        "visitors": {
+          "title": "訪客與註冊",
+          "sub": "誰來過、從哪裡來、有多少人建立了帳號。"
         }
       },
       "overrides": {
@@ -4507,6 +4511,148 @@
           "off": "未連線",
           "rapidapi": "搜尋服務",
           "syndication": "從它的職缺發布來源讀取"
+        }
+      },
+      "visitors": {
+        "eyebrow": "管理台",
+        "title": "訪客與註冊",
+        "sub": "誰來過網站、從哪裡來、有多少人建立了帳號。",
+        "loading": "載入中…",
+        "refresh": "重新整理",
+        "refreshing": "重新整理中…",
+        "site": "網站",
+        "allSites": "兩個網站",
+        "timezone": "日期以 {tz} 時區計算。",
+        "empty": "這段期間沒有記錄到訪客。",
+        "notReady": {
+          "title": "尚未開始記錄訪客",
+          "body": "資料庫裡還沒有訪客資料表。加入之後會從那一刻起記錄訪客，先前的造訪無法補記。"
+        },
+        "kpi": {
+          "visitors": "新訪客",
+          "visitorsDetail": "共瀏覽 {pages} 個頁面",
+          "signedUp": "建立的帳號",
+          "signedUpDetail": "來自這些訪客",
+          "rate": "訪客轉為帳號",
+          "rateDetail": "{visitors} 位訪客中有 {signedUp} 位",
+          "onboarded": "完成初始設定",
+          "onboardedDetail": "佔新帳號的 {rate}"
+        },
+        "steps": {
+          "title": "從首次造訪到建立帳號",
+          "sub": "這段期間首次出現的訪客，以及每位訪客至今走到哪一步。",
+          "stages": {
+            "visitors": "造訪了網站",
+            "signupViewed": "開啟了註冊或登入頁",
+            "signupStarted": "開始註冊",
+            "signedUp": "建立了帳號",
+            "onboarded": "完成初始設定"
+          },
+          "ofVisitors": "佔訪客的 {rate}",
+          "ofPrevious": "佔上一步的 {rate}",
+          "median": "註冊的人當中，有一半在首次造訪後 {time} 內完成註冊。",
+          "accounts": "{count, plural, other {這段期間總共建立了 {formatted} 個帳號，包含沒有對應訪客紀錄的帳號。}}",
+          "knownUsers": "{count, plural, other {另有 {formatted} 位訪客在這裡首次出現時已有帳號，未計入上面的數字。}}",
+          "untracked": "{count, plural, other {另有 {formatted} 次頁面造訪只計了數，沒有訪客紀錄（歐洲經濟區、英國和瑞士尚未允許使用統計的訪客），未計入上面的數字。}}"
+        },
+        "daily": {
+          "title": "依日期",
+          "sub": "每一欄是當天首次出現的訪客，填色部分是其中建立了帳號的比例。",
+          "visitors": "新訪客",
+          "signedUp": "建立了帳號",
+          "summary": "{from} 到 {to}：{visitors} 位新訪客，{signedUp} 位建立了帳號。"
+        },
+        "breakdown": {
+          "visitors": "訪客",
+          "signedUp": "帳號",
+          "rate": "轉換率",
+          "empty": "這段期間沒有紀錄。",
+          "none": "未記錄",
+          "direct": "沒有來源網站",
+          "channels": {
+            "title": "到訪方式",
+            "sub": "每位訪客首次造訪的管道。",
+            "column": "管道"
+          },
+          "sources": {
+            "title": "來源",
+            "sub": "連結中的活動來源；沒有時為連到這裡的網站。",
+            "column": "來源"
+          },
+          "landing": {
+            "title": "第一個頁面",
+            "sub": "每位訪客最先開啟的頁面。",
+            "column": "頁面"
+          },
+          "countries": {
+            "title": "國家和地區",
+            "sub": "訪客首次出現時所在的位置。",
+            "column": "國家或地區"
+          },
+          "devices": {
+            "title": "裝置",
+            "sub": "訪客首次造訪時使用的裝置。",
+            "column": "裝置"
+          },
+          "methods": {
+            "title": "註冊方式",
+            "sub": "在開始註冊的訪客當中。",
+            "column": "方式"
+          }
+        },
+        "channel": {
+          "direct": "直接造訪",
+          "search": "搜尋",
+          "ai": "AI 助理",
+          "social": "社群平台",
+          "email": "電子郵件",
+          "paid": "付費廣告",
+          "campaign": "活動連結",
+          "invite": "邀請連結",
+          "referral": "其他網站"
+        },
+        "device": {
+          "desktop": "電腦",
+          "mobile": "手機",
+          "tablet": "平板"
+        },
+        "method": {
+          "email": "電子郵件",
+          "google": "Google",
+          "line": "LINE",
+          "phone": "手機號碼",
+          "wechat": "WeChat"
+        },
+        "status": {
+          "browsing": "瀏覽中",
+          "signup_viewed": "開啟了註冊頁",
+          "signup_started": "開始註冊",
+          "signed_up": "建立了帳號",
+          "onboarded": "完成初始設定",
+          "known_user": "已有帳號"
+        },
+        "list": {
+          "title": "訪客",
+          "sub": "最近出現的排在前面。",
+          "statusFilter": "階段",
+          "allStatuses": "全部階段",
+          "channelFilter": "管道",
+          "allChannels": "全部管道",
+          "empty": "沒有符合篩選條件的訪客。",
+          "firstSeen": "首次出現：{time}",
+          "signupFrom": "從這裡開啟註冊頁：{from}",
+          "visits": "{count, plural, other {# 次造訪}}",
+          "next": "下一頁",
+          "first": "回到第一頁",
+          "col": {
+            "lastSeen": "最近出現",
+            "status": "階段",
+            "source": "來源",
+            "landing": "第一個頁面",
+            "where": "國家和裝置",
+            "pages": "頁面數",
+            "account": "帳號"
+          }
         }
       }
     }

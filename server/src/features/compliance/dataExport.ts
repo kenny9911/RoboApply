@@ -210,6 +210,34 @@ registerExportSection('practiceInterviews', (userId, db) =>
 registerExportSection('productEvents', (userId, db) =>
   db.rAProductEvent.findMany({ where: { userId }, orderBy: { createdAt: 'asc' }, take: ROW_CAP, select: { name: true, props: true, path: true, createdAt: true } }),
 );
+// The visit record linked to the account (growth/visitors.ts): where the person
+// first came from and when they signed up. No internal ids, no anonymous id.
+registerExportSection('visitRecords', (userId, db) =>
+  db.rAVisitor.findMany({
+    where: { userId },
+    orderBy: { firstSeenAt: 'asc' },
+    take: ROW_CAP,
+    select: {
+      firstSeenAt: true,
+      lastSeenAt: true,
+      landingPath: true,
+      referrerHost: true,
+      utmSource: true,
+      utmMedium: true,
+      utmCampaign: true,
+      channel: true,
+      country: true,
+      device: true,
+      locale: true,
+      pageViews: true,
+      visits: true,
+      signupViewedAt: true,
+      signupStartedAt: true,
+      signupMethod: true,
+      signedUpAt: true,
+    },
+  }),
+);
 registerExportSection('personalInfoRequests', (userId, db) =>
   db.rAPersonalInfoRequest.findMany({ where: { userId }, select: { kind: true, status: true, dueAt: true, createdAt: true, closedAt: true } }),
 );
