@@ -17,6 +17,7 @@ import type { BrandId } from '../../../lib/brand/registry.generated';
 import type { ResolvedFlags } from '../../../lib/flags';
 import type { FeedItem } from '../../../lib/api/contracts/feed';
 import type { TrackerEntryView } from '../../../lib/api/contracts/tracker';
+import type { AutoPrepareView } from '../../../lib/api/agent';
 import type { ResumeSummary } from '../../../lib/api/resumes';
 import type { ReadyQueueItem } from '../../../hooks/agent';
 import type { SearchProfile } from '../../../hooks/search';
@@ -162,12 +163,18 @@ export function searchProfile(over: Partial<SearchProfile> = {}): SearchProfile 
   };
 }
 
+/** "Prepare my weekly list automatically" as GET /agent/auto-prepare answers it: off and never run, by default. */
+export function autoPrepareView(over: Partial<AutoPrepareView> = {}): AutoPrepareView {
+  return { on: false, since: null, lastRun: null, aiAvailable: true, ...over };
+}
+
 /** Every read answered, every capability on, nothing waiting. */
 export function sourcesWith(over: Partial<TodaySources> = {}): TodaySources {
   return {
     flags: { ready: true, agent: true, copilot: true, feed: true },
     search: ready(searchProfile()),
     queue: ready([]),
+    autoPrepare: ready(autoPrepareView()),
     picks: ready([]),
     picksFrom: 'suggestions',
     newJobs: ready({ count: 0, since: null, capped: false }),

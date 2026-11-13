@@ -10,6 +10,9 @@
 //   cover letters     only when the post asks (default) · always · never
 //   base resume       one of the user's base resumes, or the main one
 //   file naming       four presets, previewed with the user's own name
+//   automatically     "Prepare my weekly list automatically" (AutoPrepareSetting):
+//                     off by default, saved on its own after its cost is stated,
+//                     never with "Save settings"
 
 import { useCallback, useEffect, useImperativeHandle, useMemo, useState, type Ref } from 'react';
 import { useTranslations } from 'next-intl';
@@ -21,6 +24,7 @@ import { useResumeList } from '../../../hooks/useResumes';
 import type { AgentSettings } from '../../../lib/api/contracts/agent';
 import { COVER_LETTER_MODES, FILE_NAME_STYLES, MIN_TIERS, WEEKLY_TARGETS } from './options';
 import { cn } from '../../../lib/utils';
+import { AutoPrepareSetting } from './AutoPrepareSetting';
 import { KitAllowance } from './KitAllowance';
 import type { StepFormHandle } from './AnswersEditor';
 import { previewFileName } from './fileName';
@@ -181,6 +185,8 @@ export function WeeklySettingsForm({ onSaved, handleRef }: WeeklySettingsFormPro
           </p>
         ) : null}
       </div>
+
+      <AutoPrepareSetting />
     </div>
   );
 }

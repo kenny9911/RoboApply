@@ -11031,7 +11031,8 @@
       "ownChanges": "Your lists here use filter changes you kept for Ready to apply only. Jobs still shows your main search.",
       "useMainOnly": "Use my main search only",
       "ownRemoved": "Done. Your lists here use your main search again.",
-      "keptReady": "Your main search did not change; your next lists here use these filters."
+      "keptReady": "Your main search did not change; your next lists here use these filters.",
+      "autoStarted": "{count, plural, one {# of them is} other {# of them are}} being prepared automatically."
     },
     "setup": {
       "title": "Set up Ready to apply",
@@ -11279,7 +11280,8 @@
         "undone": "Marked as not applied (Undo)",
         "opened": "Application opened; moved to Applied",
         "applied": "Marked as applied",
-        "loadFailed": "The history couldn't be loaded."
+        "loadFailed": "The history couldn't be loaded.",
+        "autoStarted": "Started automatically (“Prepare my weekly list automatically” is on)"
       },
       "notOnList": {
         "title": "This job isn't on your list",
@@ -11331,6 +11333,52 @@
         "review": "Check and open",
         "sent": "See application",
         "listed": "On your list"
+      }
+    },
+    "auto": {
+      "title": "Prepare my weekly list automatically",
+      "offNote": "Off. New jobs on your weekly list wait for you to tap Prepare.",
+      "onNote": "On. New jobs on your weekly list are prepared without a tap, within what you have left. You check and submit each one yourself.",
+      "savedOn": "Turned on. New jobs on your weekly list will be prepared automatically.",
+      "savedOff": "Turned off. Nothing already prepared was undone.",
+      "failed": "This setting wasn't saved. Try again.",
+      "loadFailed": "This setting couldn't be loaded. Try again later.",
+      "sheet": {
+        "title": "Prepare your weekly list automatically?",
+        "description": "Here's what it uses before you turn it on.",
+        "when": "Each time jobs are added to your weekly list, they are prepared in list order, without a tap.",
+        "each": "Each job it prepares uses:",
+        "kit": "1 application from your weekly allowance",
+        "tailor": "1 tailoring credit (“Tailor my resume for each job” is on)",
+        "noTailor": "No tailoring credit: tailoring is off in Settings, so your resume is used as it is",
+        "noAi": "No tailoring or cover letter credit: AI writing is off for your account, so your resume is used as it is",
+        "letter": {
+          "when_required": "1 cover letter credit when the post asks for a cover letter",
+          "always": "1 cover letter credit (a cover letter for every job)",
+          "never": "No cover letter credit: cover letters are off in Settings"
+        },
+        "left": "{left} left {window, select, day {today} week {this week} other {this month}}",
+        "leftUnknown": "Left: —",
+        "stops": "It stops when your weekly allowance or a credit runs out. It never uses bonus applications or more than you have left. Jobs it can't prepare stay in To prepare.",
+        "check": "Nothing is sent to any company. You check each application, then open it and submit it yourself.",
+        "off": "You can turn it off at any time. Turning it off undoes nothing already prepared.",
+        "loading": "Checking your settings…",
+        "settingsFailed": "Your settings couldn't be loaded, so the cost can't be shown yet. Try again.",
+        "cancel": "Cancel",
+        "confirm": "Turn on",
+        "saving": "Turning on…"
+      },
+      "state": {
+        "waiting": "Your weekly list is prepared automatically when jobs are added to it.",
+        "ran": "This week's list was prepared automatically on {date}: {count, plural, one {# application} other {# applications}} used your weekly allowance.",
+        "ranNone": "Nothing could be prepared automatically on {date}.",
+        "stopped": {
+          "ready_kits": "{count, plural, one {# job is} other {# jobs are}} left in To prepare because your weekly allowance ran out.",
+          "tailor": "{count, plural, one {# job is} other {# jobs are}} left in To prepare because your tailoring credits ran out.",
+          "cover_letter": "{count, plural, one {# job is} other {# jobs are}} left in To prepare because your cover letter credits ran out.",
+          "error": "{count, plural, one {# job couldn't be started automatically and is} other {# jobs couldn't be started automatically and are}} left in To prepare."
+        },
+        "offNow": "Automatic preparing is off now."
       }
     }
   },

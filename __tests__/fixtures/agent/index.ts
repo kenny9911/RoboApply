@@ -23,8 +23,19 @@ export const openApplicationResponse = {
   trackerEntryId: 'trk_fixture_1',
 } satisfies A.OpenApplicationResponse;
 
+/** GET /agent/auto-prepare: "Prepare my weekly list automatically" on, after a run that stopped at the allowance. */
+export const autoPrepareView = {
+  on: true,
+  since: '2026-10-05T08:00:00.000Z',
+  lastRun: { at: '2026-10-05T11:00:00.000Z', weekKey: '2026-W41', started: 3, left: 2, stoppedBy: 'ready_kits', thisWeek: true },
+  aiAvailable: true,
+} satisfies A.AutoPrepareView;
+
 export const agentRequests: RequestFixture[] = [
   { contract: 'agent', schema: 'AddToQueueBodySchema', value: { jobIds: ['job_fixture_1'], addedVia: 'feed' } },
   { contract: 'agent', schema: 'AddToQueueBodySchema', value: { jobIds: [] }, valid: false },
   { contract: 'agent', schema: 'QueueListQuerySchema', value: { state: 'ready_for_review', weekKey: '2026-W41' } },
+  { contract: 'agent', schema: 'PutAutoPrepareBodySchema', value: { on: true } },
+  { contract: 'agent', schema: 'PutAutoPrepareBodySchema', value: { on: 'yes' }, valid: false },
+  { contract: 'agent', schema: 'PutAutoPrepareBodySchema', value: {}, valid: false },
 ];

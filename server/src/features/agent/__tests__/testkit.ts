@@ -117,6 +117,8 @@ export function makeDeps(db: ReturnType<typeof makeDb>, brand: BrandId = 'roboap
     letters: [] as string[],
     enqueued: [] as PreparePayload[],
     reserved: [] as string[],
+    /** The options of each reservation, in order (`{ useGrants: false }` for an automatic run). */
+    reserveOptions: [] as Array<{ useGrants?: boolean } | undefined>,
     committed: [] as string[],
     released: [] as string[],
     applyClicks: [] as string[],
@@ -127,7 +129,11 @@ export function makeDeps(db: ReturnType<typeof makeDb>, brand: BrandId = 'roboap
     previews: [] as Array<Parameters<AgentDeps['feedPreview']>[1]>,
     recordFiles: [] as RecordFilesPayload[],
     files: [] as Array<Parameters<AgentDeps['recordResumeFile']>[1]>,
+    /** Every UI-values write (the "Prepare my weekly list automatically" switch and its runs). */
+    uiWrites: [] as Array<Record<string, string | number | boolean | null>>,
   };
+  /** The user's UI values (RAUserUiState.state.values), per user; merged key by key like the real service. */
+  const ui = new Map<string, Record<string, unknown>>();
   let n = 0;
   const deps: AgentDeps = {
     getDb: async () => db as unknown as AgentDb,
@@ -179,8 +185,9 @@ export function makeDeps(db: ReturnType<typeof makeDb>, brand: BrandId = 'roboap
     regenerateLetter: async (_u, id) => ({ id }),
     attachLetter: async () => undefined,
     creditUsage: async () => ({ lines: { tailor: usageLine(10), cover_letter: usageLine(10), ready_kits: usageLine(3, 'week') }, upgradable: true }),
-    reserveKit: async (_u, key) => {
+    reserveKit: async (_u, key, _ref, options) => {
       calls.reserved.push(key);
+      calls.reserveOptions.push(options);
       return { id: `res_${key}`, replayed: false };
     },
     commitKit: async (id) => {
@@ -204,9 +211,20 @@ export function makeDeps(db: ReturnType<typeof makeDb>, brand: BrandId = 'roboap
       calls.notices.push(input);
       return { status: 'delivered', outcome: { notificationId: 'n1', email: null, channels: {} } };
     },
+    uiValues: async (userId) => ({ ...(ui.get(userId) ?? {}) }),
+    saveUiValues: async (userId, values) => {
+      calls.uiWrites.push(values);
+      const next = { ...(ui.get(userId) ?? {}) };
+      for (const [k, v] of Object.entries(values)) {
+        if (v === null) delete next[k];
+        else next[k] = v;
+      }
+      ui.set(userId, next);
+      return { ...next };
+    },
     ...overrides,
   };
-  return { deps, calls, service: createAgentService(deps) };
+  return { deps, calls, ui, service: createAgentService(deps) };
 }
 
 /** Seed one queue item in a given state. */

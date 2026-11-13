@@ -9946,7 +9946,8 @@
         "used": {
           "letter": "Lettre de motivation choisie pour cette candidature",
           "resume": "CV choisi pour cette candidature"
-        }
+        },
+        "autoStarted": "Lancée automatiquement (« Préparer ma liste de la semaine automatiquement » est activé)"
       },
       "letter": {
         "copyAria": "Copier la lettre de motivation",
@@ -10061,7 +10062,8 @@
       "setupNote": "Ta liste hebdomadaire vient de ta recherche principale : enregistrer ici change donc aussi les offres que tu vois sur la page Offres.",
       "title": "D’où vient ta liste hebdomadaire",
       "useMainOnly": "Utiliser seulement ma recherche principale",
-      "yes": "Oui, mettre à jour ma recherche principale"
+      "yes": "Oui, mettre à jour ma recherche principale",
+      "autoStarted": "{count, plural, one {# d’entre elles est en préparation automatique} other {# d’entre elles sont en préparation automatique}}."
     },
     "setup": {
       "back": "Retour",
@@ -10212,6 +10214,52 @@
         "review": "Vérifier et ouvrir",
         "sent": "Voir la candidature",
         "listed": "Dans ta liste"
+      }
+    },
+    "auto": {
+      "title": "Préparer ma liste de la semaine automatiquement",
+      "offNote": "Désactivé. Les nouvelles offres de ta liste de la semaine attendent que tu appuies sur Préparer.",
+      "onNote": "Activé. Les nouvelles offres de ta liste de la semaine sont préparées sans que tu aies à appuyer, dans la limite de ce qu’il te reste. Tu vérifies et tu envoies chaque candidature toi-même.",
+      "savedOn": "Activé. Les nouvelles offres de ta liste de la semaine seront préparées automatiquement.",
+      "savedOff": "Désactivé. Rien de ce qui était déjà préparé n’a été annulé.",
+      "failed": "Ce réglage n’a pas été enregistré. Réessaie.",
+      "loadFailed": "Ce réglage n’a pas pu être chargé. Réessaie plus tard.",
+      "sheet": {
+        "title": "Préparer ta liste de la semaine automatiquement ?",
+        "description": "Voici ce que ça utilise, avant que tu l’actives.",
+        "when": "Chaque fois que des offres sont ajoutées à ta liste de la semaine, elles sont préparées dans l’ordre de la liste, sans que tu aies à appuyer.",
+        "each": "Chaque offre préparée utilise :",
+        "kit": "1 candidature de ton quota hebdomadaire",
+        "tailor": "1 crédit d’adaptation (« Adapter mon CV à chaque offre » est activé)",
+        "noTailor": "Aucun crédit d’adaptation : l’adaptation est désactivée dans les Réglages, ton CV est donc utilisé tel quel",
+        "noAi": "Aucun crédit d’adaptation ni de lettre de motivation : la rédaction par IA est désactivée pour ton compte, ton CV est donc utilisé tel quel",
+        "letter": {
+          "when_required": "1 crédit de lettre de motivation quand l’annonce en demande une",
+          "always": "1 crédit de lettre de motivation (une lettre pour chaque offre)",
+          "never": "Aucun crédit de lettre de motivation : les lettres sont désactivées dans les Réglages"
+        },
+        "left": "Il t’en reste {left} {window, select, day {aujourd’hui} week {cette semaine} other {ce mois-ci}}",
+        "leftUnknown": "Restant : —",
+        "stops": "Ça s’arrête quand ton quota hebdomadaire ou un crédit est épuisé. Ça n’utilise jamais tes candidatures bonus, ni plus que ce qu’il te reste. Les offres qui ne peuvent pas être préparées restent dans À préparer.",
+        "check": "Rien n’est envoyé à aucune entreprise. Tu vérifies chaque candidature, puis tu l’ouvres et tu l’envoies toi-même.",
+        "off": "Tu peux le désactiver à tout moment. Le désactiver n’annule rien de ce qui est déjà préparé.",
+        "loading": "Vérification de tes réglages…",
+        "settingsFailed": "Tes réglages n’ont pas pu être chargés : ce que ça utilise ne peut donc pas encore être affiché. Réessaie.",
+        "cancel": "Annuler",
+        "confirm": "Activer",
+        "saving": "Activation…"
+      },
+      "state": {
+        "waiting": "Ta liste de la semaine est préparée automatiquement quand des offres y sont ajoutées.",
+        "ran": "La liste de cette semaine a été préparée automatiquement le {date} : {count, plural, one {# candidature a utilisé} other {# candidatures ont utilisé}} ton quota hebdomadaire.",
+        "ranNone": "Rien n’a pu être préparé automatiquement le {date}.",
+        "stopped": {
+          "ready_kits": "{count, plural, one {# offre reste} other {# offres restent}} dans À préparer, car ton quota hebdomadaire est épuisé.",
+          "tailor": "{count, plural, one {# offre reste} other {# offres restent}} dans À préparer, car tes crédits d’adaptation sont épuisés.",
+          "cover_letter": "{count, plural, one {# offre reste} other {# offres restent}} dans À préparer, car tes crédits de lettre de motivation sont épuisés.",
+          "error": "{count, plural, one {# offre n’a pas pu être lancée automatiquement et reste} other {# offres n’ont pas pu être lancées automatiquement et restent}} dans À préparer."
+        },
+        "offNow": "La préparation automatique est désactivée maintenant."
       }
     }
   },

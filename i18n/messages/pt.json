@@ -9946,7 +9946,8 @@
         "used": {
           "letter": "Carta de apresentação escolhida para esta candidatura",
           "resume": "Currículo escolhido para esta candidatura"
-        }
+        },
+        "autoStarted": "Iniciada automaticamente (“Preparar minha lista semanal automaticamente” está ativado)"
       },
       "letter": {
         "copyAria": "Copiar a carta de apresentação",
@@ -10061,7 +10062,8 @@
       "setupNote": "Sua lista semanal vem da sua busca principal, então salvar aqui também muda as vagas que você vê em Vagas.",
       "title": "De onde vem sua lista semanal",
       "useMainOnly": "Usar só minha busca principal",
-      "yes": "Sim, atualizar minha busca principal"
+      "yes": "Sim, atualizar minha busca principal",
+      "autoStarted": "{count, plural, one {# delas está sendo preparada} other {# delas estão sendo preparadas}} automaticamente."
     },
     "setup": {
       "back": "Voltar",
@@ -10212,6 +10214,52 @@
         "review": "Conferir e abrir",
         "sent": "Ver candidatura",
         "listed": "Na sua lista"
+      }
+    },
+    "auto": {
+      "title": "Preparar minha lista semanal automaticamente",
+      "offNote": "Desativado. As vagas novas da sua lista semanal esperam você tocar em Preparar.",
+      "onNote": "Ativado. As vagas novas da sua lista semanal são preparadas sem você precisar tocar, dentro do que ainda está disponível. Você revisa e envia cada candidatura.",
+      "savedOn": "Ativado. As vagas novas da sua lista semanal serão preparadas automaticamente.",
+      "savedOff": "Desativado. Nada do que já estava preparado foi desfeito.",
+      "failed": "Esta configuração não foi salva. Tente de novo.",
+      "loadFailed": "Não foi possível carregar esta configuração. Tente mais tarde.",
+      "sheet": {
+        "title": "Preparar sua lista semanal automaticamente?",
+        "description": "Veja o que isto usa antes de ativar.",
+        "when": "Sempre que vagas forem adicionadas à sua lista semanal, elas serão preparadas na ordem da lista, sem você precisar tocar.",
+        "each": "Cada vaga preparada usa:",
+        "kit": "1 candidatura da sua cota semanal",
+        "tailor": "1 crédito de adaptação (“Adaptar meu currículo a cada vaga” está ativado)",
+        "noTailor": "Nenhum crédito de adaptação: a adaptação está desativada em Configurações, então seu currículo é usado como está",
+        "noAi": "Nenhum crédito de adaptação ou de carta de apresentação: a escrita com IA está desativada na sua conta, então seu currículo é usado como está",
+        "letter": {
+          "when_required": "1 crédito de carta de apresentação quando o anúncio pedir uma",
+          "always": "1 crédito de carta de apresentação (uma carta para cada vaga)",
+          "never": "Nenhum crédito de carta de apresentação: as cartas estão desativadas em Configurações"
+        },
+        "left": "Disponíveis {window, select, day {hoje} week {nesta semana} other {neste mês}}: {left}",
+        "leftUnknown": "Disponíveis: —",
+        "stops": "Para quando sua cota semanal ou um crédito acaba. Nunca usa as candidaturas bônus que você recebeu nem mais do que você tem disponível. As vagas que não puderem ser preparadas ficam em A preparar.",
+        "check": "Nada é enviado a nenhuma empresa. Você revisa cada candidatura, abre e envia por conta própria.",
+        "off": "Você pode desativar quando quiser. Desativar não desfaz nada do que já foi preparado.",
+        "loading": "Verificando suas configurações…",
+        "settingsFailed": "Não foi possível carregar suas configurações, então o que isto usa ainda não pode ser mostrado. Tente de novo.",
+        "cancel": "Cancelar",
+        "confirm": "Ativar",
+        "saving": "Ativando…"
+      },
+      "state": {
+        "waiting": "Sua lista semanal é preparada automaticamente quando vagas são adicionadas a ela.",
+        "ran": "A lista desta semana foi preparada automaticamente em {date}: {count, plural, one {# candidatura usou} other {# candidaturas usaram}} sua cota semanal.",
+        "ranNone": "Nada pôde ser preparado automaticamente em {date}.",
+        "stopped": {
+          "ready_kits": "{count, plural, one {# vaga ficou} other {# vagas ficaram}} em A preparar porque sua cota semanal acabou.",
+          "tailor": "{count, plural, one {# vaga ficou} other {# vagas ficaram}} em A preparar porque seus créditos de adaptação acabaram.",
+          "cover_letter": "{count, plural, one {# vaga ficou} other {# vagas ficaram}} em A preparar porque seus créditos de carta de apresentação acabaram.",
+          "error": "{count, plural, one {# vaga não pôde ser iniciada automaticamente e ficou} other {# vagas não puderam ser iniciadas automaticamente e ficaram}} em A preparar."
+        },
+        "offNow": "A preparação automática está desativada agora."
       }
     }
   },

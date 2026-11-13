@@ -8,6 +8,8 @@
 //
 //   search          useActiveSearchProfile        the goal line
 //   queue           useReadyQueue                 applications being prepared and waiting (flag `agent`)
+//   autoPrepare     useAutoPrepare                "Prepare my weekly list automatically": on or off, and
+//                                                 this week's run with its real counts (flag `agent`)
 //   picks           useSuggestions({ limit: 3 })  with `agent`: top fits not yet on the list
 //                   useFeed                       without it: the top of the Jobs list, read with
 //                                                 `visit: false` (not a visit to Jobs: the Jobs badge
@@ -45,8 +47,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getNewCount } from '../../lib/api/feed';
 import type { FeedItem, SkillsCheckResponse } from '../../lib/api/contracts/feed';
 import { BASE_SLOT_KINDS, type ResumeSummary } from '../../lib/api/resumes';
+import type { AutoPrepareView } from '../../lib/api/agent';
 import { useCapabilities } from '../../lib/flags';
-import { useReadyQueue, useSuggestions, type ReadyQueueItem } from '../agent';
+import { useAutoPrepare, useReadyQueue, useSuggestions, type ReadyQueueItem } from '../agent';
 import { agentKeys } from '../agent/keys';
 import { feedKeys } from '../feed/keys';
 import { useSkillsCheckData } from '../feed/useCalibration';
@@ -86,6 +89,8 @@ export interface TodaySources {
   /** The search Jobs uses now (the active one, else the main one); null when the user has none. */
   search: Loadable<SearchProfile | null>;
   queue: Loadable<ReadyQueueItem[]>;
+  /** "Prepare my weekly list automatically" and its latest run (`off` without `agent`). */
+  autoPrepare: Loadable<AutoPrepareView>;
   picks: Loadable<FeedItem[]>;
   /** Where the picks come from; null when there is no list to pick from. */
   picksFrom: 'suggestions' | 'feed' | null;
@@ -118,6 +123,7 @@ export function useTodaySources(): TodaySources {
 
   const profiles = useActiveSearchProfile();
   const queue = useReadyQueue({ enabled: agent });
+  const autoPrepare = useAutoPrepare({ enabled: agent });
   // The setup search (see the header): the picks wait until the setup state says none is at work.
   const onboarding = useOnboardingState({ pollWhileSearching: true });
   const searching = onboarding.data?.searchRunning === true;
@@ -182,6 +188,7 @@ export function useTodaySources(): TodaySources {
     search: loadableOf(profiles, true, () => profiles.profile),
     // Not `off` before the flags are known: the list would settle without the applications and then change.
     queue: flagsReady ? loadableOf(queue, agent, (d) => (Array.isArray(d.items) ? d.items : undefined)) : LOADING,
+    autoPrepare: flagsReady ? loadableOf(autoPrepare, agent, (d) => (typeof d?.on === 'boolean' ? d : undefined)) : LOADING,
     picks,
     picksFrom,
     newJobs: flagsReady ? loadableOf(newCount, feedOn, newJobsOf) : LOADING,

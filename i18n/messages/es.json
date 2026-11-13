@@ -9946,7 +9946,8 @@
         "used": {
           "letter": "Carta de presentación elegida para esta candidatura",
           "resume": "Currículum elegido para esta candidatura"
-        }
+        },
+        "autoStarted": "Iniciada automáticamente («Preparar mi lista semanal automáticamente» está activado)"
       },
       "letter": {
         "copyAria": "Copiar la carta de presentación",
@@ -10061,7 +10062,8 @@
       "setupNote": "Tu lista semanal sale de tu búsqueda principal, así que guardar aquí también cambia los empleos que ves en Empleos.",
       "title": "De dónde sale tu lista semanal",
       "useMainOnly": "Usar solo mi búsqueda principal",
-      "yes": "Sí, actualizar mi búsqueda principal"
+      "yes": "Sí, actualizar mi búsqueda principal",
+      "autoStarted": "{count, plural, one {# de ellos se está preparando} other {# de ellos se están preparando}} automáticamente."
     },
     "setup": {
       "back": "Atrás",
@@ -10212,6 +10214,52 @@
         "review": "Revisar y abrir",
         "sent": "Ver candidatura",
         "listed": "En tu lista"
+      }
+    },
+    "auto": {
+      "title": "Preparar mi lista semanal automáticamente",
+      "offNote": "Desactivado. Los empleos nuevos de tu lista semanal esperan a que toques Preparar.",
+      "onNote": "Activado. Los empleos nuevos de tu lista semanal se preparan sin que toques nada, dentro de lo que te queda disponible. Tú revisas y envías cada candidatura.",
+      "savedOn": "Activado. Los empleos nuevos de tu lista semanal se prepararán automáticamente.",
+      "savedOff": "Desactivado. No se deshizo nada de lo que ya estaba preparado.",
+      "failed": "Este ajuste no se guardó. Inténtalo otra vez.",
+      "loadFailed": "Este ajuste no se pudo cargar. Inténtalo más tarde.",
+      "sheet": {
+        "title": "¿Preparar tu lista semanal automáticamente?",
+        "description": "Antes de activarlo, esto es lo que usa.",
+        "when": "Cada vez que se añaden empleos a tu lista semanal, se preparan en el orden de la lista, sin que toques nada.",
+        "each": "Cada empleo que prepara usa:",
+        "kit": "1 candidatura de tu cupo semanal",
+        "tailor": "1 crédito de adaptación («Adaptar mi currículum para cada empleo» está activado)",
+        "noTailor": "Ningún crédito de adaptación: la adaptación está desactivada en Ajustes, así que tu currículum se usa tal como está",
+        "noAi": "Ningún crédito de adaptación ni de carta de presentación: la redacción con IA está desactivada en tu cuenta, así que tu currículum se usa tal como está",
+        "letter": {
+          "when_required": "1 crédito de carta de presentación cuando el anuncio la pide",
+          "always": "1 crédito de carta de presentación (una carta para cada empleo)",
+          "never": "Ningún crédito de carta de presentación: las cartas están desactivadas en Ajustes"
+        },
+        "left": "Disponibles {window, select, day {hoy} week {esta semana} other {este mes}}: {left}",
+        "leftUnknown": "Disponibles: —",
+        "stops": "Se detiene cuando se acaba tu cupo semanal o un crédito. Nunca usa las candidaturas adicionales que recibiste ni más de lo que te queda. Los empleos que no puede preparar se quedan en Por preparar.",
+        "check": "No se envía nada a ninguna empresa. Tú revisas cada candidatura, la abres y la envías por tu cuenta.",
+        "off": "Puedes desactivarlo cuando quieras. Al desactivarlo, no se deshace nada de lo ya preparado.",
+        "loading": "Comprobando tus ajustes…",
+        "settingsFailed": "No se pudieron cargar tus ajustes, así que todavía no se puede mostrar lo que usa. Inténtalo otra vez.",
+        "cancel": "Cancelar",
+        "confirm": "Activar",
+        "saving": "Activando…"
+      },
+      "state": {
+        "waiting": "Tu lista semanal se prepara automáticamente cuando se le añaden empleos.",
+        "ran": "La lista de esta semana se preparó automáticamente el {date}: {count, plural, one {# candidatura usó} other {# candidaturas usaron}} tu cupo semanal.",
+        "ranNone": "No se pudo preparar nada automáticamente el {date}.",
+        "stopped": {
+          "ready_kits": "{count, plural, one {# empleo se queda} other {# empleos se quedan}} en Por preparar porque se acabó tu cupo semanal.",
+          "tailor": "{count, plural, one {# empleo se queda} other {# empleos se quedan}} en Por preparar porque se acabaron tus créditos de adaptación.",
+          "cover_letter": "{count, plural, one {# empleo se queda} other {# empleos se quedan}} en Por preparar porque se acabaron tus créditos de carta de presentación.",
+          "error": "{count, plural, one {# empleo no se pudo empezar automáticamente y se queda} other {# empleos no se pudieron empezar automáticamente y se quedan}} en Por preparar."
+        },
+        "offNow": "La preparación automática está desactivada ahora."
       }
     }
   },

@@ -9946,7 +9946,8 @@
         "used": {
           "letter": "Anschreiben für diese Bewerbung ausgewählt",
           "resume": "Lebenslauf für diese Bewerbung ausgewählt"
-        }
+        },
+        "autoStarted": "Automatisch gestartet („Meine Wochenliste automatisch vorbereiten“ ist an)"
       },
       "letter": {
         "copyAria": "Anschreiben kopieren",
@@ -10061,7 +10062,8 @@
       "setupNote": "Deine Wochenliste entsteht aus deiner Hauptsuche. Wenn du hier speicherst, ändern sich deshalb auch die Jobs, die du unter „Jobs“ siehst.",
       "title": "Woher deine Wochenliste kommt",
       "useMainOnly": "Nur meine Hauptsuche verwenden",
-      "yes": "Ja, meine Hauptsuche aktualisieren"
+      "yes": "Ja, meine Hauptsuche aktualisieren",
+      "autoStarted": "{count, plural, one {# davon wird} other {# davon werden}} automatisch vorbereitet."
     },
     "setup": {
       "back": "Zurück",
@@ -10212,6 +10214,52 @@
         "review": "Prüfen und öffnen",
         "sent": "Bewerbung ansehen",
         "listed": "Auf deiner Liste"
+      }
+    },
+    "auto": {
+      "title": "Meine Wochenliste automatisch vorbereiten",
+      "offNote": "Aus. Neue Jobs auf deiner Wochenliste warten, bis du auf „Vorbereiten“ tippst.",
+      "onNote": "An. Neue Jobs auf deiner Wochenliste werden ohne Tippen vorbereitet, im Rahmen dessen, was du noch übrig hast. Du prüfst und sendest jede Bewerbung selbst ab.",
+      "savedOn": "Eingeschaltet. Neue Jobs auf deiner Wochenliste werden automatisch vorbereitet.",
+      "savedOff": "Ausgeschaltet. Bereits Vorbereitetes bleibt erhalten.",
+      "failed": "Diese Einstellung wurde nicht gespeichert. Versuch es erneut.",
+      "loadFailed": "Diese Einstellung konnte nicht geladen werden. Versuch es später erneut.",
+      "sheet": {
+        "title": "Deine Wochenliste automatisch vorbereiten?",
+        "description": "Hier siehst du, was das verbraucht, bevor du es einschaltest.",
+        "when": "Jedes Mal, wenn Jobs zu deiner Wochenliste hinzukommen, werden sie in der Reihenfolge der Liste vorbereitet, ohne dass du tippen musst.",
+        "each": "Jeder Job, der vorbereitet wird, verbraucht:",
+        "kit": "1 Bewerbung aus deinem Wochenkontingent",
+        "tailor": "1 Credit für eine Lebenslauf-Anpassung („Meinen Lebenslauf für jeden Job anpassen“ ist an)",
+        "noTailor": "Keinen Credit für eine Lebenslauf-Anpassung: Das Anpassen ist in den Einstellungen ausgeschaltet, dein Lebenslauf wird unverändert verwendet",
+        "noAi": "Keinen Credit für Anpassungen oder Anschreiben: Das Schreiben mit KI ist für dein Konto ausgeschaltet, dein Lebenslauf wird unverändert verwendet",
+        "letter": {
+          "when_required": "1 Credit für ein Anschreiben, wenn die Anzeige eines verlangt",
+          "always": "1 Credit für ein Anschreiben (ein Anschreiben für jeden Job)",
+          "never": "Keinen Credit für ein Anschreiben: Anschreiben sind in den Einstellungen ausgeschaltet"
+        },
+        "left": "{window, select, day {Heute} week {Diese Woche} other {Diesen Monat}} noch {left} übrig",
+        "leftUnknown": "Noch übrig: —",
+        "stops": "Es stoppt, sobald dein Wochenkontingent oder ein Credit aufgebraucht ist. Zusätzliche Bewerbungen, die du erhalten hast, verwendet es nie, und es verbraucht nie mehr, als du übrig hast. Jobs, die nicht vorbereitet werden können, bleiben unter „Vorzubereiten“.",
+        "check": "An Unternehmen wird nichts gesendet. Du prüfst jede Bewerbung, öffnest sie und sendest sie selbst ab.",
+        "off": "Du kannst es jederzeit ausschalten. Bereits Vorbereitetes bleibt dabei erhalten.",
+        "loading": "Deine Einstellungen werden geprüft…",
+        "settingsFailed": "Deine Einstellungen konnten nicht geladen werden, deshalb kann der Verbrauch noch nicht angezeigt werden. Versuch es erneut.",
+        "cancel": "Abbrechen",
+        "confirm": "Einschalten",
+        "saving": "Wird eingeschaltet…"
+      },
+      "state": {
+        "waiting": "Deine Wochenliste wird automatisch vorbereitet, sobald Jobs hinzukommen.",
+        "ran": "Die Liste dieser Woche wurde am {date} automatisch vorbereitet. Dafür {count, plural, one {wurde # Bewerbung} other {wurden # Bewerbungen}} aus deinem Wochenkontingent verwendet.",
+        "ranNone": "Am {date} konnte nichts automatisch vorbereitet werden.",
+        "stopped": {
+          "ready_kits": "{count, plural, one {# Job bleibt} other {# Jobs bleiben}} unter „Vorzubereiten“, weil dein Wochenkontingent aufgebraucht ist.",
+          "tailor": "{count, plural, one {# Job bleibt} other {# Jobs bleiben}} unter „Vorzubereiten“, weil deine Credits für Lebenslauf-Anpassungen aufgebraucht sind.",
+          "cover_letter": "{count, plural, one {# Job bleibt} other {# Jobs bleiben}} unter „Vorzubereiten“, weil deine Credits für Anschreiben aufgebraucht sind.",
+          "error": "{count, plural, one {# Job konnte nicht automatisch gestartet werden und bleibt} other {# Jobs konnten nicht automatisch gestartet werden und bleiben}} unter „Vorzubereiten“."
+        },
+        "offNow": "Das automatische Vorbereiten ist jetzt aus."
       }
     }
   },

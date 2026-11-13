@@ -15,6 +15,8 @@
 //   usePrepareKits                            quote (credit proposal) → prepare, through the credit gate
 //   useAnswerBank / useSaveAnswers            common application answers
 //   useQuestionKeys                           the brand's common questions (canonical keys)
+//   useAutoPrepare / useSetAutoPrepare        "Prepare my weekly list automatically" (off by default)
+//                                             and its latest run; on only after the cost is stated
 //
 // D1: nothing here submits anything. `open` returns the employer's link; the
 // user applies there. The server moves the tracker entry to Applied at once
@@ -34,6 +36,7 @@ import {
   getAgentSettings,
   getAgentSetup,
   getAnswerBank,
+  getAutoPrepare,
   getKitDetail,
   getKitHistory,
   getQuestionKeys,
@@ -44,11 +47,13 @@ import {
   prepareKit,
   putAgentSettings,
   putAnswerBank,
+  putAutoPrepare,
   removeQueueItem,
   restoreQueueItem,
   skipQueueItem,
   submitCalibration,
   undoQueueApplied,
+  type AutoPrepareView,
   type GenerateListBody,
   type GenerateListResponse,
   type KitHistoryResponse,
@@ -62,6 +67,7 @@ import { apiErrorCode, type In, type Items } from '../../lib/api/contracts/wire'
 import type * as A from '../../lib/api/contracts/agent';
 import type { FeedItem } from '../../lib/api/contracts/feed';
 import { useFlag } from '../../lib/flags';
+import { CREDITS_QUERY_KEY } from '../shared/useCredits';
 import { useCreditGate, type CreditsExhaustedInfo } from '../shared/useCreditGate';
 import { useTailorAvailability } from '../tailor/useTailorAvailability';
 import { agentKeys } from './keys';
@@ -205,6 +211,41 @@ export function useAnswerBank(options: { enabled?: boolean } = {}) {
   });
 }
 
+/**
+ * "Prepare my weekly list automatically" (GET /agent/auto-prepare): the
+ * user's opt-in (off by default), the latest automatic run with its real
+ * counts, and whether AI is available for the account (the cost statement).
+ */
+export function useAutoPrepare(options: { enabled?: boolean } = {}) {
+  return useQuery<AutoPrepareView>({
+    queryKey: agentKeys.autoPrepare(),
+    queryFn: ({ signal }) => getAutoPrepare({ signal }),
+    enabled: options.enabled ?? true,
+    staleTime: 60_000,
+    retry: shouldRetryAgent,
+  });
+}
+
+/**
+ * Switch it (PUT /agent/auto-prepare). Send `true` only from the place that
+ * stated the cost first (AutoPrepareSetting's sheet); `false` stops later
+ * runs and undoes nothing already prepared.
+ */
+export function useSetAutoPrepare() {
+  const qc = useQueryClient();
+  return useMutation<AutoPrepareView, Error, boolean>({
+    mutationFn: (on) => putAutoPrepare({ on }),
+    onSuccess: (view) => qc.setQueryData(agentKeys.autoPrepare(), view),
+  });
+}
+
+/** A list build ran "Prepare my weekly list automatically": its run, the allowance and the list changed. */
+function afterAutoRun(qc: QueryClient, ran: boolean): void {
+  if (!ran) return;
+  void qc.invalidateQueries({ queryKey: agentKeys.autoPrepare() });
+  void qc.invalidateQueries({ queryKey: CREDITS_QUERY_KEY });
+}
+
 // ── Writes ──────────────────────────────────────────────────────────────────
 
 export function useSaveAgentSettings() {
@@ -239,6 +280,7 @@ export function useCompleteSetupStep() {
     onSuccess: (setup) => {
       qc.setQueryData(agentKeys.setup(), setup);
       if (setup.firstList) void qc.invalidateQueries({ queryKey: agentKeys.queue() });
+      afterAutoRun(qc, Boolean(setup.firstList?.autoPrepared));
     },
   });
 }
@@ -252,9 +294,10 @@ export function useGenerateList() {
   const qc = useQueryClient();
   return useMutation<GenerateListResponse, Error, GenerateListBody>({
     mutationFn: (body) => generateList(body),
-    onSuccess: async (_data, body) => {
+    onSuccess: async (data, body) => {
       void qc.invalidateQueries({ queryKey: agentKeys.queue() });
       void qc.invalidateQueries({ queryKey: agentKeys.suggestions() });
+      afterAutoRun(qc, Boolean(data?.autoPrepared));
       // Awaited: the caller's `mutateAsync` resolves with the kept filters already on screen.
       if (body?.overrides) await qc.invalidateQueries({ queryKey: agentKeys.settings() });
     },

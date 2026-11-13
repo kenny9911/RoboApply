@@ -13,7 +13,8 @@
 //   Waiting for you   at most four cards; the first carries the screen's one primary button
 //                     (when nothing waits, the first pick's action carries it instead)
 //   Job search        one past-tense line with a real count · three picks · See all jobs
-//   Applications      real counts · the week's allowance · "You submit each application yourself."
+//   Applications      real counts · what automatic preparing did this week · the week's allowance ·
+//                     "You submit each application yourself."
 //   Resume            the main resume and its latest check · what jobs ask for
 //   Ask               one input that opens the Assistant (flag `copilot`)
 //
@@ -103,7 +104,7 @@ export function TodayDesk({ sources, check, now: nowProp, variant = 'desk', gree
         {goals ? goals({ leadPrimary }) : null}
         <JobSearchLane flags={sources.flags} newJobs={sources.newJobs} picks={sources.picks} picksFrom={sources.picksFrom} leadPrimary={false} searching={sources.searching} />
         <div className={styles.dashLanes}>
-          <ApplicationsLane flags={sources.flags} queue={sources.queue} board={sources.board} now={now} />
+          <ApplicationsLane flags={sources.flags} queue={sources.queue} board={sources.board} autoPrepare={sources.autoPrepare} now={now} />
           <ResumeLane resumes={sources.resumes} check={check} skills={sources.skills} />
         </div>
       </div>
@@ -133,7 +134,7 @@ export function TodayDesk({ sources, check, now: nowProp, variant = 'desk', gree
           />
         </div>
         <div className={styles.column}>
-          <ApplicationsLane flags={sources.flags} queue={sources.queue} board={sources.board} now={now} />
+          <ApplicationsLane flags={sources.flags} queue={sources.queue} board={sources.board} autoPrepare={sources.autoPrepare} now={now} />
           <ResumeLane resumes={sources.resumes} check={check} skills={sources.skills} />
           {sources.flags.copilot ? <AskBox /> : null}
         </div>

@@ -5,7 +5,8 @@
 // no model client. Tests replace any of these (`createAgentService(deps)`).
 //
 // D1: none of these calls an employer endpoint. The only outbound effects are
-// our own services (tracker, tailoring, letters, credits, queue, notices), and
+// our own services (tracker, tailoring, letters, credits, queue, notices, the
+// user's UI state), and
 // one read: `checkJobLive` asks the public job-board API of a posting's
 // applicant tracking system whether the posting is still listed (jobs/liveness:
 // one documented JSON request, never an application form). Nothing is
@@ -65,10 +66,13 @@ interface ResumeServiceModule {
 export type JobLiveState = 'open' | 'closed' | 'unknown';
 
 export interface CreditUsageLine {
+  /** What can still be spent: the window's allowance left plus usable bonus credits (grants). */
   remaining: number;
   window: 'day' | 'week' | 'month';
   resetsAt: Date;
   cap: number;
+  /** The window's own allowance left, without bonus credits; absent when not known (then `remaining`). */
+  windowRemaining?: number;
 }
 
 export interface AgentDeps {
@@ -77,7 +81,8 @@ export interface AgentDeps {
   brand(): ProductBrand;
   /** AI for this user: consent (`aiAllowed`) AND the brand's text model (R-13). */
   aiAvailable(userId: string): Promise<boolean>;
-  flag(key: 'jobs.feed' | 'extension', userId: string): Promise<boolean>;
+  /** `agent`: this area's own capability for the user (an automatic run checks it before it spends anything). */
+  flag(key: 'jobs.feed' | 'extension' | 'agent', userId: string): Promise<boolean>;
   /** GoApply: a WeChat account binds a phone before any AI step (403 phone_binding_required). */
   assertPhoneBound(userId: string): Promise<void>;
   /** R-14: drop GoApply third-party postings in mode `off` (other markets unchanged). */
@@ -138,7 +143,8 @@ export interface AgentDeps {
   attachLetter(userId: string, letterId: string, trackerEntryId: string): Promise<void>;
 
   creditUsage(userId: string): Promise<{ lines: Partial<Record<'tailor' | 'cover_letter' | 'ready_kits', CreditUsageLine>>; upgradable: boolean }>;
-  reserveKit(userId: string, idempotencyKey: string, refId: string): Promise<{ id: string; replayed: boolean }>;
+  /** `useGrants: false` (an automatic run): the weekly allowance only, never bonus applications. */
+  reserveKit(userId: string, idempotencyKey: string, refId: string, options?: { useGrants?: boolean }): Promise<{ id: string; replayed: boolean }>;
   commitKit(reservationId: string, refId: string): Promise<void>;
   releaseKit(reservationId: string, reason: string): Promise<void>;
 
@@ -154,6 +160,15 @@ export interface AgentDeps {
   /** Start a short drain after the response (Vercel `waitUntil`); the queue-drain cron covers the rest. */
   kickPrepare(): void;
   notify(input: NotifyUserInput): Promise<NotifyUserResult>;
+
+  /**
+   * "Prepare my weekly list automatically": the user's stored UI values
+   * (`RAUserUiState.state.values`; this area reads its `agent.autoPrepare*`
+   * keys, autoPrepare.ts). No schema change.
+   */
+  uiValues(userId: string): Promise<Record<string, unknown>>;
+  /** Set (or, with null, delete) UI values, merged key by key with what is stored; answers the stored values. */
+  saveUiValues(userId: string, values: Record<string, string | number | boolean | null>): Promise<Record<string, unknown>>;
 }
 
 /** Tracker stages before Applied (jobs/detail PRE_APPLY_STATUSES; not exported from its index). */
@@ -163,7 +178,7 @@ const db = async (): Promise<AgentDb> => (await import('../../lib/prisma.js')).d
 
 function usageLine(u: BucketUsage | undefined): CreditUsageLine | undefined {
   if (!u) return undefined;
-  return { remaining: u.remaining + u.grantRemaining, window: u.window, resetsAt: u.resetsAt, cap: u.cap };
+  return { remaining: u.remaining + u.grantRemaining, window: u.window, resetsAt: u.resetsAt, cap: u.cap, windowRemaining: u.remaining };
 }
 
 /** What `readyListFits` reads; the defaults are the feed's personalisation rule and the fit contract. */
@@ -360,9 +375,16 @@ export function defaultAgentDeps(): AgentDeps {
         upgradable: ent.planProfile === 'free' && ent.proSellable,
       };
     },
-    async reserveKit(userId, idempotencyKey, refId) {
+    async reserveKit(userId, idempotencyKey, refId, options) {
       const { creditService } = await import('../../platform/credits/index.js');
-      const r = await creditService.reserve({ userId, bucket: 'ready_kits', idempotencyKey, refType: 'agent_kit', refId });
+      const r = await creditService.reserve({
+        userId,
+        bucket: 'ready_kits',
+        idempotencyKey,
+        refType: 'agent_kit',
+        refId,
+        ...(options?.useGrants === false ? { useGrants: false } : {}),
+      });
       return { id: r.id, replayed: r.replayed };
     },
     async commitKit(reservationId, refId) {
@@ -406,6 +428,14 @@ export function defaultAgentDeps(): AgentDeps {
     async notify(input) {
       const { notifyUser } = await import('../alerts/index.js');
       return notifyUser(input);
+    },
+    async uiValues(userId) {
+      const { uiStateService } = await import('../uistate/index.js');
+      return (await uiStateService.get(userId)).state.values;
+    },
+    async saveUiValues(userId, values) {
+      const { uiStateService } = await import('../uistate/index.js');
+      return (await uiStateService.patch(userId, { values })).state.values;
     },
   };
 }
