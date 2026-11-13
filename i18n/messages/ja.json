@@ -140,6 +140,7 @@
       "view": "出典を見る"
     },
     "dashboard": "ダッシュボード",
+    "pay": "給与チェック",
     "profile_card": {
       "you": "あなた",
       "set_role": "希望職種を設定",
@@ -7630,6 +7631,7 @@
       "payExact": "{period} {amount}",
       "payFrom": "{period} {min}から",
       "payNotListed": "給与の記載なし",
+      "payCheck": "この職種の求人票に記載された給与を見る",
       "payRange": "{period} {min} – {max}",
       "payUpTo": "{period} {max}まで",
       "period": {
@@ -7741,6 +7743,61 @@
       "removed": "{company}を企業のリストから削除しました。",
       "failed": "企業のリストを変更できませんでした。もう一度試してください。",
       "full": "企業のリストがいっぱいです。この企業を追加するには、検索条件でほかの企業を削除してください。"
+    }
+  },
+  "payCheck": {
+    "title": "給与チェック",
+    "sub": "直近{days}日間の求人票に記載された給与を、職種名ごとに確認できます。",
+    "loading": "読み込み中…",
+    "start": "職種名を入力すると、求人票に記載された給与を確認できます。",
+    "reading": "求人票を読み込んでいます…",
+    "error": "現在、給与を読み込めませんでした。",
+    "rateLimited": "短時間に確認が多すぎます。1分ほどしてからもう一度お試しください。",
+    "retry": "もう一度試す",
+    "form": {
+      "label": "職種名から給与を確認する",
+      "title": "職種名",
+      "titlePlaceholder": "例：データアナリスト",
+      "location": "勤務地（任意）",
+      "locationPlaceholder": "市区町村、地域、または国",
+      "remote": "リモート勤務のみ",
+      "submit": "給与を確認",
+      "prefilled": "保存した検索条件から入力しました。"
+    },
+    "unavailable": {
+      "title": "給与チェックはここではご利用いただけません",
+      "sub": "現在このサイトには求人票が表示されないため、確認できる給与がありません。",
+      "back": "ダッシュボードへ"
+    },
+    "result": {
+      "heading": "「{title}」の記載給与",
+      "matchRole": "職種「{role}」、および「{text}」を含む職種名で一致しています。",
+      "matchText": "「{text}」を含む職種名で一致しています。",
+      "placeAny": "勤務地の指定なし。",
+      "placeRemote": "リモート勤務のみ。",
+      "placeRemoteIn": "リモート勤務（{country}）。",
+      "placeIn": "勤務地：{place}。",
+      "placeText": "勤務地に「{place}」を含む求人。",
+      "matched": "{count, plural, =0 {直近{days}日間で一致する求人票はありませんでした。} other {直近{days}日間で#件の求人票が一致しました。}}",
+      "matchedCapped": "直近{days}日間で一致した求人票が{count, number}件を超えたため、新しい順に{count, number}件を読み込みました。",
+      "withPay": "{count, plural, =0 {給与の記載がある求人票はありません。} other {そのうち#件に給与の記載があります。}}",
+      "honesty": "これは求人票に記載された給与であり、実際に提示される条件を予測するものではありません。",
+      "yearly": "時給・日給・週給・月給は年額に換算して表示しています（2,080時間、260日、52週、12か月、または求人票に記載された支給月数）。"
+    },
+    "range": {
+      "heading": "{currency}・年額",
+      "sample": "{currency}で給与の記載がある求人票：{count, plural, other {#件}}",
+      "p25": "25パーセンタイル",
+      "median": "中央値",
+      "p75": "75パーセンタイル",
+      "summary": "これらの求人票の半数は、年額{low}〜{high}の給与を記載しています。中央値は{median}です。"
+    },
+    "few": "{currency}：給与の記載がある求人票は{count, plural, other {#件}}で、範囲を表示するには少なすぎます（{min}件以上が必要です）。",
+    "notEnough": {
+      "title": "給与の記載がある求人票がまだ足りません",
+      "sub": "同じ通貨で給与の記載がある求人票が{min}件以上になると、範囲を表示します。より広い職種名で試すか、勤務地を空欄にしてください。",
+      "tryRole": "「{role}」で確認",
+      "withoutPlace": "勤務地なしで確認"
     }
   },
   "jobImport": {

@@ -140,6 +140,7 @@
       "view": "Voir la source"
     },
     "dashboard": "Tableau de bord",
+    "pay": "Salaires annoncés",
     "profile_card": {
       "you": "Vous",
       "set_role": "Indiquez le poste visé",
@@ -7630,6 +7631,7 @@
       "payExact": "{amount} {period}",
       "payFrom": "À partir de {min} {period}",
       "payNotListed": "Salaire non indiqué",
+      "payCheck": "Voir ce que les annonces paient pour ce poste",
       "payRange": "{min} – {max} {period}",
       "payUpTo": "Jusqu’à {max} {period}",
       "period": {
@@ -7741,6 +7743,61 @@
       "removed": "{company} n’est plus dans ta liste d’entreprises.",
       "failed": "Ta liste d’entreprises n’a pas pu être modifiée. Réessaie.",
       "full": "Ta liste d’entreprises est pleine. Retires-en une dans ta recherche pour ajouter celle-ci."
+    }
+  },
+  "payCheck": {
+    "title": "Salaires annoncés",
+    "sub": "Vois ce que les annonces des {days} derniers jours indiquent comme salaire pour un intitulé de poste.",
+    "loading": "Chargement…",
+    "start": "Saisis un intitulé de poste pour voir quel salaire indiquent les annonces.",
+    "reading": "Lecture des annonces…",
+    "error": "Impossible de charger les salaires pour le moment.",
+    "rateLimited": "Trop de recherches en peu de temps. Réessaie dans une minute.",
+    "retry": "Réessayer",
+    "form": {
+      "label": "Voir le salaire d’un intitulé de poste",
+      "title": "Intitulé du poste",
+      "titlePlaceholder": "Par exemple, analyste de données",
+      "location": "Lieu (facultatif)",
+      "locationPlaceholder": "Ville, région ou pays",
+      "remote": "Télétravail uniquement",
+      "submit": "Voir les salaires",
+      "prefilled": "Repris de ta recherche enregistrée."
+    },
+    "unavailable": {
+      "title": "Les salaires annoncés ne sont pas disponibles ici",
+      "sub": "Ce site n’affiche aucune annonce pour le moment, il n’y a donc aucun salaire annoncé à consulter.",
+      "back": "Aller au tableau de bord"
+    },
+    "result": {
+      "heading": "Salaire annoncé pour « {title} »",
+      "matchRole": "Correspond au poste « {role} » et aux intitulés qui contiennent « {text} ».",
+      "matchText": "Correspond aux intitulés qui contiennent « {text} ».",
+      "placeAny": "Tous les lieux.",
+      "placeRemote": "Télétravail uniquement.",
+      "placeRemoteIn": "Postes en télétravail ({country}).",
+      "placeIn": "Lieu : {place}.",
+      "placeText": "Postes dont le lieu mentionne « {place} ».",
+      "matched": "{count, plural, =0 {Aucune annonce des {days} derniers jours ne correspond.} one {# annonce des {days} derniers jours correspond.} other {# annonces des {days} derniers jours correspondent.}}",
+      "matchedCapped": "Plus de {count, number} annonces des {days} derniers jours correspondent ; les {count, number} plus récentes ont été lues.",
+      "withPay": "{count, plural, =0 {Aucune n’indique de salaire.} one {# d’entre elles indique un salaire.} other {# d’entre elles indiquent un salaire.}}",
+      "honesty": "Voici ce que les annonces indiquent comme salaire, pas une prédiction de l’offre que tu recevras.",
+      "yearly": "Un salaire indiqué à l’heure, à la journée, à la semaine ou au mois est affiché sur un an : 2 080 heures, 260 jours, 52 semaines ou 12 mois (ou le nombre de mois de salaire indiqué dans l’annonce)."
+    },
+    "range": {
+      "heading": "{currency}, par an",
+      "sample": "{count, plural, one {# annonce indique un salaire} other {# annonces indiquent un salaire}} en {currency}",
+      "p25": "25e centile",
+      "median": "Médiane",
+      "p75": "75e centile",
+      "summary": "La moitié de ces annonces indique un salaire entre {low} et {high} par an. La médiane est de {median}."
+    },
+    "few": "{currency} : {count, plural, one {# annonce indique un salaire} other {# annonces indiquent un salaire}}, trop peu pour afficher une fourchette (au moins {min} nécessaires).",
+    "notEnough": {
+      "title": "Pas encore assez d’annonces avec un salaire",
+      "sub": "Une fourchette s’affiche dès qu’au moins {min} annonces dans une même devise indiquent un salaire. Essaie un intitulé plus général, ou laisse le lieu vide.",
+      "tryRole": "Voir « {role} »",
+      "withoutPlace": "Voir sans le lieu"
     }
   },
   "jobImport": {

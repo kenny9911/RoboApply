@@ -1300,3 +1300,69 @@ describe("the preview read: the desktop list's first job, shown before the perso
     expect(api.addToQueue).not.toHaveBeenCalled();
   });
 });
+
+describe('the pay check link beside the stated pay (/pay)', () => {
+  const FEED_ON = { ...BASE_FLAGS, 'jobs.feed': true };
+  const NAME = 'See what postings pay for this title';
+
+  it('sits in the pay line and opens the pay check for the job’s title and place', async () => {
+    api.getJob.mockResolvedValue(detail({}, { pay: { min: 120000, max: 150000, currency: 'USD', period: 'year', text: null } }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: FEED_ON });
+    await screen.findByTestId('job-detail');
+    const link = screen.getByRole('link', { name: NAME });
+    expect(link).toHaveAttribute('href', '/pay?title=Backend+Engineer&location=Austin%2C+TX');
+    // Next to the stated pay, in the header; the pay line itself reads as before.
+    expect(link.parentElement).toBe(screen.getByTestId('job-pay').parentElement);
+    expect(within(screen.getByTestId('job-header')).getByRole('link', { name: NAME })).toBe(link);
+    expect(screen.getByTestId('job-pay')).not.toHaveTextContent(NAME);
+  });
+
+  it('also beside "Pay not listed"; a remote job asks for remote jobs', async () => {
+    api.getJob.mockResolvedValue(detail({}, { workModel: 'remote', location: 'Remote - US' }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: FEED_ON });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('job-pay')).toHaveTextContent(/^Pay not listed$/);
+    expect(screen.getByRole('link', { name: NAME })).toHaveAttribute('href', '/pay?title=Backend+Engineer&location=remote');
+  });
+
+  it('a job with no stated place asks for the title alone', async () => {
+    api.getJob.mockResolvedValue(detail({}, { location: null, workModel: null }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: FEED_ON });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByRole('link', { name: NAME })).toHaveAttribute('href', '/pay?title=Backend+Engineer');
+  });
+
+  it('absent while the job feed is off (the pay check reads the posts; R-04)', async () => {
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: { ...BASE_FLAGS, 'jobs.feed': false } });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('job-pay')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: NAME })).toBeNull();
+    expect(screen.queryByTestId('job-pay-check')).toBeNull();
+  });
+
+  it('GoApply: under the market block, which prints the pay there in place of the header', async () => {
+    const meta = {
+      cn: {
+        sourceLine: { kind: 'source', sourceName: 'GoHire', originalSourceName: null, licence: null },
+        salary: { text: '15-25K·14薪', disclosed: true },
+        updatedAt: '2026-10-08T00:00:00.000Z',
+        lastCheckedAt: NOW,
+        expiresAt: null,
+        tags: [],
+        classYears: [],
+        warnings: [],
+      },
+    };
+    api.getJob.mockResolvedValue(
+      detail({ marketMeta: meta }, { title: '数据分析师', companyName: '示例科技', location: '上海', pay: { min: 15000, max: 25000, currency: 'CNY', period: 'month', text: '15-25K·14薪' }, payText: '15-25K·14薪' }),
+    );
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { 'jobs.feed': true } });
+    await screen.findByTestId('job-detail');
+    const link = screen.getByTestId('job-pay-check');
+    expect(link).toHaveAttribute('href', `/pay?title=${encodeURIComponent('数据分析师')}&location=${encodeURIComponent('上海')}`);
+    expect(within(screen.getByTestId('job-header')).queryByTestId('job-pay-check')).toBeNull();
+    // Right after the block that holds the pay.
+    expect(screen.getByTestId('job-meta-cn').compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByTestId('job-pay-check')).toHaveLength(1);
+  });
+});

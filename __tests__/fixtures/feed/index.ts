@@ -154,6 +154,32 @@ export const feedQueryResponse = {
   sessionId: 'sess_fixture_1',
 } satisfies F.FeedQueryResponse;
 
+/** The pay check (/pay): stated pay of the brand's posts for a title, per currency; EUR has too few posts for figures. */
+export const payCheckResponse = {
+  status: 'ok',
+  title: 'Data Analyst',
+  titleMatch: { method: 'role', roleId: 'data_analyst', roleLabel: 'Data analyst', text: 'data analyst' },
+  place: { input: 'Austin, TX', kind: 'city', name: 'Austin', country: 'US' },
+  window: { days: 90, from: '2026-08-15T12:00:00.000Z', to: '2026-11-13T12:00:00.000Z' },
+  matchedCount: 412,
+  withPayCount: 125,
+  capped: false,
+  rowCap: 2000,
+  period: 'year',
+  minSample: 20,
+  currencies: [
+    {
+      currency: 'USD',
+      sampleSize: 120,
+      p25: { value: 95000, source: 'index', sampleSize: 120, asOf: '2026-11-13T12:00:00.000Z', method: 'computed' },
+      median: { value: 120000, source: 'index', sampleSize: 120, asOf: '2026-11-13T12:00:00.000Z', method: 'computed' },
+      p75: { value: 150000, source: 'index', sampleSize: 120, asOf: '2026-11-13T12:00:00.000Z', method: 'computed' },
+    },
+    { currency: 'EUR', sampleSize: 5, p25: null, median: null, p75: null },
+  ],
+  asOf: '2026-11-13T12:00:00.000Z',
+} satisfies F.PayCheckResponse;
+
 export const feedRequests: RequestFixture[] = [
   { contract: 'feed', schema: 'FeedQueryBodySchema', value: { sort: 'newest', fitTier: 'good' } },
   { contract: 'feed', schema: 'FeedQueryBodySchema', value: { sort: 'loudest' }, valid: false },
@@ -161,4 +187,9 @@ export const feedRequests: RequestFixture[] = [
   { contract: 'feed', schema: 'FeedQueryBodySchema', value: { sort: 'recommended', overrides: { taxonomyIds: ['software_engineering'] } } },
   { contract: 'feed', schema: 'HideJobBodySchema', value: { reasonCode: 'wrong_title' } },
   { contract: 'feed', schema: 'ReportJobBodySchema', value: { reason: 'scam', note: 'Asks for a fee.' } },
+  // The pay check: a title (any language) and an optional place; a title with no letter or digit is refused.
+  { contract: 'feed', schema: 'PayCheckQuerySchema', value: { title: 'Data Analyst', location: 'Austin, TX' } },
+  { contract: 'feed', schema: 'PayCheckQuerySchema', value: { title: '数据分析师', location: 'remote' } },
+  { contract: 'feed', schema: 'PayCheckQuerySchema', value: { title: '%%%' }, valid: false },
+  { contract: 'feed', schema: 'PayCheckQuerySchema', value: { location: 'Austin, TX' }, valid: false },
 ];

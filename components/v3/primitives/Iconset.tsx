@@ -280,5 +280,13 @@ export const IconInfo = (p: IconProps) => (
     <path d="M12 11v5M12 8h.01" />
   </Icon>
 );
+// The pay check's nav entry: a range with its middle band and the median.
+export const IconPayRange = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 12h4.5M16.5 12H21" />
+    <rect x="7.5" y="8.5" width="9" height="7" rx="1.5" />
+    <path d="M12 6.5v11" />
+  </Icon>
+);
 
 export { Icon };

@@ -140,6 +140,7 @@
     "signing_out": "Signing out…",
     "today": "Today",
     "dashboard": "Dashboard",
+    "pay": "Pay check",
     "profile_card": {
       "you": "You",
       "set_role": "Set your target role",
@@ -8059,6 +8060,7 @@
     },
     "header": {
       "payNotListed": "Pay not listed",
+      "payCheck": "See what postings pay for this title",
       "payExact": "{amount} {period}",
       "payRange": "{min} – {max} {period}",
       "payFrom": "From {min} {period}",
@@ -8272,6 +8274,61 @@
       "removed": "{company} is off your list of companies.",
       "failed": "Your list of companies could not be changed. Try again.",
       "full": "Your list of companies is full. Remove one in your search to add this one."
+    }
+  },
+  "payCheck": {
+    "title": "Pay check",
+    "sub": "See what job posts from the last {days} days state about pay for a job title.",
+    "loading": "Loading…",
+    "start": "Enter a job title to see what job posts state about pay.",
+    "reading": "Reading job posts…",
+    "error": "Pay could not be loaded right now.",
+    "rateLimited": "Too many checks in a short time. Try again in a minute.",
+    "retry": "Try again",
+    "form": {
+      "label": "Check pay for a job title",
+      "title": "Job title",
+      "titlePlaceholder": "For example, data analyst",
+      "location": "Location (optional)",
+      "locationPlaceholder": "City, region or country",
+      "remote": "Remote jobs only",
+      "submit": "Check pay",
+      "prefilled": "Filled in from your saved search."
+    },
+    "unavailable": {
+      "title": "Pay check is not available here",
+      "sub": "This site shows no job posts right now, so there is no stated pay to check.",
+      "back": "Go to the dashboard"
+    },
+    "result": {
+      "heading": "Stated pay for “{title}”",
+      "matchRole": "Matched as the role “{role}” and as titles that contain “{text}”.",
+      "matchText": "Matched as titles that contain “{text}”.",
+      "placeAny": "Any location.",
+      "placeRemote": "Remote jobs only.",
+      "placeRemoteIn": "Remote jobs ({country}).",
+      "placeIn": "Location: {place}.",
+      "placeText": "Jobs whose location mentions “{place}”.",
+      "matched": "{count, plural, =0 {No job posts from the last {days} days matched.} one {# job post from the last {days} days matched.} other {# job posts from the last {days} days matched.}}",
+      "matchedCapped": "More than {count, number} job posts from the last {days} days matched, so the newest {count, number} were read.",
+      "withPay": "{count, plural, =0 {None of them state pay.} one {# of them states pay.} other {# of them state pay.}}",
+      "honesty": "This is what job posts state about pay, not a prediction of an offer.",
+      "yearly": "Pay stated by the hour, day, week or month is shown as a year's pay: 2,080 hours, 260 days, 52 weeks or 12 months (or the months of pay the post states)."
+    },
+    "range": {
+      "heading": "{currency}, a year",
+      "sample": "{count, plural, one {# post states pay} other {# posts state pay}} in {currency}",
+      "p25": "25th percentile",
+      "median": "Median",
+      "p75": "75th percentile",
+      "summary": "Half of these posts state pay between {low} and {high} a year. The median is {median}."
+    },
+    "few": "{currency}: {count, plural, one {# post states pay} other {# posts state pay}}, too few to show a range (at least {min} needed).",
+    "notEnough": {
+      "title": "Not enough posts state pay for this yet",
+      "sub": "A range shows once at least {min} posts in one currency state pay. Try a broader title, or leave the location empty.",
+      "tryRole": "Check “{role}”",
+      "withoutPlace": "Check without the location"
     }
   },
   "jobImport": {

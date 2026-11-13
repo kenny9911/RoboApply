@@ -140,6 +140,7 @@
       "view": "查看来源"
     },
     "dashboard": "首页",
+    "pay": "薪资参考",
     "profile_card": {
       "you": "你",
       "set_role": "设置目标职位",
@@ -9860,6 +9861,7 @@
       "payExact": "{amount}/{period}",
       "payFrom": "{min}/{period} 起",
       "payNotListed": "薪资未披露",
+      "payCheck": "查看这个职位名称的公开薪资",
       "payRange": "{min} – {max}/{period}",
       "payUpTo": "最高 {max}/{period}",
       "period": {
@@ -9971,6 +9973,61 @@
       "removed": "{company}已从目标公司名单中移除。",
       "failed": "未能修改你的目标公司名单，请重试。",
       "full": "你的目标公司名单已满。请先在搜索条件中移除一家公司，再添加这一家。"
+    }
+  },
+  "payCheck": {
+    "title": "薪资参考",
+    "sub": "按职位名称，查看最近 {days} 天的职位信息写明的薪资。",
+    "loading": "加载中…",
+    "start": "输入职位名称，查看职位信息里写明的薪资。",
+    "reading": "正在读取职位信息…",
+    "error": "暂时无法加载薪资。",
+    "rateLimited": "短时间内查询次数太多，请一分钟后再试。",
+    "retry": "重试",
+    "form": {
+      "label": "按职位名称查询薪资",
+      "title": "职位名称",
+      "titlePlaceholder": "例如：数据分析师",
+      "location": "地点（选填）",
+      "locationPlaceholder": "城市、地区或国家",
+      "remote": "仅远程职位",
+      "submit": "查询薪资",
+      "prefilled": "已按你保存的搜索条件填写。"
+    },
+    "unavailable": {
+      "title": "这里暂不提供薪资参考",
+      "sub": "本站目前不展示职位信息，因此没有可查询的公开薪资。",
+      "back": "返回首页"
+    },
+    "result": {
+      "heading": "“{title}”的公开薪资",
+      "matchRole": "按岗位“{role}”，以及名称含“{text}”的职位匹配。",
+      "matchText": "按名称含“{text}”的职位匹配。",
+      "placeAny": "不限地点。",
+      "placeRemote": "仅远程职位。",
+      "placeRemoteIn": "远程职位（{country}）。",
+      "placeIn": "地点：{place}。",
+      "placeText": "地点信息含“{place}”的职位。",
+      "matched": "{count, plural, =0 {最近 {days} 天没有匹配的职位。} other {最近 {days} 天有 # 个职位匹配。}}",
+      "matchedCapped": "最近 {days} 天匹配的职位超过 {count, number} 个，已读取最新的 {count, number} 个。",
+      "withPay": "{count, plural, =0 {其中没有写明薪资的职位。} other {其中 # 个写明了薪资。}}",
+      "honesty": "这里是职位信息写明的薪资，不是对你实际录用薪资的预测。",
+      "yearly": "按小时、天、周或月写明的薪资，均折算为年薪显示：2,080 小时、260 天、52 周或 12 个月（写明“N 薪”的，按 N 个月计算）。"
+    },
+    "range": {
+      "heading": "{currency}，年薪",
+      "sample": "{count, plural, other {# 个职位}}以 {currency} 写明薪资",
+      "p25": "第 25 百分位",
+      "median": "中位数",
+      "p75": "第 75 百分位",
+      "summary": "这些职位中，有一半写明的年薪在 {low} 到 {high} 之间，中位数为 {median}。"
+    },
+    "few": "{currency}：只有 {count, plural, other {# 个职位}}写明薪资，数量太少，无法显示范围（至少需要 {min} 个）。",
+    "notEnough": {
+      "title": "写明薪资的职位还不够",
+      "sub": "同一币种中至少有 {min} 个职位写明薪资时，才会显示范围。可以换一个更宽泛的职位名称，或不填地点。",
+      "tryRole": "查询“{role}”",
+      "withoutPlace": "不限地点再查"
     }
   },
   "jobImport": {

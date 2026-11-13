@@ -87,6 +87,7 @@ import { ApplyInterceptSheet } from './ApplyInterceptSheet';
 import { GetReadyChecklist } from './GetReadyChecklist';
 import { JobHeader, JobHeaderActions } from './JobHeader';
 import { JobOverview } from './JobOverview';
+import { PayCheckLink } from './PayCheckLink';
 import { PeopleTab } from './PeopleTab';
 import { SimilarJobs, jobDetailHref } from './SimilarJobs';
 import { TargetCompanyToggle } from './TargetCompanyToggle';
@@ -430,6 +431,8 @@ function Loaded({
       <div className={styles.layout}>
         <div className={styles.main}>
           {metaAboveTabs ? <MarketJobMeta jobId={job.id} meta={withListing(withOwnImport(detail.marketMeta, ownImport), listing)} variant="detail" /> : null}
+          {/* The market block prints the pay here in place of the header: the pay check link goes under it. */}
+          {metaAboveTabs ? <PayCheckLink job={job} variant="line" /> : null}
           <Tabs ariaLabel={t('tabs.label')} idBase={idBase} tabs={tabs} value={tab} onChange={setTab} />
           <div {...tabPanelProps(idBase, 'overview')} hidden={tab !== 'overview'}>
             {tab === 'overview' ? <JobOverview detail={detail} marketMeta={!metaAboveTabs} /> : null}

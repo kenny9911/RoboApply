@@ -70,14 +70,18 @@ describe('feed index plan', () => {
     expect(indexNamesInPlan(plan)).toEqual(['RAJobUserState_pkey', 'RAJob_market_isCanonical_archivedAt_postedAt_idx']);
   });
 
-  it('explains the real retrieval, keyset refill and count statements, plus one per requested index', () => {
+  it('explains the real retrieval, keyset refill and count statements, plus one per requested index and the pay check', () => {
     const s = proofStatements(new Date('2026-10-10T00:00:00Z'));
-    expect(Object.keys(s)).toEqual(['retrieval', 'refill', 'count', 'newCount', 'cnEmployerTags', 'geo']);
+    expect(Object.keys(s)).toEqual(['retrieval', 'refill', 'count', 'newCount', 'cnEmployerTags', 'geo', 'payCheck']);
     expect(s.retrieval.text).toContain('ORDER BY j."postedAt" DESC');
     expect(s.refill.text).toContain('(j."postedAt", j."id") < (');
     expect(s.newCount.text).toContain('j."firstSeenAt" >');
     expect(s.cnEmployerTags.text).toContain('j."employerTags" @>');
     expect(s.geo.text).toContain('j."geoLat" BETWEEN');
+    // The pay check: the scope's equality columns, a first-seen window, newest first and a LIMIT.
+    expect(s.payCheck.text).toContain('j."firstSeenAt" >=');
+    expect(s.payCheck.text).toContain('ORDER BY j."firstSeenAt" DESC');
+    expect(s.payCheck.text).toMatch(/LIMIT \$\d+$/);
     for (const [index, statement] of Object.entries(REQUESTED_INDEX_STATEMENT)) {
       expect(PLANNED_FEED_INDEXES).toHaveProperty(index);
       expect(s).toHaveProperty(statement);
@@ -96,6 +100,8 @@ describe.skipIf(process.env.FEED_INDEX_PROOF !== '1')('index proof against the d
     expect(result.plans.retrieval.some((n) => n === 'RAJobUserState_pkey' || n === 'RAJobUserState_userId_hiddenAt_idx')).toBe(true);
     expect(result.plans.refill).toContain('RAJob_market_isCanonical_archivedAt_postedAt_idx');
     expect(result.plans.count.length).toBeGreaterThan(0);
+    // The pay check walks a scope index (market, isCanonical, archivedAt, then its date), never the whole table.
+    expect(result.plans.payCheck.some((n) => n.startsWith('RAJob_market_isCanonical_archivedAt_'))).toBe(true);
     // SCHEMA-3 indexes (SR-32-1…3): each statement must use its index.
     expect(result.missingRequested).toEqual([]);
     for (const [index, statement] of Object.entries(REQUESTED_INDEX_STATEMENT)) {

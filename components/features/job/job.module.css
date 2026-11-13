@@ -194,6 +194,35 @@
   color: var(--text-muted);
 }
 
+/* The pay line and "See what postings pay for this title" (the pay check, /pay). */
+.payRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--sp-3);
+  min-width: 0;
+}
+
+.payCheckLine {
+  margin: 0;
+}
+
+.payCheckLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--action);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.payCheckLink:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
 .meta {
   display: flex;
   flex-wrap: wrap;

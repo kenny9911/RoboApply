@@ -140,6 +140,7 @@
       "view": "Ver fonte"
     },
     "dashboard": "Painel",
+    "pay": "Consulta salarial",
     "profile_card": {
       "you": "Você",
       "set_role": "Defina seu cargo-alvo",
@@ -7630,6 +7631,7 @@
       "payExact": "{amount} {period}",
       "payFrom": "A partir de {min} {period}",
       "payNotListed": "Salário não informado",
+      "payCheck": "Veja quanto os anúncios pagam para este cargo",
       "payRange": "{min} – {max} {period}",
       "payUpTo": "Até {max} {period}",
       "period": {
@@ -7741,6 +7743,61 @@
       "removed": "{company} saiu da sua lista de empresas.",
       "failed": "Não foi possível mudar sua lista de empresas. Tente de novo.",
       "full": "Sua lista de empresas está cheia. Remova uma na sua busca para adicionar esta."
+    }
+  },
+  "payCheck": {
+    "title": "Consulta salarial",
+    "sub": "Veja qual salário os anúncios de vagas dos últimos {days} dias informam para um cargo.",
+    "loading": "Carregando…",
+    "start": "Digite um cargo para ver qual salário os anúncios informam.",
+    "reading": "Lendo anúncios…",
+    "error": "Não foi possível carregar o salário agora.",
+    "rateLimited": "Muitas consultas em pouco tempo. Tente de novo em um minuto.",
+    "retry": "Tentar de novo",
+    "form": {
+      "label": "Consultar o salário de um cargo",
+      "title": "Cargo",
+      "titlePlaceholder": "Por exemplo, analista de dados",
+      "location": "Local (opcional)",
+      "locationPlaceholder": "Cidade, região ou país",
+      "remote": "Somente vagas remotas",
+      "submit": "Consultar salário",
+      "prefilled": "Preenchido com a sua busca salva."
+    },
+    "unavailable": {
+      "title": "A consulta salarial não está disponível aqui",
+      "sub": "Este site não mostra anúncios de vagas no momento, então não há salários informados para consultar.",
+      "back": "Ir para o painel"
+    },
+    "result": {
+      "heading": "Salário informado para “{title}”",
+      "matchRole": "Corresponde ao cargo “{role}” e a títulos que contêm “{text}”.",
+      "matchText": "Corresponde a títulos que contêm “{text}”.",
+      "placeAny": "Qualquer local.",
+      "placeRemote": "Somente vagas remotas.",
+      "placeRemoteIn": "Vagas remotas ({country}).",
+      "placeIn": "Local: {place}.",
+      "placeText": "Vagas cujo local menciona “{place}”.",
+      "matched": "{count, plural, =0 {Nenhum anúncio dos últimos {days} dias correspondeu.} one {# anúncio dos últimos {days} dias correspondeu.} other {# anúncios dos últimos {days} dias corresponderam.}}",
+      "matchedCapped": "Mais de {count, number} anúncios dos últimos {days} dias corresponderam, então os {count, number} mais recentes foram lidos.",
+      "withPay": "{count, plural, =0 {Nenhum deles informa o salário.} one {# deles informa o salário.} other {# deles informam o salário.}}",
+      "honesty": "Isto é o que os anúncios informam sobre o salário, não uma previsão do que vão oferecer a você.",
+      "yearly": "Salário por hora, dia, semana ou mês aparece como salário anual: 2.080 horas, 260 dias, 52 semanas ou 12 meses (ou os meses de salário que o anúncio informar)."
+    },
+    "range": {
+      "heading": "{currency}, por ano",
+      "sample": "{count, plural, one {# anúncio informa o salário} other {# anúncios informam o salário}} em {currency}",
+      "p25": "Percentil 25",
+      "median": "Mediana",
+      "p75": "Percentil 75",
+      "summary": "Metade desses anúncios informa um salário entre {low} e {high} por ano. A mediana é {median}."
+    },
+    "few": "{currency}: {count, plural, one {# anúncio informa o salário} other {# anúncios informam o salário}}, poucos demais para mostrar uma faixa (são necessários pelo menos {min}).",
+    "notEnough": {
+      "title": "Ainda não há anúncios suficientes com salário informado",
+      "sub": "Uma faixa aparece quando pelo menos {min} anúncios na mesma moeda informam o salário. Tente um cargo mais amplo ou deixe o local em branco.",
+      "tryRole": "Consultar “{role}”",
+      "withoutPlace": "Consultar sem o local"
     }
   },
   "jobImport": {

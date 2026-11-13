@@ -140,6 +140,7 @@
       "view": "Quelle ansehen"
     },
     "dashboard": "Übersicht",
+    "pay": "Gehaltscheck",
     "profile_card": {
       "you": "Du",
       "set_role": "Zielposition festlegen",
@@ -7630,6 +7631,7 @@
       "payExact": "{amount} {period}",
       "payFrom": "Ab {min} {period}",
       "payNotListed": "Gehalt nicht angegeben",
+      "payCheck": "Sieh dir an, was Anzeigen für diesen Titel zahlen",
       "payRange": "{min} – {max} {period}",
       "payUpTo": "Bis zu {max} {period}",
       "period": {
@@ -7741,6 +7743,61 @@
       "removed": "{company} steht nicht mehr auf deiner Unternehmensliste.",
       "failed": "Deine Unternehmensliste konnte nicht geändert werden. Versuch es erneut.",
       "full": "Deine Unternehmensliste ist voll. Entferne in deiner Suche ein Unternehmen, um dieses hinzuzufügen."
+    }
+  },
+  "payCheck": {
+    "title": "Gehaltscheck",
+    "sub": "Sieh dir an, was Stellenanzeigen der letzten {days} Tage zum Gehalt für eine Jobbezeichnung angeben.",
+    "loading": "Wird geladen…",
+    "start": "Gib eine Jobbezeichnung ein, um zu sehen, was Stellenanzeigen zum Gehalt angeben.",
+    "reading": "Stellenanzeigen werden gelesen…",
+    "error": "Das Gehalt konnte gerade nicht geladen werden.",
+    "rateLimited": "Zu viele Abfragen in kurzer Zeit. Versuch es in einer Minute noch einmal.",
+    "retry": "Erneut versuchen",
+    "form": {
+      "label": "Gehalt für eine Jobbezeichnung prüfen",
+      "title": "Jobbezeichnung",
+      "titlePlaceholder": "Zum Beispiel Datenanalyst",
+      "location": "Ort (optional)",
+      "locationPlaceholder": "Stadt, Region oder Land",
+      "remote": "Nur Remote-Jobs",
+      "submit": "Gehalt prüfen",
+      "prefilled": "Aus deiner gespeicherten Suche übernommen."
+    },
+    "unavailable": {
+      "title": "Der Gehaltscheck ist hier nicht verfügbar",
+      "sub": "Diese Seite zeigt gerade keine Stellenanzeigen, deshalb gibt es kein angegebenes Gehalt zu prüfen.",
+      "back": "Zur Übersicht"
+    },
+    "result": {
+      "heading": "Angegebenes Gehalt für „{title}“",
+      "matchRole": "Gefunden als Rolle „{role}“ und als Titel, die „{text}“ enthalten.",
+      "matchText": "Gefunden als Titel, die „{text}“ enthalten.",
+      "placeAny": "Jeder Ort.",
+      "placeRemote": "Nur Remote-Jobs.",
+      "placeRemoteIn": "Remote-Jobs ({country}).",
+      "placeIn": "Ort: {place}.",
+      "placeText": "Jobs, deren Ortsangabe „{place}“ enthält.",
+      "matched": "{count, plural, =0 {Keine Stellenanzeige der letzten {days} Tage passt.} one {# Stellenanzeige der letzten {days} Tage passt.} other {# Stellenanzeigen der letzten {days} Tage passen.}}",
+      "matchedCapped": "Mehr als {count, number} Stellenanzeigen der letzten {days} Tage passen, deshalb wurden die neuesten {count, number} gelesen.",
+      "withPay": "{count, plural, =0 {Keine davon nennt ein Gehalt.} one {# davon nennt ein Gehalt.} other {# davon nennen ein Gehalt.}}",
+      "honesty": "Das ist, was Stellenanzeigen zum Gehalt angeben, keine Vorhersage für ein Angebot.",
+      "yearly": "Gehalt pro Stunde, Tag, Woche oder Monat wird als Jahresgehalt gezeigt: 2.080 Stunden, 260 Tage, 52 Wochen oder 12 Monate (oder so viele Monatsgehälter, wie die Anzeige nennt)."
+    },
+    "range": {
+      "heading": "{currency}, pro Jahr",
+      "sample": "{count, plural, one {# Anzeige nennt ein Gehalt} other {# Anzeigen nennen ein Gehalt}} in {currency}",
+      "p25": "25. Perzentil",
+      "median": "Median",
+      "p75": "75. Perzentil",
+      "summary": "Die Hälfte dieser Anzeigen nennt ein Gehalt zwischen {low} und {high} pro Jahr. Der Median liegt bei {median}."
+    },
+    "few": "{currency}: {count, plural, one {# Anzeige nennt ein Gehalt} other {# Anzeigen nennen ein Gehalt}}, zu wenige für eine Spanne (mindestens {min} nötig).",
+    "notEnough": {
+      "title": "Dafür nennen noch nicht genug Anzeigen ein Gehalt",
+      "sub": "Eine Spanne erscheint, sobald mindestens {min} Anzeigen in einer Währung ein Gehalt nennen. Versuch einen allgemeineren Titel oder lass den Ort leer.",
+      "tryRole": "„{role}“ prüfen",
+      "withoutPlace": "Ohne Ort prüfen"
     }
   },
   "jobImport": {

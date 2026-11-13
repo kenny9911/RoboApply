@@ -140,6 +140,7 @@
       "view": "查看來源"
     },
     "dashboard": "首頁",
+    "pay": "薪資參考",
     "profile_card": {
       "you": "你",
       "set_role": "設定目標職務",
@@ -7630,6 +7631,7 @@
       "payExact": "{period} {amount}",
       "payFrom": "{period} {min} 起",
       "payNotListed": "未列出薪資",
+      "payCheck": "查看這個職稱的公開薪資",
       "payRange": "{period} {min} – {max}",
       "payUpTo": "{period}最高 {max}",
       "period": {
@@ -7741,6 +7743,61 @@
       "removed": "{company}已從目標公司清單中移除。",
       "failed": "無法修改你的目標公司清單，請重試。",
       "full": "你的目標公司清單已滿。請先在搜尋條件中移除一家公司，再加入這一家。"
+    }
+  },
+  "payCheck": {
+    "title": "薪資參考",
+    "sub": "依職稱查看近 {days} 天職缺寫明的薪資。",
+    "loading": "載入中…",
+    "start": "輸入職稱，即可查看職缺寫明的薪資。",
+    "reading": "正在讀取職缺…",
+    "error": "目前無法載入薪資。",
+    "rateLimited": "短時間內查詢太多次，請過一分鐘再試。",
+    "retry": "重試",
+    "form": {
+      "label": "依職稱查詢薪資",
+      "title": "職稱",
+      "titlePlaceholder": "例如：資料分析師",
+      "location": "地點（選填）",
+      "locationPlaceholder": "城市、地區或國家",
+      "remote": "只看遠端",
+      "submit": "查詢薪資",
+      "prefilled": "已依你儲存的搜尋條件填入。"
+    },
+    "unavailable": {
+      "title": "這裡目前無法使用薪資參考",
+      "sub": "本站目前沒有顯示職缺，因此沒有可查詢的公開薪資。",
+      "back": "回到首頁"
+    },
+    "result": {
+      "heading": "「{title}」的公開薪資",
+      "matchRole": "依職務「{role}」及職稱包含「{text}」的職缺比對。",
+      "matchText": "依職稱包含「{text}」的職缺比對。",
+      "placeAny": "不限地點。",
+      "placeRemote": "只看遠端職缺。",
+      "placeRemoteIn": "遠端職缺（{country}）。",
+      "placeIn": "地點：{place}。",
+      "placeText": "地點包含「{place}」的職缺。",
+      "matched": "{count, plural, =0 {近 {days} 天沒有符合的職缺。} other {近 {days} 天有 # 則職缺符合。}}",
+      "matchedCapped": "近 {days} 天符合的職缺超過 {count, number} 則，已讀取最新的 {count, number} 則。",
+      "withPay": "{count, plural, =0 {其中沒有職缺寫明薪資。} other {其中 # 則寫明了薪資。}}",
+      "honesty": "這是職缺寫明的薪資，不是對你實際錄取薪資的預測。",
+      "yearly": "以時薪、日薪、週薪或月薪寫明的薪資，都換算成年薪顯示：2,080 小時、260 天、52 週或 12 個月（若職缺寫明發放月數，則依該月數計算）。"
+    },
+    "range": {
+      "heading": "{currency}，年薪",
+      "sample": "{count, plural, other {# 則職缺}}以 {currency} 寫明薪資",
+      "p25": "第 25 百分位數",
+      "median": "中位數",
+      "p75": "第 75 百分位數",
+      "summary": "這些職缺中，有一半寫明的年薪介於 {low} 到 {high}，中位數為 {median}。"
+    },
+    "few": "{currency}：只有 {count, plural, other {# 則職缺}}寫明薪資，數量太少，無法顯示範圍（至少需要 {min} 則）。",
+    "notEnough": {
+      "title": "寫明薪資的職缺還不夠",
+      "sub": "同一幣別中至少有 {min} 則職缺寫明薪資，才會顯示範圍。可以換個更廣泛的職稱，或不填地點。",
+      "tryRole": "查詢「{role}」",
+      "withoutPlace": "不限地點再查一次"
     }
   },
   "jobImport": {

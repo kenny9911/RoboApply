@@ -140,6 +140,7 @@
       "view": "출처 보기"
     },
     "dashboard": "대시보드",
+    "pay": "급여 확인",
     "profile_card": {
       "you": "나",
       "set_role": "희망 직무를 설정하세요",
@@ -7630,6 +7631,7 @@
       "payExact": "{period} {amount}",
       "payFrom": "{period} {min}부터",
       "payNotListed": "급여 정보 없음",
+      "payCheck": "이 직무의 공고 급여 보기",
       "payRange": "{period} {min} – {max}",
       "payUpTo": "{period} 최대 {max}",
       "period": {
@@ -7741,6 +7743,61 @@
       "removed": "{company}을(를) 회사 목록에서 삭제했어요.",
       "failed": "회사 목록을 바꾸지 못했어요. 다시 시도해 주세요.",
       "full": "회사 목록이 가득 찼어요. 이 회사를 추가하려면 검색 조건에서 다른 회사를 삭제해 주세요."
+    }
+  },
+  "payCheck": {
+    "title": "급여 확인",
+    "sub": "최근 {days}일 동안 올라온 공고에 적힌 급여를 직무 이름별로 확인해요.",
+    "loading": "불러오는 중…",
+    "start": "직무 이름을 입력하면 공고에 적힌 급여를 볼 수 있어요.",
+    "reading": "공고를 읽는 중…",
+    "error": "지금은 급여를 불러올 수 없어요.",
+    "rateLimited": "짧은 시간에 너무 많이 확인했어요. 1분 뒤에 다시 시도해 주세요.",
+    "retry": "다시 시도",
+    "form": {
+      "label": "직무 이름으로 급여 확인",
+      "title": "직무 이름",
+      "titlePlaceholder": "예: 데이터 분석가",
+      "location": "지역(선택)",
+      "locationPlaceholder": "도시, 지역 또는 국가",
+      "remote": "원격 근무만",
+      "submit": "급여 확인",
+      "prefilled": "저장한 검색 조건에서 가져왔어요."
+    },
+    "unavailable": {
+      "title": "여기서는 급여 확인을 쓸 수 없어요",
+      "sub": "지금 이 사이트에는 공고가 표시되지 않아서 확인할 급여가 없어요.",
+      "back": "대시보드로 가기"
+    },
+    "result": {
+      "heading": "‘{title}’ 공고에 적힌 급여",
+      "matchRole": "찾은 기준: ‘{role}’ 직무, 또는 직무 이름에 ‘{text}’ 포함.",
+      "matchText": "찾은 기준: 직무 이름에 ‘{text}’ 포함.",
+      "placeAny": "지역: 전체.",
+      "placeRemote": "원격 근무만.",
+      "placeRemoteIn": "원격 근무({country}).",
+      "placeIn": "지역: {place}.",
+      "placeText": "지역 정보에 ‘{place}’ 포함.",
+      "matched": "{count, plural, =0 {최근 {days}일 동안 맞는 공고가 없어요.} other {최근 {days}일 동안 공고 #건이 맞았어요.}}",
+      "matchedCapped": "최근 {days}일 동안 맞는 공고가 {count, number}건이 넘어서 최신 공고 {count, number}건을 읽었어요.",
+      "withPay": "{count, plural, =0 {그중 급여가 적힌 공고는 없어요.} other {그중 #건에 급여가 적혀 있어요.}}",
+      "honesty": "공고에 적힌 급여일 뿐, 실제로 받게 될 제안을 예측한 것이 아니에요.",
+      "yearly": "시급, 일급, 주급, 월급은 연봉으로 바꿔 보여 줘요(2,080시간, 260일, 52주, 12개월 또는 공고에 적힌 지급 개월 수)."
+    },
+    "range": {
+      "heading": "{currency}, 연 기준",
+      "sample": "{currency} 기준 급여가 적힌 공고 {count, plural, other {#건}}",
+      "p25": "25번째 백분위수",
+      "median": "중앙값",
+      "p75": "75번째 백분위수",
+      "summary": "이 공고들의 절반이 연 {low}~{high} 사이의 급여를 적었어요. 중앙값: {median}."
+    },
+    "few": "{currency}: 급여가 적힌 공고가 {count, plural, other {#건}}뿐이라 범위를 보여 주기에는 부족해요(최소 {min}건 필요).",
+    "notEnough": {
+      "title": "아직 급여가 적힌 공고가 충분하지 않아요",
+      "sub": "같은 통화로 급여가 적힌 공고가 {min}건 이상이면 범위를 보여 줘요. 더 넓은 직무 이름으로 시도하거나 지역을 비워 보세요.",
+      "tryRole": "‘{role}’ 확인하기",
+      "withoutPlace": "지역 없이 확인하기"
     }
   },
   "jobImport": {

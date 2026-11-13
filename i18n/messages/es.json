@@ -140,6 +140,7 @@
       "view": "Ver fuente"
     },
     "dashboard": "Panel",
+    "pay": "Consulta de sueldos",
     "profile_card": {
       "you": "Tú",
       "set_role": "Indica tu puesto objetivo",
@@ -7630,6 +7631,7 @@
       "payExact": "{amount} {period}",
       "payFrom": "Desde {min} {period}",
       "payNotListed": "Sueldo no indicado",
+      "payCheck": "Mira cuánto pagan los anuncios para este puesto",
       "payRange": "{min} – {max} {period}",
       "payUpTo": "Hasta {max} {period}",
       "period": {
@@ -7741,6 +7743,61 @@
       "removed": "{company} ya no está en tu lista de empresas.",
       "failed": "No se pudo cambiar tu lista de empresas. Inténtalo otra vez.",
       "full": "Tu lista de empresas está llena. Quita una en tu búsqueda para agregar esta."
+    }
+  },
+  "payCheck": {
+    "title": "Consulta de sueldos",
+    "sub": "Mira qué sueldo indican los anuncios de empleo de los últimos {days} días para un puesto.",
+    "loading": "Cargando…",
+    "start": "Escribe un puesto para ver qué sueldo indican los anuncios.",
+    "reading": "Leyendo anuncios…",
+    "error": "No se pudo cargar el sueldo en este momento.",
+    "rateLimited": "Hiciste demasiadas consultas en poco tiempo. Vuelve a intentarlo en un minuto.",
+    "retry": "Reintentar",
+    "form": {
+      "label": "Consultar el sueldo de un puesto",
+      "title": "Puesto",
+      "titlePlaceholder": "Por ejemplo, analista de datos",
+      "location": "Ubicación (opcional)",
+      "locationPlaceholder": "Ciudad, región o país",
+      "remote": "Solo empleos remotos",
+      "submit": "Consultar sueldo",
+      "prefilled": "Tomado de tu búsqueda guardada."
+    },
+    "unavailable": {
+      "title": "La consulta de sueldos no está disponible aquí",
+      "sub": "Este sitio no muestra anuncios de empleo por ahora, así que no hay sueldos indicados para consultar.",
+      "back": "Ir al panel"
+    },
+    "result": {
+      "heading": "Sueldo indicado para «{title}»",
+      "matchRole": "Coincide con el puesto «{role}» y con títulos que contienen «{text}».",
+      "matchText": "Coincide con títulos que contienen «{text}».",
+      "placeAny": "Cualquier ubicación.",
+      "placeRemote": "Solo empleos remotos.",
+      "placeRemoteIn": "Empleos remotos ({country}).",
+      "placeIn": "Ubicación: {place}.",
+      "placeText": "Empleos cuya ubicación menciona «{place}».",
+      "matched": "{count, plural, =0 {Ningún anuncio de los últimos {days} días coincidió.} one {# anuncio de los últimos {days} días coincidió.} other {# anuncios de los últimos {days} días coincidieron.}}",
+      "matchedCapped": "Coincidieron más de {count, number} anuncios de los últimos {days} días, así que se leyeron los {count, number} más recientes.",
+      "withPay": "{count, plural, =0 {Ninguno indica el sueldo.} one {# de ellos indica el sueldo.} other {# de ellos indican el sueldo.}}",
+      "honesty": "Esto es lo que indican los anuncios sobre el sueldo, no una predicción de lo que te van a ofrecer.",
+      "yearly": "El sueldo por hora, día, semana o mes se muestra como sueldo anual: 2080 horas, 260 días, 52 semanas o 12 meses (o los meses de sueldo que indique el anuncio)."
+    },
+    "range": {
+      "heading": "{currency}, al año",
+      "sample": "{count, plural, one {# anuncio indica el sueldo} other {# anuncios indican el sueldo}} en {currency}",
+      "p25": "Percentil 25",
+      "median": "Mediana",
+      "p75": "Percentil 75",
+      "summary": "La mitad de estos anuncios indica un sueldo de entre {low} y {high} al año. La mediana es {median}."
+    },
+    "few": "{currency}: {count, plural, one {# anuncio indica el sueldo} other {# anuncios indican el sueldo}}, muy pocos para mostrar un rango (se necesitan al menos {min}).",
+    "notEnough": {
+      "title": "Todavía no hay suficientes anuncios que indiquen el sueldo",
+      "sub": "Se muestra un rango cuando al menos {min} anuncios en una misma moneda indican el sueldo. Prueba con un puesto más general o deja la ubicación vacía.",
+      "tryRole": "Consultar «{role}»",
+      "withoutPlace": "Consultar sin ubicación"
     }
   },
   "jobImport": {
