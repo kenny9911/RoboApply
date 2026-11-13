@@ -2465,6 +2465,24 @@ describe('a thin list for a saved search queues one targeted ingest', () => {
   });
 });
 
+// ── The Dashboard's picks read the top of the list, and that read is not a visit to Jobs ──
+
+describe('a read that is not a visit (`visit: false`)', () => {
+  it('returns the same first page without stamping the visit; a read without the flag still stamps it', async () => {
+    seed(25);
+    const before = new Date(NOW.getTime() - 5 * 3_600_000);
+    repo.visits.set('u1', before);
+    const s = service();
+    const peek = await s.query(ctx(), { sort: 'recommended', visit: false });
+    expect(peek.items).toHaveLength(20);
+    expect(repo.visits.get('u1')).toEqual(before);
+    // "New" still counts from the previous real visit, so the Jobs list shows the same markers afterwards.
+    const visit = await s.query(ctx(), { sort: 'recommended' });
+    expect(visit.items.map((i) => i.jobId)).toEqual(peek.items.map((i) => i.jobId));
+    expect(repo.visits.get('u1')).toEqual(NOW);
+  });
+});
+
 // ── An admin viewing as the person (platform/viewAs) reads the list, and it is not their visit ──
 
 describe('an admin viewing as the person', () => {

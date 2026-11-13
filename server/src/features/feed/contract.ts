@@ -101,6 +101,13 @@ export const FeedQueryBodySchema = z
      * accept the text and do not use it.
      */
     relevance: FeedRelevanceSchema,
+    /**
+     * `false`: this read is not a visit to the Jobs list (the Dashboard's
+     * picks, read from the top of the list). The visit stamp the Jobs badge
+     * and the "New" markers count from (`RAUserUiState.lastFeedVisitAt`) is
+     * left as it is. Absent or true: a first page stamps it, as before.
+     */
+    visit: z.boolean().optional(),
   })
   .strict();
 

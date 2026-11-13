@@ -98,24 +98,23 @@ describe('useTodaySources: what is asked, by capability', () => {
     const { result } = sources();
     expect(h.queue).toHaveBeenLastCalledWith({ enabled: false });
     expect(h.suggestions).toHaveBeenLastCalledWith({ enabled: false, limit: 3 });
-    await waitFor(() => expect(h.feed).toHaveBeenLastCalledWith({ searchProfileId: 'sp1', version: 4, sort: 'recommended', fitTier: 'good', enabled: true }));
+    await waitFor(() => expect(h.feed).toHaveBeenLastCalledWith({ searchProfileId: 'sp1', version: 4, sort: 'recommended', fitTier: 'good', visit: false, enabled: true }));
     expect(result.current.queue).toEqual({ status: 'off' });
     expect(result.current.picksFrom).toBe('feed');
     expect(valueOf(result.current.picks)?.map((p) => p.jobId)).toEqual(['a', 'b', 'c']);
     expect(result.current.flags).toMatchObject({ agent: false, copilot: false });
   });
 
-  it('reads the new-jobs count before it opens the Jobs list: opening the list is the visit the count starts from', async () => {
+  it('reads the top of the Jobs list as a read that is not a visit, alongside the new-jobs count', async () => {
     h.caps.mockReturnValue(flags({ 'jobs.feed': true }));
     let answer: (value: { count: number; since: string | null }) => void = () => undefined;
     h.getNewCount.mockReturnValue(new Promise((resolve) => (answer = resolve)));
     const { result } = sources();
     await waitFor(() => expect(h.getNewCount).toHaveBeenCalledTimes(1));
-    // The count is still on its way: the list is not asked for.
-    expect(h.feed.mock.calls.every(([params]) => (params as { enabled: boolean }).enabled === false)).toBe(true);
+    // The list read does not reset the count (`visit: false`), so it need not wait for it.
+    await waitFor(() => expect(h.feed).toHaveBeenLastCalledWith(expect.objectContaining({ visit: false, enabled: true })));
     answer({ count: 5, since: '2026-11-09T08:00:00.000Z' });
-    await waitFor(() => expect(h.feed).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true })));
-    expect(result.current.newJobs).toEqual({ status: 'ready', data: { count: 5, since: '2026-11-09T08:00:00.000Z', capped: false } });
+    await waitFor(() => expect(result.current.newJobs).toEqual({ status: 'ready', data: { count: 5, since: '2026-11-09T08:00:00.000Z', capped: false } }));
   });
 
   it('still opens the Jobs list when the count could not be read', async () => {

@@ -293,6 +293,11 @@ export interface FeedQueryInput {
    * market's. Never part of the session hash: it changes no row and no order.
    */
   locale?: string;
+  /**
+   * `false`: the read is not a visit to the Jobs list (the Dashboard's picks),
+   * so `lastFeedVisitAt` is not stamped. Never part of the session hash.
+   */
+  visit?: boolean;
 }
 
 /** The input of `preview` (the Assistant's tools, precompute, the job-search index read). */
@@ -1463,8 +1468,9 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     });
     // An admin viewing as the person (platform/viewAs) reads the list without it counting as their visit.
     const ownVisit = !getCurrentViewAs();
-    // Opening the list is a visit: the Jobs badge counts from here (a category browse is not).
-    if (!browse && ownVisit) await repo.stampFeedVisit(ctx.userId, ctx.now).catch((err) => logger.warn('FEED', 'could not stamp the feed visit', { error: String(err) }));
+    // Opening the list is a visit: the Jobs badge counts from here (a category browse is not, nor a read that
+    // says it is not one: the Dashboard's picks, `visit: false`).
+    if (!browse && ownVisit && input.visit !== false) await repo.stampFeedVisit(ctx.userId, ctx.now).catch((err) => logger.warn('FEED', 'could not stamp the feed visit', { error: String(err) }));
     // The saved search as it is (no one-off override, no typed query) came back thin: one targeted ingest.
     const asSaved = !browse && input.q === undefined && !Object.keys(input.overrides ?? {}).length;
     if (asSaved && ownVisit && w.rows.length < L.widenBelowRows) requestIngestOnce(profile, ctx.now);

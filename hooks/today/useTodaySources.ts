@@ -9,9 +9,9 @@
 //   search          useActiveSearchProfile        the goal line
 //   queue           useReadyQueue                 applications being prepared and waiting (flag `agent`)
 //   picks           useSuggestions({ limit: 3 })  with `agent`: top fits not yet on the list
-//                   useFeed                       without it: the top of the Jobs list. There is no
-//                                                 other read of that list: the server counts it as a
-//                                                 visit to Jobs, so the new-jobs count is read first
+//                   useFeed                       without it: the top of the Jobs list, read with
+//                                                 `visit: false` (not a visit to Jobs: the Jobs badge
+//                                                 and the "New" markers keep counting from the last one)
 //   newJobs         GET /feed/new-count           the Jobs nav badge's own count, with its date
 //   board           usePipelineBoard              applications (the cache entry /applications and its badge use)
 //   profileMissing  useProfile                    details application forms ask for (the Profile badge's source)
@@ -136,20 +136,19 @@ export function useTodaySources(): TodaySources {
     refetchOnWindowFocus: false,
     retry: false,
   });
-  // Without Ready to apply the picks are the top of the Jobs list itself: the
-  // same query key as /jobs on its default sort, so the two share one read.
-  // Opening the list IS a visit to Jobs for the server (it stamps the instant
-  // the new-jobs count starts from), so the count is read first: the line
-  // "Found N new jobs since {date}" is then about the time before this visit,
-  // never a count taken a moment after the list reset it.
+  // Without Ready to apply the picks are the top of the Jobs list on its
+  // default sort, read with `visit: false`: looking at the Dashboard is not a
+  // visit to Jobs, so the server leaves the instant the Jobs badge and the
+  // "New" markers count from as it is (the list's own read on /jobs stamps
+  // it). The read is keyed apart from /jobs' list for that reason.
   const useFeedPicks = flagsReady && !agent && feedOn;
-  const countSettled = newCount.data !== undefined || newCount.isError;
   const feed = useFeed({
     searchProfileId: profiles.profile?.id ?? null,
     version: profiles.profile?.version ?? null,
     sort: 'recommended',
     fitTier: profiles.profile?.filters.fitTier ?? 'all',
-    enabled: useFeedPicks && !profiles.isPending && countSettled && picksMayLoad,
+    visit: false,
+    enabled: useFeedPicks && !profiles.isPending && picksMayLoad,
   });
   const board = usePipelineBoard();
   const profile = useProfile();
