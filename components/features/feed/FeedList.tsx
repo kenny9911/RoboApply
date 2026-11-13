@@ -11,6 +11,8 @@
 // A card whose item carries `alsoIn` (the same role at the same company in
 // other places, folded into it by the server) gets the "Also in N more
 // locations" control directly under it (AlsoInLocations.tsx).
+// The card of the job open in the split view is marked selected (`active`),
+// and the list tells its owner which job it shows first (`onFirstShown`).
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
@@ -38,9 +40,16 @@ export interface FeedListProps {
   label: string;
   /** A prompt shown inside the list after the card at index `after` (the rating card after 10). */
   inline?: { after: number; node: ReactNode } | null;
+  /**
+   * The first job the list shows (null: it shows none), once its first page
+   * has answered, and again whenever that changes (the card was hidden, a new
+   * list came). Not called while the first page loads. The desktop split view
+   * opens that job (JobsWorkspace).
+   */
+  onFirstShown?: (jobId: string | null) => void;
 }
 
-export function FeedList({ feed, market, activeJobId = null, onOpen, onSeen, empty, label, inline = null }: FeedListProps) {
+export function FeedList({ feed, market, activeJobId = null, onOpen, onSeen, empty, label, inline = null, onFirstShown }: FeedListProps) {
   const t = useTranslations('jobs.workspace');
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const sentinel = useRef<HTMLDivElement>(null);
@@ -65,6 +74,13 @@ export function FeedList({ feed, market, activeJobId = null, onOpen, onSeen, emp
     io.observe(node);
     return () => io.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // The first card on screen (after the jobs the user hid), for the desktop split view.
+  const answered = !feed.isPending;
+  const firstShown = items[0]?.jobId ?? null;
+  useEffect(() => {
+    if (answered) onFirstShown?.(firstShown);
+  }, [answered, firstShown, onFirstShown]);
 
   if (feed.isPending) {
     return (

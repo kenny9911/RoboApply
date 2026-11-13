@@ -36,7 +36,7 @@ export interface BucketSummary {
   resetsAt: string;
   /**
    * The cap the Pro plan gives for this bucket, per `proWindow` — only when
-   * that is more than the cap above (so "Pro: up to 30 kits a week" can be
+   * that is more than the cap above (so "Pro: prepare up to 30 applications a week" can be
    * printed from the catalog, never from copy). Absent when Pro gives no more:
    * the user is on Pro, or an override already lifts the cap.
    */

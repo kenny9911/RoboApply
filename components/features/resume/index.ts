@@ -42,6 +42,10 @@ export {
   type NextStep,
   type StartMethod,
 } from './hub';
+// The editor's tabs (Edit · Customize · Review · Tailor), the open one in
+// `?tab=`: a link to a tab of a resume. The editor page imports the tab bar
+// and the panels from ./editor directly.
+export { EDITOR_TABS, editorTabHref, type EditorTab } from './editor/tabs';
 export {
   TEMPLATES,
   RECOMMENDED_TEMPLATE,

@@ -38,16 +38,17 @@ import { Providers } from './providers';
 // never covered by these latin fonts (subsets:['latin']) — they fall back to
 // system fonts as before.
 
-// The interface uses the self-hosted Bricolage Grotesque variable font
-// (weights 200–800, optical sizes 12–96) throughout — the Paper system,
-// docs/design-system.md. Inter remains available only for the user's resume
-// document templates.
+// The interface uses the self-hosted Inter variable font (weights 100–900)
+// throughout — the Desk system, docs/design-system.md, which follows
+// resume.io's neutral sans (its own face is proprietary). Inter is also the
+// default face of the user's resume document templates. Bricolage Grotesque
+// (the October Paper system's face) stays declared for anything that still
+// names --font-bricolage, but is no longer preloaded.
 const inter = localFont({
   src: './fonts/inter-100-900.woff2',
   weight: '100 900',
   display: 'swap',
   variable: '--font-inter',
-  preload: false,
 });
 
 const bricolage = localFont({
@@ -55,6 +56,7 @@ const bricolage = localFont({
   weight: '200 800',
   display: 'swap',
   variable: '--font-bricolage',
+  preload: false,
 });
 
 // ── Résumé document type ──────────────────────────────────────────────────

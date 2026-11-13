@@ -7,6 +7,8 @@
 //   RoboApply unchanged: pay, posted, last checked and source on the card.
 //   Tailor    <TailorButton from="feed"> shows only when AI tailoring is
 //             available to this user; it opens /resume?tailor=<jobId>.
+//             With the `agent` flag (redesign §6) the same entry is an item of
+//             the card's "…" menu: same gate, same launch.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -305,6 +307,76 @@ describe('feed card — Tailor resume', () => {
       { flags: { 'ai.text': true } },
     );
     await waitFor(() => expect(screen.getAllByRole('button', { name: /^Tailor your resume for/ })).toHaveLength(20));
+    expect(net.to('GET', GRADE)).toHaveLength(1);
+  });
+});
+
+describe('feed card — Tailor resume in the "…" menu (flag `agent`, redesign §6)', () => {
+  const AGENT = { 'ai.text': true, agent: true };
+  const openMenu = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    return screen.getByRole('menu', { name: 'More options' });
+  };
+
+  it('moves into the menu, and still opens the tailor flow for this job', async () => {
+    installFetch(resumeRoutes(true));
+    renderFeed(card(feedItem(7), 'intl'), { flags: AGENT });
+    await act(async () => undefined);
+    // Not a button of the row any more.
+    expect(screen.queryByRole('button', { name: /Tailor/ })).toBeNull();
+    const menu = openMenu();
+    const item = await within(menu).findByRole('menuitem', { name: 'Tailor resume' });
+    // First in the menu, above the items that were already there.
+    expect(within(menu).getAllByRole('menuitem')[0]).toBe(item);
+    fireEvent.click(item);
+    expect(nav.push).toEqual(['/resume?tailor=job_7&from=feed']);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('keeps its gate: no item when the brand has no usable text model, when the user has not agreed to AI, or without a resume', async () => {
+    const off = installFetch(resumeRoutes(true));
+    const a = renderFeed(card(feedItem(7), 'cn'), { brand: 'goapply', flags: { 'ai.text': false, agent: true } });
+    openMenu();
+    await act(async () => undefined);
+    expect(screen.queryByRole('menuitem', { name: /Tailor/ })).toBeNull();
+    expect(off.to('GET', GRADE)).toHaveLength(0);
+    a.unmount();
+
+    const noConsent = installFetch(resumeRoutes(false));
+    const b = renderFeed(card(feedItem(7), 'cn'), { brand: 'goapply', flags: AGENT });
+    openMenu();
+    await waitFor(() => expect(noConsent.to('GET', GRADE)).toHaveLength(1));
+    await act(async () => undefined);
+    expect(screen.queryByRole('menuitem', { name: /Tailor/ })).toBeNull();
+    b.unmount();
+
+    resumes.list = [];
+    const noResume = installFetch(resumeRoutes(true));
+    renderFeed(card(feedItem(7), 'intl'), { flags: AGENT });
+    openMenu();
+    await act(async () => undefined);
+    expect(screen.queryByRole('menuitem', { name: /Tailor/ })).toBeNull();
+    expect(noResume.to('GET', GRADE)).toHaveLength(0);
+  });
+
+  it('a list of cards asks nothing until a menu is opened, then shares one consent lookup', async () => {
+    const net = installFetch(resumeRoutes(true));
+    renderFeed(
+      <>
+        {Array.from({ length: 20 }, (_, i) => (
+          <JobCard key={i} item={feedItem(i + 1)} position={i} market="intl" />
+        ))}
+      </>,
+      { flags: AGENT },
+    );
+    await act(async () => undefined);
+    expect(net.to('GET', GRADE)).toHaveLength(0);
+    const first = screen.getAllByTestId('job-card')[0];
+    fireEvent.click(within(first).getByRole('button', { name: 'More options' }));
+    expect(await within(first).findByRole('menuitem', { name: 'Tailor resume' })).toBeInTheDocument();
+    const second = screen.getAllByTestId('job-card')[1];
+    fireEvent.click(within(second).getByRole('button', { name: 'More options' }));
+    expect(await within(second).findByRole('menuitem', { name: 'Tailor resume' })).toBeInTheDocument();
     expect(net.to('GET', GRADE)).toHaveLength(1);
   });
 });

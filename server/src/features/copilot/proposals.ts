@@ -17,6 +17,17 @@
 //     cover_letter, job_import, rewrite, outreach) only now;
 //   - memory_add: GoApply needs a live `copilot_memory` consent (403), at
 //     most 50 facts (409 memory_full; counted and stored under one lock).
+//   - list_add / prepare_application (the applications agent): need the
+//     capability `agent` (404 feature_disabled, the proposal stays pending).
+//     The job joins the list through the agent's own `addToQueue` (no
+//     credit; the item it has when the job is there already). To prepare,
+//     the agent's own `prepare` then starts the kit through the `ready_kits`
+//     credit gate, its reservation keyed `copilot:<proposalId>`; a short
+//     bucket answers 402 and the proposal stays pending. A job already past
+//     "To prepare" is not prepared twice: the result says where it stands.
+//     A closed post closes the suggestion (409 reason job_closed). The result
+//     card `application_status` links to the application. Nothing is ever
+//     submitted (D1): the user opens the application and submits it.
 // The reply to the click never waits long on the bookkeeping: the count shown
 // after a filter change and the update of the stored card are each given
 // COUNT_AFTER_WAIT_MS, then the click is answered and the card update finishes
@@ -27,14 +38,16 @@
 // while that work is still running in this process a second click is told
 // `applying` instead: the work may still fail and put the proposal back.
 // The card in the stored message gets the new status, and a result card
-// (tailor_ready, cover_letter, job_imported, rewrite_ready; for an outreach
-// draft a link to the job's People tab, where the draft is kept) is appended,
+// (tailor_ready, cover_letter, job_imported, rewrite_ready, application_status;
+// for an outreach draft a link to the job's People tab, where the draft is kept) is appended,
 // both under a row lock on the message (store.updateCards). The update is
 // safe to run twice: a result card is appended once, by its id.
 
 import { HttpError } from '../../platform/http.js';
 import type { Market, ProductBrand } from '../../platform/brand/registry.js';
+import type { FlagKey } from '../../platform/flags.js';
 import { logger } from '../../services/LoggerService.js';
+import { PREPARABLE_STATES, type QueueItemView } from '../agent/contract.js';
 import type { ManualJob } from '../jobs/import/index.js';
 import { OUTREACH_CHANNELS, type OutreachChannel, type OutreachDraftView } from '../network/contract.js';
 import {
@@ -42,8 +55,11 @@ import {
   COPILOT_MEMORY_MAX,
   CreditActionPayloadSchema,
   FilterChangePayloadSchema,
+  ListAddPayloadSchema,
   MemoryAddPayloadSchema,
+  PrepareApplicationPayloadSchema,
   PROPOSAL_TTL_MS,
+  type ApplicationStatusCardData,
   type ApplyProposalResponse,
   type CopilotCard,
   type CountView,
@@ -66,6 +82,35 @@ export interface ProposalServiceDeps {
   newCardId: () => string;
   /** True when this process knows the reply `messageId` could not be stored (CopilotService). */
   turnUnsaved?: (messageId: string) => boolean;
+  /**
+   * The account's capabilities: `agent` gates the applications proposals
+   * (list_add, prepare_application), as it gates the list's own routes.
+   * Absent, those proposals are refused (fails closed).
+   */
+  isEnabled?: (key: FlagKey, userId: string) => Promise<boolean>;
+}
+
+/** Proposal kinds the applications agent carries out (capability `agent`). */
+const APPLICATION_KINDS: ReadonlySet<string> = new Set(['list_add', 'prepare_application']);
+
+const errorReason = (err: unknown): string | null => {
+  const details = (err as { details?: unknown } | null)?.details;
+  const reason = details && typeof details === 'object' ? (details as { reason?: unknown }).reason : undefined;
+  return typeof reason === 'string' ? reason : null;
+};
+
+/** The agent refused the job because its post closed (410 gone, reason job_closed). */
+const isJobClosedError = (err: unknown) => (err as { code?: unknown } | null)?.code === 'gone' || errorReason(err) === 'job_closed';
+
+/** The result card of an applied list_add / prepare_application: where the application stands now. */
+export function applicationStatusData(item: QueueItemView): ApplicationStatusCardData {
+  return {
+    jobId: item.jobId,
+    state: item.state,
+    jobTitle: item.job?.title ?? null,
+    company: item.job?.companyName || null,
+    trackerEntryId: item.trackerEntryId,
+  };
 }
 
 /**
@@ -359,6 +404,50 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
     return { applied: true, result: { card, ...extra } };
   }
 
+  /** The job's list item as it is now (null when it is not on the list, or not for this user). */
+  async function itemNow(userId: string, jobId: string): Promise<QueueItemView | null> {
+    const { items } = await areas.jobPlaces(userId, [jobId]);
+    return items.find((p) => p.jobId === jobId)?.item ?? null;
+  }
+
+  /**
+   * list_add / prepare_application, through the applications agent: the same
+   * calls, list, credit rules and states as the web's "Prepare application".
+   */
+  async function applyApplication(userId: string, row: ProposalRow): Promise<ApplyProposalResponse> {
+    const prepareIt = row.kind === 'prepare_application';
+    const { jobId } = prepareIt ? PrepareApplicationPayloadSchema.parse(row.payload) : ListAddPayloadSchema.parse(row.payload);
+    let card: CopilotCard;
+    try {
+      // On the list (or the item it already has): no credit, one item per job.
+      let item = await areas.addToList(userId, jobId);
+      if (prepareIt && (PREPARABLE_STATES as readonly string[]).includes(item.state)) {
+        try {
+          // The kit credit is reserved under this proposal's key: however often it is sent, one kit.
+          await areas.prepareApplication(userId, item.id, `copilot:${row.id}`);
+          item = { ...item, state: 'preparing' };
+        } catch (err) {
+          // Started meanwhile from another window: that is where it stands, and this click used nothing.
+          const now = (err as { code?: unknown } | null)?.code === 'conflict' ? await itemNow(userId, jobId).catch(() => null) : null;
+          if (!now || (PREPARABLE_STATES as readonly string[]).includes(now.state)) throw err;
+          item = now;
+        }
+      }
+      card = { type: 'application_status', id: deps.newCardId(), data: applicationStatusData(item) };
+    } catch (err) {
+      if (isJobClosedError(err)) {
+        // The post closed: nothing was added or used, and this suggestion cannot be used again.
+        await unclaim(row, 'conflict');
+        await syncCards(row, 'conflict');
+        throw new HttpError('conflict', 'This job is no longer listed, so nothing was added or prepared.', { reason: 'job_closed' });
+      }
+      await unclaim(row);
+      throw err;
+    }
+    await syncCardsSoon(row, 'applied', [card]);
+    return { applied: true, result: { card } };
+  }
+
   async function applyMemory(userId: string, row: ProposalRow): Promise<ApplyProposalResponse> {
     const payload = MemoryAddPayloadSchema.parse(row.payload);
     // Count and create are one locked step, so concurrent applies cannot pass the cap together.
@@ -381,6 +470,11 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
         // Fast path (the proposal stays pending); applyMemory re-checks atomically.
         if ((await store.countMemory(userId)) >= COPILOT_MEMORY_MAX) throw memoryFull();
       }
+      if (APPLICATION_KINDS.has(row.kind) && row.status === 'pending') {
+        // The list's own capability, checked before anything is consumed (the proposal stays pending).
+        const on = deps.isEnabled ? await deps.isEnabled('agent', userId).catch(() => false) : false;
+        if (!on) throw new HttpError('feature_disabled', 'Preparing applications is not available for this account.', { reason: 'feature_disabled', feature: 'agent' });
+      }
       if (row.kind === 'filter_change' && options.baseVersion !== undefined) {
         const payload = FilterChangePayloadSchema.safeParse(row.payload);
         if (payload.success && payload.data.baseVersion !== options.baseVersion) {
@@ -397,6 +491,9 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
             return await applyFilter(userId, row, market);
           case 'credit_action':
             return await applyCreditAction(userId, row, options.locale);
+          case 'list_add':
+          case 'prepare_application':
+            return await applyApplication(userId, row);
           case 'memory_add':
             try {
               return await applyMemory(userId, row);

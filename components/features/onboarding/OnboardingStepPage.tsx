@@ -6,6 +6,11 @@
 //   - Reads GET /onboarding/state. A finished user goes to the jobs page; a
 //     step beyond where the user is goes to their current step (no jumping
 //     ahead; the server refuses it too).
+//   - A RoboApply user who has saved no step yet belongs in the two-screen
+//     start flow (/onboarding/start, ./express): these screens send them
+//     there, unless they asked for these screens (`?classic=1`, the start
+//     screen's "Answer a few more questions instead"). Once a step is saved
+//     the user is mid-way and stays here; GoApply is never sent there.
 //   - Saving: PUT /onboarding/steps/:step, then the server's `nextRoute`.
 //     O7 uses POST /onboarding/confirm. Back goes to the previous screen of
 //     this brand and branch and keeps the answers (they are re-read from the
@@ -30,8 +35,8 @@
 //   - A finished user goes to the server's `firstValueRoute` (RoboApply: /jobs).
 //   - First-party events: onboarding_step_viewed / _completed / _abandoned.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -57,7 +62,7 @@ import {
   type CnMatchSummary,
   type CnOnboardingStepProps,
 } from '../onboarding-cn';
-import { screensFor, stageOrder } from './flow';
+import { CLASSIC_FLOW_PARAM, classicFlowChosen, expressRedirect, screensFor, stageOrder, startsInExpress } from './flow';
 import { BasicsStep } from './steps/BasicsStep';
 import { ConfirmStep } from './steps/ConfirmStep';
 import { GoalStep } from './steps/GoalStep';
@@ -94,8 +99,20 @@ export function matchSummaryOf(state: Pick<OnboardingState, 'answers'>): CnMatch
 }
 
 export function OnboardingStepPage({ step }: { step: string }) {
+  // The screen reads the query string (`useSearchParams`): inside a boundary,
+  // so a page that renders it can be prerendered without failing the build.
+  return (
+    <Suspense fallback={null}>
+      <OnboardingStepScreen step={step} />
+    </Suspense>
+  );
+}
+
+function OnboardingStepScreen({ step }: { step: string }) {
   const t = useTranslations('onboarding.frame');
   const router = useRouter();
+  // The user's choice of these screens over the start flow (null outside the app router).
+  const classic = classicFlowChosen(useSearchParams());
   const brandId = useBrandId();
   const { refresh } = useAuth();
   const stateQuery = useOnboardingState();
@@ -122,10 +139,15 @@ export function OnboardingStepPage({ step }: { step: string }) {
     if (exitRoute) return exitRoute;
     if (!state) return null;
     if (state.completed) return state.firstValueRoute ?? '/jobs';
-    if (state.stage !== 'done' && state.stage !== 'tour' && stageOrder(step) > stageOrder(state.stage) && state.nextRoute) return state.nextRoute;
-    if (index < 0 && state.nextRoute) return state.nextRoute;
+    // Nothing saved yet: the start flow, unless the user chose these screens.
+    const express = expressRedirect(state, classic);
+    if (express) return express;
+    // Such a user who is sent back to their first step keeps that choice in the URL (the step would send them on otherwise).
+    const current = state.nextRoute && startsInExpress(state) ? `${state.nextRoute}?${CLASSIC_FLOW_PARAM}=1` : state.nextRoute;
+    if (state.stage !== 'done' && state.stage !== 'tour' && stageOrder(step) > stageOrder(state.stage) && current) return current;
+    if (index < 0 && current) return current;
     return null;
-  }, [state, step, index, exitRoute]);
+  }, [state, step, index, exitRoute, classic]);
 
   useEffect(() => {
     if (redirect) router.replace(redirect);

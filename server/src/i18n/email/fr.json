@@ -279,10 +279,10 @@
     },
     "kitReady": {
       "body": "Ton CV adapté et tes réponses pour le poste {title} chez {company} sont prêts. Relis-les, puis postule toi-même sur le site de l’entreprise.",
-      "cta": "Relire le kit",
-      "heading": "Ton kit est prêt à être relu",
-      "preheader": "Relis ton kit pour {title}.",
-      "subject": "Ton kit de candidature pour {title} est prêt"
+      "cta": "Relire la candidature",
+      "heading": "Ta candidature est prête à être relue",
+      "preheader": "Relis ta candidature pour {title}.",
+      "subject": "Ta candidature pour {title} est prête à être relue"
     },
     "readyList": {
       "body": "{count, plural, one {# offre est prête à être consultée.} other {# offres sont prêtes à être consultées.}} C’est toi qui choisis lesquelles ouvrir, et tu envoies chaque candidature toi-même.",

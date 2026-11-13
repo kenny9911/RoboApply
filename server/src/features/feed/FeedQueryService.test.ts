@@ -2465,6 +2465,24 @@ describe('a thin list for a saved search queues one targeted ingest', () => {
   });
 });
 
+// ── The Dashboard's picks read the top of the list, and that read is not a visit to Jobs ──
+
+describe('a read that is not a visit (`visit: false`)', () => {
+  it('returns the same first page without stamping the visit; a read without the flag still stamps it', async () => {
+    seed(25);
+    const before = new Date(NOW.getTime() - 5 * 3_600_000);
+    repo.visits.set('u1', before);
+    const s = service();
+    const peek = await s.query(ctx(), { sort: 'recommended', visit: false });
+    expect(peek.items).toHaveLength(20);
+    expect(repo.visits.get('u1')).toEqual(before);
+    // "New" still counts from the previous real visit, so the Jobs list shows the same markers afterwards.
+    const visit = await s.query(ctx(), { sort: 'recommended' });
+    expect(visit.items.map((i) => i.jobId)).toEqual(peek.items.map((i) => i.jobId));
+    expect(repo.visits.get('u1')).toEqual(NOW);
+  });
+});
+
 // ── An admin viewing as the person (platform/viewAs) reads the list, and it is not their visit ──
 
 describe('an admin viewing as the person', () => {
@@ -2727,5 +2745,80 @@ describe('the first page says whether the text to rank by took part in the list'
     expect((await s.query(ctx(), { sort: 'newest', relevance: 'kafka' })).relevanceApplied).toBe(false);
     const next = await s.query(ctx(), { sort: 'recommended', relevance: 'kafka', cursor: matched.cursor! });
     expect(next).not.toHaveProperty('relevanceApplied');
+  });
+});
+
+describe("the reader's list on the cards (docs/agent-driven/REDESIGN.md §9)", () => {
+  const listOn = (on: boolean) => ({ applicationsOn: vi.fn(async (_userId: string) => on) });
+
+  it("agent on: every card of every page carries its list state, read once per page for the page's ids", async () => {
+    seed(30);
+    const s = service(listOn(true));
+    const first = await s.query(ctx(), { sort: 'newest' });
+    // Rows of the first page in three states; the rest are not on the list.
+    const [a, b, c] = first.items.map((i) => i.jobId);
+    repo.applications.set(a!, { state: 'preparing', trackerEntryId: null });
+    repo.applications.set(b!, { state: 'ready_for_review', trackerEntryId: null });
+    repo.applications.set(c!, { state: 'opened', trackerEntryId: 'te_9' });
+    repo.applicationReads = [];
+    const again = await s.query(ctx(), { sort: 'newest' });
+    expect(again.items.slice(0, 3).map((i) => i.application)).toEqual([
+      { state: 'preparing', trackerEntryId: null },
+      { state: 'ready_for_review', trackerEntryId: null },
+      { state: 'opened', trackerEntryId: 'te_9' },
+    ]);
+    // A job that is not on the list says so: null, never left out.
+    expect(again.items.slice(3).every((i) => i.application === null)).toBe(true);
+    // One read for the page, with every id of the page: no read per card.
+    expect(repo.applicationReads).toEqual([again.items.map((i) => i.jobId)]);
+    const next = await s.query(ctx(), { sort: 'newest', cursor: again.cursor! });
+    expect(next.items).toHaveLength(10);
+    expect(next.items.every((i) => i.application === null)).toBe(true);
+    expect(repo.applicationReads).toHaveLength(2);
+    expect(repo.applicationReads[1]).toEqual(next.items.map((i) => i.jobId));
+  });
+
+  it('agent off, or no seam: no card carries the field and the list is not read', async () => {
+    seed(5);
+    repo.applications.set('j000', { state: 'preparing', trackerEntryId: null });
+    const off = listOn(false);
+    for (const s of [service(off), service()]) {
+      const res = await s.query(ctx(), { sort: 'newest' });
+      expect(res.items).toHaveLength(5);
+      for (const item of res.items) expect(item).not.toHaveProperty('application');
+    }
+    expect(off.applicationsOn).toHaveBeenCalledWith('u1');
+    expect(repo.applicationReads).toEqual([]);
+  });
+
+  it('a list that cannot be read, or a state this contract does not name, says nothing on the card (D3); the page still answers', async () => {
+    seed(3);
+    repo.applications.set('j000', { state: 'somewhere_new', trackerEntryId: null });
+    repo.applications.set('j001', { state: 'approved', trackerEntryId: null });
+    const s = service(listOn(true));
+    const res = await s.query(ctx(), { sort: 'newest' });
+    const byId = new Map(res.items.map((i) => [i.jobId, i]));
+    expect(byId.get('j000')).not.toHaveProperty('application');
+    expect(byId.get('j001')!.application).toEqual({ state: 'approved', trackerEntryId: null });
+    expect(byId.get('j002')!.application).toBeNull();
+    repo.failApplications = true;
+    const failed = await s.query(ctx(), { sort: 'newest' });
+    expect(failed.items).toHaveLength(3);
+    for (const item of failed.items) expect(item).not.toHaveProperty('application');
+    // The capability check failing is the same: nothing is said, and the list is not read.
+    repo.failApplications = false;
+    repo.applicationReads = [];
+    const flaky = service({ applicationsOn: async () => Promise.reject(new Error('flags down')) });
+    for (const item of (await flaky.query(ctx(), { sort: 'newest' })).items) expect(item).not.toHaveProperty('application');
+    expect(repo.applicationReads).toEqual([]);
+  });
+
+  it('the preview seam other areas read never reads the list', async () => {
+    seed(4);
+    repo.applications.set('j000', { state: 'preparing', trackerEntryId: null });
+    const items = await service(listOn(true)).preview(ctx(), { limit: 4, sort: 'newest' });
+    expect(items).toHaveLength(4);
+    for (const item of items) expect(item).not.toHaveProperty('application');
+    expect(repo.applicationReads).toEqual([]);
   });
 });

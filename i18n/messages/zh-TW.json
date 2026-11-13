@@ -17,7 +17,8 @@
   },
   "nav": {
     "aria_primary": "主要導覽",
-    "brand_home": "%BRAND% —— 前往職缺",
+    "brand_home": "%BRAND% 首頁",
+    "today": "今天",
     "jobs": "職缺",
     "resume": "履歷",
     "applications": "應徵紀錄",
@@ -46,11 +47,7 @@
       "refresh_limited": "過去幾分鐘內，你已經搜尋或重新整理職缺清單很多次。請等幾分鐘後再試。",
       "search_jobs": "在職缺中搜尋「{query}」"
     },
-    "workspace": "你的工作區",
-    "workspace_note": "多一點清楚，下一步更有把握。",
     "skip_content": "跳至主要內容",
-    "guide": "聚焦你的職涯方向",
-    "guide_note": "探索。準備。向前。",
     "aria_lower": "帳號與更多",
     "ask": "提問",
     "ask_aria": "向助理提問",
@@ -141,6 +138,18 @@
       },
       "source": "來源：{label}",
       "view": "查看來源"
+    },
+    "dashboard": "首頁",
+    "profile_card": {
+      "you": "你",
+      "set_role": "設定目標職務",
+      "percent": "{percent}%",
+      "complete": "個人檔案完成度 {percent}%"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, other {# 筆未開啟}}",
+      "ready_open": "查看已準備好的應徵",
+      "upgrade": "升級"
     }
   },
   "jobs": {
@@ -393,7 +402,8 @@
       },
       "tabsLabel": "職缺清單",
       "title": "職缺",
-      "introByDate": "職缺依刊登日期排列，最新的在最前面。開啟任何一個就能看到詳細資訊。"
+      "introByDate": "職缺依刊登日期排列，最新的在最前面。開啟任何一個就能看到詳細資訊。",
+      "searchLabel": "你的搜尋"
     },
     "zero": {
       "gain": "{count, plural, one {+# 個職缺} other {+# 個職缺}}",
@@ -1009,7 +1019,23 @@
       },
       "title": "範本與版面"
     },
-    "ai_edit_cost": "每次用 AI 修改一條重點、你的個人簡介或技能，會使用 1 點。"
+    "ai_edit_cost": "每次用 AI 修改一條重點、你的個人簡介或技能，會使用 1 點。",
+    "editor_tabs": {
+      "label": "履歷編輯器",
+      "edit": "編輯",
+      "customize": "樣式",
+      "review": "檢查",
+      "tailor": "調整",
+      "new": "新功能",
+      "check": {
+        "loading": "正在載入上次的檢查結果…",
+        "load_error": "無法載入上次的檢查結果。",
+        "counts": "依優先順序排列的項目",
+        "edit_section": "編輯這個區塊",
+        "edit_section_aria": "編輯「{section}」區塊",
+        "change_template": "更換範本"
+      }
+    }
   },
   "applications": {
     "page_title": "應徵紀錄",
@@ -1254,6 +1280,12 @@
       "title": "本週",
       "write": "寫一份摘要",
       "writing": "撰寫中…"
+    },
+    "switch": {
+      "label": "你的應徵紀錄",
+      "ready": "準備應徵",
+      "sent": "已送出",
+      "waiting": "{count, plural, other {有 # 份應徵資料已準備好，等你處理}}"
     }
   },
   "practice": {
@@ -1269,7 +1301,7 @@
         "noMatch": "沒有職務符合「{query}」。換個短一點的詞，或直接貼上職缺說明。",
         "planLegend": "你的這場面試",
         "planHint": "已照職缺配好，哪一項都能改。",
-        "pickRoleFirst": "先在上面選一個職缺。",
+        "pickRoleFirst": "先選一個職缺。",
         "chip": {
           "focus": "重點",
           "mode": "形式",
@@ -1283,6 +1315,35 @@
         "useShorter": "改成 {minutes} 分鐘",
         "previewToggle": "預覽面試可能會問的問題",
         "costShort": "{n, plural, other {# 點}} —— 比你現有的點數多"
+      },
+      "side": {
+        "howTitle": "練習怎麼進行",
+        "steps": {
+          "job": {
+            "title": "選職缺",
+            "body": "搜尋招募中的職缺、依產業瀏覽，或貼上職缺說明。目標公司選填。"
+          },
+          "plan": {
+            "title": "拿到這個職缺的安排",
+            "body": "這個職缺會有哪些面試官、各自看什麼；填了公司，還會寫出這家公司怎麼面試。哪一項都能改。"
+          },
+          "interview": {
+            "title": "開口練習",
+            "body": "面試官用語音提問，你開口回答，畫面上即時顯示逐字稿。"
+          },
+          "written": {
+            "title": "用文字作答",
+            "body": "題目一題一題出現，你逐題用文字回答。"
+          },
+          "report": {
+            "title": "看報告",
+            "body": "看分數、做得好的地方和要改的地方，知道下一步該練什麼。"
+          }
+        },
+        "summaryTitle": "你的這場練習",
+        "planPending": "安排好之後，面試官、重點和長度會顯示在這裡。",
+        "basisSources": "來自公開資料",
+        "basisGeneral": "同類公司的常見做法"
       },
       "loading": "正在載入面試準備…",
       "startError": "這場面試沒有開始成功。請重試。",
@@ -2868,7 +2929,7 @@
           },
           "s2": {
             "body": "使用前，想改哪裡都可以。",
-            "title": "檢查每一份應徵準備包"
+            "title": "檢查每一份應徵資料"
           },
           "s3": {
             "body": "開啟雇主的頁面並送出。職缺會移到「已應徵」。",
@@ -2876,7 +2937,7 @@
           },
           "sample": {
             "line1": "本週 5 個職缺 · 還算適合以上",
-            "line2": "應徵準備包已備妥：針對職缺調整的履歷、求職信、4 則回答",
+            "line2": "應徵資料已備妥：針對職缺調整的履歷、求職信、4 則回答",
             "line3": "開啟應徵頁面 → 由你檢查並送出"
           },
           "sub": "針對適合的職缺，%BRAND% 會準備一份調整過的履歷、一封求職信，以及常見問題的回答。每一份應徵都由你自己開啟並送出。",
@@ -3126,7 +3187,7 @@
           },
           "s2": {
             "body": "使用前，想改哪裡都可以。",
-            "title": "檢查每一份應徵準備包"
+            "title": "檢查每一份應徵資料"
           },
           "s3": {
             "body": "開啟雇主的頁面並送出。職缺會移到「已應徵」。",
@@ -3134,7 +3195,7 @@
           },
           "sample": {
             "line1": "本週 5 個職缺 · 還算適合以上",
-            "line2": "應徵準備包已備妥：針對職缺調整的履歷、求職信、4 則回答",
+            "line2": "應徵資料已備妥：針對職缺調整的履歷、求職信、4 則回答",
             "line3": "開啟應徵頁面 → 由你檢查並送出"
           },
           "sub": "針對適合的職缺，%BRAND% 會準備一份調整過的履歷、一封求職信，以及常見問題的回答。每一份應徵都由你自己開啟並送出。",
@@ -5226,7 +5287,23 @@
       "applying": "處理中…",
       "inProgress": "這件事已經在處理了。如果一分鐘後還沒有結果，請重試。",
       "notSaved": "這個建議沒有和回答一起儲存，所以無法使用。請再問一次。",
-      "waitForAnswer": "回答完成後才能使用。"
+      "waitForAnswer": "回答完成後才能使用。",
+      "listAdd": {
+        "title": "把 {job} 加入你的清單",
+        "body": "不會扣點。在你提出之前，不會準備任何內容。",
+        "confirm": "加入我的清單"
+      },
+      "prepare": {
+        "title": "為 {job} 準備應徵資料",
+        "addsToList": "會先加入你的清單，這一步不會扣點。"
+      },
+      "applicationStatus": {
+        "title": "{job} 的應徵",
+        "picked": "已在你的清單上。準備好時，可以從清單準備應徵資料。",
+        "open": "在「準備應徵」中開啟",
+        "unavailable": "你的帳號目前無法使用應徵資料準備功能。",
+        "closed": "這個職缺已不再刊登，所以沒有加入清單。"
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -5440,7 +5517,10 @@
       "top_fit_jobs": "正在找出最適合你的職缺…",
       "added_jobs": "正在查看你新增的職缺…",
       "show_jobs": "正在整理清單…",
-      "similar_jobs": "正在尋找類似的職缺…"
+      "similar_jobs": "正在尋找類似的職缺…",
+      "application_status": "正在查看你的清單…",
+      "add_to_list": "正在查看你的清單…",
+      "prepare_application": "正在確認準備會用掉的點數…"
     },
     "voice": {
       "blocked": "這個瀏覽器封鎖了麥克風的使用權限。",
@@ -6175,7 +6255,7 @@
       "job_import": "你新增的職缺",
       "outreach": "訊息草稿",
       "practice": "練習面試",
-      "ready_kits": "應徵準備包",
+      "ready_kits": "應徵資料準備",
       "resume_check": "履歷檢查",
       "rewrite": "AI 修改",
       "tailor": "針對職缺調整的履歷",
@@ -6940,7 +7020,16 @@
     },
     "unnamed": "你的主要搜尋",
     "unnamedNumbered": "已儲存的搜尋 {n}",
-    "unnamedOther": "已儲存的搜尋（未命名）"
+    "unnamedOther": "已儲存的搜尋（未命名）",
+    "summary": {
+      "label": "你的搜尋：",
+      "all": "所有職缺",
+      "loading": "正在載入你的搜尋…",
+      "more": "另外 {count} 項",
+      "change": "變更搜尋",
+      "panel": "搜尋與篩選條件",
+      "done": "完成"
+    }
   },
   "fit": {
     "analysis": {
@@ -8532,7 +8621,7 @@
       "cards": {
         "practice": "練習面試",
         "practiceBody": "回答針對這個職務、貼近真實面試的問題，並得到回饋。",
-        "ready": "應徵準備包 —— 由你自己送出",
+        "ready": "準備好的應徵資料 —— 由你自己送出",
         "readyBody": "我們準備好資料；你檢查後，到公司網站上自己送出。",
         "tailor": "為每個職缺調整一份履歷",
         "tailorBody": "依照職缺的要求調整你的履歷，只使用你真實的經歷。"
@@ -8733,7 +8822,7 @@
         "fitBody": "每個職缺都會顯示你的履歷哪裡符合要求、哪裡不符合。",
         "practice": "練習面試",
         "practiceBody": "演練針對這個職務、貼近真實面試的問題，並得到回饋。",
-        "ready": "應徵準備包 —— 由你自己送出",
+        "ready": "準備好的應徵資料 —— 由你自己送出",
         "readyBody": "我們準備好資料。你檢查後，到公司網站上自己送出。",
         "tailor": "為每個職缺調整一份履歷",
         "tailorBody": "針對單一職缺調整你的履歷，只使用你真實的經歷。"
@@ -8745,6 +8834,45 @@
       "prev": "上一則提示",
       "start": "開始",
       "title": "你可以在這裡做什麼"
+    },
+    "express": {
+      "resume": {
+        "title": "從你的履歷開始",
+        "continue": "繼續",
+        "noResume": "我還沒有履歷",
+        "working": "請稍候…",
+        "classic": "改為多回答幾個問題"
+      },
+      "check": {
+        "title": "這是你想找的工作嗎？",
+        "subtitleSuggested": "以下是根據你的履歷提出的建議。不對的地方都可以改。",
+        "subtitleNothingSuggested": "無法從你的履歷得出建議。請填寫以下內容來尋找職缺。",
+        "subtitleNoResume": "沒有新增履歷，所以只會根據這些回答尋找職缺。之後可以新增履歷，查看每個職缺的適合度。",
+        "filling": "正在根據你的履歷填寫…",
+        "otherPlaces": "新增其他地點",
+        "chosenPlaces": "只顯示已選的地點",
+        "aboutYou": "你的情況：{value}",
+        "email": "符合這個搜尋的新職缺，每天會用電子郵件寄給你一次。你可以到「設定」變更。",
+        "submit": "尋找我的職缺",
+        "retry": "重試"
+      },
+      "progress": {
+        "saving": "正在儲存你的回答…",
+        "searching": "正在開始搜尋…",
+        "finishing": "正在完成設定…"
+      },
+      "failed": {
+        "answers": "你的回答沒有儲存成功，所以搜尋沒有開始。",
+        "resume": "你的履歷選擇沒有儲存成功，所以搜尋沒有開始。",
+        "finish": "你的搜尋已儲存，但設定沒有完成。"
+      },
+      "why": {
+        "rate_limited": "短時間內嘗試次數太多。請等一分鐘再試。",
+        "invalid": "有一項回答沒有被接受。請檢查後再試。",
+        "conflict": "設定已在其他地方繼續進行，可能是在另一個分頁。請重新整理這個頁面。",
+        "unavailable": "這項功能目前無法使用。請稍後再試。",
+        "unknown": "你填寫的內容都還在。請重試。"
+      }
     }
   },
   "people": {
@@ -9624,12 +9752,12 @@
   },
   "ready": {
     "allowance": {
-      "bonus": "另外，你還獲得了 {count, plural, one {# 份額外的應徵準備包} other {# 份額外的應徵準備包}}。",
-      "left": "本週還剩 {left} 份應徵準備包（共 {cap, plural, one {# 份} other {# 份}}）。",
-      "pro": "Pro：每週最多 {count} 份應徵準備包。",
+      "bonus": "另外，你還獲得了 {count, plural, one {# 份額外的應徵資料} other {# 份額外的應徵資料}}。",
+      "left": "本週還剩 {left} 份應徵資料（共 {cap, plural, one {# 份} other {# 份}}）。",
+      "pro": "Pro：每週最多準備 {count} 份應徵資料。",
       "resets": "{date} 會補回。",
       "seePro": "查看 Pro",
-      "unknown": "本週剩餘的應徵準備包：—"
+      "unknown": "本週剩餘的應徵資料：—"
     },
     "answers": {
       "add": "新增問題",
@@ -9644,7 +9772,7 @@
         "work_authorization": "也請說明你現在或以後是否需要簽證贊助。"
       },
       "inCurrency": "{question}（{currency}）",
-      "lead": "先寫好應徵表單常問問題的回答。應徵準備包會列出這些回答，並附上複製按鈕。這些回答只由你自己撰寫。",
+      "lead": "先寫好應徵表單常問問題的回答。應徵資料會列出這些回答，並附上複製按鈕。這些回答只由你自己撰寫。",
       "loadFailed": "你儲存的回答沒有載入成功。",
       "optional": "（可不填）",
       "protectedNote": "AI 絕不會回答這個問題。只會用你自己的回答來填。",
@@ -9665,10 +9793,10 @@
     },
     "intro": {
       "continue": "繼續設定",
-      "lead": "%BRAND% 每週從你的搜尋中挑選職缺。要為哪些職缺準備應徵準備包，由你選擇。",
-      "point_kit": "你選的每個職缺都有一份應徵準備包：針對職缺說明調整的履歷、職缺說明有要求時附上的求職信，以及你儲存的回答。",
+      "lead": "%BRAND% 每週從你的搜尋中挑選職缺。要為哪些職缺準備應徵資料，由你選擇。",
+      "point_kit": "你選的每個職缺都有一份應徵資料：針對職缺說明調整的履歷、職缺說明有要求時附上的求職信，以及你儲存的回答。",
       "point_list": "每週一份符合你搜尋條件的職缺清單。你也可以自己加入任何職缺。",
-      "point_review": "每份應徵準備包都由你檢查後再使用。履歷裡任何新增的內容，都必須經過你確認。",
+      "point_review": "每份應徵資料都由你檢查後再使用。履歷裡任何新增的內容，都必須經過你確認。",
       "start": "設定「準備應徵」",
       "title": "把每一次應徵準備好，再由你自己送出",
       "point_open": "你自己開啟應徵頁面，並自己送出應徵。"
@@ -9684,12 +9812,12 @@
           "title": "沒有待準備的職缺"
         },
         "ready": {
-          "sub": "在「待準備」準備一份應徵準備包。準備好後會顯示在這裡，等你檢查。",
-          "title": "還沒有準備好的應徵準備包"
+          "sub": "在「待準備」準備一份應徵資料。準備好後會顯示在這裡，等你檢查。",
+          "title": "還沒有準備好的應徵資料"
         }
       },
       "expiredNote": "有 {count, plural, one {# 個職缺} other {# 個職缺}}，公司已不再刊登。移除後，清單會比較整齊。",
-      "prepareSelected": "準備 {count, plural, one {# 份應徵準備包} other {# 份應徵準備包}}",
+      "prepareSelected": "準備 {count, plural, one {# 份應徵資料} other {# 份應徵資料}}",
       "selectAll": "全選 {count, plural, one {# 個職缺} other {# 個職缺}}",
       "selected": "{count, plural, one {已選取 # 個職缺} other {已選取 # 個職缺}}"
     },
@@ -9697,26 +9825,26 @@
     "prepare": {
       "bucket": {
         "cover_letter": "{count, plural, one {# 點求職信點數} other {# 點求職信點數}}",
-        "ready_kits": "{count, plural, one {# 份應徵準備包} other {# 份應徵準備包}}",
+        "ready_kits": "{count, plural, one {# 份應徵資料} other {# 份應徵資料}}",
         "tailor": "{count, plural, one {# 點履歷調整點數} other {# 點履歷調整點數}}"
       },
       "cancel": "取消",
-      "confirm": "準備 {count, plural, one {# 份應徵準備包} other {# 份應徵準備包}}",
+      "confirm": "準備 {count, plural, one {# 份應徵資料} other {# 份應徵資料}}",
       "cost": "會用掉 {what}；你{window, select, day {今天} week {本週} other {本月}}的餘額是 {left}。",
       "costUnknown": "會用掉 {what}。剩餘點數：—",
       "description": "開始之前，先看看這會用掉什麼。",
       "noTailor": "會直接使用你原本的履歷（「設定」中已關閉履歷調整）。",
-      "noTailorAi": "你的帳號已關閉 AI 撰寫，所以應徵準備包會直接使用你原本的履歷。",
-      "noTailorAsIs": "不會用到履歷調整點數：應徵準備包會直接使用你原本的履歷。",
+      "noTailorAi": "你的帳號已關閉 AI 撰寫，所以應徵資料會直接使用你原本的履歷。",
+      "noTailorAsIs": "不會用到履歷調整點數：應徵資料會直接使用你原本的履歷。",
       "notEnough": "目前只能準備 {left} 份。",
       "quoteFailed": "無法確認這次會用掉多少。沒有扣點。請重試。",
       "quoting": "正在確認這次會用掉多少…",
-      "runFailed": "{count, plural, one {# 份應徵準備包} other {# 份應徵準備包}}沒有開始準備。請從「待準備」再試一次。",
+      "runFailed": "{count, plural, one {# 份應徵資料} other {# 份應徵資料}}沒有開始準備。請從「待準備」再試一次。",
       "running": "正在開始…",
       "someFailed": "{count, plural, one {有 # 個職缺沒能確認，這次不包含在內} other {有 # 個職缺沒能確認，這次不包含在內}}。",
-      "started": "正在準備 {count, plural, one {# 份應徵準備包} other {# 份應徵準備包}}。完成後會顯示在「已準備好」。",
-      "title": "準備 {count, plural, one {# 份應徵準備包} other {# 份應徵準備包}}",
-      "whatHappens": "應徵準備包會在背景準備。不會傳送任何內容給任何公司。"
+      "started": "正在準備 {count, plural, one {# 份應徵資料} other {# 份應徵資料}}。完成後會顯示在「已準備好」。",
+      "title": "準備 {count, plural, one {# 份應徵資料} other {# 份應徵資料}}",
+      "whatHappens": "應徵資料會在背景準備。不會傳送任何內容給任何公司。"
     },
     "progress": {
       "applied": "已應徵",
@@ -9748,7 +9876,7 @@
       "work_model_preference": "你偏好遠端、混合辦公，還是現場辦公？"
     },
     "review": {
-      "aiOff": "你的帳號已關閉 AI 撰寫，所以應徵準備包會直接使用你原本的履歷。",
+      "aiOff": "你的帳號已關閉 AI 撰寫，所以應徵資料會直接使用你原本的履歷。",
       "answers": {
         "add": "新增回答",
         "addToProfile": "加到你的個人檔案",
@@ -9764,19 +9892,19 @@
       "copyFailed": "沒有複製成功。請選取文字後自行複製。",
       "errors": {
         "aiUnavailable": "你的帳號目前無法使用 AI 撰寫。",
-        "changed": "這份應徵準備包剛才有變動。頁面現在顯示的是最新狀態。",
+        "changed": "這份應徵資料剛才有變動。頁面現在顯示的是最新狀態。",
         "closed": "這個職缺公司已不再刊登。",
         "full": "你的清單已滿。請先移除一個職缺。",
         "generic": "沒有成功。請重試。",
-        "preparing": "這份應徵準備包還在準備中。請稍後再試。",
+        "preparing": "這份應徵資料還在準備中。請稍後再試。",
         "undoExpired": "這裡已經無法復原了。",
         "unverified": "使用前，請先核對調整後的履歷新增的細節。"
       },
       "expired": "公司已不再刊登這個職缺。",
-      "failed": "這份應徵準備包沒有準備成功。",
+      "failed": "這份應徵資料沒有準備成功。",
       "failedReason": {
-        "aiUnavailable": "準備這份應徵準備包時無法使用 AI 撰寫。請稍後再試。",
-        "credits": "你當時沒有點數可以用在這份應徵準備包。請等點數補回後再試。",
+        "aiUnavailable": "準備這份應徵資料時無法使用 AI 撰寫。請稍後再試。",
+        "credits": "你當時沒有點數可以用在這份應徵資料。請等點數補回後再試。",
         "jobClosed": "公司已停止刊登這個職缺。",
         "noResume": "請先新增一份履歷，然後再試一次。",
         "ourSide": "我們這邊出了點問題。請重試。"
@@ -9806,8 +9934,8 @@
         },
         "loadFailed": "歷程沒有載入成功。",
         "moved": "目前狀態：{state}",
-        "none": "這份應徵準備包還沒有任何歷程。",
-        "notice": "提醒：這份應徵準備包已準備好，但還沒開啟",
+        "none": "這份應徵資料還沒有任何歷程。",
+        "notice": "提醒：這份應徵資料已準備好，但還沒開啟",
         "opened": "已開啟應徵頁面；已移到「已應徵」",
         "revised": {
           "letter": "已要求修改求職信",
@@ -9816,27 +9944,27 @@
         "title": "歷程",
         "undone": "已標示為未應徵（復原）",
         "used": {
-          "letter": "已選定這份應徵準備包要用的求職信",
-          "resume": "已選定這份應徵準備包要用的履歷"
+          "letter": "已選定這份應徵資料要用的求職信",
+          "resume": "已選定這份應徵資料要用的履歷"
         }
       },
       "letter": {
         "copyAria": "複製求職信",
         "edit": "編輯求職信",
         "loadFailed": "求職信沒有載入成功。",
-        "none": "這份應徵準備包裡沒有求職信。",
+        "none": "這份應徵資料裡沒有求職信。",
         "off": "「設定」中已關閉求職信。",
         "title": "求職信",
-        "use": "用在這份應徵準備包"
+        "use": "用在這份應徵資料"
       },
       "notOnList": {
         "add": "加入「準備應徵」",
         "failed": "這個職缺沒有加入成功。請重試。",
         "full": "你的清單已滿。請先移除或完成幾個職缺。",
-        "sub": "加入後，就可以為它準備應徵準備包。",
+        "sub": "加入後，就可以為它準備應徵資料。",
         "title": "這個職缺不在你的清單上"
       },
-      "notPrepared": "這份應徵準備包還沒有準備。",
+      "notPrepared": "這份應徵資料還沒有準備。",
       "open": {
         "again": "再次開啟應徵頁面",
         "alreadyApplied": "這個職缺原本就在「應徵紀錄」裡。",
@@ -9859,18 +9987,18 @@
         "sub": "根據這則職缺說明進行的練習面試。",
         "title": "針對這個職缺練習"
       },
-      "prepare": "準備應徵準備包",
-      "preparing": "正在準備你的應徵準備包。這個頁面會自動更新。",
+      "prepare": "準備應徵資料",
+      "preparing": "正在準備你的應徵資料。這個頁面會自動更新。",
       "remove": "從清單移除",
       "removeConfirm": "要把這個職缺從你的清單移除嗎？",
       "removeYes": "移除",
       "resume": {
-        "asIs": "這份應徵準備包直接使用你原本的履歷。",
+        "asIs": "這份應徵資料直接使用你原本的履歷。",
         "finishBlock": "使用前，請先儲存上方核對過的履歷。",
         "loadFailed": "調整後的履歷沒有載入成功。請重新整理頁面再試一次。",
         "openAsIs": "開啟履歷",
         "title": "履歷",
-        "use": "用在這份應徵準備包",
+        "use": "用在這份應徵資料",
         "verifyBlock": "使用這份履歷前，請先核對上方的 {count, plural, one {# 處細節} other {# 處細節}}。",
         "fitNote": "「調整前」和「調整後」顯示的是這份履歷調整當時的適合度。職缺標題旁的適合度是今天的結果，所以兩者可能不同。"
       },
@@ -9881,7 +10009,7 @@
       },
       "reviseSend": "送出",
       "skip": "略過這個職缺",
-      "skipped": "你略過了這個職缺。把它放回清單，就可以為它準備應徵準備包。"
+      "skipped": "你略過了這個職缺。把它放回清單，就可以為它準備應徵資料。"
     },
     "row": {
       "loading": "正在載入職缺…",
@@ -9891,7 +10019,7 @@
       "remove": "移除",
       "restore": "放回清單",
       "retry": "重試",
-      "review": "檢查應徵準備包",
+      "review": "檢查應徵資料",
       "reviewOpen": "檢查並開啟",
       "seeApplication": "在「應徵紀錄」中查看",
       "select": "選取 {title}",
@@ -9980,7 +10108,7 @@
       },
       "extension": {
         "lead": "瀏覽器擴充功能會在你要求時，用你的個人檔案和回答填寫應徵表單。表單由你檢查，再由你自己送出。",
-        "skipNote": "你可以先略過，之後再加入擴充功能。沒有擴充功能也能使用應徵準備包：從應徵準備包複製你的回答即可。"
+        "skipNote": "你可以先略過，之後再加入擴充功能。沒有擴充功能也能使用應徵資料：從應徵資料複製你的回答即可。"
       },
       "finish": "完成設定",
       "firstList": "設定完成。你本週的清單上有 {count, plural, one {# 個職缺} other {# 個職缺}}。",
@@ -9988,9 +10116,9 @@
       "profile": {
         "allSet": "表單通常會問的資料，你的個人檔案都有了。",
         "complete": "完成你的個人檔案",
-        "lead": "應徵表單會問這些資料。應徵準備包使用的是你個人檔案裡的內容，請確認正確無誤。",
+        "lead": "應徵表單會問這些資料。應徵資料使用的是你個人檔案裡的內容，請確認正確無誤。",
         "missing": "未填",
-        "missingNote": "你現在可以繼續。每份應徵準備包都會列出還缺的資料，方便你在表單上補填。",
+        "missingNote": "你現在可以繼續。每份應徵資料都會列出還缺的資料，方便你在表單上補填。",
         "missingTitle": "{count, plural, one {表單會問的資料還缺 # 項} other {表單會問的資料還缺 # 項}}"
       },
       "skip": "先略過",
@@ -10022,12 +10150,12 @@
       "addAria": "把 {title} 加入你的清單",
       "failed": "這個職缺沒有加入成功。請重試。",
       "full": "你的清單已滿。請先移除或完成幾個職缺。",
-      "sub": "還不在你的清單上。想要應徵準備包的職缺，就加進來。",
+      "sub": "還不在你的清單上。想為哪些職缺準備應徵資料，就把它們加進來。",
       "title": "更多符合你搜尋條件的職缺"
     },
     "tabs": {
       "done": "已完成",
-      "label": "依狀態檢視應徵準備包",
+      "label": "依狀態檢視應徵資料",
       "prepare": "待準備",
       "ready": "已準備好"
     },
@@ -10062,14 +10190,28 @@
       "saved": "設定已儲存。",
       "saving": "儲存中…",
       "tailorEach": "針對每個職缺調整我的履歷",
-      "tailorEachNote": "每份應徵準備包會扣一點履歷調整點數。每一處變更都由你檢查後才會使用。",
+      "tailorEachNote": "每份應徵資料會扣一點履歷調整點數。每一處變更都由你檢查後才會使用。",
       "target": "每週清單的職缺數",
-      "targetNote": "這是清單的目標數量，不是承諾：符合的職缺較少時，清單上的職缺也會比較少。可以準備幾份應徵準備包，由你的方案決定。",
+      "targetNote": "這是清單的目標數量，不是承諾：符合的職缺較少時，清單上的職缺也會比較少。可以準備幾份應徵資料，由你的方案決定。",
       "targetValue": "每週 {count} 個",
       "tierAtLeast": {
         "good": "至少",
         "great": "只選",
         "possible": "至少"
+      }
+    },
+    "oneTap": {
+      "action": "準備應徵資料",
+      "adding": "加入中…",
+      "started": "正在準備。需要你確認時，會顯示在「等你處理」。",
+      "failed": "沒有成功開始準備。沒有扣點。請重試。",
+      "full": "你的清單已滿。請先從「準備應徵」移除一個職缺，然後再試一次。",
+      "closed": "這個職缺已不再刊登，所以沒有準備任何內容。",
+      "place": {
+        "preparing": "準備中",
+        "review": "檢查並開啟",
+        "sent": "查看應徵紀錄",
+        "listed": "已在你的清單上"
       }
     }
   },
@@ -11683,6 +11825,202 @@
       "source": "來源：<link>{name}</link>",
       "title": "{company} 的簽證贊助紀錄",
       "usNote": "獲得認證的申請不等於簽證核准或錄用。申請數量計算的是首次裁決，涵蓋新聘與續聘。"
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, other {有 # 件事在等你處理}}",
+      "titleNone": "沒有事情在等你處理",
+      "titleLoading": "正在確認有哪些事在等你處理…",
+      "titlePartial": "今天的清單有一部分沒有載入出來"
+    },
+    "goal": {
+      "line": "你想找的工作：{what}",
+      "any": "你的搜尋沒有限定條件，任何職缺都在範圍內。",
+      "more": "{list}，另外還有 {count} 項",
+      "change": "變更",
+      "changeLabel": "修改你想找的工作",
+      "loading": "正在載入你的搜尋…",
+      "failed": "你的搜尋沒有載入出來。",
+      "none": "還沒有已儲存的搜尋。",
+      "setUp": "設定你的搜尋"
+    },
+    "agentTag": "AI 代理",
+    "retry": "重試",
+    "laneFailed": "其中部分內容沒有載入出來。",
+    "notLoaded": "未載入",
+    "waiting": {
+      "title": "等你處理",
+      "loading": "正在確認有哪些事在等你處理…",
+      "empty": "目前沒有需要你處理的事。精選職缺在下方。",
+      "emptyLink": "前往精選職缺",
+      "emptyPlain": "目前沒有需要你處理的事。",
+      "more": "{count, plural, other {還有 # 件事在等你處理。處理完這幾項後，會陸續顯示在這裡。}}",
+      "partial": "這份清單有一部分沒有載入出來，所以可能還有更多。",
+      "fact": {
+        "review": "{company} 的 {title}：應徵資料已準備好，等你檢查。",
+        "reviewTitle": "{title}：應徵資料已準備好，等你檢查。",
+        "reviewUnnamed": "有一份應徵資料已準備好，等你檢查。",
+        "open": "{company} 的 {title}：可以開啟應徵頁面了。",
+        "openTitle": "{title}：可以開啟應徵頁面了。",
+        "openUnnamed": "有一筆應徵可以開啟了。",
+        "verify": "{count, plural, other {{name} 中有 # 處新增的細節需要你確認。}}",
+        "noReply": "{count, plural, other {有 # 筆應徵已 {days} 天沒有回覆。}}",
+        "profile": "{count, plural, other {你的個人檔案還缺 # 項應徵表單會問的資料。}}",
+        "noResume": "你還沒有新增履歷。",
+        "setup": "{count, plural, other {設定還剩 # 個步驟。}}"
+      },
+      "action": {
+        "review": "檢查並開啟",
+        "open": "開啟應徵頁面",
+        "verify": "核對細節",
+        "noReply": "查看這些應徵",
+        "profile": "補上資料",
+        "noResume": "新增履歷",
+        "setup": "完成設定"
+      }
+    },
+    "jobSearch": {
+      "title": "職缺搜尋",
+      "found": "{count, plural, =0 {自 {date} 以來，沒有找到適合的新職缺。} other {自 {date} 以來，找到 # 個適合的新職缺。}}",
+      "foundSinceVisit": "{count, plural, =0 {自你上次造訪後，沒有找到適合的新職缺。} other {自你上次造訪後，找到 # 個適合的新職缺。}}",
+      "foundCapped": "自 {date} 以來，找到超過 {count} 個適合的新職缺。",
+      "foundCappedSinceVisit": "自你上次造訪後，找到超過 {count} 個適合的新職缺。",
+      "foundUnknown": "自你上次造訪後適合的新職缺：",
+      "picksTitle": "精選職缺",
+      "picksLoading": "正在載入精選職缺…",
+      "searching": "正在搜尋符合你回答的職缺。搜尋完成後，精選職缺會顯示在這裡。",
+      "picksNone": "目前沒有新的精選職缺。",
+      "picksFailed": "精選職缺沒有載入出來。",
+      "viewJob": "查看職缺",
+      "seeAll": "查看所有職缺",
+      "off": "這個帳號無法使用職缺清單。"
+    },
+    "applications": {
+      "title": "應徵",
+      "numbersLabel": "應徵的各項數字",
+      "preparing": "準備中",
+      "waiting": "等你處理",
+      "sent": "本週已送出",
+      "saved": "已儲存",
+      "open": "開啟應徵紀錄",
+      "failed": "其中部分數字沒有載入出來。"
+    },
+    "resume": {
+      "title": "履歷",
+      "mainLabel": "主履歷",
+      "loading": "正在載入你的履歷…",
+      "none": "還沒有履歷。",
+      "add": "新增履歷",
+      "improve": "改善我的履歷",
+      "open": "開啟履歷頁",
+      "failed": "你的履歷沒有載入出來。",
+      "asked": "你搜尋到的職缺要求這些技能，而你的個人檔案沒有列出：",
+      "askedIn": "{total} 個職缺中有 {count} 個要求"
+    },
+    "ask": {
+      "title": "提問",
+      "label": "問問和你求職有關的問題",
+      "placeholder": "例如：這些職缺中哪一個最適合我？",
+      "submit": "提問",
+      "hint": "會開啟助理，並填好你的問題，隨時可以送出。"
+    }
+  },
+  "dashboard": {
+    "hi": "{name}，你好！",
+    "hi_anon": "你好！",
+    "subtitle": "今天想推進哪一步？",
+    "goals_aria": "你的目標",
+    "goal": {
+      "resume": "履歷",
+      "jobs": "找工作",
+      "applications": "應徵",
+      "interview": "面試準備"
+    },
+    "progress": "進度",
+    "progress_aria": "{goal}：步驟與進度",
+    "value_percent": "{value}%",
+    "value_count": "{value}/{target}",
+    "value_unknown": "目前還不知道",
+    "score_label": "履歷健檢",
+    "ask_bar": "有問題，問問助理",
+    "steps": {
+      "resume_check": {
+        "label": "履歷健檢",
+        "title_no_resume": "先從履歷開始",
+        "body_no_resume": "上傳你現有的履歷，或一步步建立一份。這裡的其他步驟都從履歷開始。",
+        "cta_no_resume": "新增履歷",
+        "title_start": "看看你的履歷讀起來如何",
+        "body_start": "履歷健檢會看雇主最先讀的內容，並依重要程度列出要修改的地方。",
+        "title_more": "你的履歷還能更好",
+        "title_good": "你的履歷狀態不錯",
+        "body_more": "上次健檢得分 {score}%。打開履歷依建議修改，然後再健檢一次。",
+        "cta": "打開履歷"
+      },
+      "tailored": {
+        "label": "客製履歷",
+        "title_start": "依職缺客製履歷",
+        "body_start": "選一個已儲存的職缺，或貼上職缺內容。你會得到一份為該職務改寫的履歷副本，原本的履歷保持不變。",
+        "title_more": "每個職務各一份",
+        "body_more": "每個職缺一份履歷，能把該職務重視的經歷放在前面。為每個想應徵的職缺各準備一份。",
+        "cta": "客製履歷"
+      },
+      "letters": {
+        "label": "求職信",
+        "title_start": "寫一封求職信",
+        "body_start": "為已儲存的職缺起草一封求職信，再修改到像你自己寫的。",
+        "title_more": "為下一次應徵再寫一封",
+        "body_more": "求職信針對單一職缺寫效果最好。從已儲存的職缺開始寫下一封。",
+        "cta": "打開求職信"
+      },
+      "profile": {
+        "label": "個人檔案",
+        "title_start": "完成個人檔案",
+        "body_start": "個人檔案決定我們為你顯示哪些職缺，也會用來填寫應徵表單。只要幾分鐘。",
+        "title_more": "個人檔案已完成 {percent}%",
+        "body_more": "補上缺少的資料，推薦的職缺和自動填寫的內容才會正確。",
+        "cta": "打開個人檔案"
+      },
+      "saved": {
+        "label": "已儲存的職缺",
+        "title_start": "儲存你喜歡的職缺",
+        "body_start": "已儲存的職缺會進入你的應徵清單，可以在那裡客製履歷、準備每一份應徵。",
+        "title_more": "繼續擴充候選名單",
+        "body_more": "看看新推薦的職缺，把值得應徵的儲存起來。",
+        "cta": "瀏覽職缺"
+      },
+      "preparing": {
+        "label": "準備中",
+        "title_start": "準備一份應徵",
+        "body_start": "我們會填寫應徵表單並客製你的文件。你檢查所有內容，由你自己送出。",
+        "title_more": "應徵正在準備中",
+        "body_more": "送出前逐一打開，檢查文件和回答。",
+        "cta": "打開準備應徵"
+      },
+      "applied": {
+        "label": "已應徵",
+        "title_start": "送出第一份應徵",
+        "body_start": "應徵後把職缺標記為已應徵，就知道什麼時候該追蹤。",
+        "title_more": "追蹤你的應徵",
+        "body_more": "應徵清單會顯示哪些已經一段時間沒有回音。",
+        "cta": "打開應徵紀錄"
+      },
+      "interviews": {
+        "label": "面試",
+        "title_start": "管理你的面試",
+        "body_start": "收到面試邀請後，把職缺移到面試階段，並記下每一輪的筆記。",
+        "title_more": "為面試做準備",
+        "body_more": "正式面試前，先用這個職務做一次模擬面試。",
+        "cta": "打開應徵紀錄"
+      },
+      "practice": {
+        "label": "模擬面試",
+        "title_start": "練習一次面試",
+        "body_start": "依你想要的職缺做一次模擬面試，每個回答都會得到回饋。",
+        "title_more": "繼續練習",
+        "body_more": "每練一輪，回答都會更好。換個職務或公司試試看。",
+        "cta": "開始練習"
+      }
     }
   }
 }

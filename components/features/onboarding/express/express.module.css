@@ -1,0 +1,126 @@
+/* components/features/onboarding/express/express.module.css — what the start
+ * flow (/onboarding/start) adds to ../onboarding.module.css. Paper tokens only;
+ * 375 px and up; every control is at least 44 px tall. */
+
+/* Under the resume screen: the way to the longer screens. Sits inside the
+ * frame's column, pulled up into the frame's bottom padding. */
+.alt {
+  max-width: 760px;
+  margin: calc(-1 * var(--sp-6)) auto 0;
+  padding: 0 var(--sp-4) var(--sp-6);
+}
+.altLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.altLink:hover {
+  color: var(--text);
+}
+.altLink:focus-visible,
+.tagRemove:focus-visible,
+.textBtn:focus-visible,
+.moreSummary:focus-visible,
+.failure:focus-visible,
+.status:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* A save that failed: what happened and the way on, together at the top. */
+.failure {
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: start;
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--danger-subtle);
+  color: var(--danger);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+.failure p {
+  margin: 0;
+}
+.failureAction {
+  min-height: 44px;
+}
+
+/* A chosen value that is not a button (a city, "Anywhere in …"). */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--action);
+  border-radius: var(--r-pill);
+  background: var(--action-subtle);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+/* "Remove" inside a tag: a full 44 px target that does not make the tag wider. */
+.tagRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin-right: calc(-1 * var(--sp-4));
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.tagRemove:hover {
+  color: var(--text);
+}
+
+/* A quiet button in a line of text ("Add another place"). */
+.textBtn {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-meta);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.textBtn:hover {
+  color: var(--text);
+}
+
+/* "About you": one line until opened. */
+.more {
+  border-top: 1px solid var(--rule);
+}
+.moreSummary {
+  padding: var(--sp-3) 0;
+  min-height: 44px;
+  font-size: var(--fs-meta);
+  line-height: 20px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.moreBody {
+  padding-bottom: var(--sp-3);
+}
+
+/* The line that says what is running now. */
+.status {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--text-2);
+}

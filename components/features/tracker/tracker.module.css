@@ -417,7 +417,87 @@
   overflow-wrap: anywhere;
 }
 
+/* ── Applications switch: Getting ready · Sent (ApplicationsSwitch) ──────
+ * Two links drawn like the shared segmented Tabs control (the primitives'
+ * .tablist / .tab): a glass pill track, and the page the user is on is the
+ * action pill. The state is `aria-current`, never colour alone: the current
+ * link is also the filled one. */
+.switch {
+  display: flex;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 var(--sp-4);
+  padding: 4px;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--r-pill);
+  background: var(--surface-glass);
+  scrollbar-width: none;
+}
+
+.switchLink {
+  /* The containing block for the count's screen-reader sentence (absolutely
+   * placed), so it never widens the track's scroll area. */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 36px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-pill);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background var(--dur-hover) var(--ease-out),
+    color var(--dur-hover) var(--ease-out);
+}
+
+.switchLink:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.switchLink[aria-current='page'] {
+  color: var(--action-ink);
+  background: var(--action);
+  box-shadow: var(--e1);
+}
+
+.switchLink:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.switchCount {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  text-align: center;
+}
+
+.switchLink[aria-current='page'] .switchCount {
+  background: color-mix(in srgb, var(--action-ink) 18%, transparent);
+  color: var(--action-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switchLink {
+    transition: none;
+  }
+}
+
 @media (max-width: 760px) {
+  .switchLink {
+    min-height: 44px;
+  }
+
   .grid2,
   .rowButton {
     grid-template-columns: minmax(0, 1fr);

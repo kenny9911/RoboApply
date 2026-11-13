@@ -190,7 +190,7 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
           {shown.map(({ badge: b, label }) => (
             <li
               key={b.kind}
-              className={cn(styles.badge, b.kind === 'direct_from_employer' && styles.badgeOk)}
+              className={cn(styles.badge, b.kind === 'direct_from_employer' && styles.badgeDirect)}
               title={b.quote ? t('header.quote', { quote: b.quote }) : undefined}
               data-badge={b.kind}
             >

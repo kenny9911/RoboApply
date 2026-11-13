@@ -75,7 +75,7 @@ describe('the 4-card tour', () => {
     });
     renderWith(<TourOverlay />);
     expect(await screen.findByText("Why you fit and what's missing")).toBeInTheDocument();
-    for (const card of ['A tailored resume for each job', 'Ready-to-apply kits — you submit', 'Practice the interview']) {
+    for (const card of ['A tailored resume for each job', 'Prepared applications — you submit', 'Practice the interview']) {
       expect(screen.getByText(card)).toBeInTheDocument();
     }
     expect(gate.keys).toContain('onboarding:tour');

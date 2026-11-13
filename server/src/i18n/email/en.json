@@ -330,11 +330,11 @@
       "preheader": "Jobs ready for you to review."
     },
     "kitReady": {
-      "subject": "Your application kit for {title} is ready",
-      "heading": "Your kit is ready to review",
+      "subject": "Your application for {title} is ready to review",
+      "heading": "Your application is ready to review",
       "body": "Your tailored resume and answers for {title} at {company} are ready. Review them, then apply on the company site yourself.",
-      "cta": "Review the kit",
-      "preheader": "Review your kit for {title}."
+      "cta": "Review the application",
+      "preheader": "Review your application for {title}."
     },
     "campusDeadline": {
       "subject": "{company}: applications for {program} close on {date}",

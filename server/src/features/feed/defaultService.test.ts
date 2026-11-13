@@ -14,7 +14,8 @@ const configuredSearchPlanner = vi.fn();
 vi.mock('../../job-search/agent.js', () => ({ configuredSearchPlanner: (...a: unknown[]) => configuredSearchPlanner(...a) }));
 
 import { setEmbeddingsClientForTests } from '../../platform/embeddings/index.js';
-import { defaultFeedDeps, defaultFeedEmbeddings, defaultFeedRetrieval, defaultRequestIngest } from './defaultService.js';
+import { flagEnvName, setFlagOverrideLoader } from '../../platform/flags.js';
+import { defaultApplicationsOn, defaultFeedDeps, defaultFeedEmbeddings, defaultFeedRetrieval, defaultRequestIngest } from './defaultService.js';
 import { isFeedPersonalized } from './index.js';
 
 beforeEach(() => {
@@ -44,6 +45,19 @@ describe('isFeedPersonalized', () => {
   it('fails closed when the consent lookup fails', async () => {
     hasLiveConsent.mockRejectedValueOnce(new Error('db down'));
     expect(await isFeedPersonalized('u1', 'cn')).toBe(false);
+  });
+});
+
+describe("production wiring of the reader's list on the cards (REDESIGN §9)", () => {
+  afterEach(() => setFlagOverrideLoader(null));
+
+  it('the cards carry the list state exactly while the `agent` capability is on for the reader', async () => {
+    setFlagOverrideLoader(async () => []);
+    expect(defaultFeedDeps().applicationsOn).toBe(defaultApplicationsOn);
+    // RoboApply turns Ready to apply on by default.
+    expect(await defaultApplicationsOn('u1')).toBe(true);
+    vi.stubEnv(flagEnvName('roboapply', 'agent'), 'false');
+    expect(await defaultApplicationsOn('u1')).toBe(false);
   });
 });
 

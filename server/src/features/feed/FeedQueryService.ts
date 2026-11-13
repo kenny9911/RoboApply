@@ -53,6 +53,11 @@
 // is in date order from its first row to its last, and legs B and C could only
 // add rows out of that order.
 //
+// The reader's list (docs/agent-driven/REDESIGN.md §9): with the `agent`
+// capability on, each card of a `query` page carries the job's place on the
+// reader's list (`FeedItem.application`), read in one statement per page.
+// `preview` (the seams other areas read) does not read it.
+//
 // "New" (JI-10; items.ts): a card is new when we first read its posting after
 // the viewer's previous visit to the list. That visit is the stored stamp
 // (`RAUserUiState.lastFeedVisitAt`, the instant the new-count badge counts
@@ -83,6 +88,7 @@ import { cnRecruitmentInfoMode } from '../../platform/flags.js';
 import { getCurrentViewAs } from '../../lib/requestContext.js';
 import { HttpError } from '../../platform/http.js';
 import { logger } from '../../services/LoggerService.js';
+import { QUEUE_STATES, type QueueState } from '../agent/contract.js';
 import type { ExplainMatchInput } from '../compliance/index.js';
 import type { MatchExplanation } from '../compliance/contract.js';
 import type { MarketHookContext, MarketHookJob } from '../jobs/marketHooks.js';
@@ -108,6 +114,7 @@ import {
   FEED_RELEVANCE_MAX_CHARS,
   FEED_THIN_BELOW,
   type ExploreResponse,
+  type FeedApplication,
   type FeedCountResult,
   type FeedCountsResponse,
   type FeedItem,
@@ -235,6 +242,13 @@ export interface FeedServiceDeps {
    * Absent → nothing is queued.
    */
   requestIngest?: (searchProfileId: string) => Promise<unknown> | unknown;
+  /**
+   * Is the `agent` capability (the reader's list, "Prepare application") on
+   * for this reader? Then each card of the /jobs list carries the job's place
+   * on that list (`FeedItem.application`), read in one statement per page.
+   * Absent, false or failing → the cards carry none.
+   */
+  applicationsOn?: (userId: string) => Promise<boolean>;
 }
 
 /** `embedTexts` as the feed calls it: one query text, `purpose: 'query'`; `{ unavailable }` means "no vector now". */
@@ -279,6 +293,11 @@ export interface FeedQueryInput {
    * market's. Never part of the session hash: it changes no row and no order.
    */
   locale?: string;
+  /**
+   * `false`: the read is not a visit to the Jobs list (the Dashboard's picks),
+   * so `lastFeedVisitAt` is not stamped. Never part of the session hash.
+   */
+  visit?: boolean;
 }
 
 /** The input of `preview` (the Assistant's tools, precompute, the job-search index read). */
@@ -1074,6 +1093,31 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     return out;
   }
 
+  /**
+   * The places of a page's jobs on the reader's list (`FeedItem.application`):
+   * one capability check and one statement for the whole page, never one per
+   * card. Null when the capability is off (or the seam is absent) and when
+   * either read fails: the cards then say nothing about the list (D3). In the
+   * map, a job with no entry is not on the list; an entry of null is on the
+   * list in a state this contract does not name, and its card is left without
+   * the field rather than told "not on your list".
+   */
+  async function applicationsOf(ctx: Pick<FeedCtx, 'userId'>, jobIds: string[]): Promise<Map<string, FeedApplication | null> | null> {
+    if (!deps.applicationsOn || !jobIds.length) return null;
+    try {
+      if (!(await deps.applicationsOn(ctx.userId))) return null;
+      const rows = await repo.applicationStates(ctx.userId, jobIds);
+      const out = new Map<string, FeedApplication | null>();
+      for (const [jobId, row] of rows) {
+        out.set(jobId, (QUEUE_STATES as readonly string[]).includes(row.state) ? { state: row.state as QueueState, trackerEntryId: row.trackerEntryId ?? null } : null);
+      }
+      return out;
+    } catch (err) {
+      logger.warn('FEED', 'list states unavailable; the cards of this page say nothing about the list', { error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  }
+
   async function items(
     ctx: FeedCtx,
     cands: CardCandidate[],
@@ -1083,11 +1127,15 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     also: ReadonlyMap<string, FeedJobRow[]> = new Map(),
     fused = false,
     newSince: Date | null = null,
+    /** The /jobs list's pages: each card carries its place on the reader's list (`applicationsOf`). */
+    withApplications = false,
   ): Promise<FeedItem[]> {
-    const [tracker, meta, sourced] = await Promise.all([
-      repo.trackerStates(ctx.userId, cands.map((c) => c.row.id)),
+    const ids = cands.map((c) => c.row.id);
+    const [tracker, meta, sourced, applications] = await Promise.all([
+      repo.trackerStates(ctx.userId, ids),
       cardMetaFor(ctx, cands.map((c) => c.row)),
       withSponsorshipSource(cands.map((c) => c.row), user),
+      withApplications ? applicationsOf(ctx, ids) : Promise.resolve(null),
     ]);
     return cands.map((c, i) => {
       const item = toFeedItem(sourced.get(c.row.id) ?? c.row, {
@@ -1104,6 +1152,11 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       // The same role in other places, folded into this card (set here: items.ts builds the card itself).
       const alsoIn = alsoInOf(also.get(c.row.id) ?? []);
       if (alsoIn) item.alsoIn = alsoIn;
+      if (applications) {
+        // No entry: not on the list. An entry of null (a state this contract does not name): left off.
+        const place = applications.get(c.row.id);
+        if (place !== null) item.application = place ?? null;
+      }
       return item;
     });
   }
@@ -1303,7 +1356,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const exhausted = state.sort === 'deadline' || !olderRemain(s, floor);
     const nextOffset = offset + L.pageSize;
     const more = nextOffset < s.jobIds.length || !exhausted;
-    const [cards, header] = await Promise.all([items(state.ctx, cands, state.user, offset, state.personalized, also, state.fused, state.newSince), sourcesFor(state, s.createdAt)]);
+    const [cards, header] = await Promise.all([items(state.ctx, cands, state.user, offset, state.personalized, also, state.fused, state.newSince, true), sourcesFor(state, s.createdAt)]);
     const sources = header?.sources;
     // Thin means the WHOLE list is short, not the part read so far: `jobIds` holds the windows fetched up to
     // now (the first one reaches back 14 or 45 days, the list 120). So it is said only when that is known:
@@ -1415,8 +1468,9 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     });
     // An admin viewing as the person (platform/viewAs) reads the list without it counting as their visit.
     const ownVisit = !getCurrentViewAs();
-    // Opening the list is a visit: the Jobs badge counts from here (a category browse is not).
-    if (!browse && ownVisit) await repo.stampFeedVisit(ctx.userId, ctx.now).catch((err) => logger.warn('FEED', 'could not stamp the feed visit', { error: String(err) }));
+    // Opening the list is a visit: the Jobs badge counts from here (a category browse is not, nor a read that
+    // says it is not one: the Dashboard's picks, `visit: false`).
+    if (!browse && ownVisit && input.visit !== false) await repo.stampFeedVisit(ctx.userId, ctx.now).catch((err) => logger.warn('FEED', 'could not stamp the feed visit', { error: String(err) }));
     // The saved search as it is (no one-off override, no typed query) came back thin: one targeted ingest.
     const asSaved = !browse && input.q === undefined && !Object.keys(input.overrides ?? {}).length;
     if (asSaved && ownVisit && w.rows.length < L.widenBelowRows) requestIngestOnce(profile, ctx.now);

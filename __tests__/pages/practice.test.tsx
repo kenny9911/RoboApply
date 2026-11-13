@@ -238,7 +238,7 @@ describe('/practice setup', () => {
     // Nothing to launch until a job is named — and nothing else is asked for.
     const start = (await screen.findByRole('button', { name: 'Start the interview' })) as HTMLButtonElement;
     expect(start.disabled).toBe(true);
-    expect(screen.getByText('Pick a job above to begin.')).toBeTruthy();
+    expect(screen.getByText('Pick a job to begin.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
 
     // The title is searched as typed; the roles that match and the open jobs come back.

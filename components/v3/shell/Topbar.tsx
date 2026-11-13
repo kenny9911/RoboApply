@@ -1,8 +1,10 @@
 'use client';
 
 // Topbar — the sticky header (.topbar) (FND-6a; PRODUCT_PLAN.md §3.3).
-// Left: the page name (crumb). Right (.top-actions): ⌘K search, **Ask** (opens
-// the Assistant rail), the message-center slot, theme, language, avatar menu.
+// Left: the page name (crumb). Right (.top-actions): the two calls to action
+// resume.io's header carries (TopbarCtas.tsx: Ready to apply, Upgrade; docs/
+// resume-io/TEARDOWN.md), ⌘K search, **Ask** (opens the Assistant rail), the
+// message-center slot, theme, language, avatar menu.
 //
 // The crumb is one level. It comes from the nav registry (destinations.ts
 // `crumbKeyFor`), so every destination names itself the same way in the rail,
@@ -40,6 +42,7 @@ import { useCommandPalette, usePaletteJobSearch } from './CommandPalette';
 import { AvatarMenu } from './AvatarMenu';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
+import { ReadyLink, UpgradeLink } from './TopbarCtas';
 import { SURFACES_READY, crumbKeyFor, showAllNav } from './destinations';
 import { IconChat, IconSearch } from '../primitives/Iconset';
 import styles from './shell.module.css';
@@ -72,6 +75,10 @@ export function Topbar() {
       <div className="top-actions">
         {!isAdmin ? (
           <>
+            <ReadyLink />
+            <UpgradeLink />
+            <span className={styles.ctaRule} aria-hidden="true" />
+
             <button
               type="button"
               className="search"

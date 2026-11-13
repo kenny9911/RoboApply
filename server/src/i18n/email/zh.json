@@ -386,10 +386,10 @@
     },
     "kitReady": {
       "body": "针对 {company} 的 {title}，你的定制简历和回答已经备好。请先检查，然后自己到公司官网申请。",
-      "cta": "检查材料包",
-      "heading": "你的材料包已备好，等你检查",
-      "preheader": "检查你针对 {title} 的材料包。",
-      "subject": "你针对 {title} 的申请材料包已备好"
+      "cta": "检查申请材料",
+      "heading": "你的申请材料已备好，等你检查",
+      "preheader": "检查你针对 {title} 的申请材料。",
+      "subject": "你针对 {title} 的申请材料已备好"
     },
     "readyList": {
       "body": "{count, plural, other {有 # 个职位已备好，等你检查。}}打开哪些由你决定，每份申请都由你自己提交。",

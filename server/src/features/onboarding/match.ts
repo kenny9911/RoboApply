@@ -23,14 +23,28 @@
 //
 // Hard cap 120 s (p50 target 45 s): when a phase ends past the cap, or the
 // client goes away, the rest is queued as one `onboarding.match` item that
-// queue-drain finishes (Vercel offers no work after the response).
+// queue-drain finishes (Vercel offers no work after the response). The drain
+// is kicked at once (`kick`), so the rest does not wait for the 5-minute cron.
+//
+// Setup may finish while the search runs (RoboApply saves `confirm` while the
+// stage is `matching`, CONFIRM_WHILE_MATCHING). The run then goes on as
+// before and stores its result without moving the stage. A live run that
+// fails once setup is finished has no screen left to say "Try again", so its
+// rest is queued instead; while the user is still at a setup screen, the
+// failure is reported and recorded.
+//
+// The run keeps a record (`answers.matchRun`: started, queued, failed) so a
+// screen opened meanwhile can ask whether the search is still at work
+// (`searchRunningOf`; GET /onboarding/state `searchRunning`, read by the
+// Dashboard's Job search lane).
 //
 // Who may write the saved search: only the O6 screen itself, i.e. a live
-// request while the user is at `matching` or `confirm`. A queued run finishes
-// minutes later, when the user may have completed setup and edited the search
-// in the product; it reads the current search and never writes it (each step
-// already wrote its answers when it was saved, so nothing is lost). The same
-// holds for a re-run from the tour.
+// request while the user is at `matching` or `confirm` (checked again just
+// before the write: a confirm saved meanwhile has already written its part).
+// A queued run finishes minutes later, when the user may have completed setup
+// and edited the search in the product; it reads the current search and never
+// writes it (each step already wrote its answers when it was saved, so nothing
+// is lost). The same holds for a re-run from the tour.
 //
 // What the stored count means (D3): `jobCount` is the number of compared jobs
 // at Good fit or better; `compared` is how many open jobs the search found
@@ -57,12 +71,16 @@ export interface RankedFit {
 import {
   ONBOARDING_MATCH_AI_TOP_N,
   ONBOARDING_MATCH_HARD_CAP_MS,
+  ONBOARDING_MATCH_LIVE_WINDOW_MS,
   ONBOARDING_MATCH_PHASES,
+  ONBOARDING_MATCH_QUEUED_WINDOW_MS,
   ROBOAPPLY_STEP_BODY_SCHEMAS,
   type OnboardingAnswers,
   type OnboardingMatchEvent,
   type OnboardingMatchPhase,
   type OnboardingMatchResult,
+  type OnboardingMatchRun,
+  type OnboardingStage,
 } from './contract.js';
 import type { CandidateQuery, OnboardingRepo } from './repo.js';
 import type { SearchProfileRef } from './service.js';
@@ -113,7 +131,9 @@ export interface MatchPipelineDeps {
    * when no resume was compared. Absent = not counted.
    */
   searchCount?(userId: string): Promise<{ count: number | null; capped: boolean }>;
-  enqueue(kind: string, payload: unknown, options: { userId: string; dedupeKey?: string; priority?: number }): Promise<unknown>;
+  enqueue(kind: string, payload: unknown, options: { userId: string; dedupeKey?: string; priority?: number; onConflict?: 'keep' | 'requeue' }): Promise<unknown>;
+  /** Start a short drain of this kind now (platform/queue `kickDrain`). Absent = the queue-drain cron runs it. */
+  kick?(kind: string): void;
   log?: (msg: string, meta: Record<string, unknown>) => void;
 }
 
@@ -131,6 +151,63 @@ export interface MatchRunOptions {
 export interface OnboardingMatchPayload {
   userId: string;
   fromPhase: OnboardingMatchPhase;
+}
+
+/**
+ * The queue item that runs (the rest of) a user's search in the background.
+ * One per user: an item of theirs that already ran is put back with this
+ * payload; one that is queued or running is kept.
+ */
+export function onboardingMatchQueueItem(userId: string, fromPhase: OnboardingMatchPhase) {
+  return {
+    kind: ONBOARDING_MATCH_KIND,
+    payload: { userId, fromPhase } satisfies OnboardingMatchPayload,
+    options: { userId, dedupeKey: `${ONBOARDING_MATCH_KIND}:${userId}`, onConflict: 'requeue' as const },
+  };
+}
+
+/** `answers.matchRun` when it is readable, else null. */
+export function matchRunOf(answers: OnboardingAnswers | null | undefined): OnboardingMatchRun | null {
+  const v = (answers ?? {}).matchRun as Partial<OnboardingMatchRun> | undefined;
+  if (!v || typeof v !== 'object' || typeof v.startedAt !== 'string' || !Number.isFinite(Date.parse(v.startedAt))) return null;
+  return {
+    startedAt: v.startedAt,
+    ...(typeof v.queuedAt === 'string' ? { queuedAt: v.queuedAt } : {}),
+    ...(typeof v.failedAt === 'string' ? { failedAt: v.failedAt } : {}),
+  };
+}
+
+/** True when a search result is stored (`answers.matching`), whatever run it came from. */
+export function hasMatchResult(answers: OnboardingAnswers | null | undefined): boolean {
+  const m = (answers ?? {}).matching as Partial<OnboardingMatchResult> | undefined;
+  return !!m && typeof m === 'object' && typeof m.finishedAt === 'string';
+}
+
+const timeOf = (iso: string | undefined): number => (iso ? Date.parse(iso) : Number.NaN);
+
+/**
+ * Is the setup search still at work for this user? (GET /onboarding/state
+ * `searchRunning`.) Yes when its latest run started, has stored no result
+ * since, has not failed, and is still inside its window: a live run for
+ * `ONBOARDING_MATCH_LIVE_WINDOW_MS` after it started, a run handed to the
+ * queue for `ONBOARDING_MATCH_QUEUED_WINDOW_MS` after it was queued. The
+ * windows are the guarantee that a run which died without a word never holds
+ * a screen. Pure.
+ */
+export function searchRunningOf(answers: OnboardingAnswers | null | undefined, nowMs: number): boolean {
+  const run = matchRunOf(answers);
+  if (!run) return false;
+  const started = Date.parse(run.startedAt);
+  const result = (answers ?? {}).matching as Partial<OnboardingMatchResult> | undefined;
+  const finished = timeOf(typeof result?.finishedAt === 'string' ? result.finishedAt : undefined);
+  const resultSince = Number.isFinite(finished) && finished >= started;
+  // A result stored since the run started: it ended, unless that result says the rest went to the queue.
+  if (resultSince && result?.continuedInBackground !== true) return false;
+  const failed = timeOf(run.failedAt);
+  if (Number.isFinite(failed) && failed >= started) return false;
+  const queued = Number.isFinite(timeOf(run.queuedAt)) ? timeOf(run.queuedAt) : resultSince ? finished : Number.NaN;
+  if (Number.isFinite(queued)) return nowMs - queued < ONBOARDING_MATCH_QUEUED_WINDOW_MS;
+  return nowMs - started < ONBOARDING_MATCH_LIVE_WINDOW_MS;
 }
 
 const ANY_CITY = 'any';
@@ -214,6 +291,7 @@ export const rankPreScores = rankFits;
 export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string, opts: MatchRunOptions = {}): Promise<OnboardingMatchResult | null> {
   const now = deps.now ?? (() => Date.now());
   const started = now();
+  const iso = (ms: number) => new Date(ms).toISOString();
   const cap = opts.background ? Number.POSITIVE_INFINITY : (opts.hardCapMs ?? ONBOARDING_MATCH_HARD_CAP_MS);
   const emit = opts.emit ?? (() => undefined);
   const phases = ONBOARDING_MATCH_PHASES;
@@ -231,7 +309,7 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
   let comparedCapped = false;
   let profile: SearchProfileRef | null = null;
   // Only the O6 screen writes the saved search (see the header).
-  const mayWrite = !opts.background && WRITE_STAGES.includes(effectiveStage(deps.brand.id, rec));
+  let mayWrite = !opts.background && WRITE_STAGES.includes(effectiveStage(deps.brand.id, rec));
   const searchProfile = (): Promise<SearchProfileRef | null> =>
     mayWrite ? deps.applyAnswers(userId) : deps.currentProfile ? deps.currentProfile(userId) : Promise.resolve(null);
   // Was a resume read for this comparison? (Looked up once; a queued run starts after `reading`.)
@@ -255,12 +333,55 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
     }
   }
 
+  /**
+   * Update the run record (`answers.matchRun`); `fresh` starts a new one. Best
+   * effort: the record only tells screens whether to wait, and its windows end
+   * the wait anyway, so a failed write never fails the search.
+   */
+  async function markRun(patch: Partial<OnboardingMatchRun>, fresh = false): Promise<void> {
+    try {
+      await deps.repo.mutate(userId, (cur) => {
+        const prev = fresh ? null : matchRunOf(cur.answers);
+        const run: OnboardingMatchRun = { ...(prev ?? { startedAt: iso(started) }), ...patch };
+        return { patch: { answers: { ...cur.answers, matchRun: run } }, result: null };
+      });
+    } catch (err) {
+      deps.log?.('onboarding match run record not written (non-fatal)', { userId, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  /** The user's setup stage as stored now (null when there is no record). */
+  async function stageNow(): Promise<OnboardingStage | null> {
+    const cur = await deps.repo.read(userId);
+    return cur ? effectiveStage(deps.brand.id, cur) : null;
+  }
+
   async function queueRest(next: OnboardingMatchPhase, reason: string): Promise<void> {
-    await deps.enqueue(ONBOARDING_MATCH_KIND, { userId, fromPhase: next } satisfies OnboardingMatchPayload, {
-      userId,
-      dedupeKey: `${ONBOARDING_MATCH_KIND}:${userId}`,
-    });
+    const item = onboardingMatchQueueItem(userId, next);
+    await deps.enqueue(item.kind, item.payload, item.options);
+    await markRun({ queuedAt: iso(now()) });
+    // Run it now rather than at the next queue-drain cron: the user may be waiting on the picks.
+    deps.kick?.(item.kind);
     deps.log?.('onboarding match continues in the background', { userId, next, reason, elapsedMs: now() - started });
+  }
+
+  /**
+   * A live run failed. While setup is still at a screen that shows the error
+   * and offers "Try again", the run is recorded as failed. Once setup is
+   * finished nobody is there to try again, so the rest is queued from the
+   * phase that failed. Never throws (the caller rethrows the error).
+   */
+  async function settleFailure(at: OnboardingMatchPhase, err: unknown): Promise<void> {
+    try {
+      if ((await stageNow()) === 'done') {
+        await queueRest(at, 'failed_after_setup');
+        return;
+      }
+    } catch (queueErr) {
+      deps.log?.('onboarding match rest not queued after a failure', { userId, error: queueErr instanceof Error ? queueErr.message : String(queueErr) });
+    }
+    await markRun({ failedAt: iso(now()) });
+    deps.log?.('onboarding match failed', { userId, phase: at, error: err instanceof Error ? err.message : String(err) });
   }
 
   async function store(result: OnboardingMatchResult, advance: boolean): Promise<void> {
@@ -270,114 +391,131 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
     });
   }
 
-  for (let i = startAt; i < phases.length; i++) {
-    const phase = phases[i];
-    if (i > startAt) {
-      const over = now() - started > cap;
-      const gone = opts.signal?.aborted === true;
-      if (over || gone) {
-        await queueRest(phase, over ? 'hard_cap' : 'client_gone');
-        const partial: OnboardingMatchResult = { jobCount: 0, compared, topJobIds: [], continuedInBackground: true, finishedAt: new Date(now()).toISOString() };
-        if (!gone) {
-          await store(partial, true);
-          emit({ event: 'done', data: { jobCount: 0, topJobIds: [], continuedInBackground: true } });
-        }
-        return partial;
-      }
-    }
-    switch (phase) {
-      case 'reading':
-        // No resume, or a deleted or foreign one, was not read: say so (the search uses the answers only).
-        emit({ event: 'phase', data: (await hasResume()) ? { phase } : { phase, skipped: true } });
-        break;
-      case 'saving':
-        if (!mayWrite) {
-          // Not this run's to write: the saved search stays as the user has it now.
-          profile = await searchProfile().catch(() => null);
-          emit({ event: 'phase', data: { phase, skipped: true } });
-          break;
-        }
-        profile = await deps.applyAnswers(userId);
-        emit({ event: 'phase', data: { phase } });
-        break;
-      case 'searching': {
-        if (!searchOn) {
-          emit({ event: 'phase', data: { phase, skipped: true } });
-          break;
-        }
-        profile ??= await searchProfile().catch(() => null);
-        const remaining = Number.isFinite(cap) ? cap - (now() - started) - 30_000 : ONBOARDING_INGEST_BUDGET_MS;
-        const budget = Math.max(5_000, Math.min(ONBOARDING_INGEST_BUDGET_MS, remaining));
-        if (profile) {
-          try {
-            await deps.ingest(profile.id, budget);
-          } catch (err) {
-            // A provider failure still leaves whatever is already in the index.
-            deps.log?.('onboarding ingest failed; ranking the existing index', { userId, error: err instanceof Error ? err.message : String(err) });
+  // A live run says it started, so a screen opened meanwhile (the Dashboard) knows the search is at work.
+  if (!opts.background) await markRun({ startedAt: iso(started) }, true);
+
+  let phase: OnboardingMatchPhase = phases[startAt];
+  try {
+    for (let i = startAt; i < phases.length; i++) {
+      phase = phases[i];
+      if (i > startAt) {
+        const over = now() - started > cap;
+        const gone = opts.signal?.aborted === true;
+        if (over || gone) {
+          await queueRest(phase, over ? 'hard_cap' : 'client_gone');
+          const partial: OnboardingMatchResult = { jobCount: 0, compared, topJobIds: [], continuedInBackground: true, finishedAt: iso(now()) };
+          if (!gone) {
+            await store(partial, true);
+            emit({ event: 'done', data: { jobCount: 0, topJobIds: [], continuedInBackground: true } });
           }
+          return partial;
         }
-        emit({ event: 'phase', data: { phase } });
-        break;
       }
-      case 'comparing': {
-        if (!searchOn) {
-          emit({ event: 'phase', data: { phase, skipped: true } });
+      switch (phase) {
+        case 'reading':
+          // No resume, or a deleted or foreign one, was not read: say so (the search uses the answers only).
+          emit({ event: 'phase', data: (await hasResume()) ? { phase } : { phase, skipped: true } });
+          break;
+        case 'saving': {
+          // Asked again right before the write: a confirm saved since the run started (setup finished while
+          // the search runs on) has already written its part of the search, which this write must not undo.
+          if (mayWrite) {
+            const stage = await stageNow();
+            mayWrite = stage !== null && WRITE_STAGES.includes(stage);
+          }
+          if (!mayWrite) {
+            // Not this run's to write: the saved search stays as the user has it now.
+            profile = await searchProfile().catch(() => null);
+            emit({ event: 'phase', data: { phase, skipped: true } });
+            break;
+          }
+          profile = await deps.applyAnswers(userId);
+          emit({ event: 'phase', data: { phase } });
           break;
         }
-        const query = candidateQueryFor(answers, deps.brand.market);
-        const ids = await deps.repo.findCandidates(query);
-        compared = ids.length;
-        // At the cap there may be more open jobs than were looked at: every count from this run is a floor.
-        comparedCapped = ids.length >= query.limit;
-        // Without the user's say-so the profile is not used: the jobs are found, not compared.
-        ranked = ids.length && readFits && (await mayRank()) ? rankFits(await readFits(userId, ids)) : [];
-        emit({ event: 'phase', data: (await mayRank()) ? { phase } : { phase, skipped: true } });
-        break;
-      }
-      case 'ranking': {
-        if (!searchOn || !(await mayRank())) {
+        case 'searching': {
+          if (!searchOn) {
+            emit({ event: 'phase', data: { phase, skipped: true } });
+            break;
+          }
+          profile ??= await searchProfile().catch(() => null);
+          const remaining = Number.isFinite(cap) ? cap - (now() - started) - 30_000 : ONBOARDING_INGEST_BUDGET_MS;
+          const budget = Math.max(5_000, Math.min(ONBOARDING_INGEST_BUDGET_MS, remaining));
+          if (profile) {
+            try {
+              await deps.ingest(profile.id, budget);
+            } catch (err) {
+              // A provider failure still leaves whatever is already in the index.
+              deps.log?.('onboarding ingest failed; ranking the existing index', { userId, error: err instanceof Error ? err.message : String(err) });
+            }
+          }
+          emit({ event: 'phase', data: { phase } });
+          break;
+        }
+        case 'comparing': {
+          if (!searchOn) {
+            emit({ event: 'phase', data: { phase, skipped: true } });
+            break;
+          }
+          const query = candidateQueryFor(answers, deps.brand.market);
+          const ids = await deps.repo.findCandidates(query);
+          compared = ids.length;
+          // At the cap there may be more open jobs than were looked at: every count from this run is a floor.
+          comparedCapped = ids.length >= query.limit;
+          // Without the user's say-so the profile is not used: the jobs are found, not compared.
+          ranked = ids.length && readFits && (await mayRank()) ? rankFits(await readFits(userId, ids)) : [];
+          emit({ event: 'phase', data: (await mayRank()) ? { phase } : { phase, skipped: true } });
+          break;
+        }
+        case 'ranking': {
+          if (!searchOn || !(await mayRank())) {
+            const result: OnboardingMatchResult = {
+              jobCount: compared,
+              compared,
+              topJobIds: [],
+              continuedInBackground: false,
+              finishedAt: iso(now()),
+              ranked: false,
+              resumeCompared: false,
+              comparedCapped,
+              ...(await searchSize()),
+            };
+            await store(result, !opts.background);
+            emit({ event: 'phase', data: { phase, skipped: true } });
+            emit({ event: 'done', data: { jobCount: result.jobCount, topJobIds: [], continuedInBackground: false } });
+            return result;
+          }
+          const good = ranked.filter((r) => r.tier === 'great' || r.tier === 'good');
+          const top = ranked.filter((r) => r.score !== null).slice(0, ONBOARDING_MATCH_AI_TOP_N);
+          if (top.length && (await deps.aiAllowed(userId))) {
+            for (const r of top) {
+              await deps.enqueue('job.score', { userId, jobId: r.jobId }, { userId, dedupeKey: `job.score:onboarding:${userId}:${r.jobId}`, priority: 50 });
+            }
+          }
+          const resumeCompared = await hasResume();
           const result: OnboardingMatchResult = {
-            jobCount: compared,
+            jobCount: good.length,
             compared,
-            topJobIds: [],
+            topJobIds: top.map((r) => r.jobId),
             continuedInBackground: false,
-            finishedAt: new Date(now()).toISOString(),
-            ranked: false,
-            resumeCompared: false,
+            finishedAt: iso(now()),
+            ranked: true,
+            resumeCompared,
             comparedCapped,
-            ...(await searchSize()),
+            // No resume: the heading counts the saved search, so that number is stored with the result.
+            ...(resumeCompared ? {} : await searchSize()),
           };
           await store(result, !opts.background);
-          emit({ event: 'phase', data: { phase, skipped: true } });
-          emit({ event: 'done', data: { jobCount: result.jobCount, topJobIds: [], continuedInBackground: false } });
+          emit({ event: 'phase', data: { phase } });
+          emit({ event: 'done', data: { jobCount: result.jobCount, topJobIds: result.topJobIds, continuedInBackground: false } });
           return result;
         }
-        const good = ranked.filter((r) => r.tier === 'great' || r.tier === 'good');
-        const top = ranked.filter((r) => r.score !== null).slice(0, ONBOARDING_MATCH_AI_TOP_N);
-        if (top.length && (await deps.aiAllowed(userId))) {
-          for (const r of top) {
-            await deps.enqueue('job.score', { userId, jobId: r.jobId }, { userId, dedupeKey: `job.score:onboarding:${userId}:${r.jobId}`, priority: 50 });
-          }
-        }
-        const resumeCompared = await hasResume();
-        const result: OnboardingMatchResult = {
-          jobCount: good.length,
-          compared,
-          topJobIds: top.map((r) => r.jobId),
-          continuedInBackground: false,
-          finishedAt: new Date(now()).toISOString(),
-          ranked: true,
-          resumeCompared,
-          comparedCapped,
-          // No resume: the heading counts the saved search, so that number is stored with the result.
-          ...(resumeCompared ? {} : await searchSize()),
-        };
-        await store(result, !opts.background);
-        emit({ event: 'phase', data: { phase } });
-        emit({ event: 'done', data: { jobCount: result.jobCount, topJobIds: result.topJobIds, continuedInBackground: false } });
-        return result;
       }
     }
+  } catch (err) {
+    // A queued run is retried by the queue itself; a live one is settled here (recorded, or its rest queued).
+    if (!opts.background) await settleFailure(phase, err);
+    throw err;
   }
   return null;
 }

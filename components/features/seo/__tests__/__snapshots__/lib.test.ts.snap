@@ -61,6 +61,7 @@ exports[`robots per host > goapply 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/dashboard",
         "/jobs",
         "/job-search",
         "/resume",
@@ -86,6 +87,7 @@ exports[`robots per host > goapply 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/dashboard",
         "/jobs",
         "/job-search",
         "/resume",
@@ -127,6 +129,7 @@ exports[`robots per host > goapply 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/dashboard",
         "/jobs",
         "/job-search",
         "/resume",
@@ -161,6 +164,7 @@ exports[`robots per host > roboapply 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/dashboard",
         "/jobs",
         "/job-search",
         "/resume",
@@ -186,6 +190,7 @@ exports[`robots per host > roboapply 1`] = `
       "allow": "/",
       "disallow": [
         "/api/",
+        "/dashboard",
         "/jobs",
         "/job-search",
         "/resume",

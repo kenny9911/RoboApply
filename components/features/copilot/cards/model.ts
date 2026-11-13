@@ -462,6 +462,108 @@ export function parseCreditAction(d: unknown): CreditActionData | null {
   };
 }
 
+// ── list_add / prepare_application / application_status (the applications agent) ──
+
+/** The list states (server agent `QUEUE_STATES`; never "submitted", D1). */
+export const QUEUE_STATE_KEYS = ['picked', 'preparing', 'ready_for_review', 'approved', 'opened', 'applied', 'skipped', 'expired', 'failed'] as const;
+export type QueueStateKey = (typeof QUEUE_STATE_KEYS)[number];
+const queueStateOf = (v: unknown): QueueStateKey | null => ((QUEUE_STATE_KEYS as readonly string[]).includes(v as string) ? (v as QueueStateKey) : null);
+
+/** "Data Analyst · Acme", the title alone, or null when the card names no job. Pure. */
+export function jobLine(jobTitle: string | null, company: string | null): string | null {
+  if (!jobTitle) return null;
+  return company ? `${jobTitle} · ${company}` : jobTitle;
+}
+
+export interface ListAddData {
+  proposalId: string;
+  jobId: string;
+  jobTitle: string | null;
+  company: string | null;
+  expiresAt: string | null;
+  status: CardProposalStatus;
+}
+/** `ListAddCardData` (server contract) from the add_to_list tool. Pure. */
+export function parseListAdd(d: unknown): ListAddData | null {
+  if (!isObj(d) || !str(d.proposalId) || !str(d.jobId)) return null;
+  return {
+    proposalId: d.proposalId as string,
+    jobId: d.jobId as string,
+    jobTitle: str(d.jobTitle),
+    company: str(d.company),
+    expiresAt: str(d.expiresAt),
+    status: statusOf(d.status),
+  };
+}
+
+export const PREPARE_BUCKETS = ['ready_kits', 'tailor', 'cover_letter'] as const;
+export type PrepareBucket = (typeof PREPARE_BUCKETS)[number];
+export interface PrepareApplicationData {
+  proposalId: string;
+  jobId: string;
+  jobTitle: string | null;
+  company: string | null;
+  /** The job is not on the list yet: applying puts it there first (no credit for that). */
+  addsToList: boolean;
+  /** What preparing uses, per bucket, as the server's credit proposal says (never computed here). */
+  credits: Array<{ bucket: PrepareBucket; cost: number }>;
+  /** False: prepared without AI (the resume as it is). */
+  aiAvailable: boolean;
+  /** The weekly setting "tailor each application"; null when not sent. */
+  tailorEach: boolean | null;
+  expiresAt: string | null;
+  status: CardProposalStatus;
+}
+/**
+ * `PrepareApplicationCardData` (server contract) from the prepare_application
+ * tool. The cost must name the weekly allowance (`ready_kits`): a card that
+ * cannot say what it uses is not shown (the cost comes before anything). Pure.
+ */
+export function parsePrepareApplication(d: unknown): PrepareApplicationData | null {
+  if (!isObj(d) || !str(d.proposalId) || !str(d.jobId) || !Array.isArray(d.credits)) return null;
+  const credits: PrepareApplicationData['credits'] = [];
+  for (const c of d.credits.slice(0, 3)) {
+    if (!isObj(c) || !(PREPARE_BUCKETS as readonly string[]).includes(c.bucket as string)) continue;
+    const cost = num(c.cost);
+    if (cost === null || cost < 0 || credits.some((x) => x.bucket === c.bucket)) continue;
+    credits.push({ bucket: c.bucket as PrepareBucket, cost });
+  }
+  if (!credits.some((c) => c.bucket === 'ready_kits')) return null;
+  return {
+    proposalId: d.proposalId as string,
+    jobId: d.jobId as string,
+    jobTitle: str(d.jobTitle),
+    company: str(d.company),
+    addsToList: d.addsToList === true,
+    credits,
+    aiAvailable: d.aiAvailable !== false,
+    tailorEach: typeof d.tailorEach === 'boolean' ? d.tailorEach : null,
+    expiresAt: str(d.expiresAt),
+    status: statusOf(d.status),
+  };
+}
+
+export interface ApplicationStatusData {
+  jobId: string;
+  state: QueueStateKey;
+  jobTitle: string | null;
+  company: string | null;
+  trackerEntryId: string | null;
+}
+/** `ApplicationStatusCardData` (server contract): the result of an applied list_add / prepare_application, or a job already on the list. Pure. */
+export function parseApplicationStatus(d: unknown): ApplicationStatusData | null {
+  if (!isObj(d) || !str(d.jobId)) return null;
+  const state = queueStateOf(d.state);
+  if (!state) return null;
+  return { jobId: d.jobId as string, state, jobTitle: str(d.jobTitle), company: str(d.company), trackerEntryId: str(d.trackerEntryId) };
+}
+
+/** The `application_status` card an applied list_add / prepare_application answered with (`result.card`), or null. Pure. */
+export function applicationResult(result: unknown): ApplicationStatusData | null {
+  const c = isObj(result) && isObj(result.card) ? result.card : null;
+  return c && c.type === 'application_status' ? parseApplicationStatus(c.data) : null;
+}
+
 // ── outreach draft (the result of an applied `outreach` credit action) ───
 
 export interface OutreachDraftData {

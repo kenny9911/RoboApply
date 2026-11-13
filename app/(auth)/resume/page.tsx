@@ -8,6 +8,8 @@
 //
 // Layout (components/features/resume/hub):
 //   PageHeader · ResumeHubTabs
+//   (Library first, then Studio: resume.io's documents page lists the
+//   documents first; docs/resume-io/TEARDOWN.md)
 //   Studio     — TailorPanel: AI tailoring from a saved job (those without a
 //                tailored version) or a pasted posting (only when AI may run
 //                for this user, R-04) · beside it NextSteps ("Up next":
@@ -378,27 +380,6 @@ export default function ResumesPage() {
         <ResumeStart {...startProps} />
       ) : (
         <>
-          {showStudio ? (
-            <div className={styles.studio} data-single={tailorAvailable ? undefined : true}>
-              {tailorAvailable && baseId ? (
-                <TailorPanel
-                  bases={bases}
-                  baseId={baseId}
-                  onBaseChange={setBaseChoice}
-                  jobs={untailored}
-                  onTailor={(jobId) => startTailoring(baseId, jobId)}
-                />
-              ) : null}
-              <div className={styles.side}>
-                <NextSteps steps={steps} loading={stepsLoading} />
-                {/* Same gate as the editor's Ask button: the Assistant on, and AI allowed for this user. */}
-                {tailorAvailable && assistantOn && main ? (
-                  <AskAssistant onAsk={(prompt) => void openAssistant({ source: 'resume', resumeId: main.id, scope: 'resume', prompt })} />
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
           <section aria-labelledby="hub-library">
             <div className={styles.sectionHead}>
               <h2 className={styles.sectionTitle} id="hub-library">
@@ -427,6 +408,27 @@ export default function ResumesPage() {
               <NewResumeTile {...startProps} full={slotsFull} limit={BASE_RESUME_LIMIT} />
             </div>
           </section>
+
+          {showStudio ? (
+            <div className={styles.studio} data-single={tailorAvailable ? undefined : true}>
+              {tailorAvailable && baseId ? (
+                <TailorPanel
+                  bases={bases}
+                  baseId={baseId}
+                  onBaseChange={setBaseChoice}
+                  jobs={untailored}
+                  onTailor={(jobId) => startTailoring(baseId, jobId)}
+                />
+              ) : null}
+              <div className={styles.side}>
+                <NextSteps steps={steps} loading={stepsLoading} />
+                {/* Same gate as the editor's Ask button: the Assistant on, and AI allowed for this user. */}
+                {tailorAvailable && assistantOn && main ? (
+                  <AskAssistant onAsk={(prompt) => void openAssistant({ source: 'resume', resumeId: main.id, scope: 'resume', prompt })} />
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </>
       )}
 

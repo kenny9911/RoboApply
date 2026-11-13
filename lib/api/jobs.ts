@@ -6,6 +6,7 @@
 //
 // Endpoints:
 //   GET    /api/v1/roboapply/jobs/:id
+//   GET    /api/v1/roboapply/jobs/:id?preview=1   (the same page, not counted as opening the job)
 //   POST   /api/v1/roboapply/jobs/:id/score
 //   GET    /api/v1/roboapply/jobs/:id/similar
 //   POST   /api/v1/roboapply/jobs/:id/save
@@ -25,9 +26,20 @@ import type * as D from './contracts/jobs/detail';
 import { listingApply, listingSource, type ListingApply, type ListingSource } from './feed';
 import type * as CO from './contracts/jobs/companies';
 
-/** `jobs.get` — GET /api/v1/roboapply/jobs/:id */
+/** `jobs.get` — GET /api/v1/roboapply/jobs/:id (the person opened the job: the server records the view) */
 export function getJob(id: string, opts?: CallOptions): Promise<D.JobDetailResponse> {
   return call<D.JobDetailResponse>('GET', `/api/v1/roboapply/jobs/${seg(id)}`, opts);
+}
+
+/**
+ * `jobs.preview` — GET /api/v1/roboapply/jobs/:id?preview=1: the same page,
+ * read without counting it as the person opening the job (the desktop Jobs
+ * list's first job, shown before the person picked one; contract
+ * `JobDetailQuerySchema`).
+ */
+export function getJobPreview(id: string, opts?: CallOptions): Promise<D.JobDetailResponse> {
+  const query: In<typeof D.JobDetailQuerySchema> = { preview: '1' };
+  return call<D.JobDetailResponse>('GET', withQuery(`/api/v1/roboapply/jobs/${seg(id)}`, query), opts);
 }
 
 /** `jobs.score` — POST /api/v1/roboapply/jobs/:id/score */
@@ -115,6 +127,7 @@ export function jobListing(detail: Pick<D.JobDetailResponse, 'job'> | null | und
 /** Every wrapper of this area, for callers that prefer one import. */
 export const jobsApi = {
   getJob,
+  getJobPreview,
   scoreJob,
   getSimilarJobs,
   saveJob,
