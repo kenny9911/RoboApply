@@ -57,6 +57,8 @@ Use Node 24.x and the committed `package-lock.json`; install dependencies with
 
 ## Work in progress on this branch
 
+`feat/resumeio-clone` (November 2026, pushed, not merged) restyles the app after resume.io (the Desk design system in `docs/design-system.md`; teardown in `docs/resume-io/TEARDOWN.md`) and carries the agent-driven redesign (`docs/agent-driven/REDESIGN.md`, §11 for how the two meet). Merging it also merges PRs 13, 14 and 16. The signed-in home is `/dashboard` (the agent desk inside resume.io's dashboard; `/today` and `/home` redirect to it). The product still never submits an application (R1/D1). Preview without a backend: `node scripts/design-preview.mjs` from this worktree, port 3612.
+
 `feat/practice-prep` adds the interview-prep agents and skills to practice interviews (job search for the practice target, per-job interview plans with generated interviewers and focuses, researched company interview styles, 15/20/30-minute practices). Read `docs/interview-practice/PREP_AGENTS.md` before changing `server/src/interview-engine/prep/`, `server/src/interview-engine/skills/` or the `/practice` setup.
 
 The Jobright clone (dual brand: RoboApply and GoApply) is merged; its record and the rules that are easy to break (Alipay tests are frozen, schema changes are additive only, the local Stripe key is live) are in `docs/jobright-clone/HANDOFF.md`.

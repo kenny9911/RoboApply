@@ -19,6 +19,10 @@
 //
 // WP-65: the 4-step tour (ResumeTour, F-RES-07) points at the parts marked
 // `data-tour` (grade, filters, issues, recheck).
+//
+// The editor's Review tab (./editor/ReviewPanel) shows the same check in
+// short: it reuses the issue grouping, the cost line and the start / running
+// cards exported here, so both read the check the same way.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
@@ -33,8 +37,46 @@ import { issueTypeName } from './issueText';
 import { ResumeTour } from './ResumeTour';
 import styles from './ResumeCheck.module.css';
 
-const SEVERITIES: IssueSeverity[] = ['urgent', 'critical', 'optional'];
-const SECTION_ORDER = ['layout', 'contact', 'summary', 'experience', 'projects', 'education', 'skills', 'other'] as const;
+/** Priorities, most pressing first. */
+export const SEVERITIES: readonly IssueSeverity[] = ['urgent', 'critical', 'optional'];
+/** The order the report lists sections in; a section it does not know goes under "other". */
+export const SECTION_ORDER = ['layout', 'contact', 'summary', 'experience', 'projects', 'education', 'skills', 'other'] as const;
+export type CheckSection = (typeof SECTION_ORDER)[number];
+
+export interface IssueGroup {
+  section: CheckSection;
+  issues: GradeIssue[];
+}
+
+/** Issues by section in SECTION_ORDER, the most pressing first in each; `severity` keeps one priority only. */
+export function groupIssues(issues: readonly GradeIssue[], severity: IssueSeverity | null = null): IssueGroup[] {
+  const bySection = new Map<CheckSection, GradeIssue[]>();
+  for (const issue of issues) {
+    if (severity && issue.severity !== severity) continue;
+    const key: CheckSection = (SECTION_ORDER as readonly string[]).includes(issue.section) ? (issue.section as CheckSection) : 'other';
+    bySection.set(key, [...(bySection.get(key) ?? []), issue]);
+  }
+  const rank = (s: IssueSeverity) => SEVERITIES.indexOf(s);
+  return SECTION_ORDER.filter((s) => bySection.has(s)).map((s) => ({
+    section: s,
+    issues: [...bySection.get(s)!].sort((a, b) => rank(a.severity) - rank(b.severity)),
+  }));
+}
+
+/**
+ * What running the check costs this user, as a `resumeCheck` message: nothing
+ * with AI off (checklist only), else one resume check credit, and with none
+ * left the checklist still runs without the spelling pass.
+ */
+export function checkCostMessage(
+  aiAvailable: boolean,
+  creditsLeft: number | null,
+): { key: 'empty.noAi' | 'empty.creditAi' | 'empty.creditNone' | 'empty.creditLeft'; values?: { left: number } } {
+  if (!aiAvailable) return { key: 'empty.noAi' };
+  if (creditsLeft === null) return { key: 'empty.creditAi' };
+  if (creditsLeft === 0) return { key: 'empty.creditNone' };
+  return { key: 'empty.creditLeft', values: { left: creditsLeft } };
+}
 
 export interface ResumeCheckReportProps {
   resumeId: string;
@@ -115,7 +157,7 @@ export function ResumeCheckReport({ resumeId, focusIssueId = null }: ResumeCheck
   );
 }
 
-function RunningCard({ onCancel }: { onCancel: () => Promise<void> }) {
+export function RunningCard({ onCancel }: { onCancel: () => Promise<void> }) {
   const t = useTranslations('resumeCheck');
   const [cancelling, setCancelling] = useState(false);
   return (
@@ -144,7 +186,7 @@ function RunningCard({ onCancel }: { onCancel: () => Promise<void> }) {
   );
 }
 
-function StartCard({
+export function StartCard({
   aiAvailable,
   creditsLeft,
   failed,
@@ -159,6 +201,7 @@ function StartCard({
 }) {
   const t = useTranslations('resumeCheck');
   const [target, setTarget] = useState('');
+  const cost = checkCostMessage(aiAvailable, creditsLeft);
   return (
     <section className={styles.cardSoft}>
       <h2 className={styles.cardTitle}>{failed ? t('failed.title') : t('empty.title')}</h2>
@@ -176,15 +219,7 @@ function StartCard({
         <Btn variant="primary" onClick={() => onRun(target.trim() || undefined)}>
           {failed ? t('failed.retry') : t('empty.cta')}
         </Btn>
-        <p className={styles.muted}>
-          {!aiAvailable
-            ? t('empty.noAi')
-            : creditsLeft === null
-              ? t('empty.creditAi')
-              : creditsLeft === 0
-                ? t('empty.creditNone')
-                : t('empty.creditLeft', { left: creditsLeft })}
-        </p>
+        <p className={styles.muted}>{t(cost.key, cost.values)}</p>
       </div>
     </section>
   );
@@ -216,19 +251,7 @@ function Report({
   // A linked issue that this check no longer lists (fixed, or the resume was checked again).
   const focusMissing = Boolean(focusIssueId) && !grade.issues.some((i) => i.id === focusIssueId);
 
-  const groups = useMemo(() => {
-    const visible = grade.issues.filter((i) => !filter || i.severity === filter);
-    const bySection = new Map<string, GradeIssue[]>();
-    for (const issue of visible) {
-      const key = (SECTION_ORDER as readonly string[]).includes(issue.section) ? issue.section : 'other';
-      bySection.set(key, [...(bySection.get(key) ?? []), issue]);
-    }
-    const rank = (s: IssueSeverity) => SEVERITIES.indexOf(s);
-    return SECTION_ORDER.filter((s) => bySection.has(s)).map((s) => ({
-      section: s,
-      issues: [...bySection.get(s)!].sort((a, b) => rank(a.severity) - rank(b.severity)),
-    }));
-  }, [grade.issues, filter]);
+  const groups = useMemo(() => groupIssues(grade.issues, filter), [grade.issues, filter]);
 
   return (
     <>

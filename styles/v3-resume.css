@@ -475,6 +475,9 @@
   position: sticky; top: 0; z-index: 2;
 }
 .rb-preview-lbl { color: var(--text); }
+/* A bar whose only control is off (the Assistant entry with AI or the Assistant
+   unavailable) takes no room above the page. */
+.rb-preview-bar:empty { display: none; }
 .rb-zoom {
   display: flex; align-items: center; gap: var(--sp-1);
   color: var(--text-2);

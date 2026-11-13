@@ -6,6 +6,9 @@
 // MKT-4F: the "Also in N more locations" control under a card (SM-12), the
 // "Ranked by" chip and the relevance text sent with every page (SM-9), and the
 // intro line of a list ordered by its search words (GoApply, SM-7).
+// resume.io clone: on desktop the first job opens in the split view as a
+// preview (no `?job=` written, the pane told it is a preview), until the
+// person opens a job themselves or closes the pane; never on a phone.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -60,7 +63,15 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('../job', () => ({
-  JobDetailPanel: (p: { jobId: string; mode: string }) => <div data-testid="job-panel" data-job={p.jobId} data-mode={p.mode} />,
+  JobDetailPanel: (p: { jobId: string; mode: string; preview?: boolean; application?: { state: string } | null }) => (
+    <div
+      data-testid="job-panel"
+      data-job={p.jobId}
+      data-mode={p.mode}
+      data-preview={String(p.preview === true)}
+      data-application={p.application === undefined ? 'unknown' : (p.application?.state ?? 'none')}
+    />
+  ),
 }));
 
 function setDesktop(on: boolean) {
@@ -576,6 +587,7 @@ describe('/jobs workspace', () => {
     const panel = await screen.findByTestId('job-panel');
     expect(panel).toHaveAttribute('data-job', 'job_2');
     expect(panel).toHaveAttribute('data-mode', 'split');
+    expect(panel).toHaveAttribute('data-preview', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'Close job details' }));
     expect(nav.replace.at(-1)).toBe('/jobs');
   });
@@ -655,6 +667,139 @@ describe('/jobs workspace', () => {
     await waitFor(() => expect(net.to('PATCH', `${PROFILES}/sp_main`)).toHaveLength(1));
     expect(net.to('PATCH', `${PROFILES}/sp_main`)[0].body).toEqual({ baseVersion: 3, filters: { q: 'data' } });
     await waitFor(() => expect(screen.queryByTestId('after-change')).toBeNull());
+  });
+});
+
+// ── The search is one line until the user opens it (agent-driven redesign §6) ──
+
+describe('/jobs: the search collapses to one line', () => {
+  const SEARCH = { titles: ['Product designer'], workModels: ['remote'], seniority: ['senior'], postedWithinDays: 30 };
+  const withSearch = (over: Record<string, Route> = {}) => baseRoutes({ [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ filters: SEARCH as never })])), ...over });
+  const toggle = () => screen.getByRole('button', { name: 'Change search' });
+
+  it('closed on a plain visit: the search in words and "Change search"; the fit view and the sort stay; no search box, saved searches, filter buttons or chips', async () => {
+    installFetch(withSearch());
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    const region = screen.getByRole('region', { name: 'Your search' });
+    expect(within(region).getByTestId('search-summary')).toHaveTextContent('Product designer · Remote · Senior · Past month');
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById(toggle().getAttribute('aria-controls')!)).toHaveAttribute('hidden');
+    // What stays on screen: the fit view and the sort, on the bar itself.
+    expect(within(region).getByRole('radio', { name: 'Everything' })).toBeChecked();
+    expect(within(region).getByLabelText('Sort')).toHaveValue('recommended');
+    expect(within(region).getByRole('link', { name: 'How ranking works' })).toBeInTheDocument();
+    // What is one click away.
+    expect(screen.queryByRole('search')).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Quick filters' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Active filters' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save as a new search' })).toBeNull();
+    // Nothing was written to the address by arriving.
+    expect(nav.replace).toEqual([]);
+  });
+
+  it('"Hiding {n} weaker fits" shows while the search is closed', async () => {
+    installFetch(
+      baseRoutes({
+        [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ filters: { ...SEARCH, fitTier: 'good' } as never })])),
+        [`POST ${FEED}/query`]: () => ok(page(items(1, 2), { hiddenByTier: 37 })),
+      }),
+    );
+    renderFeed(<JobsWorkspace />);
+    expect(await screen.findByText('Hiding 37 weaker fits.')).toBeInTheDocument();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('"Change search" opens every control in place and leaves the address alone; it stays open when a change reloads the list', async () => {
+    let filters: Record<string, unknown> = { ...SEARCH };
+    let version = 3;
+    const net = installFetch(
+      baseRoutes({
+        [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ version, filters: filters as never })])),
+        [`PATCH ${PROFILES}/sp_main`]: (c) => {
+          const patch = (c.body as { filtersPatch: Record<string, unknown> }).filtersPatch;
+          filters = Object.fromEntries(Object.entries({ ...filters, ...patch }).filter(([, v]) => v !== null));
+          version = 4;
+          return ok(searchProfile({ version, filters: filters as never }));
+        },
+      }),
+    );
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    fireEvent.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Quick filters' })).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Active filters' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Product designer', 'Remote', 'Senior', 'Past month']);
+    expect(nav.replace).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove filter: Senior' }));
+    await waitFor(() => expect(net.to('PATCH', `${PROFILES}/sp_main`)).toHaveLength(1));
+    // The search changed, so the list is asked for again; the controls the user is working in do not close.
+    await waitFor(() => expect(net.to('POST', `${FEED}/query`).length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByTestId('search-summary')).toHaveTextContent(/^Your search: Product designer · Remote · Past month$/));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('search')).toBeInTheDocument();
+  });
+
+  it('/jobs?edit=search arrives with the controls open; closing them takes the request out of the address and keeps the rest', async () => {
+    nav.search = 'sort=newest&edit=search';
+    installFetch(withSearch());
+    renderFeed(<JobsWorkspace />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('group', { name: 'Active filters' })).toBeInTheDocument();
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(nav.replace).toEqual(['/jobs?sort=newest']);
+  });
+
+  it('a link to /jobs?edit=search followed while the page is already open opens the controls', async () => {
+    installFetch(withSearch());
+    const view = renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    nav.search = 'edit=search';
+    view.rerender(<JobsWorkspace />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    // Any other value of the parameter asks for nothing.
+    view.unmount();
+    nav.search = 'edit=resume';
+    renderFeed(<JobsWorkspace />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('after the Assistant changed the search the controls are open beside "Looks better / Not quite"', async () => {
+    installFetch(withSearch());
+    noteAssistantFilterChange({ searchProfileId: 'sp_main', before: { q: 'data' } });
+    renderFeed(<JobsWorkspace />);
+    expect(await screen.findByTestId('after-change')).toBeInTheDocument();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('group', { name: 'Active filters' })).toBeInTheDocument();
+    // "Looks better" settles the question; it does not close what the user may still be reading.
+    fireEvent.click(within(screen.getByTestId('after-change')).getByRole('button', { name: 'Looks better' }));
+    await waitFor(() => expect(screen.queryByTestId('after-change')).toBeNull());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('an Assistant change confirmed while /jobs is open opens the controls then', async () => {
+    installFetch(withSearch());
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    act(() => noteAssistantFilterChange({ searchProfileId: 'sp_main', before: {} }));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('search')).toBeInTheDocument();
+  });
+
+  it('GoApply gets the same line (D5)', async () => {
+    installFetch(withSearch());
+    renderFeed(<JobsWorkspace />, { brand: 'goapply' });
+    await screen.findAllByTestId('job-card');
+    expect(screen.getByTestId('search-summary')).toHaveTextContent('Product designer · Remote · Senior · Past month');
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('search')).toBeNull();
   });
 });
 
@@ -882,5 +1027,131 @@ describe('the intro says how the list is ordered', () => {
     await screen.findAllByTestId('job-card');
     expect(screen.getByText(/ranked by how well your resume lines up/)).toBeInTheDocument();
     expect(screen.queryByText(/how closely the post matches/)).toBeNull();
+  });
+});
+
+// ── Desktop opens the first job, as a preview (resume.io's job search) ─────────────
+
+describe('desktop: the first job opens in the split view as a preview', () => {
+  const panel = () => screen.getByTestId('job-panel');
+  const selected = () => screen.getAllByTestId('job-card').map((c) => c.getAttribute('data-active'));
+
+  it('once the list is on screen: the first job, read as a preview, its card selected, and no ?job= written', async () => {
+    setDesktop(true);
+    const net = installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page([feedItem(1, { isNew: true }), feedItem(2), feedItem(3)])) }));
+    renderFeed(<JobsWorkspace />);
+    expect(await screen.findByTestId('job-panel')).toHaveAttribute('data-job', 'job_1');
+    expect(panel()).toHaveAttribute('data-mode', 'split');
+    expect(panel()).toHaveAttribute('data-preview', 'true');
+    expect(screen.getByTestId('split-detail')).toHaveAttribute('data-preview', 'true');
+    expect(selected()).toEqual(['true', null, null]);
+    // Nothing is written to the address, so Back and a shared link behave as before.
+    expect(nav.replace).toEqual([]);
+    expect(nav.push).toEqual([]);
+    // "New" and the new-jobs count are untouched: the chip stays, the list was asked once, the count is not asked.
+    expect(within(screen.getAllByTestId('job-card')[0]).getByTestId('job-card-new')).toBeInTheDocument();
+    expect(net.to('POST', `${FEED}/query`)).toHaveLength(1);
+    expect(net.calls.filter((c) => c.path === `${FEED}/new-count`)).toEqual([]);
+  });
+
+  it('opening the previewed job is the normal read: ?job= is written and the pane is no longer a preview', async () => {
+    setDesktop(true);
+    installFetch(baseRoutes());
+    const view = renderFeed(<JobsWorkspace />);
+    expect(await screen.findByTestId('job-panel')).toHaveAttribute('data-preview', 'true');
+    // The title link: a click, or the keyboard's Enter on it (the same click event).
+    fireEvent.click(screen.getAllByRole('link', { name: /Open Backend engineer 1 at/ })[0]);
+    expect(nav.replace).toEqual(['/jobs?job=job_1']);
+    nav.search = 'job=job_1';
+    view.rerender(<JobsWorkspace />);
+    expect(panel()).toHaveAttribute('data-job', 'job_1');
+    expect(panel()).toHaveAttribute('data-preview', 'false');
+    expect(selected()).toEqual(['true', null, null]);
+  });
+
+  it('opening another job moves the selection and is an open, not a preview', async () => {
+    setDesktop(true);
+    installFetch(baseRoutes());
+    const view = renderFeed(<JobsWorkspace />);
+    await screen.findByTestId('job-panel');
+    fireEvent.click(screen.getAllByRole('link', { name: /Open Backend engineer 3 at/ })[0]);
+    expect(nav.replace).toEqual(['/jobs?job=job_3']);
+    nav.search = 'job=job_3';
+    view.rerender(<JobsWorkspace />);
+    expect(screen.getAllByTestId('job-panel')).toHaveLength(1);
+    expect(panel()).toHaveAttribute('data-job', 'job_3');
+    expect(panel()).toHaveAttribute('data-preview', 'false');
+    expect(selected()).toEqual([null, null, 'true']);
+  });
+
+  it('a ?job= link opens that job, never as a preview', async () => {
+    setDesktop(true);
+    nav.search = 'job=job_2';
+    installFetch(baseRoutes());
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(panel()).toHaveAttribute('data-job', 'job_2');
+    expect(panel()).toHaveAttribute('data-preview', 'false');
+    expect(selected()).toEqual([null, 'true', null]);
+  });
+
+  it('closing the preview writes nothing, and the pane stays closed for the visit', async () => {
+    setDesktop(true);
+    installFetch(baseRoutes());
+    const view = renderFeed(<JobsWorkspace />);
+    await screen.findByTestId('job-panel');
+    fireEvent.click(screen.getByRole('button', { name: 'Close job details' }));
+    expect(screen.queryByTestId('split-detail')).toBeNull();
+    expect(nav.replace).toEqual([]);
+    view.rerender(<JobsWorkspace />);
+    expect(screen.queryByTestId('split-detail')).toBeNull();
+    expect(selected()).toEqual([null, null, null]);
+  });
+
+  it('a hidden first job hands the preview to the next one', async () => {
+    setDesktop(true);
+    installFetch(
+      baseRoutes({
+        [`POST ${FEED}/query`]: () => ok(page([feedItem(1), feedItem(2)])),
+        'POST /api/v1/roboapply/feed/jobs/job_1/hide': () =>
+          ok({ proposedFilterDiff: { searchProfileId: 'sp_main', baseVersion: 3, ops: [{ op: 'add', path: 'companies/excluded', value: 'Example Co 1' }], countAfter: 41 } }),
+      }),
+    );
+    renderFeed(<JobsWorkspace />);
+    expect(await screen.findByTestId('job-panel')).toHaveAttribute('data-job', 'job_1');
+    const card = screen.getAllByTestId('job-card')[0];
+    fireEvent.click(within(card).getByRole('button', { name: 'More options' }));
+    fireEvent.click(within(card).getByRole('menuitem', { name: 'Not interested' }));
+    fireEvent.click(within(await screen.findByTestId('sheet')).getByLabelText('This company'));
+    fireEvent.click(within(screen.getByTestId('sheet')).getByRole('button', { name: 'Hide this job' }));
+    await waitFor(() => expect(panel()).toHaveAttribute('data-job', 'job_2'));
+    expect(panel()).toHaveAttribute('data-preview', 'true');
+    expect(nav.replace).toEqual([]);
+  });
+
+  it('the pane gets what the card knows about the job on the list', async () => {
+    setDesktop(true);
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page([feedItem(1, { application: { state: 'preparing', trackerEntryId: null } }), feedItem(2, { application: null }), feedItem(3)])) }));
+    const view = renderFeed(<JobsWorkspace />, { flags: { agent: true } });
+    expect(await screen.findByTestId('job-panel')).toHaveAttribute('data-application', 'preparing');
+    for (const [n, expected] of [[2, 'none'], [3, 'unknown']] as const) {
+      nav.search = `job=job_${n}`;
+      view.rerender(<JobsWorkspace />);
+      expect(panel()).toHaveAttribute('data-application', expected);
+    }
+  });
+
+  it('phone: nothing opens by itself, and an empty list opens nothing on desktop', async () => {
+    installFetch(baseRoutes());
+    const phone = renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(screen.queryByTestId('split-detail')).toBeNull();
+    expect(nav.replace).toEqual([]);
+    phone.unmount();
+    setDesktop(true);
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page([])) }));
+    renderFeed(<JobsWorkspace />);
+    await waitFor(() => expect(screen.queryAllByTestId('card-skeleton')).toHaveLength(0));
+    expect(screen.queryByTestId('split-detail')).toBeNull();
   });
 });

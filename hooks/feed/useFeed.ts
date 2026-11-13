@@ -39,6 +39,12 @@ export interface UseFeedParams {
   overrides?: Record<string, unknown> | null;
   /** Words to rank the list by (at most 240 characters). Never a filter. */
   relevance?: string | null;
+  /**
+   * `false`: the read is not a visit to the Jobs list (the Dashboard's picks).
+   * The server then leaves the visit stamp the Jobs badge counts from as it is;
+   * the read is cached apart from the list's own.
+   */
+  visit?: boolean;
   enabled?: boolean;
 }
 
@@ -106,7 +112,8 @@ export function useFeed(params: UseFeedParams): FeedListState {
   const overridesKey = stableKey(overrides);
   const relevance = feedRelevance(params.relevance);
   const queryClient = useQueryClient();
-  const queryKey = feedKeys.list({ searchProfileId, version, sort, fitTier, overridesKey, relevance });
+  const visit = params.visit === false ? false : undefined;
+  const queryKey = feedKeys.list({ searchProfileId, version, sort, fitTier, overridesKey, relevance, ...(visit === false ? { visit } : {}) });
   const query = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam, signal }) =>
@@ -117,6 +124,7 @@ export function useFeed(params: UseFeedParams): FeedListState {
           fitTier,
           ...(overridesKey ? { overrides: overrides ?? undefined } : {}),
           ...(relevance ? { relevance } : {}),
+          ...(visit === false ? { visit: false } : {}),
           ...(pageParam ? { cursor: pageParam } : {}),
         },
         { signal },

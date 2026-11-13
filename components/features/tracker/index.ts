@@ -12,3 +12,4 @@ export { AddJobSheet, type AddJobSheetProps } from './AddJobSheet';
 export { EntryRow, type EntryRowProps } from './EntryRow';
 export { useTrackerColumns, useStageLabel, entryCompany, entryRole, entryLink } from './shared';
 export { ApplicationsToolbar, type ApplicationsToolbarProps } from './ApplicationsToolbar';
+export { ApplicationsSwitch, APPLICATIONS_VIEW_HREF, type ApplicationsSwitchProps, type ApplicationsView } from './ApplicationsSwitch';

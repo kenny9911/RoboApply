@@ -8,19 +8,39 @@
 //   tabs          For you · Explore · Added by you
 //   prompts       "Looks better / Not quite" (after an Assistant change),
 //                 the skills check, the getting-started checklist
-//   filters       FilterBar (WP-20) with the "Hiding {n} weaker fits" number
-//   sort          Recommended · Newest · Your best fits · Highest pay
-//                 (+ GoApply deadline) and "How ranking works". `?sort=<key>`
-//                 opens the list in that order (the Assistant's "Show jobs
-//                 sorted this way" link); a key this market does not offer is
-//                 ignored. Picking a sort keeps the address in step.
+//   search        FilterBar (WP-20), collapsed to one line: the active search
+//                 in words + "Change search" (docs/agent-driven/REDESIGN.md
+//                 §6). The search box, saved searches, filter buttons and
+//                 chips open in place on demand. They open by themselves for
+//                 `?edit=search` (a link that sends the user here to change
+//                 the search) and after the Assistant changed the search, and
+//                 stay open until the user closes them. Closed on each visit
+//                 otherwise: nothing is remembered between visits.
+//   view + sort   one row that stays visible: the fit view with its "Hiding
+//                 {n} weaker fits" number, and Recommended · Newest · Your
+//                 best fits · Highest pay (+ GoApply deadline) with "How
+//                 ranking works". `?sort=<key>` opens the list in that order
+//                 (the Assistant's "Show jobs sorted this way" link); a key
+//                 this market does not offer is ignored. Picking a sort keeps
+//                 the address in step.
 //   ranked by     the words a plain-language search left over (Explore →
 //                 "Apply"): the list is ordered by closeness to them until the
 //                 search changes or the person clears them. They are never a
 //                 filter and nothing is checked against them (SM-9).
 //   list          infinite, 20 per page; the rating card after 10 cards
 //   split detail  desktop `?job=<id>` renders JobDetailPanel (WP-34) beside
-//                 the list; on a phone a job opens as /jobs/[id]
+//                 the list; on a phone a job opens as /jobs/[id]. Like
+//                 resume.io's job search, a desktop list with no `?job=`
+//                 opens its first job there once the list is on screen. That
+//                 job is a PREVIEW: the person did not open it, so its page is
+//                 read without recording a view (`viewedAt`, which the feed's
+//                 "seen and skipped" rule reads) and the address is not
+//                 written (Back and a shared link behave as before). Opening a
+//                 job (its title, by click or keyboard, or a `?job=` link) is
+//                 the normal read. Closing the pane ends the preview for this
+//                 visit. Phones never open one. The selected card is washed
+//                 blue with a blue rule; the pane sticks under the top bar and
+//                 scrolls on its own.
 //
 // The feed is on by default on both brands (D5). With `jobs.feed` switched
 // off (GoApply: CN_RECRUITMENT_INFO_MODE=off) there is no list at all, only
@@ -56,7 +76,7 @@ import { useFeed } from '../../../hooks/feed/useFeed';
 import { sortUsesRelevance, useListRelevance } from '../../../hooks/feed/useExplore';
 import { feedKeys } from '../../../hooks/feed/keys';
 import { SPLIT_VIEW_QUERY, useIsDesktop } from '../../../hooks/feed/useIsDesktop';
-import { RATING_AFTER_CARDS, useCalibration, useSeenCounter, useSkillsCheckData } from '../../../hooks/feed/useCalibration';
+import { RATING_AFTER_CARDS, useAssistantFilterChange, useCalibration, useSeenCounter, useSkillsCheckData } from '../../../hooks/feed/useCalibration';
 import type { FeedSort, NewCountResponse } from '../../../lib/api/contracts/feed';
 import { AfterChangeCheck } from './AfterChangeCheck';
 import { FeedList } from './FeedList';
@@ -66,6 +86,12 @@ import { SkillsCheck } from './SkillsCheck';
 import { SortMenu, sortFromQuery, sortsFor } from './SortMenu';
 import { ZeroResults } from './ZeroResults';
 import styles from './feed.module.css';
+
+/** `/jobs?edit=search` opens the list with the search controls showing. */
+export const SEARCH_EDIT_PARAM = 'edit';
+export const SEARCH_EDIT_VALUE = 'search';
+/** Where "Change" on a search shown elsewhere (Today's goal line) sends the user. */
+export const JOBS_SEARCH_EDIT_HREF = `/jobs?${SEARCH_EDIT_PARAM}=${SEARCH_EDIT_VALUE}`;
 
 export function JobsWorkspace() {
   const t = useTranslations('jobs.workspace');
@@ -99,6 +125,35 @@ export function JobsWorkspace() {
       const query = new URLSearchParams(params?.toString() ?? '');
       if (next === 'recommended') query.delete('sort');
       else query.set('sort', next);
+      const qs = query.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [params, pathname, router],
+  );
+  // The search controls are closed until asked for, so the first job sits near the top. Two things open them
+  // without a click: a link that sends the user here to change the search, and a change the Assistant just made
+  // (the chips then show what it changed, beside "Looks better / Not quite"). Both are followed when they arrive
+  // while the page is already open, and neither closes the controls again: only the user does.
+  const editAsked = params?.get(SEARCH_EDIT_PARAM) === SEARCH_EDIT_VALUE;
+  const assistantChangeAt = useAssistantFilterChange()?.at ?? null;
+  const [searchOpen, setSearchOpenState] = useState(editAsked || assistantChangeAt !== null);
+  const [seenEditAsked, setSeenEditAsked] = useState(editAsked);
+  if (editAsked !== seenEditAsked) {
+    setSeenEditAsked(editAsked);
+    if (editAsked) setSearchOpenState(true);
+  }
+  const [seenChangeAt, setSeenChangeAt] = useState(assistantChangeAt);
+  if (assistantChangeAt !== seenChangeAt) {
+    setSeenChangeAt(assistantChangeAt);
+    if (assistantChangeAt !== null) setSearchOpenState(true);
+  }
+  const setSearchOpen = useCallback(
+    (next: boolean) => {
+      setSearchOpenState(next);
+      // Closing ends the edit the link asked for: the address stops asking, so a reload opens the list closed.
+      if (next || params?.get(SEARCH_EDIT_PARAM) !== SEARCH_EDIT_VALUE) return;
+      const query = new URLSearchParams(params?.toString() ?? '');
+      query.delete(SEARCH_EDIT_PARAM);
       const qs = query.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
@@ -181,14 +236,24 @@ export function JobsWorkspace() {
     [desktop, params, pathname, router],
   );
 
+  // The first job the list shows (FeedList reports it once its first page answered), previewed on desktop.
+  const [firstShownId, setFirstShownId] = useState<string | null>(null);
+  const [previewOn, setPreviewOn] = useState(true);
+  const previewId = desktop && feedOn && previewOn && !jobParam ? firstShownId : null;
+  const splitJobId = desktop ? (jobParam ?? previewId) : null;
+  const splitOpen = splitJobId !== null;
+  // What the list's card knows about the open job, for the pane's "Prepare application".
+  const splitItem = splitJobId ? feed.items.find((i) => i.jobId === splitJobId) : undefined;
+
   const closeJob = useCallback(() => {
+    // Closing the pane ends the first-job preview for this visit: the list takes the width.
+    setPreviewOn(false);
+    if (!params?.get('job')) return;
     const next = new URLSearchParams(params?.toString() ?? '');
     next.delete('job');
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [params, pathname, router]);
-
-  const splitOpen = desktop && !!jobParam;
 
   return (
     <div className={styles.workspace}>
@@ -230,12 +295,14 @@ export function JobsWorkspace() {
             {calibration.skills.show && skillsData.data ? <SkillsCheck data={skillsData.data} onClose={calibration.skills.close} /> : null}
             <GettingStartedChecklist variant="card" />
 
-            <div className={styles.filters}>
-              <FilterBar hiddenWeakerFits={feed.hiddenByTier} />
-            </div>
-            <div className={styles.toolbar}>
-              <SortMenu value={sort} market={market} onChange={setSort} />
-            </div>
+            <section className={styles.filters} aria-label={t('searchLabel')}>
+              <FilterBar
+                hiddenWeakerFits={feed.hiddenByTier}
+                open={searchOpen}
+                onOpenChange={setSearchOpen}
+                trailing={<SortMenu value={sort} market={market} onChange={setSort} />}
+              />
+            </section>
             {rankedByWords && feed.relevanceApplied !== false ? (
               // Left out when the first page says the words took no part in the order (no posting matched them, or
               // hybrid retrieval is off): the page never says "ranked by" for a list that was not (MKT-5C O-7).
@@ -254,9 +321,10 @@ export function JobsWorkspace() {
                   feed={feed}
                   market={market}
                   label={t('listLabel')}
-                  activeJobId={splitOpen ? jobParam : null}
+                  activeJobId={splitJobId}
                   onOpen={openJob}
                   onSeen={markSeen}
+                  onFirstShown={setFirstShownId}
                   empty={<ZeroResults profile={profile} />}
                   inline={
                     ratingFixes
@@ -282,14 +350,22 @@ export function JobsWorkspace() {
                   }
                 />
               </div>
-              {splitOpen && jobParam ? (
-                <aside className={styles.detail} aria-label={t('detailLabel')} data-testid="split-detail">
+              {splitJobId ? (
+                <aside className={styles.detail} aria-label={t('detailLabel')} data-testid="split-detail" data-preview={jobParam ? undefined : 'true'}>
                   <div className={styles.detailHead}>
                     <button type="button" className={styles.iconBtn} onClick={closeJob} aria-label={t('closeDetail')}>
                       <span aria-hidden="true">×</span>
                     </button>
                   </div>
-                  <JobDetailPanel key={jobParam} jobId={jobParam} mode="split" onClose={closeJob} />
+                  {/* Keyed by job only: opening the previewed job keeps the pane and reads the page again as an open. */}
+                  <JobDetailPanel
+                    key={splitJobId}
+                    jobId={splitJobId}
+                    mode="split"
+                    preview={!jobParam}
+                    application={splitItem?.application}
+                    onClose={closeJob}
+                  />
                 </aside>
               ) : null}
             </div>

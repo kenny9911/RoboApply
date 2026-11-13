@@ -3,7 +3,9 @@
 // /practice — SETUP, wired to the real-time Interview Engine and its prep agents.
 //
 // This file owns the state and the engine calls; PracticeTargetPicker and
-// PracticeSetupFlow own the screen.
+// PracticeSetupFlow own the screen (two columns at desktop widths: the setup
+// on the left, a side panel with how a practice works and the recent
+// practices, then the summary of what is about to start and Start).
 //
 // The flow:
 //   1. Which job — typed in the candidate's own words and searched in their job
@@ -62,6 +64,7 @@ import {
   practiceDurationOptions,
   type LoadState,
   type PracticeTarget,
+  type RecentPractice,
   type RoleSourceMode,
 } from '../../../components/v3/mock';
 import {
@@ -81,7 +84,7 @@ import {
   normalizeMockCreditMinutes,
 } from '../../../lib/mockInterviewCredits';
 import { useAuth } from '../../../lib/auth/AuthProvider';
-import type { RAMockFormat, RAMockSessionSummary } from '../../../lib/api/v2/types';
+import type { RAMockFormat } from '../../../lib/api/v2/types';
 import {
   ieErrorInfo,
   interviewEngineApi,
@@ -443,10 +446,10 @@ export default function MockSetupPage() {
   const textMode = !!setup && setup.ai.allowed && !setup.voice.available && setup.voice.reason === 'voice_unavailable';
   const canLaunch = hasRoleSource && planState === 'ready' && !!plan && !!interviewer && !!focus && !aiBlocked;
 
-  const recentSummaries: RAMockSessionSummary[] = useMemo(() => {
+  const recentSummaries: RecentPractice[] = useMemo(() => {
     return recent
       .filter((s) => s.status === 'completed')
-      .map((s) => ({
+      .map((s): RecentPractice => ({
         id: s.id,
         role: s.company ? `${localizeRole(s.role)} · ${s.company}` : localizeRole(s.role),
         // A planned session names its own interviewer and focus; older ones
@@ -458,9 +461,9 @@ export default function MockSetupPage() {
         typeLabel:
           s.focusLabel ??
           localizeType(s.interviewType, 'label', catalog?.types.find((tp) => tp.id === s.interviewType)?.label ?? s.interviewType),
-        score: s.overall ?? 0,
+        // A session the engine never scored has no number: "—", never 0 (D3).
+        score: s.overall ?? null,
         when: formatRelativeTime(s.endedAt ?? s.createdAt, uiLocale),
-        note: '',
       }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recent, catalog, uiLocale]);
@@ -704,6 +707,7 @@ export default function MockSetupPage() {
       onFormatChange={setFormat}
       // Video or voice is a choice only where the voice practice can run.
       formatChoice={setup ? setup.voice.available : true}
+      written={textMode}
       language={language}
       onLanguageChange={setLanguage}
       durationMinutes={durationMinutes}

@@ -8,6 +8,8 @@
 // (a faked check: closed, open, cannot tell, never for a private import or a
 // bank row), the apply click refuses a posting that is gone, three date facts
 // and `isNew` on the wire, the provider-reading sponsorship line.
+// The preview read (`?preview=1`, the desktop list's first job): the same page,
+// and no `viewedAt` stamp.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../lib/prisma.js', () => ({ default: {}, prisma: {} }));
@@ -604,6 +606,21 @@ describe('GET /jobs/:id (service)', () => {
     expect(res.autofill).toEqual({ supported: true, atsType: 'greenhouse' });
     expect(res.people.mode).toBe('deeplinks_only');
     expect(res.people.searchLinks).toHaveLength(3);
+  });
+
+  it('opening the page stamps the view; the preview read (the desktop list\'s first job) answers the same page and stamps nothing', async () => {
+    // Shown on four visits and never opened: the feed's "seen and skipped" rule reads exactly this row.
+    const { service, db } = setup({ jobs: [job(), job({ id: 'j2' })], seed: { rAJobUserState: [{ userId: 'u1', jobId: 'j1', impressions: 4, viewedAt: null }] } });
+    const preview = await service.get('u1', 'j1', { preview: true });
+    const fresh = await service.get('u1', 'j2', { preview: true });
+    expect(db.$rows('rAJobUserState')).toEqual([expect.objectContaining({ jobId: 'j1', impressions: 4, viewedAt: null })]);
+    const opened = await service.get('u1', 'j1');
+    // Nothing else about the read changes.
+    expect(opened).toEqual(preview);
+    expect(fresh.job.id).toBe('j2');
+    expect(db.$rows('rAJobUserState')).toEqual([expect.objectContaining({ userId: 'u1', jobId: 'j1', impressions: 4, viewedAt: NOW })]);
+    await service.get('u1', 'j2');
+    expect(db.$rows('rAJobUserState').find((r) => r.jobId === 'j2')).toMatchObject({ userId: 'u1', viewedAt: NOW });
   });
 
   it('another market → 404; a private import only for its owner', async () => {
@@ -1571,8 +1588,8 @@ describe('company news search (Tavily)', () => {
 
 describe('routes', () => {
   let h: RouteHarness;
-  const { service } = setup({
-    jobs: [job(), job({ id: 'jcn', market: 'cn' })],
+  const { service, db } = setup({
+    jobs: [job(), job({ id: 'jcn', market: 'cn' }), job({ id: 'jprev' })],
   });
   const scoreHandler: RequestHandler = (_req, res) => {
     res.json({ success: true, data: { fit: fitView() } });
@@ -1618,6 +1635,21 @@ describe('routes', () => {
     expect(ok.body.data.job.id).toBe('j1');
     const other = await h.request<{ code: string }>('GET', '/api/v1/roboapply/jobs/jcn', user);
     expect(other.status).toBe(404);
+  });
+
+  it('GET /:id?preview=1 answers the same page without stamping the view; any other value is refused', async () => {
+    const views = () => db.$rows('rAJobUserState').filter((r) => r.jobId === 'jprev');
+    const peek = await h.request<{ data: JobDetailResponse }>('GET', '/api/v1/roboapply/jobs/jprev?preview=1', user);
+    expect(peek.status).toBe(200);
+    expect(peek.body.data.job.id).toBe('jprev');
+    expect(views()).toEqual([]);
+    for (const bad of ['yes', 'true', '0']) {
+      expect((await h.request('GET', `/api/v1/roboapply/jobs/jprev?preview=${bad}`, user)).status, bad).toBe(422);
+    }
+    expect(views()).toEqual([]);
+    const opened = await h.request<{ data: JobDetailResponse }>('GET', '/api/v1/roboapply/jobs/jprev', user);
+    expect(opened.body.data).toEqual(peek.body.data);
+    expect(views()).toEqual([expect.objectContaining({ userId: 'u1', viewedAt: NOW })]);
   });
 
   it('apply-click → undo round trip; I applied validates its body; score uses MATCH’s handler', async () => {

@@ -61,13 +61,13 @@ describe('entry attribution', () => {
 });
 
 describe('sign-in routing', () => {
-  it('sends unfinished onboarding to its screen, otherwise next or /jobs', () => {
+  it('sends unfinished onboarding to its screen, otherwise next or the Dashboard', () => {
     const unfinished = { onboarding: { step: 'resume' as const, path: null, completed: false, nextRoute: '/onboarding/resume' } };
     expect(signInRoute(unfinished, '/jobs/cm1')).toBe('/onboarding/resume');
     const done = { onboarding: { step: 'done' as const, path: null, completed: true, nextRoute: null } };
     expect(signInRoute(done, '/jobs/cm1')).toBe('/jobs/cm1');
-    expect(signInRoute(done, 'https://evil.example')).toBe('/jobs');
-    expect(signInRoute(null, null)).toBe('/jobs');
+    expect(signInRoute(done, 'https://evil.example')).toBe('/dashboard');
+    expect(signInRoute(null, null)).toBe('/dashboard');
   });
 });
 
@@ -138,12 +138,12 @@ describe('`next` to a free tool page (WP-57 → INT-01)', () => {
     expect(signInRoute(unfinished, '/tools/something-else')).toBe('/onboarding/situation');
     // Never off-site, whatever the path looks like.
     expect(signInRoute(unfinished, '//evil.example/tools/resume-check')).toBe('/onboarding/situation');
-    expect(signInRoute(done, 'https://evil.example/tools/resume-check')).toBe('/jobs');
+    expect(signInRoute(done, 'https://evil.example/tools/resume-check')).toBe('/dashboard');
     expect(priorityNext('/\\evil/tools/resume-check')).toBeNull();
     expect(priorityNext(null)).toBeNull();
-    // Onboarding done: any same-site next, else /jobs.
+    // Onboarding done: any same-site next, else the Dashboard.
     expect(signInRoute(done, '/jobs/cm1')).toBe('/jobs/cm1');
-    expect(signInRoute(done, null)).toBe('/jobs');
+    expect(signInRoute(done, null)).toBe('/dashboard');
   });
 
   it('from=resume-job-match picks its own contextual variant', () => {

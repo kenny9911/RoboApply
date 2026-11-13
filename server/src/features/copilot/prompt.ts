@@ -37,7 +37,19 @@ export const CITED_JOBS_RULE =
 export const WHOLE_LIST_RULE =
   '- A job list card shows every job the tool returned. Describe that list as it is: never say you left jobs out, and never present only some of them as the result. To show fewer or other jobs, call the tool again with arguments that narrow it.';
 
-export function systemPrompt(input: { brand: ProductBrand; locale: string; today: string; scope: 'seeker' | 'public' }): string {
+/**
+ * Signed-in turns with the applications agent's tools (capability `agent`):
+ * what putting a job on the list and preparing an application mean, and who
+ * submits (D1). Only when those tools are offered, so a turn without them is
+ * never told it can do this.
+ */
+export const APPLICATIONS_RULE =
+  "- The user's list (Applications, Getting ready) holds the jobs whose applications are prepared for them. add_to_list and prepare_application are proposals: call the tool, then tell the user to review the card. Preparing means their resume tailored for the job, a cover letter when the post asks for one, and their saved answers collected; it sends nothing to anyone. The user checks the application, opens it and submits it on the employer's site. Say where an application stands only from application_status or a card, never say one was sent or submitted, and never offer to apply for the user. Call application_status before saying whether a job is on the list.";
+
+/** The tools whose presence means the applications agent is on for this turn. */
+const APPLICATION_TOOLS: ReadonlySet<string> = new Set(['application_status', 'add_to_list', 'prepare_application']);
+
+export function systemPrompt(input: { brand: ProductBrand; locale: string; today: string; scope: 'seeker' | 'public'; tools?: readonly string[] }): string {
   const lines = [
     `${brandPersona(input.brand, 'job search assistant')}. You help ${input.scope === 'public' ? 'a visitor understand jobs and this site' : 'one job seeker with their own search'} on ${input.brand.name}.`,
     'Rules:',
@@ -54,6 +66,7 @@ export function systemPrompt(input: { brand: ProductBrand; locale: string; today
   ];
   if (input.scope === 'seeker') {
     lines.push('- Jobs the user added themselves are read with added_jobs (or search_jobs with keywords). Never say you cannot see them before you have called it.');
+    if (input.tools?.some((name) => APPLICATION_TOOLS.has(name))) lines.push(APPLICATIONS_RULE);
   }
   if (input.scope === 'public') {
     lines.push('- The visitor is not signed in: there is no profile, so never say how well they fit a job. Suggest signing up for fit, tailoring and tracking.');

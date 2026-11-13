@@ -9,12 +9,17 @@
 // apply button; an apply click that finds it gone reads the page again; three
 // date facts in the header; "New" from first seen; a provider's sponsorship
 // reading as a badge that names the provider.
+// The preview read (resume.io clone): the desktop list's first job is read
+// with ?preview=1 and nothing on the pane reads it another way; opening it
+// reads the page again as an open, with no skeleton in between.
 
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({
   getJob: vi.fn(),
+  getJobPreview: vi.fn(),
   getSimilarJobs: vi.fn(),
   getCompanyJobs: vi.fn(),
   getCompanyNews: vi.fn(),
@@ -45,6 +50,7 @@ vi.mock('../../../lib/api/jobs', async (orig) => ({
   // The pure readers (jobListing) are the real ones; only the requests are stubbed.
   ...(await orig<Record<string, unknown>>()),
   getJob: api.getJob,
+  getJobPreview: api.getJobPreview,
   getSimilarJobs: api.getSimilarJobs,
   getCompanyJobs: api.getCompanyJobs,
   getCompanyNews: api.getCompanyNews,
@@ -172,6 +178,7 @@ let openSpy: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
   api.getJob.mockResolvedValue(detail());
+  api.getJobPreview.mockResolvedValue(detail());
   api.getSimilarJobs.mockResolvedValue({ items: [] });
   api.getCompanyJobs.mockResolvedValue({ items: [], cursor: null });
   api.scoreJob.mockResolvedValue({ fit: fit() });
@@ -1156,5 +1163,65 @@ describe('split mode and deep links', () => {
     render(await Page({ params: Promise.resolve({ id: 'j1' }) }));
     expect(await screen.findByTestId('job-detail')).toHaveAttribute('data-mode', 'page');
     expect(api.getJob).toHaveBeenCalledWith('j1', expect.anything());
+    expect(api.getJobPreview).not.toHaveBeenCalled();
+  });
+});
+
+describe("the preview read: the desktop list's first job, shown before the person opened it", () => {
+  /** The split pane as the Jobs list drives it: a preview until the person opens the job. */
+  function Pane() {
+    const [opened, setOpened] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpened(true)}>
+          open it
+        </button>
+        <JobDetailPanel jobId="j1" mode="split" preview={!opened} />
+      </>
+    );
+  }
+
+  it('reads the page with ?preview=1 only; nothing on it reads the page another way (the extension button uses the page it has)', async () => {
+    api.getJobPreview.mockResolvedValue(detail({ autofill: { supported: true, atsType: 'greenhouse' } }));
+    render(<JobDetailPanel jobId="j1" mode="split" preview />, { flags: { ...BASE_FLAGS, extension: true, agent: true, copilot: true } });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Backend Engineer' })).toBeInTheDocument();
+    expect(screen.getByTestId('job-checklist')).toBeInTheDocument();
+    expect(api.getJobPreview).toHaveBeenCalledWith('j1', expect.anything());
+    await act(async () => undefined);
+    expect(api.getJob).not.toHaveBeenCalled();
+  });
+
+  it('once the person opens the job, the page is read again as an open, and the preview stays on screen meanwhile', async () => {
+    let answer: (d: JobDetailResponse) => void = () => undefined;
+    // The page's fit is the live one, so the "Why this job" sync asks for no extra read here.
+    api.getJobPreview.mockResolvedValue(detail({ fit: fit() }));
+    api.getJob.mockImplementation(() => new Promise<JobDetailResponse>((resolve) => (answer = resolve)));
+    render(<Pane />);
+    expect(await screen.findByRole('heading', { level: 2, name: 'Backend Engineer' })).toBeInTheDocument();
+    expect(api.getJob).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'open it' }));
+    await waitFor(() => expect(api.getJob).toHaveBeenCalledWith('j1', expect.anything()));
+    // No skeleton while the open read runs: the page already on screen stays.
+    expect(screen.queryByTestId('job-loading')).toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: 'Backend Engineer' })).toBeInTheDocument();
+    await act(async () => answer(detail({ fit: fit() }, { title: 'Backend Engineer II' })));
+    expect(await screen.findByRole('heading', { level: 2, name: 'Backend Engineer II' })).toBeInTheDocument();
+    expect(api.getJobPreview).toHaveBeenCalledTimes(1);
+    expect(api.getJob).toHaveBeenCalledTimes(1);
+  });
+
+  it('the full page is always an open, whatever it is told', async () => {
+    render(<JobDetailPanel jobId="j1" mode="page" preview />);
+    await screen.findByTestId('job-detail');
+    expect(api.getJob).toHaveBeenCalledWith('j1', expect.anything());
+    expect(api.getJobPreview).not.toHaveBeenCalled();
+  });
+
+  it("the pane's \"Prepare application\" says where the job is on the list when the card knew it", async () => {
+    render(<JobDetailPanel jobId="j1" mode="split" preview application={{ state: 'preparing', trackerEntryId: null }} />, { flags: { ...BASE_FLAGS, agent: true } });
+    const link = await screen.findByRole('link', { name: 'Being prepared' });
+    expect(link).toHaveAttribute('href', '/ready/j1');
+    expect(screen.queryByRole('button', { name: 'Prepare application' })).toBeNull();
+    expect(api.addToQueue).not.toHaveBeenCalled();
   });
 });

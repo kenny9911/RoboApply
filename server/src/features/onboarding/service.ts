@@ -26,6 +26,13 @@
 // When setup reaches `done` (the tour is finished, or the user leaves early)
 // `onSetupDone` runs once per call, softly: the invite programme checks the
 // user's referral there, and a failure never blocks finishing onboarding.
+//
+// RoboApply may save `confirm` while the stage is `matching`
+// (CONFIRM_WHILE_MATCHING): setup finishes while the search runs on. When that
+// confirm finds no search at work and no result (the search failed, was cut
+// off, or never started) it queues one (`queueMatch`), so the first picks
+// still come from a search for these answers. GET /state says whether the
+// search is still at work (`searchRunning`).
 
 import type { z } from 'zod';
 import { HttpError, parseInput } from '../../platform/http.js';
@@ -65,11 +72,13 @@ import {
 } from './mapping.js';
 import type { OnboardingRecord, OnboardingRepo, ResumeVariantRow } from './repo.js';
 import { OnboardingProfileMissingError } from './repo.js';
+import { hasMatchResult, matchRunOf, searchRunningOf } from './match.js';
 import {
   StageError,
   afterSave,
   assertStepSavable,
   branchForTiming,
+  confirmsWhileMatching,
   effectiveStage,
   isPaused,
   meOf,
@@ -144,6 +153,13 @@ export interface OnboardingDeps {
   grantFreeResumeCheck(userId: string): Promise<'granted' | 'already_granted'>;
   /** Queue the free check for one resume (dedupe is per user, so at most one is ever queued). */
   queueResumeCheck(userId: string, variantId: string, targetTitle: string | null): Promise<void>;
+  /**
+   * Queue the setup search (O6) to run in the background, from the start, and
+   * start a drain for it (production: `onboarding.match`, one per user).
+   * Called when RoboApply's confirm is saved while the stage is `matching` and
+   * no search is at work and none has a result. Absent = nothing is queued.
+   */
+  queueMatch?(userId: string, brand: ProductBrand): Promise<void>;
   /** Non-fatal problems (tests leave it out). */
   warn?(message: string, meta: Record<string, unknown>): void;
 }
@@ -313,6 +329,25 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
     }
   }
 
+  /**
+   * Queue the setup search after a confirm saved while `matching` (the run
+   * record already says it is queued). Never throws: a search that cannot be
+   * queued is recorded as failed, so no screen waits for it.
+   */
+  async function queueSearch(userId: string, brand: ProductBrand): Promise<void> {
+    try {
+      await deps.queueMatch!(userId, brand);
+    } catch (err) {
+      deps.warn?.('the setup search could not be queued after confirm (non-fatal)', { userId, error: err instanceof Error ? err.message : String(err) });
+      await repo
+        .mutate(userId, (cur) => {
+          const run = matchRunOf(cur.answers);
+          return { patch: run ? { answers: { ...cur.answers, matchRun: { ...run, failedAt: now().toISOString() } } } : null, result: null };
+        })
+        .catch(() => undefined);
+    }
+  }
+
   async function saveStep(userId: string, stepRaw: string, body: Record<string, unknown>, ctx: OnboardingContext): Promise<StepResponse> {
     const brand = ctx.brand;
     try {
@@ -336,6 +371,15 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
         else skippedList.delete(step);
         const nextAnswers: OnboardingAnswers = { ...cur.answers, [step]: answers, skipped: [...skippedList] };
         if (transition.resumed) delete nextAnswers.leftEarly;
+        // Setup finishes while the stage is still `matching`. A search at work, or one that stored a
+        // result, goes on or stands; otherwise one is queued, recorded here first (in the same write)
+        // so a screen that asks at once already sees it at work.
+        const searchToQueue =
+          !!deps.queueMatch &&
+          confirmsWhileMatching(brand.id, step, effectiveStage(brand.id, cur)) &&
+          !searchRunningOf(cur.answers, t.getTime()) &&
+          !hasMatchResult(cur.answers);
+        if (searchToQueue) nextAnswers.matchRun = { startedAt: t.toISOString(), queuedAt: t.toISOString() };
         const patch = {
           step: transition.step,
           path: brand.id === 'roboapply' ? transition.path : cur.path,
@@ -348,10 +392,16 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
               }
             : {}),
         };
-        return { patch, result: { transition, answers: nextAnswers, entry: cur.entry } };
+        return { patch, result: { transition, answers: nextAnswers, entry: cur.entry, searchToQueue } };
       });
 
-      await applyEffects(userId, brand, step, answers, out.answers, skip, cn, ctx.locale);
+      try {
+        await applyEffects(userId, brand, step, answers, out.answers, skip, cn, ctx.locale);
+      } finally {
+        // After the confirmed filters are written (the queued search reads the saved search), and even
+        // when writing them failed: the search was recorded as queued, so it must really be queued.
+        if (out.searchToQueue) await queueSearch(userId, brand);
+      }
       return {
         stage: out.transition.step,
         nextStage: out.transition.nextStage,
@@ -378,6 +428,7 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
       progress: progressOf(brand, rec),
       defaults: { country: defaultCountry(ctx.country, ctx.locale) },
       firstValueRoute: firstValueRoute(brand, firstValueOf(ctx, rec.answers)),
+      searchRunning: searchRunningOf(rec.answers, now().getTime()),
     };
   }
 

@@ -16,6 +16,7 @@ import { useTranslations } from 'next-intl';
 
 import type { CardType, CopilotCard } from '../../../../lib/api/contracts/copilot';
 import { ActionCard } from './ActionCard';
+import { ApplicationStatusCard } from './ApplicationStatusCard';
 import { ApplicationsCard } from './ApplicationsCard';
 import { CampusDeadlinesCard } from './CampusDeadlinesCard';
 import { CompanyCard } from './CompanyCard';
@@ -29,8 +30,10 @@ import { FitAnalysisCard } from './FitAnalysisCard';
 import { InterviewPlanCard } from './InterviewPlanCard';
 import { JobImportedCard } from './JobImportedCard';
 import { JobListCard } from './JobListCard';
+import { ListAddCard } from './ListAddCard';
 import { MemoryAddCard } from './MemoryAddCard';
 import { NoticeCard } from './NoticeCard';
+import { PrepareApplicationCard } from './PrepareApplicationCard';
 import { ProfileGapsCard } from './ProfileGapsCard';
 import { ResumeTipsCard } from './ResumeTipsCard';
 import { RewriteReadyCard } from './RewriteReadyCard';
@@ -62,6 +65,9 @@ export const CARD_COMPONENTS: Record<CardType, ComponentType<CardProps>> = {
   competitiveness: CompetitivenessCard,
   resume_tips: ResumeTipsCard,
   rewrite_ready: RewriteReadyCard,
+  list_add: ListAddCard,
+  prepare_application: PrepareApplicationCard,
+  application_status: ApplicationStatusCard,
 };
 
 /** Renders nothing in place of a card that threw while rendering. */
@@ -109,4 +115,5 @@ export * from './model';
 export { ACTION_CARD_CAPS, sortHref } from './ActionCard';
 export { countText } from './FilterDiffCard';
 export { creditResult } from './CreditActionCard';
+export { applicationLink } from './ApplicationStatusCard';
 export { formatRange } from './SalaryCard';

@@ -24,7 +24,7 @@ let h: RouteHarness | undefined;
 let userId: string | null = 'u1';
 let mem: ReturnType<typeof createMemoryRepo>;
 
-async function start(over: Partial<OnboardingDeps> = {}, routerOpts: { rateLimitDb?: RateLimitDb } = {}) {
+async function start(over: Partial<OnboardingDeps> = {}, routerOpts: { rateLimitDb?: RateLimitDb; match?: Partial<MatchPipelineDeps> } = {}) {
   mem = createMemoryRepo({ u1: {} });
   const sp = createMemorySearchProfiles();
   const deps: OnboardingDeps = {
@@ -53,6 +53,7 @@ async function start(over: Partial<OnboardingDeps> = {}, routerOpts: { rateLimit
     preScore: async () => [preScoreFixture('j1', 82, 'great')],
     aiAllowed: async () => false,
     enqueue: async () => undefined,
+    ...routerOpts.match,
   });
   h = await startRouteHarness({
     mounts: [
@@ -257,6 +258,76 @@ describe('the flow over HTTP', () => {
     mem.rows.get('u1')!.step = 'confirm';
     const res = await call('POST', '/confirm', { experienceLevels: ['mid'], linkedinUrl: 'https://example.com/me' });
     expect(res.status).toBe(422);
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §9: the two-screen start finishes setup without waiting for the search.
+describe('setup finishes while the search runs', () => {
+  it('RoboApply: confirm and complete are taken during POST /match; the search goes on and stores its result without moving the stage back', async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const inSearch = new Promise<void>((resolve) => (entered = resolve));
+    const ingest = vi.fn(() => {
+      entered();
+      return new Promise<void>((resolve) => (release = resolve));
+    });
+    await start({}, { match: { ingest } });
+    Object.assign(mem.rows.get('u1')!, { step: 'matching', path: 'urgent', answers: { basics: { ...SAMPLE_BASICS } } });
+    mem.setCandidates(['j1']);
+
+    const search = h!.request('POST', '/onboarding/match', { host: RA, body: {} });
+    await inSearch;
+    expect((await call('GET', '/state')).body.data).toMatchObject({ stage: 'matching', searchRunning: true });
+    expect((await call('POST', '/confirm', { experienceLevels: ['mid'], alertFrequency: 'daily' })).body.data).toEqual({ stage: 'tour', nextRoute: '/jobs' });
+    expect((await call('POST', '/complete')).body.data).toEqual({ stage: 'done', nextRoute: '/jobs' });
+    // Setup is finished; the search is still at work.
+    expect((await call('GET', '/state')).body.data).toMatchObject({ completed: true, searchRunning: true });
+
+    release();
+    const res = await search;
+    expect(res.text).toContain('event: done');
+    expect(mem.rows.get('u1')).toMatchObject({ step: 'done', answers: { matching: { jobCount: 1 } } });
+    expect((await call('GET', '/state')).body.data).toMatchObject({ completed: true, searchRunning: false });
+    // A new search from the web after setup is refused, as before.
+    expect((await call('POST', '/match', {})).status).toBe(409);
+  });
+
+  it('RoboApply: after a search that failed, confirm is still taken (setup is never stuck on the search)', async () => {
+    await start();
+    Object.assign(mem.rows.get('u1')!, { step: 'matching', path: 'urgent', answers: { basics: { ...SAMPLE_BASICS } } });
+    mem.repo.findCandidates = async () => {
+      throw new Error('db down');
+    };
+    const failed = await h!.request('POST', '/onboarding/match', { host: RA, body: {} });
+    expect(failed.text).toContain('event: error');
+    expect((await call('GET', '/state')).body.data).toMatchObject({ stage: 'matching', searchRunning: false });
+    const c = await call('PUT', '/steps/confirm', { experienceLevels: ['mid'] });
+    expect(c.status).toBe(200);
+    expect(c.body.data).toEqual({ stage: 'tour', nextStage: 'tour', nextRoute: '/jobs' });
+    expect((await call('POST', '/complete')).body.data).toEqual({ stage: 'done', nextRoute: '/jobs' });
+  });
+
+  it('every other order rule holds: confirm before the search and complete before confirm are 409', async () => {
+    await start();
+    Object.assign(mem.rows.get('u1')!, { step: 'resume', path: 'urgent' });
+    const early = await call('POST', '/confirm', { experienceLevels: ['mid'] });
+    expect(early.status).toBe(409);
+    expect(early.body.details).toEqual({ reason: 'onboarding_step_not_available' });
+    mem.rows.get('u1')!.step = 'matching';
+    const complete = await call('POST', '/complete');
+    expect(complete.status).toBe(409);
+    expect(complete.body.details).toEqual({ reason: 'onboarding_not_finished' });
+  });
+
+  it('GoApply keeps its order: confirm at `matching` is 409 until the search is done', async () => {
+    const validateCnStep = async (step: string, body: unknown) => (step === 'confirm' ? { ok: true, answers: body as Record<string, unknown> } : { ok: false, issues: [] });
+    await start({ validateCnStep });
+    mem.rows.get('u1')!.step = 'matching';
+    const post = await call('POST', '/confirm', { heardFrom: 'school' }, GO);
+    expect(post.status).toBe(409);
+    expect(post.body.details).toEqual({ reason: 'onboarding_step_not_available' });
+    expect((await call('PUT', '/steps/confirm', { heardFrom: 'school' }, GO)).status).toBe(409);
+    expect(mem.rows.get('u1')!.step).toBe('matching');
   });
 });
 

@@ -379,41 +379,50 @@
   color: var(--text-muted);
 }
 
+/* The library as resume.io's documents page lays it out
+ * (docs/resume-io/TEARDOWN.md): each resume a wide row — the page itself on
+ * the left, its name, dates, check and actions on the right — two to a row,
+ * the "new resume" tile beside them. Phones stack the card (see the end). */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--sp-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr));
+  gap: var(--sp-6) var(--sp-5);
   margin: 0 0 var(--sp-7);
 }
 
 .card {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  gap: var(--sp-5);
   min-width: 0;
-  overflow: hidden;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  transition:
-    border-color var(--dur-hover) var(--ease-out),
-    box-shadow var(--dur-hover) var(--ease-out);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
-.card:hover {
-  border-color: var(--rule-strong);
+.card:hover .cardThumb {
   box-shadow: var(--e2);
 }
-.card[data-primary] {
-  border-color: color-mix(in srgb, var(--action) 40%, var(--rule));
-}
 
-/* The resume itself, small: the editor's sheet scaled into the card. */
+/* The resume itself: the editor's sheet scaled into a page-shaped frame. */
 .cardThumb {
   position: relative;
   display: block;
-  height: 196px;
+  flex-shrink: 0;
+  width: 196px;
+  height: 262px;
   overflow: hidden;
   background: var(--surface-2);
-  border-bottom: 1px solid var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  box-shadow: var(--e1);
+  transition: box-shadow var(--dur-hover) var(--ease-out);
+}
+.card[data-primary] .cardThumb {
+  border-color: color-mix(in srgb, var(--action) 45%, var(--rule));
+}
+.cardThumb .thumbSheet {
+  top: 12px;
+  transform: scale(0.33);
 }
 .cardThumb::after {
   content: '';
@@ -443,8 +452,8 @@
     0 1px 2px rgba(27, 22, 49, 0.1),
     0 18px 40px -18px rgba(27, 22, 49, 0.35);
 }
-.card:hover .thumbSheet {
-  transform: scale(0.44) translateY(-6px);
+.card:hover .cardThumb .thumbSheet {
+  transform: scale(0.33) translateY(-4px);
 }
 .thumbBlank {
   position: absolute;
@@ -463,7 +472,8 @@
   flex: 1;
   flex-direction: column;
   gap: var(--sp-3);
-  padding: var(--sp-4);
+  min-width: 0;
+  padding: var(--sp-1) 0 0;
 }
 .cardHead {
   display: flex;
@@ -474,9 +484,9 @@
 .cardTitle {
   margin: 0;
   min-width: 0;
-  font-size: var(--fs-subtitle);
-  line-height: var(--lh-subtitle);
-  letter-spacing: var(--ls-subtitle);
+  font-size: var(--fs-title);
+  line-height: var(--lh-title);
+  letter-spacing: var(--ls-title);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -734,9 +744,10 @@
   flex-direction: column;
   gap: var(--sp-3);
   min-width: 0;
+  min-height: 262px;
   padding: var(--sp-5);
   border: 1.5px dashed var(--rule-strong);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--surface);
   transition:
     border-color var(--dur-hover) var(--ease-out),
@@ -1021,6 +1032,37 @@
   }
   .grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-4);
+  }
+  /* A phone stacks the card: the page on top, the details under it. */
+  .card {
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: var(--r-md);
+    background: var(--surface);
+  }
+  .cardThumb {
+    width: auto;
+    height: 196px;
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .cardThumb .thumbSheet {
+    top: 20px;
+    transform: scale(0.44);
+  }
+  .card:hover .cardThumb .thumbSheet {
+    transform: scale(0.44) translateY(-6px);
+  }
+  .cardBody {
+    padding: var(--sp-4);
+  }
+  .newTile {
+    min-height: 0;
   }
   .action,
   .jobChip,

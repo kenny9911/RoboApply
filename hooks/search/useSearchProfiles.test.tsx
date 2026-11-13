@@ -14,6 +14,7 @@ import {
   useUpdateSearchProfile,
 } from './useSearchProfiles';
 import { LEGACY_PREFERENCES_KEY, searchKeys } from './keys';
+import { agentKeys } from '../agent/keys';
 import { installFetch, list, ok, profile } from '../../components/features/filters/filters.testkit';
 
 const P = '/api/v1/roboapply/search-profiles';
@@ -83,5 +84,19 @@ describe('saved-search writes and the legacy preferences query', () => {
     const act2 = renderHook(() => useActivateSearchProfile(), { wrapper: h2.wrapper });
     await act(() => act2.result.current.mutateAsync('sp_b'));
     await waitFor(() => expect(h2.legacyInvalidated()).toBe(true));
+  });
+});
+
+describe('saved-search writes and the Job search agent’s picks', () => {
+  it('a filter change made anywhere (the Jobs list too) asks for the picks afresh', async () => {
+    installFetch({ [`PATCH ${P}/sp_main`]: (c) => ok({ ...main, version: 4, filters: (c.body as { filters: object }).filters }) });
+    const h = harness();
+    h.client.setQueryData(agentKeys.suggestions(3), { items: [] });
+    const reset = vi.spyOn(h.client, 'resetQueries');
+    const { result } = renderHook(() => useUpdateSearchProfile(), { wrapper: h.wrapper });
+    await act(() => result.current.mutateAsync({ id: 'sp_main', body: { baseVersion: 3, filters: { titles: ['QA'] } } }));
+    expect(reset).toHaveBeenCalledWith({ queryKey: agentKeys.suggestions() });
+    // Reset, not refreshed in place: the cached picks are dropped, so the Dashboard takes the new list as a whole.
+    expect(h.client.getQueryData(agentKeys.suggestions(3))).toBeUndefined();
   });
 });

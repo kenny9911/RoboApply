@@ -5,6 +5,11 @@
 // first-value page once setup is finished (RoboApply: /jobs; GoApply: /campus,
 // /jobs or /resume by what is on). The "Finish setting up" banner links here.
 //
+// A RoboApply user who has saved no step yet goes to /onboarding/start, the
+// two-screen flow (docs/agent-driven/REDESIGN.md §4), instead of the first
+// long screen. A user who is mid-way, and every GoApply user, goes where they
+// went before.
+//
 // GoApply at stage `tour` (confirm saved, the first-value screen not finished):
 // the server's `nextRoute` is already the first-value page, which may be
 // /campus — a page outside the app shell, where nothing would ever finish
