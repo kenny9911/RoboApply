@@ -3,15 +3,17 @@
 // The published texts of the Recommended order (rankingText.ts). The frozen
 // copies below are what /help/ranking publishes since the ranking refinements
 // of MKT-4F (freshness with a slow tail; the wrong-title, seen-and-skipped and
-// same-role rules): a test that fails here means the published text changed,
-// and the page copy (`landing.ranking.*`) and its mirror
+// same-role rules) and the target companies of the agent-driven redesign
+// (REDESIGN §8 scenario 4: "Companies you want to work at" left the affinity
+// factor for a rule of their own): a test that fails here means the published
+// text changed, and the page copy (`landing.ranking.*`) and its mirror
 // (components/features/marketing/catalog.ts) must change with it.
 
 import { describe, expect, it } from 'vitest';
 import * as contract from './contract.js';
 import { AFFINITY_DELTAS, EMPTY_AFFINITY, affinityScore, applyAffinity } from './affinity.js';
 import { freshness, seenSkippedPenalty } from './ranking.js';
-import { ALSO_IN_MAX, FRESHNESS_CURVE, GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS, SEEN_SKIPPED, WRONG_TITLE_WEIGHT } from './rankingText.js';
+import { ALSO_IN_MAX, FRESHNESS_CURVE, GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS, SEEN_SKIPPED, TARGET_COMPANY_POINTS, WRONG_TITLE_WEIGHT } from './rankingText.js';
 
 const FROZEN_RANKING_FACTORS = [
   { key: 'fit', weight: 0.55, what: 'Fit score: the AI score when one exists, otherwise the quick estimate. Both are on the same scale. Until a market has enough scored jobs to line the two up, a job with an AI score is ranked halfway between its quick estimate and its AI score.' },
@@ -20,7 +22,7 @@ const FROZEN_RANKING_FACTORS = [
     weight: 0.2,
     what: 'How recently the job was posted: 100 × (0.7 × e^(−hours / 48) + 0.3 × e^(−hours / 336)); a post no longer listed by its source counts from when it was last seen.',
   },
-  { key: 'affinity', weight: 0.15, what: 'Your own actions: saving, applying and hiding jobs, and companies you marked as preferred; fades 2% a day.' },
+  { key: 'affinity', weight: 0.15, what: 'Your own actions: saving, applying and hiding jobs; fades 2% a day.' },
   { key: 'source_quality', weight: 0.1, what: 'How complete the posting is: pay listed, a known application system, a real posting date, a detailed description.' },
 ];
 
@@ -36,6 +38,12 @@ const FROZEN_ORDERING_RULES = [
     points: 10,
     when: 'Skills is the only filter that narrows your list.',
     what: 'Jobs that require more of your chosen skills rank higher in Recommended: up to 10 points, in proportion to how many of them the job asks for.',
+  },
+  {
+    key: 'target_companies',
+    points: 5,
+    when: 'Your search lists companies you want to work at.',
+    what: 'A job at one of those companies gets 5 points in Recommended, and the picks count its fit as 5 points higher. It is never a filter: jobs at other companies still show.',
   },
   {
     key: 'wrong_title',
@@ -129,8 +137,12 @@ describe('published ranking texts', () => {
     expect([0, 1, 2, 3, 4, 5, 6, 40].map((n) => seenSkippedPenalty(n))).toEqual([0, 0, 0, 5, 7.5, 10, 10, 10]);
     expect(rule('seen_skipped').points).toBe(-Math.max(...SEEN_SKIPPED.points));
     expect(rule('seen_skipped').what).toBe('It ranks lower in Recommended: 5 points after three visits, 7.5 after four and 10 from five on.');
+    // Companies you want to work at: the points of the entry are the points the code adds, and the text says so.
+    expect(rule('target_companies').points).toBe(TARGET_COMPANY_POINTS);
+    expect(rule('target_companies').what).toContain(`${TARGET_COMPANY_POINTS} points in Recommended`);
+    expect(RANKING_FACTORS.find((f) => f.key === 'affinity')!.what).not.toMatch(/compan/i);
     // The exploration slot is not built and not published.
-    expect(ORDERING_RULES.map((r) => r.key)).toEqual(['sponsorship_first', 'skills_boost', 'wrong_title', 'seen_skipped', 'same_role_collapse']);
+    expect(ORDERING_RULES.map((r) => r.key)).toEqual(['sponsorship_first', 'skills_boost', 'target_companies', 'wrong_title', 'seen_skipped', 'same_role_collapse']);
     expect(JSON.stringify(ORDERING_RULES)).not.toMatch(/explor/i);
   });
 });

@@ -63,6 +63,20 @@ export const EMPTY_UI_STATE: UiState = Object.freeze({
   values: {},
 }) as UiState;
 
+/**
+ * Values a server area keeps here and changes only through its own route,
+ * which states what the setting does: this PATCH refuses them (read with GET
+ * as any value). `agent.autoPrepare*` is "Prepare my weekly list
+ * automatically" (features/agent/autoPrepare.ts): it spends credits, so it is
+ * switched on only where its cost is stated (PUT /agent/auto-prepare).
+ */
+export const SERVER_OWNED_VALUE_PREFIXES = ['agent.autoPrepare'] as const;
+
+/** True when `key` is one of the server-owned values (the prefix itself, or `<prefix>.<anything>`). */
+export function isServerOwnedValueKey(key: string): boolean {
+  return SERVER_OWNED_VALUE_PREFIXES.some((p) => key === p || key.startsWith(`${p}.`));
+}
+
 const KeyList = z.array(UiKeySchema).max(UI_STATE_LIMITS.keysPerOp);
 
 /** PATCH body: every field optional; at least one operation required. */
@@ -80,10 +94,11 @@ export const UiStatePatchSchema = z
     popupShown: z.literal(true).optional(),
     /** Add announcement ids. */
     announcementsSeen: z.array(z.string().min(1).max(64)).max(UI_STATE_LIMITS.keysPerOp).optional(),
-    /** Set values; `null` deletes the key. */
+    /** Set values; `null` deletes the key. Server-owned keys (SERVER_OWNED_VALUE_PREFIXES) are refused. */
     values: z
       .record(UiKeySchema, UiValueSchema)
       .refine((v) => Object.keys(v).length <= UI_STATE_LIMITS.keysPerOp, { message: 'Too many values in one request.' })
+      .refine((v) => !Object.keys(v).some(isServerOwnedValueKey), { message: 'This value is changed from its own setting.' })
       .optional(),
   })
   .strict()

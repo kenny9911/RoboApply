@@ -8,6 +8,7 @@
 //   GET    /api/v1/roboapply/search-profiles
 //   POST   /api/v1/roboapply/search-profiles
 //   POST   /api/v1/roboapply/search-profiles/count
+//   POST   /api/v1/roboapply/search-profiles/target-companies
 //   PATCH  /api/v1/roboapply/search-profiles/:id
 //   DELETE /api/v1/roboapply/search-profiles/:id
 //   POST   /api/v1/roboapply/search-profiles/:id/activate
@@ -33,6 +34,8 @@ export type TaxonomyResponse = S.TaxonomyResponse;
 export type SkillSuggestion = S.SkillSuggestionWire;
 /** PATCH /search-profiles/:id body: `baseVersion` plus `filters` (replace) or `filtersPatch`. */
 export type UpdateSearchProfileBody = In<typeof S.UpdateSearchProfileBodySchema>;
+/** POST /search-profiles/target-companies body: one company on (`on: true`) or off the active search's "Companies you want to work at". */
+export type SetTargetCompanyBody = In<typeof S.SetTargetCompanyBodySchema>;
 
 /** `search.list` — GET /api/v1/roboapply/search-profiles */
 export function listSearchProfiles(opts?: CallOptions): Promise<S.SearchProfileListWire> {
@@ -47,6 +50,11 @@ export function createSearchProfile(body: In<typeof S.CreateSearchProfileBodySch
 /** `search.count` — POST /api/v1/roboapply/search-profiles/count */
 export function countFilters(body: CountFiltersBody, opts?: CallOptions): Promise<F.FeedCountResult> {
   return call<F.FeedCountResult>('POST', `/api/v1/roboapply/search-profiles/count`, { ...opts, body });
+}
+
+/** `search.setTargetCompany` — POST /api/v1/roboapply/search-profiles/target-companies */
+export function setTargetCompany(body: SetTargetCompanyBody, opts?: CallOptions): Promise<S.SetTargetCompanyResponse> {
+  return call<S.SetTargetCompanyResponse>('POST', `/api/v1/roboapply/search-profiles/target-companies`, { ...opts, body });
 }
 
 /** `search.update` — PATCH /api/v1/roboapply/search-profiles/:id */
@@ -84,6 +92,7 @@ export const searchApi = {
   listSearchProfiles,
   createSearchProfile,
   countFilters,
+  setTargetCompany,
   updateSearchProfile,
   deleteSearchProfile,
   activateSearchProfile,

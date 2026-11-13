@@ -149,6 +149,24 @@ describe('GET/PATCH /ui-state', () => {
     expect(res.body.code).toBe('invalid_request');
   });
 
+  it('refuses the values a server area owns ("Prepare my weekly list automatically" is switched only where its cost is stated)', async () => {
+    for (const values of [{ 'agent.autoPrepare': true }, { 'agent.autoPrepare.since': '2026-10-10T08:00:00.000Z' }, { 'agent.autoPrepare': null }]) {
+      const res = await h.request<{ code: string }>('PATCH', '/api/v1/roboapply/ui-state', { ...as('u1'), body: { values } });
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('invalid_request');
+    }
+    expect(db.$rows('rAUserUiState')).toHaveLength(0);
+    // The server area writes them through the service itself; the GET returns them like any value.
+    const service = new UiStateService(db as unknown as ConstructorParameters<typeof UiStateService>[0]);
+    await service.patch('u1', { values: { 'agent.autoPrepare': true } }, T0);
+    const res = await h.request<{ data: UiStateResponse }>('GET', '/api/v1/roboapply/ui-state', as('u1'));
+    expect(res.body.data.state.values).toEqual({ 'agent.autoPrepare': true });
+    // Other values are still the client's own.
+    const own = await h.request<{ data: UiStateResponse }>('PATCH', '/api/v1/roboapply/ui-state', { ...as('u1'), body: { values: { 'copilot.railOpen': true } } });
+    expect(own.status).toBe(200);
+    expect(own.body.data.state.values).toEqual({ 'agent.autoPrepare': true, 'copilot.railOpen': true });
+  });
+
   it('retries when another tab wrote in between, and gives up with 409 conflict', async () => {
     const svcDb = createFakePrisma({ seed: { rAUserUiState: [{ userId: 'u3', state: {}, updatedAt: T0 }] } });
     const service = new UiStateService(svcDb as unknown as ConstructorParameters<typeof UiStateService>[0]);

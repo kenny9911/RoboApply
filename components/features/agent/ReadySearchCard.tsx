@@ -110,9 +110,13 @@ export function ReadySearchCard({ mode = 'list' }: ReadySearchCardProps) {
     setMessage({ tone: 'danger', text: t(reason === 'version_conflict' ? 'search.conflict' : 'search.failed') });
   };
 
-  /** What the list generation did, in plain words. */
+  /** What the list generation did, in plain words (and how many "Prepare my weekly list automatically" started). */
   const listMessage = (r: GenerateListResponse, savedMain: boolean): Message => {
-    if (r.added > 0) return { tone: 'ok', text: t(savedMain ? 'search.addedBoth' : 'search.addedReady', { count: r.added }) };
+    if (r.added > 0) {
+      const started = r.autoPrepared?.started.length ?? 0;
+      const added = t(savedMain ? 'search.addedBoth' : 'search.addedReady', { count: r.added });
+      return { tone: 'ok', text: started > 0 ? `${added} ${t('search.autoStarted', { count: started })}` : added };
+    }
     const why = r.reason ?? 'no_matches';
     // Nothing was added, but the filters are saved either way: say where they apply.
     return { tone: 'ok', text: savedMain ? `${t('search.savedBoth')} ${t(`search.none.${why}`)}` : `${t(`search.none.${why}`)} ${t('search.keptReady')}` };

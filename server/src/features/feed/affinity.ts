@@ -131,15 +131,18 @@ export function applyAffinity(state: AffinityState, keys: AffinityKeys, delta: n
 
 /**
  * The affinity factor of one job, 0–100 (50 = neutral): the mean of the role
- * weight, the company weight (a preferred company counts at least +0.5) and
- * the mean of its skill weights. A NEGATIVE weight on the job's title joins
- * that mean as a fourth part; a title with no weight, or a positive one,
- * leaves the mean of three as it is (a title is never boosted by this map).
+ * weight, the company weight and the mean of its skill weights, all from the
+ * user's own actions. A NEGATIVE weight on the job's title joins that mean as
+ * a fourth part; a title with no weight, or a positive one, leaves the mean of
+ * three as it is (a title is never boosted by this map). The companies the
+ * user listed as wanted are not read here: they have their own rule of fixed
+ * points (ranking.ts, ORDERING_RULES `target_companies`), which used to be a
+ * floor of +0.5 on this company weight and so added nothing for a company the
+ * user had already saved jobs at.
  */
-export function affinityScore(state: AffinityState, keys: AffinityKeys, preferredCompanyKeys: ReadonlySet<string> = new Set()): number {
+export function affinityScore(state: AffinityState, keys: AffinityKeys): number {
   const role = keys.taxonomy ? (state.taxonomy[keys.taxonomy] ?? 0) : 0;
-  let company = keys.company ? (state.company[keys.company] ?? 0) : 0;
-  if (keys.company && preferredCompanyKeys.has(keys.company)) company = Math.max(company, 0.5);
+  const company = keys.company ? (state.company[keys.company] ?? 0) : 0;
   const skillWeights = keys.skills.map((s) => state.skill[s] ?? 0);
   const skill = skillWeights.length ? skillWeights.reduce((a, b) => a + b, 0) / skillWeights.length : 0;
   const title = keys.title ? (state.title?.[keys.title] ?? 0) : 0;

@@ -9,6 +9,8 @@
 //   - sampleForFilters: job ids for a filter set, newest first, no ranking (competitiveness report)
 //   - alertCandidates: new job ids for a saved search with the feed's filter semantics (alerts)
 //   - marketStats.salary: posted pay for a role and place, Sourced, N ≥ 20 (Assistant, offers)
+//   - payCheck.check: what live posts of the last 90 days state about pay for a title, per currency,
+//     N ≥ 20 (GET /feed/pay-check, the /pay page)
 //   - feedSignals.latestRating / reportedSince: the user's own feed actions (Assistant nudges)
 //   - recordInteraction: affinity from save / apply click / applied (WP-34, WP-38, extension)
 //   - isFeedPersonalized: whether the feed may use the profile for order and fit (WP-31)
@@ -30,6 +32,8 @@ export { createFeedQueryService, REPORT_CLOSE_REASONS } from './FeedQueryService
 export type { AlertCandidateOptions, AlertCandidates, FeedPreviewInput, FeedQueryInput, FeedQueryService, FeedServiceDeps, SampleOptions } from './FeedQueryService.js';
 export { createMarketStats, marketStats, summarizePay, salaryWhere as marketSalaryWhere, SALARY_LOOKBACK_DAYS, SALARY_ROW_CAP } from './marketStats.js';
 export type { JobRoleRow, MarketStats, MarketStatsDb, MarketStatsDeps, PayRow, SalarySample, SalaryStatsInput, SalaryStatsResult } from './marketStats.js';
+export { createPayCheck, payCheck, payCheckSql, resolvePlace, statedAnnualPay, summarizePayCheck, titleMatchOf } from './payCheck.js';
+export type { PayCheck, PayCheckDb, PayCheckDeps, PayCheckInput, PayCheckRow, PayCheckSummary, ResolvedPlace } from './payCheck.js';
 export { createFeedSignals, feedSignals } from './signals.js';
 export type { FeedSignals } from './signals.js';
 /** The feed's personalisation switch (GoApply: a live 个性化推荐 grant; RoboApply: always) — WP-31 asserts through it. */

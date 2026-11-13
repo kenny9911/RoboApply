@@ -140,6 +140,7 @@
       "view": "查看來源"
     },
     "dashboard": "首頁",
+    "pay": "薪資參考",
     "profile_card": {
       "you": "你",
       "set_role": "設定目標職務",
@@ -247,7 +248,8 @@
       "alsoInList": "{company} 的 {title}：其他地點",
       "alsoInMore": "{count, plural, other {還有 # 個地點沒有列在這裡。}}",
       "firstSeen": "首次出現於 {date}",
-      "leadLabel": "{label}："
+      "leadLabel": "{label}：",
+      "targetCompany": "在你的目標公司清單中"
     },
     "explore": {
       "back": "所有工作類別",
@@ -3564,6 +3566,10 @@
         "wrongTitle": {
           "body": "如果你把一個職缺標記為「沒有興趣：職稱不符」，該職務的權重和該職稱的權重都會各降低 0.25，權重的範圍是 -1 到 1。「你表現出興趣的內容」是這個職缺的職務、公司和技能權重的平均值；如果職稱權重低於零，也會一併計入。所以標記一次，會讓其他相同職務或職稱的職缺稍微往後，每多標記一次，就往後更多。這個影響每天減弱 2%。你的篩選條件維持不變。",
           "title": "你標記為不符的職稱"
+        },
+        "targetCompanies": {
+          "title": "想去的公司",
+          "body": "如果你的搜尋列出想去的公司，這些公司的職缺在「推薦」排序中加 5 分，在精選職缺中則以適合度高 5 分來排序。這不是篩選條件：其他公司的職缺仍會顯示。"
         }
       },
       "rulesTitle": "{count, plural, =1 {另一條規則} other {其他規則}}",
@@ -6805,7 +6811,7 @@
       "locations": "地點",
       "needsSponsorship": "簽證贊助",
       "postedWithinDays": "刊登時間",
-      "preferredCompanies": "你喜歡的公司",
+      "preferredCompanies": "想去的公司",
       "q": "關鍵字",
       "recruiterJobsOnly": "招募人員刊登的職缺",
       "roleType": "職務類型",
@@ -6836,7 +6842,7 @@
       "includeUndisclosedPay": "關閉時：沒有標示薪資的職缺仍會留在清單中。",
       "locations": "遠端職缺仍會留在清單中。",
       "needsSponsorship": "優先顯示有提到簽證贊助的職缺，並隱藏職缺說明寫明不提供贊助的職缺。這個回答也會儲存到你的個人檔案。",
-      "preferredCompanies": "這些公司的職缺會排在比較前面。其他職缺仍會顯示。",
+      "preferredCompanies": "這些公司的職缺在「推薦」排序和精選職缺中，會排在相似職缺前面。其他職缺仍會顯示。",
       "recruiterJobsOnly": "只顯示招募人員在 {sourceName} 刊登的職缺。",
       "salaryMonthsMin": "沒有寫明每年發薪月數的職缺仍會留在清單中。",
       "schoolTiers": "隱藏對學校層級有要求、而你不符合的職缺。絕不會用來排序職缺。",
@@ -7625,6 +7631,7 @@
       "payExact": "{period} {amount}",
       "payFrom": "{period} {min} 起",
       "payNotListed": "未列出薪資",
+      "payCheck": "查看這個職稱的公開薪資",
       "payRange": "{period} {min} – {max}",
       "payUpTo": "{period}最高 {max}",
       "period": {
@@ -7726,6 +7733,71 @@
       "label": "職缺詳細資訊",
       "overview": "總覽",
       "people": "人員"
+    },
+    "targets": {
+      "on": "在你的目標公司清單中",
+      "add": "將{company}加入想去的公司",
+      "remove": "移除",
+      "removeLabel": "從想去的公司中移除{company}",
+      "added": "{company}已加入清單。這家公司的職缺在「推薦」排序和精選職缺中，會排在相似職缺前面。",
+      "removed": "{company}已從目標公司清單中移除。",
+      "failed": "無法修改你的目標公司清單，請重試。",
+      "full": "你的目標公司清單已滿。請先在搜尋條件中移除一家公司，再加入這一家。"
+    }
+  },
+  "payCheck": {
+    "title": "薪資參考",
+    "sub": "依職稱查看近 {days} 天職缺寫明的薪資。",
+    "loading": "載入中…",
+    "start": "輸入職稱，即可查看職缺寫明的薪資。",
+    "reading": "正在讀取職缺…",
+    "error": "目前無法載入薪資。",
+    "rateLimited": "短時間內查詢太多次，請過一分鐘再試。",
+    "retry": "重試",
+    "form": {
+      "label": "依職稱查詢薪資",
+      "title": "職稱",
+      "titlePlaceholder": "例如：資料分析師",
+      "location": "地點（選填）",
+      "locationPlaceholder": "城市、地區或國家",
+      "remote": "只看遠端",
+      "submit": "查詢薪資",
+      "prefilled": "已依你儲存的搜尋條件填入。"
+    },
+    "unavailable": {
+      "title": "這裡目前無法使用薪資參考",
+      "sub": "本站目前沒有顯示職缺，因此沒有可查詢的公開薪資。",
+      "back": "回到首頁"
+    },
+    "result": {
+      "heading": "「{title}」的公開薪資",
+      "matchRole": "依職務「{role}」及職稱包含「{text}」的職缺比對。",
+      "matchText": "依職稱包含「{text}」的職缺比對。",
+      "placeAny": "不限地點。",
+      "placeRemote": "只看遠端職缺。",
+      "placeRemoteIn": "遠端職缺（{country}）。",
+      "placeIn": "地點：{place}。",
+      "placeText": "地點包含「{place}」的職缺。",
+      "matched": "{count, plural, =0 {近 {days} 天沒有符合的職缺。} other {近 {days} 天有 # 則職缺符合。}}",
+      "matchedCapped": "近 {days} 天符合的職缺超過 {count, number} 則，已讀取最新的 {count, number} 則。",
+      "withPay": "{count, plural, =0 {其中沒有職缺寫明薪資。} other {其中 # 則寫明了薪資。}}",
+      "honesty": "這是職缺寫明的薪資，不是對你實際錄取薪資的預測。",
+      "yearly": "以時薪、日薪、週薪或月薪寫明的薪資，都換算成年薪顯示：2,080 小時、260 天、52 週或 12 個月（若職缺寫明發放月數，則依該月數計算）。"
+    },
+    "range": {
+      "heading": "{currency}，年薪",
+      "sample": "{count, plural, other {# 則職缺}}以 {currency} 寫明薪資",
+      "p25": "第 25 百分位數",
+      "median": "中位數",
+      "p75": "第 75 百分位數",
+      "summary": "這些職缺中，有一半寫明的年薪介於 {low} 到 {high}，中位數為 {median}。"
+    },
+    "few": "{currency}：只有 {count, plural, other {# 則職缺}}寫明薪資，數量太少，無法顯示範圍（至少需要 {min} 則）。",
+    "notEnough": {
+      "title": "寫明薪資的職缺還不夠",
+      "sub": "同一幣別中至少有 {min} 則職缺寫明薪資，才會顯示範圍。可以換個更廣泛的職稱，或不填地點。",
+      "tryRole": "查詢「{role}」",
+      "withoutPlace": "不限地點再查一次"
     }
   },
   "jobImport": {
@@ -9946,7 +10018,8 @@
         "used": {
           "letter": "已選定這份應徵資料要用的求職信",
           "resume": "已選定這份應徵資料要用的履歷"
-        }
+        },
+        "autoStarted": "已自動開始（「自動準備我的每週清單」已開啟）"
       },
       "letter": {
         "copyAria": "複製求職信",
@@ -10061,7 +10134,8 @@
       "setupNote": "每週清單來自你的主要搜尋，所以在這裡儲存，也會改變你在「職缺」頁看到的職缺。",
       "title": "每週清單的來源",
       "useMainOnly": "只使用我的主要搜尋",
-      "yes": "是，更新我的主要搜尋"
+      "yes": "是，更新我的主要搜尋",
+      "autoStarted": "其中 {count, plural, one {# 個} other {# 個}}正在自動準備。"
     },
     "setup": {
       "back": "返回",
@@ -10212,6 +10286,52 @@
         "review": "檢查並開啟",
         "sent": "查看應徵紀錄",
         "listed": "已在你的清單上"
+      }
+    },
+    "auto": {
+      "title": "自動準備我的每週清單",
+      "offNote": "已關閉。每週清單裡的新職缺會等你點「準備」後才準備。",
+      "onNote": "已開啟。每週清單裡的新職缺會在你剩餘的數量內自動準備，不用點選。每份應徵資料都由你自己檢查並送出。",
+      "savedOn": "已開啟。每週清單裡的新職缺會自動準備。",
+      "savedOff": "已關閉。已經準備好的內容都會保留。",
+      "failed": "這項設定沒有儲存成功。請重試。",
+      "loadFailed": "無法載入這項設定。請稍後再試。",
+      "sheet": {
+        "title": "要自動準備你的每週清單嗎？",
+        "description": "開啟之前，先看看這會用掉什麼。",
+        "when": "每當有職缺加入你的每週清單，就會依清單順序自動準備，不用點選。",
+        "each": "每準備一個職缺會用掉：",
+        "kit": "每週數量中的 1 份應徵資料",
+        "tailor": "1 點履歷調整點數（「針對每個職缺調整我的履歷」已開啟）",
+        "noTailor": "不會用到履歷調整點數：「設定」中已關閉履歷調整，會直接使用你原本的履歷",
+        "noAi": "不會用到履歷調整或求職信點數：你的帳號已關閉 AI 撰寫，會直接使用你原本的履歷",
+        "letter": {
+          "when_required": "職缺說明要求求職信時，用掉 1 點求職信點數",
+          "always": "1 點求職信點數（每個職缺都寫求職信）",
+          "never": "不會用到求職信點數：「設定」中已關閉求職信"
+        },
+        "left": "{window, select, day {今天} week {本週} other {本月}}的餘額：{left}",
+        "leftUnknown": "餘額：—",
+        "stops": "每週數量或任何點數用完時就會停止。不會使用你額外獲得的應徵資料，也絕不會用超過你的餘額。沒能準備的職缺會留在「待準備」。",
+        "check": "不會傳送任何內容給任何公司。每份應徵資料都由你檢查，再自己開啟並送出。",
+        "off": "你可以隨時關閉。關閉後，已經準備好的內容都會保留。",
+        "loading": "正在檢查你的設定…",
+        "settingsFailed": "無法載入你的設定，所以還不能顯示會用掉什麼。請重試。",
+        "cancel": "取消",
+        "confirm": "開啟",
+        "saving": "正在開啟…"
+      },
+      "state": {
+        "waiting": "有職缺加入時，你的每週清單會自動準備。",
+        "ran": "本週清單已在{date}自動準備：用掉了每週數量中的 {count, plural, one {# 份應徵資料} other {# 份應徵資料}}。",
+        "ranNone": "{date}沒有任何內容能自動準備。",
+        "stopped": {
+          "ready_kits": "每週數量已用完，{count, plural, one {# 個職缺} other {# 個職缺}}留在「待準備」。",
+          "tailor": "履歷調整點數已用完，{count, plural, one {# 個職缺} other {# 個職缺}}留在「待準備」。",
+          "cover_letter": "求職信點數已用完，{count, plural, one {# 個職缺} other {# 個職缺}}留在「待準備」。",
+          "error": "{count, plural, one {# 個職缺} other {# 個職缺}}無法自動開始，留在「待準備」。"
+        },
+        "offNow": "自動準備目前已關閉。"
       }
     }
   },
@@ -11843,7 +11963,9 @@
       "loading": "正在載入你的搜尋…",
       "failed": "你的搜尋沒有載入出來。",
       "none": "還沒有已儲存的搜尋。",
-      "setUp": "設定你的搜尋"
+      "setUp": "設定你的搜尋",
+      "companies": "目標公司：{list}",
+      "anyWithCompanies": "任何職缺都在範圍內，目標公司：{list}"
     },
     "agentTag": "AI 代理",
     "retry": "重試",

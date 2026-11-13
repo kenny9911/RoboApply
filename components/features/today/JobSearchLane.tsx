@@ -10,7 +10,11 @@
 //             Each row leads with the gap (ruling R2), then what lines up, the
 //             tier and score with "This is not your chance of getting hired."
 //             under them (C5: never one without the other), then company ·
-//             title · location and ONE action.
+//             title · location and ONE action. A pick at a company on the
+//             search's "Companies you want to work at" says "On your list of
+//             companies" (the server's `atTargetCompany`; such a job is ordered
+//             as if its fit were 5 points higher, never shown with another
+//             score), after the gap and the score, never before them.
 //   action    `Prepare application` (it puts the job on the list, shows the
 //             cost before anything is spent, then starts the preparation).
 //             Without Ready to apply the action is the job's own page.
@@ -154,6 +158,12 @@ function PickRow({ item, agent, withSource, lead }: { item: FeedItem; agent: boo
           {/* C5: wherever a tier or score shows, so does this line. */}
           <HonestyLine kind="fit" />
         </>
+      ) : null}
+
+      {item.atTargetCompany === true ? (
+        <p className={styles.pickTarget} data-testid="pick-target">
+          {tAny('jobs.card.targetCompany')}
+        </p>
       ) : null}
 
       <div className={styles.pickBottom}>

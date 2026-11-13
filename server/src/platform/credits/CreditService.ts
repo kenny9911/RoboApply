@@ -13,7 +13,7 @@
 //      returns the existing reservation; a replay of a RELEASED reservation
 //      (the earlier attempt failed) re-arms it so a retry can still be paid.
 //   2. window: one conditional statement that creates the row if missing.
-//   3. otherwise a live grant for the bucket or '*'.
+//   3. otherwise a live grant for the bucket or '*' (unless `useGrants: false`).
 //   4. otherwise roll back and throw CreditsExhaustedError{bucket, resetsAt, upgradable}.
 // Every plan has a cap (fair use for Pro), so there is no "unlimited" path.
 //
@@ -75,6 +75,13 @@ export interface ReserveOptions {
   sku?: string | null;
   /** Request brand fallback when the user row has none. */
   brand?: BrandId;
+  /**
+   * False: only the plan's window allowance may pay, never a grant (bonus
+   * credits); a full window is CreditsExhaustedError. Default true. Used by
+   * spending the user switched on to run without a tap ("Prepare my weekly
+   * list automatically"), which stays within the weekly allowance.
+   */
+  useGrants?: boolean;
 }
 
 export interface Reservation {
@@ -239,7 +246,7 @@ export function createCreditService(deps: CreditServiceDeps = {}): CreditService
       if (await tx.reserveWindow(opts.userId, opts.bucket, windowKey, units, b.cap)) {
         return toReservation(await tx.setLedgerSource(id, 'window', windowKey), false);
       }
-      if (b.grantable) {
+      if (b.grantable && opts.useGrants !== false) {
         const grantId = await tx.takeGrant(opts.userId, opts.bucket, units, at);
         if (grantId) return toReservation(await tx.setLedgerSource(id, `grant:${grantId}`, null), false);
       }

@@ -140,6 +140,7 @@
       "view": "Ver fonte"
     },
     "dashboard": "Painel",
+    "pay": "Consulta salarial",
     "profile_card": {
       "you": "Você",
       "set_role": "Defina seu cargo-alvo",
@@ -247,7 +248,8 @@
       "alsoInList": "Outros locais de {title} em {company}",
       "alsoInMore": "{count, plural, one {Mais # local não está listado aqui.} other {Mais # locais não estão listados aqui.}}",
       "firstSeen": "Vista pela primeira vez em {date}",
-      "leadLabel": "{label}:"
+      "leadLabel": "{label}:",
+      "targetCompany": "Na sua lista de empresas"
     },
     "explore": {
       "back": "Todos os tipos de trabalho",
@@ -3564,6 +3566,10 @@
         "wrongTitle": {
           "body": "Se você marcar uma vaga como “Não tenho interesse: cargo errado”, o peso dessa função e o peso desse cargo caem 0,25 cada um, em uma escala que vai de -1 a 1. “O que despertou seu interesse” é a média dos pesos de função, empresa e habilidades de uma vaga e também do peso do cargo, quando ele está abaixo de zero. Assim, uma marcação rebaixa um pouco as outras vagas com a mesma função ou o mesmo cargo, e cada nova marcação as rebaixa mais. O efeito diminui 2% por dia. Seus filtros continuam como estão.",
           "title": "Cargos que você marcou como errados"
+        },
+        "targetCompanies": {
+          "title": "Empresas onde você quer trabalhar",
+          "body": "Se a sua busca lista empresas onde você quer trabalhar, uma vaga em uma delas ganha 5 pontos a mais em Recomendadas, e suas melhores escolhas contam o encaixe dela como 5 pontos maior. Nunca é um filtro: vagas de outras empresas continuam aparecendo."
         }
       },
       "rulesTitle": "{count, plural, one {Mais uma regra} other {Mais regras}}",
@@ -6805,7 +6811,7 @@
       "locations": "Locais",
       "needsSponsorship": "Patrocínio de visto",
       "postedWithinDays": "Data de publicação",
-      "preferredCompanies": "Empresas que você prefere",
+      "preferredCompanies": "Empresas onde você quer trabalhar",
       "q": "Palavras-chave",
       "recruiterJobsOnly": "Vagas publicadas por recrutadores",
       "roleType": "Tipo de função",
@@ -6836,7 +6842,7 @@
       "includeUndisclosedPay": "Desligado: vagas que não informam o salário continuam na sua lista.",
       "locations": "Vagas remotas continuam na sua lista.",
       "needsSponsorship": "Mostra primeiro as vagas que mencionam patrocínio de visto e oculta as vagas cujo anúncio diz que não há patrocínio. Esta resposta também fica salva no seu perfil.",
-      "preferredCompanies": "As vagas dessas empresas aparecem mais acima. As outras vagas continuam aparecendo.",
+      "preferredCompanies": "As vagas dessas empresas aparecem antes de vagas parecidas em Recomendadas e nas suas melhores escolhas. As outras vagas continuam aparecendo.",
       "recruiterJobsOnly": "Só vagas que recrutadores publicaram em {sourceName}.",
       "salaryMonthsMin": "Vagas que não informam quantos meses de salário pagam continuam na sua lista.",
       "schoolTiers": "Oculta anúncios que exigem uma categoria de universidade que você não tem. Nunca é usada para ordenar as vagas.",
@@ -7625,6 +7631,7 @@
       "payExact": "{amount} {period}",
       "payFrom": "A partir de {min} {period}",
       "payNotListed": "Salário não informado",
+      "payCheck": "Veja quanto os anúncios pagam para este cargo",
       "payRange": "{min} – {max} {period}",
       "payUpTo": "Até {max} {period}",
       "period": {
@@ -7726,6 +7733,71 @@
       "label": "Detalhes da vaga",
       "overview": "Visão geral",
       "people": "Pessoas"
+    },
+    "targets": {
+      "on": "Na sua lista de empresas",
+      "add": "Adicionar {company} às empresas onde você quer trabalhar",
+      "remove": "Remover",
+      "removeLabel": "Remover {company} das empresas onde você quer trabalhar",
+      "added": "{company} está na sua lista. As vagas de lá aparecem antes de vagas parecidas em Recomendadas e nas suas melhores escolhas.",
+      "removed": "{company} saiu da sua lista de empresas.",
+      "failed": "Não foi possível mudar sua lista de empresas. Tente de novo.",
+      "full": "Sua lista de empresas está cheia. Remova uma na sua busca para adicionar esta."
+    }
+  },
+  "payCheck": {
+    "title": "Consulta salarial",
+    "sub": "Veja qual salário os anúncios de vagas dos últimos {days} dias informam para um cargo.",
+    "loading": "Carregando…",
+    "start": "Digite um cargo para ver qual salário os anúncios informam.",
+    "reading": "Lendo anúncios…",
+    "error": "Não foi possível carregar o salário agora.",
+    "rateLimited": "Muitas consultas em pouco tempo. Tente de novo em um minuto.",
+    "retry": "Tentar de novo",
+    "form": {
+      "label": "Consultar o salário de um cargo",
+      "title": "Cargo",
+      "titlePlaceholder": "Por exemplo, analista de dados",
+      "location": "Local (opcional)",
+      "locationPlaceholder": "Cidade, região ou país",
+      "remote": "Somente vagas remotas",
+      "submit": "Consultar salário",
+      "prefilled": "Preenchido com a sua busca salva."
+    },
+    "unavailable": {
+      "title": "A consulta salarial não está disponível aqui",
+      "sub": "Este site não mostra anúncios de vagas no momento, então não há salários informados para consultar.",
+      "back": "Ir para o painel"
+    },
+    "result": {
+      "heading": "Salário informado para “{title}”",
+      "matchRole": "Corresponde ao cargo “{role}” e a títulos que contêm “{text}”.",
+      "matchText": "Corresponde a títulos que contêm “{text}”.",
+      "placeAny": "Qualquer local.",
+      "placeRemote": "Somente vagas remotas.",
+      "placeRemoteIn": "Vagas remotas ({country}).",
+      "placeIn": "Local: {place}.",
+      "placeText": "Vagas cujo local menciona “{place}”.",
+      "matched": "{count, plural, =0 {Nenhum anúncio dos últimos {days} dias correspondeu.} one {# anúncio dos últimos {days} dias correspondeu.} other {# anúncios dos últimos {days} dias corresponderam.}}",
+      "matchedCapped": "Mais de {count, number} anúncios dos últimos {days} dias corresponderam, então os {count, number} mais recentes foram lidos.",
+      "withPay": "{count, plural, =0 {Nenhum deles informa o salário.} one {# deles informa o salário.} other {# deles informam o salário.}}",
+      "honesty": "Isto é o que os anúncios informam sobre o salário, não uma previsão do que vão oferecer a você.",
+      "yearly": "Salário por hora, dia, semana ou mês aparece como salário anual: 2.080 horas, 260 dias, 52 semanas ou 12 meses (ou os meses de salário que o anúncio informar)."
+    },
+    "range": {
+      "heading": "{currency}, por ano",
+      "sample": "{count, plural, one {# anúncio informa o salário} other {# anúncios informam o salário}} em {currency}",
+      "p25": "Percentil 25",
+      "median": "Mediana",
+      "p75": "Percentil 75",
+      "summary": "Metade desses anúncios informa um salário entre {low} e {high} por ano. A mediana é {median}."
+    },
+    "few": "{currency}: {count, plural, one {# anúncio informa o salário} other {# anúncios informam o salário}}, poucos demais para mostrar uma faixa (são necessários pelo menos {min}).",
+    "notEnough": {
+      "title": "Ainda não há anúncios suficientes com salário informado",
+      "sub": "Uma faixa aparece quando pelo menos {min} anúncios na mesma moeda informam o salário. Tente um cargo mais amplo ou deixe o local em branco.",
+      "tryRole": "Consultar “{role}”",
+      "withoutPlace": "Consultar sem o local"
     }
   },
   "jobImport": {
@@ -9946,7 +10018,8 @@
         "used": {
           "letter": "Carta de apresentação escolhida para esta candidatura",
           "resume": "Currículo escolhido para esta candidatura"
-        }
+        },
+        "autoStarted": "Iniciada automaticamente (“Preparar minha lista semanal automaticamente” está ativado)"
       },
       "letter": {
         "copyAria": "Copiar a carta de apresentação",
@@ -10061,7 +10134,8 @@
       "setupNote": "Sua lista semanal vem da sua busca principal, então salvar aqui também muda as vagas que você vê em Vagas.",
       "title": "De onde vem sua lista semanal",
       "useMainOnly": "Usar só minha busca principal",
-      "yes": "Sim, atualizar minha busca principal"
+      "yes": "Sim, atualizar minha busca principal",
+      "autoStarted": "{count, plural, one {# delas está sendo preparada} other {# delas estão sendo preparadas}} automaticamente."
     },
     "setup": {
       "back": "Voltar",
@@ -10212,6 +10286,52 @@
         "review": "Conferir e abrir",
         "sent": "Ver candidatura",
         "listed": "Na sua lista"
+      }
+    },
+    "auto": {
+      "title": "Preparar minha lista semanal automaticamente",
+      "offNote": "Desativado. As vagas novas da sua lista semanal esperam você tocar em Preparar.",
+      "onNote": "Ativado. As vagas novas da sua lista semanal são preparadas sem você precisar tocar, dentro do que ainda está disponível. Você revisa e envia cada candidatura.",
+      "savedOn": "Ativado. As vagas novas da sua lista semanal serão preparadas automaticamente.",
+      "savedOff": "Desativado. Nada do que já estava preparado foi desfeito.",
+      "failed": "Esta configuração não foi salva. Tente de novo.",
+      "loadFailed": "Não foi possível carregar esta configuração. Tente mais tarde.",
+      "sheet": {
+        "title": "Preparar sua lista semanal automaticamente?",
+        "description": "Veja o que isto usa antes de ativar.",
+        "when": "Sempre que vagas forem adicionadas à sua lista semanal, elas serão preparadas na ordem da lista, sem você precisar tocar.",
+        "each": "Cada vaga preparada usa:",
+        "kit": "1 candidatura da sua cota semanal",
+        "tailor": "1 crédito de adaptação (“Adaptar meu currículo a cada vaga” está ativado)",
+        "noTailor": "Nenhum crédito de adaptação: a adaptação está desativada em Configurações, então seu currículo é usado como está",
+        "noAi": "Nenhum crédito de adaptação ou de carta de apresentação: a escrita com IA está desativada na sua conta, então seu currículo é usado como está",
+        "letter": {
+          "when_required": "1 crédito de carta de apresentação quando o anúncio pedir uma",
+          "always": "1 crédito de carta de apresentação (uma carta para cada vaga)",
+          "never": "Nenhum crédito de carta de apresentação: as cartas estão desativadas em Configurações"
+        },
+        "left": "Disponíveis {window, select, day {hoje} week {nesta semana} other {neste mês}}: {left}",
+        "leftUnknown": "Disponíveis: —",
+        "stops": "Para quando sua cota semanal ou um crédito acaba. Nunca usa as candidaturas bônus que você recebeu nem mais do que você tem disponível. As vagas que não puderem ser preparadas ficam em A preparar.",
+        "check": "Nada é enviado a nenhuma empresa. Você revisa cada candidatura, abre e envia por conta própria.",
+        "off": "Você pode desativar quando quiser. Desativar não desfaz nada do que já foi preparado.",
+        "loading": "Verificando suas configurações…",
+        "settingsFailed": "Não foi possível carregar suas configurações, então o que isto usa ainda não pode ser mostrado. Tente de novo.",
+        "cancel": "Cancelar",
+        "confirm": "Ativar",
+        "saving": "Ativando…"
+      },
+      "state": {
+        "waiting": "Sua lista semanal é preparada automaticamente quando vagas são adicionadas a ela.",
+        "ran": "A lista desta semana foi preparada automaticamente em {date}: {count, plural, one {# candidatura usou} other {# candidaturas usaram}} sua cota semanal.",
+        "ranNone": "Nada pôde ser preparado automaticamente em {date}.",
+        "stopped": {
+          "ready_kits": "{count, plural, one {# vaga ficou} other {# vagas ficaram}} em A preparar porque sua cota semanal acabou.",
+          "tailor": "{count, plural, one {# vaga ficou} other {# vagas ficaram}} em A preparar porque seus créditos de adaptação acabaram.",
+          "cover_letter": "{count, plural, one {# vaga ficou} other {# vagas ficaram}} em A preparar porque seus créditos de carta de apresentação acabaram.",
+          "error": "{count, plural, one {# vaga não pôde ser iniciada automaticamente e ficou} other {# vagas não puderam ser iniciadas automaticamente e ficaram}} em A preparar."
+        },
+        "offNow": "A preparação automática está desativada agora."
       }
     }
   },
@@ -11843,7 +11963,9 @@
       "loading": "Carregando sua busca…",
       "failed": "Não foi possível carregar sua busca.",
       "none": "Nenhuma busca salva ainda.",
-      "setUp": "Configurar sua busca"
+      "setUp": "Configurar sua busca",
+      "companies": "em {list}",
+      "anyWithCompanies": "Você procura qualquer vaga, de preferência em {list}"
     },
     "agentTag": "Agente",
     "retry": "Tentar de novo",

@@ -44,7 +44,9 @@ import { __assistantRailStore } from '../../../hooks/shared/useOpenAssistant';
 import type { CheckState } from '../resume';
 import { TodayDesk } from './TodayDesk';
 import { waitingHref } from './WaitingList';
-import { NOW, board, daysAgo, entry, failed, kit, loading, off, pick, ready, renderToday, resume, searchProfile, sourcesWith } from './today.testkit';
+import type { AutoPrepareView } from '../../../lib/api/agent';
+import type { TodaySources } from '../../../hooks/today';
+import { NOW, autoPrepareView, board, daysAgo, entry, failed, kit, loading, off, pick, ready, renderToday, resume, searchProfile, sourcesWith } from './today.testkit';
 
 const RESETS = '2026-11-15T00:00:00.000Z';
 const CREDITS = {
@@ -129,6 +131,27 @@ describe('/today header', () => {
 
     renderToday(<TodayDesk sources={sourcesWith({ search: ready(searchProfile({ filters: {} })) })} check={null} now={NOW} />, { flags: ALL_ON });
     expect(screen.getByTestId('today-goal')).toHaveTextContent('Your search is open to any job.');
+  });
+
+  // docs/agent-driven/REDESIGN.md §8 scenario 4: target companies close the goal line, and `Change` edits them.
+  it('closes the line with the companies the search wants to work at: two named, then "and N more"', () => {
+    const base = searchProfile().filters;
+    const four = renderToday(
+      <TodayDesk sources={sourcesWith({ search: ready(searchProfile({ filters: { ...base, preferredCompanies: ['Stripe', 'Figma', 'Linear', 'Ramp'] } })) })} check={null} now={NOW} />,
+      { flags: ALL_ON },
+    );
+    expect(screen.getByTestId('today-goal')).toHaveTextContent('Looking for Product designer · Senior · Remote or London · at Stripe, Figma and 2 more');
+    expect(screen.getByRole('button', { name: 'Change what you are looking for' })).toBeInTheDocument();
+    four.unmount();
+
+    const two = renderToday(<TodayDesk sources={sourcesWith({ search: ready(searchProfile({ filters: { ...base, preferredCompanies: ['Stripe', 'Figma'] } })) })} check={null} now={NOW} />, { flags: ALL_ON });
+    expect(screen.getByTestId('today-goal')).toHaveTextContent('Looking for Product designer · Senior · Remote or London · at Stripe or Figma');
+    two.unmount();
+
+    // Only companies: the search is still open to any job (they narrow nothing), and the line says it favours them.
+    renderToday(<TodayDesk sources={sourcesWith({ search: ready(searchProfile({ filters: { preferredCompanies: ['Stripe'] } })) })} check={null} now={NOW} />, { flags: ALL_ON });
+    expect(screen.getByTestId('today-goal')).toHaveTextContent('Looking for any job, ideally at Stripe');
+    expect(screen.getByTestId('today-goal')).not.toHaveTextContent('open to any job.');
   });
 
   it('`Change` opens the shared filters editor on the search Jobs uses', async () => {
@@ -374,6 +397,30 @@ describe('/today "Job search"', () => {
     expect(screen.getByRole('link', { name: 'See all jobs' })).toHaveAttribute('href', '/jobs');
   });
 
+  // docs/agent-driven/REDESIGN.md §8 scenario 4: a pick at a company the search wants to work at says so, after the gap and the score.
+  it('a pick at a company on the list says "On your list of companies", after the gap, the score and the honesty line (R2, C5)', () => {
+    renderToday(
+      <TodayDesk
+        sources={sourcesWith({ picks: ready([pick('p1', 'Analytics Engineer', { atTargetCompany: true }), pick('p2', 'Data Scientist'), pick('p3', 'Insights Lead', { atTargetCompany: false })]) })}
+        check={CHECK_DONE}
+        now={NOW}
+      />,
+      { flags: ALL_ON },
+    );
+    const [listed, other, notListed] = screen.getAllByTestId('today-pick');
+    const note = within(listed!).getByTestId('pick-target');
+    expect(note).toHaveTextContent('On your list of companies');
+    const text = listed!.textContent ?? '';
+    const order = ["What's missing:", '74 / 100', 'This is not your chance of getting hired.', 'On your list of companies', 'Globex', 'Analytics Engineer'].map((s) => text.indexOf(s));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Only where the server said so (D3).
+    expect(within(other!).queryByTestId('pick-target')).toBeNull();
+    expect(within(notListed!).queryByTestId('pick-target')).toBeNull();
+    // A note, not a second action: the row keeps its one button.
+    expect(within(listed!).getAllByRole('button')).toHaveLength(1);
+  });
+
   it('no pick shows a tier or a score without the honesty line (C5)', () => {
     renderToday(
       <TodayDesk
@@ -593,6 +640,48 @@ describe('/today "Applications"', () => {
     fireEvent.click(within(lane).getByRole('button', { name: 'Try again' }));
     expect(retry).toHaveBeenCalledTimes(1);
   });
+
+  // "Prepare my weekly list automatically" (docs/agent-driven/REDESIGN.md §9).
+  const run = (over: Partial<NonNullable<AutoPrepareView['lastRun']>> = {}): AutoPrepareView['lastRun'] => ({
+    at: '2026-11-09T11:00:00.000Z',
+    weekKey: '2026-W46',
+    started: 3,
+    left: 0,
+    stoppedBy: null,
+    thisWeek: true,
+    ...over,
+  });
+  const laneWith = (autoPrepare: TodaySources['autoPrepare'], variant: 'desk' | 'dashboard' = 'desk') => {
+    renderToday(<TodayDesk sources={sourcesWith({ autoPrepare })} check={null} now={NOW} variant={variant} />, { flags: ALL_ON });
+    return screen.getByTestId('today-applications');
+  };
+
+  it('says when this week’s list was prepared automatically and how many used the allowance (the server’s counts), on the Dashboard too', () => {
+    const lane = laneWith(ready(autoPrepareView({ on: true, since: daysAgo(10), lastRun: run({ started: 3, left: 2, stoppedBy: 'ready_kits' }) })), 'dashboard');
+    const line = within(lane).getByTestId('auto-prepare-state');
+    expect(line).toHaveTextContent(/^This week's list was prepared automatically on .*Nov 9.*: 3 applications used your weekly allowance\./);
+    expect(line).toHaveTextContent('2 jobs are left in To prepare because your weekly allowance ran out.');
+    // Above the week's allowance it used.
+    expect(Boolean(line.compareDocumentPosition(within(lane).getByTestId('kit-allowance')) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
+  it('on with no run this week says what will happen (an earlier week’s run is not this week’s)', () => {
+    expect(within(laneWith(ready(autoPrepareView({ on: true, lastRun: run({ thisWeek: false, weekKey: '2026-W45' }) })))).getByTestId('auto-prepare-state')).toHaveTextContent(
+      /^Your weekly list is prepared automatically when jobs are added to it\.$/,
+    );
+  });
+
+  it('off and not run this week: no line at all', () => {
+    expect(within(laneWith(ready(autoPrepareView({ lastRun: run({ thisWeek: false }) })))).queryByTestId('auto-prepare-state')).toBeNull();
+  });
+
+  it('while the option loads no line is guessed', () => {
+    expect(within(laneWith(loading)).queryByTestId('auto-prepare-state')).toBeNull();
+  });
+
+  it('a read that failed draws no line either (the numbers keep their own retry)', () => {
+    expect(within(laneWith(failed())).queryByTestId('auto-prepare-state')).toBeNull();
+  });
 });
 
 // ── Resume ──────────────────────────────────────────────────────────────────
@@ -674,6 +763,7 @@ describe('/today with capabilities off', () => {
     sourcesWith({
       flags: { ready: true, agent: false, copilot: false, feed: true },
       queue: off,
+      autoPrepare: off,
       picksFrom: 'feed',
       picks: ready([pick('p1', 'Analytics Engineer'), pick('p2', 'Data Scientist')]),
       board: ready(board([entry({ id: 'a', dateApplied: daysAgo(0) }), entry({ id: 's1', status: 'bookmarked', dateApplied: null }), entry({ id: 's2', status: 'bookmarked', dateApplied: null })])),
@@ -687,6 +777,7 @@ describe('/today with capabilities off', () => {
     expect(numberOf('saved')).toHaveTextContent(/^Saved2$/);
     expect(numberOf('sent')).toHaveTextContent(/^Sent this week1$/);
     expect(screen.queryByTestId('kit-allowance')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('auto-prepare-state')).not.toBeInTheDocument();
     expect(screen.queryByTestId('prepare-application')).not.toBeInTheDocument();
     const rows = screen.getAllByTestId('today-pick');
     expect(rows).toHaveLength(2);

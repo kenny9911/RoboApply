@@ -213,8 +213,16 @@ describe('goalFacts: only what the saved search holds', () => {
       taxonomyIds: ['design_product'],
       q: 'figma',
     });
-    expect(facts).toEqual({ roles: ['Product designer', 'UX designer'], roleIds: [], seniority: ['senior'], workModels: ['remote', 'hybrid'], places: ['London'] });
+    expect(facts).toEqual({ roles: ['Product designer', 'UX designer'], roleIds: [], seniority: ['senior'], workModels: ['remote', 'hybrid'], places: ['London'], companies: [] });
     expect(goalIsEmpty(facts)).toBe(false);
+  });
+
+  // REDESIGN §8 scenario 4: the companies the search wants to work at; a preference, so they leave the search open.
+  it('reads the companies you want to work at, as saved, and they do not make the search narrow', () => {
+    const facts = goalFacts({ preferredCompanies: [' Stripe ', 'Figma', ''] });
+    expect(facts.companies).toEqual(['Stripe', 'Figma']);
+    expect(goalIsEmpty(facts)).toBe(true);
+    expect(goalFacts({ titles: ['Analyst'] }).companies).toEqual([]);
   });
 
   it('falls back to the search words, then to the job functions, when there is no title', () => {

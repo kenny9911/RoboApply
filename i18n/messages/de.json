@@ -140,6 +140,7 @@
       "view": "Quelle ansehen"
     },
     "dashboard": "Übersicht",
+    "pay": "Gehaltscheck",
     "profile_card": {
       "you": "Du",
       "set_role": "Zielposition festlegen",
@@ -247,7 +248,8 @@
       "alsoInList": "Weitere Orte für {title} bei {company}",
       "alsoInMore": "{count, plural, one {# weiterer Ort ist hier nicht aufgeführt.} other {# weitere Orte sind hier nicht aufgeführt.}}",
       "firstSeen": "Zuerst gesehen am {date}",
-      "leadLabel": "{label}:"
+      "leadLabel": "{label}:",
+      "targetCompany": "Auf deiner Unternehmensliste"
     },
     "explore": {
       "back": "Alle Berufsfelder",
@@ -3564,6 +3566,10 @@
         "wrongTitle": {
           "body": "Wenn du einen Job mit „Kein Interesse: Falsche Jobbezeichnung“ markierst, sinken das Gewicht dieser Position und das Gewicht dieser Jobbezeichnung um jeweils 0,25, auf einer Skala von -1 bis 1. „Woran du Interesse gezeigt hast“ ist der Durchschnitt aus den Gewichten für Position, Unternehmen und Fähigkeiten eines Jobs sowie aus dem Gewicht seiner Jobbezeichnung, wenn dieses unter null liegt. Eine Markierung senkt also andere Jobs mit derselben Position oder Jobbezeichnung ein wenig, und jede weitere Markierung senkt sie stärker. Der Effekt lässt um 2 % pro Tag nach. Deine Filter bleiben unverändert.",
           "title": "Jobbezeichnungen, die du als falsch markiert hast"
+        },
+        "targetCompanies": {
+          "title": "Unternehmen, bei denen du arbeiten möchtest",
+          "body": "Wenn deine Suche Unternehmen nennt, bei denen du arbeiten möchtest, bekommt ein Job bei einem davon bei „Empfohlen“ 5 Punkte mehr, und deine besten Treffer rechnen seine Passung 5 Punkte höher. Es ist nie ein Filter: Jobs bei anderen Unternehmen siehst du weiterhin."
         }
       },
       "rulesTitle": "{count, plural, one {Eine weitere Regel} other {Weitere Regeln}}",
@@ -6805,7 +6811,7 @@
       "locations": "Orte",
       "needsSponsorship": "Visa-Sponsoring",
       "postedWithinDays": "Veröffentlicht",
-      "preferredCompanies": "Unternehmen, die dir gefallen",
+      "preferredCompanies": "Unternehmen, bei denen du arbeiten möchtest",
       "q": "Suchbegriffe",
       "recruiterJobsOnly": "Von Recruitern veröffentlichte Jobs",
       "roleType": "Art der Rolle",
@@ -6836,7 +6842,7 @@
       "includeUndisclosedPay": "Aus: Jobs ohne Gehaltsangabe bleiben in deiner Liste.",
       "locations": "Remote-Jobs bleiben in deiner Liste.",
       "needsSponsorship": "Zeigt zuerst Jobs, die Sponsoring erwähnen, und blendet Jobs aus, deren Anzeige Sponsoring ausschließt. Diese Angabe wird auch in deinem Profil gespeichert.",
-      "preferredCompanies": "Jobs bei diesen Unternehmen stehen weiter oben. Andere Jobs siehst du weiterhin.",
+      "preferredCompanies": "Jobs bei diesen Unternehmen stehen bei „Empfohlen“ und in deinen besten Treffern vor ähnlichen Jobs. Andere Jobs siehst du weiterhin.",
       "recruiterJobsOnly": "Nur Jobs, die Recruiter auf {sourceName} veröffentlicht haben.",
       "salaryMonthsMin": "Jobs ohne Angabe, wie viele Monatsgehälter gezahlt werden, bleiben in deiner Liste.",
       "schoolTiers": "Blendet Anzeigen aus, die eine Hochschulkategorie verlangen, die du nicht hast. Wird nie für die Reihenfolge der Jobs verwendet.",
@@ -7625,6 +7631,7 @@
       "payExact": "{amount} {period}",
       "payFrom": "Ab {min} {period}",
       "payNotListed": "Gehalt nicht angegeben",
+      "payCheck": "Sieh dir an, was Anzeigen für diesen Titel zahlen",
       "payRange": "{min} – {max} {period}",
       "payUpTo": "Bis zu {max} {period}",
       "period": {
@@ -7726,6 +7733,71 @@
       "label": "Jobdetails",
       "overview": "Überblick",
       "people": "Personen"
+    },
+    "targets": {
+      "on": "Auf deiner Unternehmensliste",
+      "add": "{company} zu den Unternehmen hinzufügen, bei denen du arbeiten möchtest",
+      "remove": "Entfernen",
+      "removeLabel": "{company} aus den Unternehmen entfernen, bei denen du arbeiten möchtest",
+      "added": "{company} steht auf deiner Liste. Jobs dort stehen bei „Empfohlen“ und in deinen besten Treffern vor ähnlichen Jobs.",
+      "removed": "{company} steht nicht mehr auf deiner Unternehmensliste.",
+      "failed": "Deine Unternehmensliste konnte nicht geändert werden. Versuch es erneut.",
+      "full": "Deine Unternehmensliste ist voll. Entferne in deiner Suche ein Unternehmen, um dieses hinzuzufügen."
+    }
+  },
+  "payCheck": {
+    "title": "Gehaltscheck",
+    "sub": "Sieh dir an, was Stellenanzeigen der letzten {days} Tage zum Gehalt für eine Jobbezeichnung angeben.",
+    "loading": "Wird geladen…",
+    "start": "Gib eine Jobbezeichnung ein, um zu sehen, was Stellenanzeigen zum Gehalt angeben.",
+    "reading": "Stellenanzeigen werden gelesen…",
+    "error": "Das Gehalt konnte gerade nicht geladen werden.",
+    "rateLimited": "Zu viele Abfragen in kurzer Zeit. Versuch es in einer Minute noch einmal.",
+    "retry": "Erneut versuchen",
+    "form": {
+      "label": "Gehalt für eine Jobbezeichnung prüfen",
+      "title": "Jobbezeichnung",
+      "titlePlaceholder": "Zum Beispiel Datenanalyst",
+      "location": "Ort (optional)",
+      "locationPlaceholder": "Stadt, Region oder Land",
+      "remote": "Nur Remote-Jobs",
+      "submit": "Gehalt prüfen",
+      "prefilled": "Aus deiner gespeicherten Suche übernommen."
+    },
+    "unavailable": {
+      "title": "Der Gehaltscheck ist hier nicht verfügbar",
+      "sub": "Diese Seite zeigt gerade keine Stellenanzeigen, deshalb gibt es kein angegebenes Gehalt zu prüfen.",
+      "back": "Zur Übersicht"
+    },
+    "result": {
+      "heading": "Angegebenes Gehalt für „{title}“",
+      "matchRole": "Gefunden als Rolle „{role}“ und als Titel, die „{text}“ enthalten.",
+      "matchText": "Gefunden als Titel, die „{text}“ enthalten.",
+      "placeAny": "Jeder Ort.",
+      "placeRemote": "Nur Remote-Jobs.",
+      "placeRemoteIn": "Remote-Jobs ({country}).",
+      "placeIn": "Ort: {place}.",
+      "placeText": "Jobs, deren Ortsangabe „{place}“ enthält.",
+      "matched": "{count, plural, =0 {Keine Stellenanzeige der letzten {days} Tage passt.} one {# Stellenanzeige der letzten {days} Tage passt.} other {# Stellenanzeigen der letzten {days} Tage passen.}}",
+      "matchedCapped": "Mehr als {count, number} Stellenanzeigen der letzten {days} Tage passen, deshalb wurden die neuesten {count, number} gelesen.",
+      "withPay": "{count, plural, =0 {Keine davon nennt ein Gehalt.} one {# davon nennt ein Gehalt.} other {# davon nennen ein Gehalt.}}",
+      "honesty": "Das ist, was Stellenanzeigen zum Gehalt angeben, keine Vorhersage für ein Angebot.",
+      "yearly": "Gehalt pro Stunde, Tag, Woche oder Monat wird als Jahresgehalt gezeigt: 2.080 Stunden, 260 Tage, 52 Wochen oder 12 Monate (oder so viele Monatsgehälter, wie die Anzeige nennt)."
+    },
+    "range": {
+      "heading": "{currency}, pro Jahr",
+      "sample": "{count, plural, one {# Anzeige nennt ein Gehalt} other {# Anzeigen nennen ein Gehalt}} in {currency}",
+      "p25": "25. Perzentil",
+      "median": "Median",
+      "p75": "75. Perzentil",
+      "summary": "Die Hälfte dieser Anzeigen nennt ein Gehalt zwischen {low} und {high} pro Jahr. Der Median liegt bei {median}."
+    },
+    "few": "{currency}: {count, plural, one {# Anzeige nennt ein Gehalt} other {# Anzeigen nennen ein Gehalt}}, zu wenige für eine Spanne (mindestens {min} nötig).",
+    "notEnough": {
+      "title": "Dafür nennen noch nicht genug Anzeigen ein Gehalt",
+      "sub": "Eine Spanne erscheint, sobald mindestens {min} Anzeigen in einer Währung ein Gehalt nennen. Versuch einen allgemeineren Titel oder lass den Ort leer.",
+      "tryRole": "„{role}“ prüfen",
+      "withoutPlace": "Ohne Ort prüfen"
     }
   },
   "jobImport": {
@@ -9946,7 +10018,8 @@
         "used": {
           "letter": "Anschreiben für diese Bewerbung ausgewählt",
           "resume": "Lebenslauf für diese Bewerbung ausgewählt"
-        }
+        },
+        "autoStarted": "Automatisch gestartet („Meine Wochenliste automatisch vorbereiten“ ist an)"
       },
       "letter": {
         "copyAria": "Anschreiben kopieren",
@@ -10061,7 +10134,8 @@
       "setupNote": "Deine Wochenliste entsteht aus deiner Hauptsuche. Wenn du hier speicherst, ändern sich deshalb auch die Jobs, die du unter „Jobs“ siehst.",
       "title": "Woher deine Wochenliste kommt",
       "useMainOnly": "Nur meine Hauptsuche verwenden",
-      "yes": "Ja, meine Hauptsuche aktualisieren"
+      "yes": "Ja, meine Hauptsuche aktualisieren",
+      "autoStarted": "{count, plural, one {# davon wird} other {# davon werden}} automatisch vorbereitet."
     },
     "setup": {
       "back": "Zurück",
@@ -10212,6 +10286,52 @@
         "review": "Prüfen und öffnen",
         "sent": "Bewerbung ansehen",
         "listed": "Auf deiner Liste"
+      }
+    },
+    "auto": {
+      "title": "Meine Wochenliste automatisch vorbereiten",
+      "offNote": "Aus. Neue Jobs auf deiner Wochenliste warten, bis du auf „Vorbereiten“ tippst.",
+      "onNote": "An. Neue Jobs auf deiner Wochenliste werden ohne Tippen vorbereitet, im Rahmen dessen, was du noch übrig hast. Du prüfst und sendest jede Bewerbung selbst ab.",
+      "savedOn": "Eingeschaltet. Neue Jobs auf deiner Wochenliste werden automatisch vorbereitet.",
+      "savedOff": "Ausgeschaltet. Bereits Vorbereitetes bleibt erhalten.",
+      "failed": "Diese Einstellung wurde nicht gespeichert. Versuch es erneut.",
+      "loadFailed": "Diese Einstellung konnte nicht geladen werden. Versuch es später erneut.",
+      "sheet": {
+        "title": "Deine Wochenliste automatisch vorbereiten?",
+        "description": "Hier siehst du, was das verbraucht, bevor du es einschaltest.",
+        "when": "Jedes Mal, wenn Jobs zu deiner Wochenliste hinzukommen, werden sie in der Reihenfolge der Liste vorbereitet, ohne dass du tippen musst.",
+        "each": "Jeder Job, der vorbereitet wird, verbraucht:",
+        "kit": "1 Bewerbung aus deinem Wochenkontingent",
+        "tailor": "1 Credit für eine Lebenslauf-Anpassung („Meinen Lebenslauf für jeden Job anpassen“ ist an)",
+        "noTailor": "Keinen Credit für eine Lebenslauf-Anpassung: Das Anpassen ist in den Einstellungen ausgeschaltet, dein Lebenslauf wird unverändert verwendet",
+        "noAi": "Keinen Credit für Anpassungen oder Anschreiben: Das Schreiben mit KI ist für dein Konto ausgeschaltet, dein Lebenslauf wird unverändert verwendet",
+        "letter": {
+          "when_required": "1 Credit für ein Anschreiben, wenn die Anzeige eines verlangt",
+          "always": "1 Credit für ein Anschreiben (ein Anschreiben für jeden Job)",
+          "never": "Keinen Credit für ein Anschreiben: Anschreiben sind in den Einstellungen ausgeschaltet"
+        },
+        "left": "{window, select, day {Heute} week {Diese Woche} other {Diesen Monat}} noch {left} übrig",
+        "leftUnknown": "Noch übrig: —",
+        "stops": "Es stoppt, sobald dein Wochenkontingent oder ein Credit aufgebraucht ist. Zusätzliche Bewerbungen, die du erhalten hast, verwendet es nie, und es verbraucht nie mehr, als du übrig hast. Jobs, die nicht vorbereitet werden können, bleiben unter „Vorzubereiten“.",
+        "check": "An Unternehmen wird nichts gesendet. Du prüfst jede Bewerbung, öffnest sie und sendest sie selbst ab.",
+        "off": "Du kannst es jederzeit ausschalten. Bereits Vorbereitetes bleibt dabei erhalten.",
+        "loading": "Deine Einstellungen werden geprüft…",
+        "settingsFailed": "Deine Einstellungen konnten nicht geladen werden, deshalb kann der Verbrauch noch nicht angezeigt werden. Versuch es erneut.",
+        "cancel": "Abbrechen",
+        "confirm": "Einschalten",
+        "saving": "Wird eingeschaltet…"
+      },
+      "state": {
+        "waiting": "Deine Wochenliste wird automatisch vorbereitet, sobald Jobs hinzukommen.",
+        "ran": "Die Liste dieser Woche wurde am {date} automatisch vorbereitet. Dafür {count, plural, one {wurde # Bewerbung} other {wurden # Bewerbungen}} aus deinem Wochenkontingent verwendet.",
+        "ranNone": "Am {date} konnte nichts automatisch vorbereitet werden.",
+        "stopped": {
+          "ready_kits": "{count, plural, one {# Job bleibt} other {# Jobs bleiben}} unter „Vorzubereiten“, weil dein Wochenkontingent aufgebraucht ist.",
+          "tailor": "{count, plural, one {# Job bleibt} other {# Jobs bleiben}} unter „Vorzubereiten“, weil deine Credits für Lebenslauf-Anpassungen aufgebraucht sind.",
+          "cover_letter": "{count, plural, one {# Job bleibt} other {# Jobs bleiben}} unter „Vorzubereiten“, weil deine Credits für Anschreiben aufgebraucht sind.",
+          "error": "{count, plural, one {# Job konnte nicht automatisch gestartet werden und bleibt} other {# Jobs konnten nicht automatisch gestartet werden und bleiben}} unter „Vorzubereiten“."
+        },
+        "offNow": "Das automatische Vorbereiten ist jetzt aus."
       }
     }
   },
@@ -11843,7 +11963,9 @@
       "loading": "Deine Suche wird geladen…",
       "failed": "Deine Suche konnte nicht geladen werden.",
       "none": "Noch keine gespeicherte Suche.",
-      "setUp": "Suche einrichten"
+      "setUp": "Suche einrichten",
+      "companies": "bei {list}",
+      "anyWithCompanies": "Du suchst: jeden Job, am liebsten bei {list}"
     },
     "agentTag": "Agent",
     "retry": "Erneut versuchen",

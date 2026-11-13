@@ -37,6 +37,7 @@ const api = vi.hoisted(() => ({
   dismiss: vi.fn(),
   setUiValues: vi.fn(),
   addToQueue: vi.fn(),
+  setTargetCompany: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
 }));
@@ -66,6 +67,7 @@ vi.mock('../../../lib/api/match', () => ({ getKeywordCheck: api.getKeywordCheck,
 vi.mock('../../../lib/api/credits', () => ({ getCredits: api.getCredits }));
 vi.mock('../../../lib/api/uiState', () => ({ getUiState: api.getUiState, dismiss: api.dismiss, setUiValues: api.setUiValues }));
 vi.mock('../../../lib/api/agent', () => ({ addToQueue: api.addToQueue }));
+vi.mock('../../../lib/api/search', async (orig) => ({ ...(await orig<Record<string, unknown>>()), setTargetCompany: api.setTargetCompany }));
 // The share card renders nothing by design; a marker stands in so the tests can read what it is given.
 vi.mock('../notify-cn', () => ({
   WechatShareCard: (p: { title: string; description?: string | null; path?: string | null }) => (
@@ -74,6 +76,7 @@ vi.mock('../notify-cn', () => ({
 }));
 
 import { RoboApiError } from '../../../lib/api/client';
+import { __toastStore } from '../../v3/primitives/Toast';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
 import type { MatchFitView } from '../../../lib/api/contracts/match';
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
@@ -947,6 +950,78 @@ describe('apply flow (D1, R1/C11)', () => {
   });
 });
 
+// docs/agent-driven/REDESIGN.md §8 scenario 4: add the company to the search's "Companies you want to work at", or take it off.
+describe('"Companies you want to work at" on the job page', () => {
+  const savedSearch = (preferredCompanies: string[] | undefined) => ({
+    profile: { id: 'sp_main', name: '', isDefault: true, isActive: true, version: 4, schemaVersion: 1, filters: preferredCompanies ? { preferredCompanies } : {}, alertInstantMax: 0, alertDigest: null, createdAt: NOW, updatedAt: NOW },
+    on: !!preferredCompanies?.length,
+  });
+
+  /** The server: the page reads the list as it is now, and the change is kept. */
+  function server(onList: boolean) {
+    let on = onList;
+    api.getJob.mockImplementation(async () => detail({ atTargetCompany: on }));
+    api.setTargetCompany.mockImplementation(async (body: { on: boolean }) => {
+      on = body.on;
+      return savedSearch(on ? ['Figma', 'Acme'] : ['Figma']);
+    });
+  }
+
+  it('off the list: one line under the company offers to add it; adding sends the company and the line turns to "On your list of companies"', async () => {
+    server(false);
+    render();
+    const line = await screen.findByTestId('job-target-company');
+    expect(line).toHaveAttribute('data-on', 'false');
+    // Under the company and the title, above the actions.
+    const header = screen.getByTestId('job-header');
+    expect(header).toContainElement(line);
+    expect(screen.getByRole('heading', { level: 1, name: 'Backend Engineer' }).compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(within(line).getByRole('button', { name: 'Add Acme to companies you want to work at' }));
+    await waitFor(() => expect(api.setTargetCompany).toHaveBeenCalledWith({ company: 'Acme', on: true }));
+    await waitFor(() => expect(screen.getByTestId('job-target-company')).toHaveAttribute('data-on', 'true'));
+    expect(screen.getByTestId('job-target-company')).toHaveTextContent('On your list of companies');
+    expect(__toastStore.get().map((x) => `${x.tone}: ${x.message}`)).toContain('ok: Acme is on your list. Its jobs move ahead of similar jobs in Recommended and in your best picks.');
+    // The page is read again after the change, and the line holds.
+    await waitFor(() => expect(api.getJob.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(screen.getByTestId('job-target-company')).toHaveAttribute('data-on', 'true');
+    expect(api.setTargetCompany).toHaveBeenCalledTimes(1);
+    // A note and a text button: it never takes the page's one primary button.
+    expect(within(screen.getByTestId('job-target-company')).getByRole('button')).not.toHaveClass('primary');
+  });
+
+  it('on the list: "On your list of companies" with Remove, which takes it off', async () => {
+    server(true);
+    render();
+    const line = await screen.findByTestId('job-target-company');
+    expect(line).toHaveTextContent('On your list of companies');
+    fireEvent.click(within(line).getByRole('button', { name: 'Remove Acme from companies you want to work at' }));
+    await waitFor(() => expect(api.setTargetCompany).toHaveBeenCalledWith({ company: 'Acme', on: false }));
+    await waitFor(() => expect(screen.getByTestId('job-target-company')).toHaveAttribute('data-on', 'false'));
+    expect(within(screen.getByTestId('job-target-company')).getByRole('button', { name: 'Add Acme to companies you want to work at' })).toBeEnabled();
+  });
+
+  it('a full list, or any other failure, says so in the line and changes nothing', async () => {
+    server(false);
+    api.setTargetCompany
+      .mockRejectedValueOnce(new RoboApiError('full', { code: 'invalid_request', status: 422, payload: { success: false, code: 'invalid_request', details: { reason: 'invalid_filters' } } }))
+      .mockRejectedValueOnce(new RoboApiError('x', { code: 'internal_error', status: 500 }));
+    render();
+    const add = await screen.findByRole('button', { name: 'Add Acme to companies you want to work at' });
+    fireEvent.click(add);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your list of companies is full. Remove one in your search to add this one.');
+    fireEvent.click(add);
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Your list of companies could not be changed. Try again.'));
+    expect(screen.getByTestId('job-target-company')).toHaveAttribute('data-on', 'false');
+  });
+
+  it('nothing is offered when the server did not say (D3)', async () => {
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.queryByTestId('job-target-company')).toBeNull();
+    expect(screen.queryByText(/companies you want to work at/i)).toBeNull();
+  });
+});
+
 describe('checklist, People, Company', () => {
   it('Saved → Resume tailored → Practiced → Applied with actions and credit lines; Practiced says we cannot tell yet', async () => {
     render(<JobDetailPanel jobId="j1" mode="page" />, { flags: { ...BASE_FLAGS, interviewBank: true, hiringContacts: 'deeplinks_only' } });
@@ -1223,5 +1298,71 @@ describe("the preview read: the desktop list's first job, shown before the perso
     expect(link).toHaveAttribute('href', '/ready/j1');
     expect(screen.queryByRole('button', { name: 'Prepare application' })).toBeNull();
     expect(api.addToQueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('the pay check link beside the stated pay (/pay)', () => {
+  const FEED_ON = { ...BASE_FLAGS, 'jobs.feed': true };
+  const NAME = 'See what postings pay for this title';
+
+  it('sits in the pay line and opens the pay check for the job’s title and place', async () => {
+    api.getJob.mockResolvedValue(detail({}, { pay: { min: 120000, max: 150000, currency: 'USD', period: 'year', text: null } }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: FEED_ON });
+    await screen.findByTestId('job-detail');
+    const link = screen.getByRole('link', { name: NAME });
+    expect(link).toHaveAttribute('href', '/pay?title=Backend+Engineer&location=Austin%2C+TX');
+    // Next to the stated pay, in the header; the pay line itself reads as before.
+    expect(link.parentElement).toBe(screen.getByTestId('job-pay').parentElement);
+    expect(within(screen.getByTestId('job-header')).getByRole('link', { name: NAME })).toBe(link);
+    expect(screen.getByTestId('job-pay')).not.toHaveTextContent(NAME);
+  });
+
+  it('also beside "Pay not listed"; a remote job asks for remote jobs', async () => {
+    api.getJob.mockResolvedValue(detail({}, { workModel: 'remote', location: 'Remote - US' }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: FEED_ON });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('job-pay')).toHaveTextContent(/^Pay not listed$/);
+    expect(screen.getByRole('link', { name: NAME })).toHaveAttribute('href', '/pay?title=Backend+Engineer&location=remote');
+  });
+
+  it('a job with no stated place asks for the title alone', async () => {
+    api.getJob.mockResolvedValue(detail({}, { location: null, workModel: null }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: FEED_ON });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByRole('link', { name: NAME })).toHaveAttribute('href', '/pay?title=Backend+Engineer');
+  });
+
+  it('absent while the job feed is off (the pay check reads the posts; R-04)', async () => {
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: { ...BASE_FLAGS, 'jobs.feed': false } });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('job-pay')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: NAME })).toBeNull();
+    expect(screen.queryByTestId('job-pay-check')).toBeNull();
+  });
+
+  it('GoApply: under the market block, which prints the pay there in place of the header', async () => {
+    const meta = {
+      cn: {
+        sourceLine: { kind: 'source', sourceName: 'GoHire', originalSourceName: null, licence: null },
+        salary: { text: '15-25K·14薪', disclosed: true },
+        updatedAt: '2026-10-08T00:00:00.000Z',
+        lastCheckedAt: NOW,
+        expiresAt: null,
+        tags: [],
+        classYears: [],
+        warnings: [],
+      },
+    };
+    api.getJob.mockResolvedValue(
+      detail({ marketMeta: meta }, { title: '数据分析师', companyName: '示例科技', location: '上海', pay: { min: 15000, max: 25000, currency: 'CNY', period: 'month', text: '15-25K·14薪' }, payText: '15-25K·14薪' }),
+    );
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { 'jobs.feed': true } });
+    await screen.findByTestId('job-detail');
+    const link = screen.getByTestId('job-pay-check');
+    expect(link).toHaveAttribute('href', `/pay?title=${encodeURIComponent('数据分析师')}&location=${encodeURIComponent('上海')}`);
+    expect(within(screen.getByTestId('job-header')).queryByTestId('job-pay-check')).toBeNull();
+    // Right after the block that holds the pay.
+    expect(screen.getByTestId('job-meta-cn').compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByTestId('job-pay-check')).toHaveLength(1);
   });
 });

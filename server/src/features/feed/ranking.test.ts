@@ -18,6 +18,7 @@ import { EMPTY_AFFINITY } from './affinity.js';
 import { GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS } from './contract.js';
 import {
   RANK_BLEND_AI_SHARE,
+  atTargetCompany,
   collapseSameRole,
   fitBadge,
   fitForRank,
@@ -37,11 +38,15 @@ import {
   sortCandidates,
   sourceQuality,
   sponsorshipFirst,
+  targetCompanyBoost,
+  targetKeysOf,
   tierOf,
   type Candidate,
   type RankContext,
 } from './ranking.js';
+import { TARGET_COMPANY_POINTS } from './rankingText.js';
 import { feedRow } from './testkit.js';
+import type { FeedJobRow } from './types.js';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000);
@@ -216,9 +221,96 @@ describe('formula', () => {
     expect(src).not.toMatch(/fromRecruiterBank|employerVerified|sourcePriority/);
   });
 
-  it('preferred companies count as affinity (never as a filter)', () => {
+  it('companies you want to work at add their own points to the rank (never a filter)', () => {
     const row = feedRow({ id: 'p', companyNameNormalized: 'acme' });
     expect(recommendedRank(row, 70, rc({ preferredCompanyKeys: new Set(['acme']) }))).toBeGreaterThan(recommendedRank(row, 70, rc()));
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §8 scenario 4 (target companies): picks favour them, by a bounded amount.
+describe('"Companies you want to work at" (target companies): a bounded boost, never a filter', () => {
+  const at = (id: string, company: string, posted = 10): FeedJobRow =>
+    feedRow({ id, companyName: company, companyNameNormalized: company.toLowerCase(), postedAt: hoursAgo(posted), firstSeenAt: hoursAgo(posted) });
+  const keys = targetKeysOf({ preferredCompanies: ['Acme'] });
+  const cand = (row: FeedJobRow, fit: number | null, rank = 0): Candidate => ({ row, badge: null, fit, rank });
+  const ids = (list: Candidate[]) => list.map((c) => c.row.id);
+
+  it('Recommended: a job at a listed company gets exactly TARGET_COMPANY_POINTS (5), every other job none', () => {
+    expect(TARGET_COMPANY_POINTS).toBe(5);
+    expect(ORDERING_RULES.find((r) => r.key === 'target_companies')?.points).toBe(TARGET_COMPANY_POINTS);
+    const acme = at('a', 'Acme');
+    const globex = at('g', 'Globex');
+    expect(recommendedRank(acme, 70, rc({ preferredCompanyKeys: keys })) - recommendedRank(acme, 70, rc())).toBeCloseTo(TARGET_COMPANY_POINTS, 6);
+    expect(recommendedRank(globex, 70, rc({ preferredCompanyKeys: keys }))).toBe(recommendedRank(globex, 70, rc()));
+    expect(targetCompanyBoost(acme, keys)).toBe(5);
+    expect(targetCompanyBoost(acme, new Set())).toBe(0);
+  });
+
+  it('compares companies by the normalized name, the stored key first', () => {
+    expect(atTargetCompany(feedRow({ id: 'x', companyName: 'ACME, Inc.', companyNameNormalized: '' }), keys)).toBe(true);
+    expect(atTargetCompany(feedRow({ id: 'y', companyName: 'Whatever', companyNameNormalized: 'acme' }), keys)).toBe(true);
+    expect(atTargetCompany(feedRow({ id: 'z', companyName: 'Acme Robotics', companyNameNormalized: 'acme robotics' }), keys)).toBe(false);
+  });
+
+  it('the points are the same for a company the person already liked by saving its jobs (the old +0.5 floor added nothing then)', () => {
+    const liked = { ...EMPTY_AFFINITY, company: { acme: 0.8 } };
+    const acme = at('a', 'Acme');
+    expect(recommendedRank(acme, 70, rc({ affinity: liked, preferredCompanyKeys: keys })) - recommendedRank(acme, 70, rc({ affinity: liked }))).toBeCloseTo(5, 6);
+  });
+
+  it('Recommended: ahead of an otherwise equal job and of one less than 5 rank points higher; behind one further ahead', () => {
+    const ctx = rc({ preferredCompanyKeys: keys });
+    // 0.55 a fit point: 9 fit points are 4.95 rank points (passed), 10 are 5.5 (not passed). `twin` is the target's
+    // equal in everything but the company.
+    const list = [cand(at('twin', 'Globex'), 70), cand(at('near', 'Initech'), 79), cand(at('far', 'Hooli'), 80), cand(at('target', 'Acme'), 70)].map((c) => ({ ...c, rank: recommendedRank(c.row, c.fit, ctx) }));
+    expect(ids(sortCandidates(list, 'recommended', { currency: null }))).toEqual(['far', 'target', 'near', 'twin']);
+    // Without the list: the rank alone, and the equal pair falls to the last tie-break (the id), as before.
+    const plain = list.map((c) => ({ ...c, rank: recommendedRank(c.row, c.fit, rc()) }));
+    expect(ids(sortCandidates(plain, 'recommended', { currency: null }))).toEqual(['far', 'near', 'twin', 'target']);
+  });
+
+  it('Recommended: a tie after the points falls to the usual tie-breaks (newest first), never to the list', () => {
+    const ctx = rc({ preferredCompanyKeys: keys });
+    const target = cand(at('target', 'Acme', 30), 70);
+    target.rank = recommendedRank(target.row, 70, ctx);
+    const newer = cand(at('newer', 'Globex', 5), null, target.rank);
+    const older = cand(at('older', 'Initech', 60), null, target.rank);
+    expect(ids(sortCandidates([older, target, newer], 'recommended', { currency: null }))).toEqual(['newer', 'target', 'older']);
+  });
+
+  it('the picks (Best fit with the list): a listed job counts its fit 5 points higher; no fit stays last; ties fall to newest', () => {
+    const list = () => [
+      cand(at('equal', 'Globex', 10), 70),
+      cand(at('near', 'Initech', 10), 74),
+      cand(at('five', 'Umbrella', 5), 75),
+      cand(at('far', 'Hooli', 10), 76),
+      cand(at('target', 'Acme', 30), 70),
+      cand(at('none', 'Wonka', 10), null),
+      cand(at('targetNone', 'Acme', 40), null),
+    ];
+    // 70 + 5 = 75: past 74 and the equal 70, behind 76, and tied with 75, which is newer and so stays first.
+    expect(ids(sortCandidates(list(), 'best_fit', { currency: null, targetKeys: keys }))).toEqual(['far', 'five', 'target', 'near', 'equal', 'targetNone', 'none']);
+    // The /jobs Best fit sort (no list passed): the fit alone, as before.
+    expect(ids(sortCandidates(list(), 'best_fit', { currency: null }))).toEqual(['far', 'five', 'near', 'equal', 'target', 'none', 'targetNone']);
+    expect(ids(sortCandidates(list(), 'best_fit', { currency: null, targetKeys: new Set() }))).toEqual(['far', 'five', 'near', 'equal', 'target', 'none', 'targetNone']);
+  });
+
+  it('the picks: a listed job with no fit never passes a job that has one, however low', () => {
+    const list = [cand(at('low', 'Globex'), 0), cand(at('targetNone', 'Acme', 1), null)];
+    expect(ids(sortCandidates(list, 'best_fit', { currency: null, targetKeys: keys }))).toEqual(['low', 'targetNone']);
+  });
+
+  it('the other sorts ignore the list (Newest, Highest pay)', () => {
+    const list = () => [cand(at('target', 'Acme', 30), 90), cand(at('newer', 'Globex', 5), 10)];
+    expect(ids(sortCandidates(list(), 'newest', { currency: null, targetKeys: keys }))).toEqual(['newer', 'target']);
+    expect(ids(sortCandidates(list(), 'highest_pay', { currency: null, targetKeys: keys }))).toEqual(ids(sortCandidates(list(), 'highest_pay', { currency: null })));
+  });
+
+  it('the published rule names the points and says it is never a filter', () => {
+    const rule = ORDERING_RULES.find((r) => r.key === 'target_companies')!;
+    expect(rule.what).toContain(`${TARGET_COMPANY_POINTS} points in Recommended`);
+    expect(rule.what).toContain(`fit as ${TARGET_COMPANY_POINTS} points higher`);
+    expect(rule.what).toContain('never a filter');
   });
 });
 
@@ -414,8 +506,9 @@ describe('sorts and the tier view', () => {
 
 describe('ordering rules (ORDERING_RULES, listed on /help/ranking)', () => {
   it('are documented with their trigger', () => {
-    expect(ORDERING_RULES.map((r) => r.key)).toEqual(['sponsorship_first', 'skills_boost', 'wrong_title', 'seen_skipped', 'same_role_collapse']);
+    expect(ORDERING_RULES.map((r) => r.key)).toEqual(['sponsorship_first', 'skills_boost', 'target_companies', 'wrong_title', 'seen_skipped', 'same_role_collapse']);
     expect(ORDERING_RULES.find((r) => r.key === 'skills_boost')!.points).toBe(10);
+    expect(ORDERING_RULES.find((r) => r.key === 'target_companies')!.points).toBe(5);
     for (const r of ORDERING_RULES) {
       expect(r.when.length, r.key).toBeGreaterThan(10);
       expect(r.what.length, r.key).toBeGreaterThan(10);

@@ -140,6 +140,7 @@
       "view": "Voir la source"
     },
     "dashboard": "Tableau de bord",
+    "pay": "Salaires annoncés",
     "profile_card": {
       "you": "Vous",
       "set_role": "Indiquez le poste visé",
@@ -247,7 +248,8 @@
       "alsoInList": "Autres lieux pour {title} chez {company}",
       "alsoInMore": "{count, plural, one {# autre lieu n’est pas listé ici.} other {# autres lieux ne sont pas listés ici.}}",
       "firstSeen": "Vue pour la première fois le {date}",
-      "leadLabel": "{label} :"
+      "leadLabel": "{label} :",
+      "targetCompany": "Dans ta liste d’entreprises"
     },
     "explore": {
       "back": "Tous les types de métier",
@@ -3564,6 +3566,10 @@
         "wrongTitle": {
           "body": "Si tu marques une offre « Ça ne m’intéresse pas : pas le bon intitulé de poste », le poids de ce type de poste et le poids de cet intitulé baissent chacun de 0,25, sur une échelle qui va de -1 à 1. « Ce qui t’a intéressé » est la moyenne des poids du type de poste, de l’entreprise et des compétences d’une offre, ainsi que de son poids d’intitulé lorsqu’il est inférieur à zéro. Marquer une seule offre fait donc baisser un peu les autres offres qui ont le même type de poste ou le même intitulé, et chaque offre marquée en plus les fait baisser davantage. L’effet diminue de 2 % par jour. Tes filtres ne changent pas.",
           "title": "Intitulés que tu as marqués comme incorrects"
+        },
+        "targetCompanies": {
+          "title": "Entreprises où tu veux travailler",
+          "body": "Si ta recherche indique des entreprises où tu veux travailler, une offre de l’une d’elles reçoit 5 points de plus dans « Recommandées », et tes meilleures offres la classent comme si son adéquation avait 5 points de plus. Ce n’est jamais un filtre : les offres des autres entreprises restent visibles."
         }
       },
       "rulesTitle": "{count, plural, one {Une règle de plus} other {Autres règles}}",
@@ -6805,7 +6811,7 @@
       "locations": "Lieux",
       "needsSponsorship": "Parrainage de visa",
       "postedWithinDays": "Date de publication",
-      "preferredCompanies": "Entreprises qui te plaisent",
+      "preferredCompanies": "Entreprises où tu veux travailler",
       "q": "Mots-clés",
       "recruiterJobsOnly": "Offres publiées par des recruteurs",
       "roleType": "Type de rôle",
@@ -6836,7 +6842,7 @@
       "includeUndisclosedPay": "Désactivé : les offres qui n’indiquent pas le salaire restent dans ta liste.",
       "locations": "Les offres en télétravail restent dans ta liste.",
       "needsSponsorship": "Affiche d’abord les offres qui mentionnent un parrainage de visa et masque celles dont l’annonce dit qu’il n’y en a pas. Cette réponse est aussi enregistrée dans ton profil.",
-      "preferredCompanies": "Les offres de ces entreprises sont classées plus haut. Les autres offres restent visibles.",
+      "preferredCompanies": "Les offres de ces entreprises passent devant les offres similaires dans « Recommandées » et dans tes meilleures offres. Les autres offres restent visibles.",
       "recruiterJobsOnly": "Uniquement les offres que des recruteurs ont publiées sur {sourceName}.",
       "salaryMonthsMin": "Les offres qui n’indiquent pas le nombre de mois payés restent dans ta liste.",
       "schoolTiers": "Masque les annonces qui exigent une catégorie d’école que tu n’as pas. Ne sert jamais à classer les offres.",
@@ -7625,6 +7631,7 @@
       "payExact": "{amount} {period}",
       "payFrom": "À partir de {min} {period}",
       "payNotListed": "Salaire non indiqué",
+      "payCheck": "Voir ce que les annonces paient pour ce poste",
       "payRange": "{min} – {max} {period}",
       "payUpTo": "Jusqu’à {max} {period}",
       "period": {
@@ -7726,6 +7733,71 @@
       "label": "Détails de l’offre",
       "overview": "Aperçu",
       "people": "Personnes"
+    },
+    "targets": {
+      "on": "Dans ta liste d’entreprises",
+      "add": "Ajouter {company} aux entreprises où tu veux travailler",
+      "remove": "Retirer",
+      "removeLabel": "Retirer {company} des entreprises où tu veux travailler",
+      "added": "{company} est dans ta liste. Ses offres passent devant les offres similaires dans « Recommandées » et dans tes meilleures offres.",
+      "removed": "{company} n’est plus dans ta liste d’entreprises.",
+      "failed": "Ta liste d’entreprises n’a pas pu être modifiée. Réessaie.",
+      "full": "Ta liste d’entreprises est pleine. Retires-en une dans ta recherche pour ajouter celle-ci."
+    }
+  },
+  "payCheck": {
+    "title": "Salaires annoncés",
+    "sub": "Vois ce que les annonces des {days} derniers jours indiquent comme salaire pour un intitulé de poste.",
+    "loading": "Chargement…",
+    "start": "Saisis un intitulé de poste pour voir quel salaire indiquent les annonces.",
+    "reading": "Lecture des annonces…",
+    "error": "Impossible de charger les salaires pour le moment.",
+    "rateLimited": "Trop de recherches en peu de temps. Réessaie dans une minute.",
+    "retry": "Réessayer",
+    "form": {
+      "label": "Voir le salaire d’un intitulé de poste",
+      "title": "Intitulé du poste",
+      "titlePlaceholder": "Par exemple, analyste de données",
+      "location": "Lieu (facultatif)",
+      "locationPlaceholder": "Ville, région ou pays",
+      "remote": "Télétravail uniquement",
+      "submit": "Voir les salaires",
+      "prefilled": "Repris de ta recherche enregistrée."
+    },
+    "unavailable": {
+      "title": "Les salaires annoncés ne sont pas disponibles ici",
+      "sub": "Ce site n’affiche aucune annonce pour le moment, il n’y a donc aucun salaire annoncé à consulter.",
+      "back": "Aller au tableau de bord"
+    },
+    "result": {
+      "heading": "Salaire annoncé pour « {title} »",
+      "matchRole": "Correspond au poste « {role} » et aux intitulés qui contiennent « {text} ».",
+      "matchText": "Correspond aux intitulés qui contiennent « {text} ».",
+      "placeAny": "Tous les lieux.",
+      "placeRemote": "Télétravail uniquement.",
+      "placeRemoteIn": "Postes en télétravail ({country}).",
+      "placeIn": "Lieu : {place}.",
+      "placeText": "Postes dont le lieu mentionne « {place} ».",
+      "matched": "{count, plural, =0 {Aucune annonce des {days} derniers jours ne correspond.} one {# annonce des {days} derniers jours correspond.} other {# annonces des {days} derniers jours correspondent.}}",
+      "matchedCapped": "Plus de {count, number} annonces des {days} derniers jours correspondent ; les {count, number} plus récentes ont été lues.",
+      "withPay": "{count, plural, =0 {Aucune n’indique de salaire.} one {# d’entre elles indique un salaire.} other {# d’entre elles indiquent un salaire.}}",
+      "honesty": "Voici ce que les annonces indiquent comme salaire, pas une prédiction de l’offre que tu recevras.",
+      "yearly": "Un salaire indiqué à l’heure, à la journée, à la semaine ou au mois est affiché sur un an : 2 080 heures, 260 jours, 52 semaines ou 12 mois (ou le nombre de mois de salaire indiqué dans l’annonce)."
+    },
+    "range": {
+      "heading": "{currency}, par an",
+      "sample": "{count, plural, one {# annonce indique un salaire} other {# annonces indiquent un salaire}} en {currency}",
+      "p25": "25e centile",
+      "median": "Médiane",
+      "p75": "75e centile",
+      "summary": "La moitié de ces annonces indique un salaire entre {low} et {high} par an. La médiane est de {median}."
+    },
+    "few": "{currency} : {count, plural, one {# annonce indique un salaire} other {# annonces indiquent un salaire}}, trop peu pour afficher une fourchette (au moins {min} nécessaires).",
+    "notEnough": {
+      "title": "Pas encore assez d’annonces avec un salaire",
+      "sub": "Une fourchette s’affiche dès qu’au moins {min} annonces dans une même devise indiquent un salaire. Essaie un intitulé plus général, ou laisse le lieu vide.",
+      "tryRole": "Voir « {role} »",
+      "withoutPlace": "Voir sans le lieu"
     }
   },
   "jobImport": {
@@ -9946,7 +10018,8 @@
         "used": {
           "letter": "Lettre de motivation choisie pour cette candidature",
           "resume": "CV choisi pour cette candidature"
-        }
+        },
+        "autoStarted": "Lancée automatiquement (« Préparer ma liste de la semaine automatiquement » est activé)"
       },
       "letter": {
         "copyAria": "Copier la lettre de motivation",
@@ -10061,7 +10134,8 @@
       "setupNote": "Ta liste hebdomadaire vient de ta recherche principale : enregistrer ici change donc aussi les offres que tu vois sur la page Offres.",
       "title": "D’où vient ta liste hebdomadaire",
       "useMainOnly": "Utiliser seulement ma recherche principale",
-      "yes": "Oui, mettre à jour ma recherche principale"
+      "yes": "Oui, mettre à jour ma recherche principale",
+      "autoStarted": "{count, plural, one {# d’entre elles est en préparation automatique} other {# d’entre elles sont en préparation automatique}}."
     },
     "setup": {
       "back": "Retour",
@@ -10212,6 +10286,52 @@
         "review": "Vérifier et ouvrir",
         "sent": "Voir la candidature",
         "listed": "Dans ta liste"
+      }
+    },
+    "auto": {
+      "title": "Préparer ma liste de la semaine automatiquement",
+      "offNote": "Désactivé. Les nouvelles offres de ta liste de la semaine attendent que tu appuies sur Préparer.",
+      "onNote": "Activé. Les nouvelles offres de ta liste de la semaine sont préparées sans que tu aies à appuyer, dans la limite de ce qu’il te reste. Tu vérifies et tu envoies chaque candidature toi-même.",
+      "savedOn": "Activé. Les nouvelles offres de ta liste de la semaine seront préparées automatiquement.",
+      "savedOff": "Désactivé. Rien de ce qui était déjà préparé n’a été annulé.",
+      "failed": "Ce réglage n’a pas été enregistré. Réessaie.",
+      "loadFailed": "Ce réglage n’a pas pu être chargé. Réessaie plus tard.",
+      "sheet": {
+        "title": "Préparer ta liste de la semaine automatiquement ?",
+        "description": "Voici ce que ça utilise, avant que tu l’actives.",
+        "when": "Chaque fois que des offres sont ajoutées à ta liste de la semaine, elles sont préparées dans l’ordre de la liste, sans que tu aies à appuyer.",
+        "each": "Chaque offre préparée utilise :",
+        "kit": "1 candidature de ton quota hebdomadaire",
+        "tailor": "1 crédit d’adaptation (« Adapter mon CV à chaque offre » est activé)",
+        "noTailor": "Aucun crédit d’adaptation : l’adaptation est désactivée dans les Réglages, ton CV est donc utilisé tel quel",
+        "noAi": "Aucun crédit d’adaptation ni de lettre de motivation : la rédaction par IA est désactivée pour ton compte, ton CV est donc utilisé tel quel",
+        "letter": {
+          "when_required": "1 crédit de lettre de motivation quand l’annonce en demande une",
+          "always": "1 crédit de lettre de motivation (une lettre pour chaque offre)",
+          "never": "Aucun crédit de lettre de motivation : les lettres sont désactivées dans les Réglages"
+        },
+        "left": "Il t’en reste {left} {window, select, day {aujourd’hui} week {cette semaine} other {ce mois-ci}}",
+        "leftUnknown": "Restant : —",
+        "stops": "Ça s’arrête quand ton quota hebdomadaire ou un crédit est épuisé. Ça n’utilise jamais tes candidatures bonus, ni plus que ce qu’il te reste. Les offres qui ne peuvent pas être préparées restent dans À préparer.",
+        "check": "Rien n’est envoyé à aucune entreprise. Tu vérifies chaque candidature, puis tu l’ouvres et tu l’envoies toi-même.",
+        "off": "Tu peux le désactiver à tout moment. Le désactiver n’annule rien de ce qui est déjà préparé.",
+        "loading": "Vérification de tes réglages…",
+        "settingsFailed": "Tes réglages n’ont pas pu être chargés : ce que ça utilise ne peut donc pas encore être affiché. Réessaie.",
+        "cancel": "Annuler",
+        "confirm": "Activer",
+        "saving": "Activation…"
+      },
+      "state": {
+        "waiting": "Ta liste de la semaine est préparée automatiquement quand des offres y sont ajoutées.",
+        "ran": "La liste de cette semaine a été préparée automatiquement le {date} : {count, plural, one {# candidature a utilisé} other {# candidatures ont utilisé}} ton quota hebdomadaire.",
+        "ranNone": "Rien n’a pu être préparé automatiquement le {date}.",
+        "stopped": {
+          "ready_kits": "{count, plural, one {# offre reste} other {# offres restent}} dans À préparer, car ton quota hebdomadaire est épuisé.",
+          "tailor": "{count, plural, one {# offre reste} other {# offres restent}} dans À préparer, car tes crédits d’adaptation sont épuisés.",
+          "cover_letter": "{count, plural, one {# offre reste} other {# offres restent}} dans À préparer, car tes crédits de lettre de motivation sont épuisés.",
+          "error": "{count, plural, one {# offre n’a pas pu être lancée automatiquement et reste} other {# offres n’ont pas pu être lancées automatiquement et restent}} dans À préparer."
+        },
+        "offNow": "La préparation automatique est désactivée maintenant."
       }
     }
   },
@@ -11843,7 +11963,9 @@
       "loading": "Chargement de ta recherche…",
       "failed": "Ta recherche n’a pas pu être chargée.",
       "none": "Pas encore de recherche enregistrée.",
-      "setUp": "Configurer ta recherche"
+      "setUp": "Configurer ta recherche",
+      "companies": "chez {list}",
+      "anyWithCompanies": "Tu recherches : n’importe quelle offre, idéalement chez {list}"
     },
     "agentTag": "Agent",
     "retry": "Réessayer",

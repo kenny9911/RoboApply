@@ -8,6 +8,12 @@
 // job functions, when there is no title), level, and where (work models and
 // places). An empty search says it is open to any job; nothing is assumed.
 //
+// Target companies (REDESIGN §8 scenario 4): the search's "Companies you want
+// to work at" close the line ("… · at Stripe, Figma and 2 more"). They are a
+// preference, not a filter, so a search that holds nothing else still says it
+// is open to any job, and that it favours them. `Change` edits them in the
+// same drawer (its Companies section).
+//
 // `Change` opens the same editor as "All filters" on /jobs and "Edit filters"
 // in Settings (FiltersDrawer): one PATCH with `baseVersion`, nothing new to
 // keep in step. It is imported on the first tap rather than with the page.
@@ -24,7 +30,7 @@ import { readableTaxonomyId, useTaxonomyLabelState } from '../../../hooks/search
 import type { SearchProfile } from '../../../hooks/search';
 import type { Loadable } from '../../../hooks/today';
 import { FailedNote } from './parts';
-import { GOAL_GROUP_LIMIT, goalFacts, goalIsEmpty } from './todayModel';
+import { GOAL_COMPANY_LIMIT, GOAL_GROUP_LIMIT, goalFacts, goalIsEmpty } from './todayModel';
 import styles from './today.module.css';
 
 const FiltersDrawer = lazy(() => import('../filters').then((m) => ({ default: m.FiltersDrawer })));
@@ -96,11 +102,19 @@ export function GoalLine({ search }: GoalLineProps) {
       facts.roleIds.map((id) => taxonomy.labels.get(id) ?? (taxonomy.ready ? readableTaxonomyId(id) : ''));
   const where = [...facts.workModels.map((v) => option('workModels', v)), ...facts.places];
   const what = [group(roles), group(facts.seniority.map((v) => option('seniority', v))), group(where, GOAL_GROUP_LIMIT + 1)].filter(Boolean).join(' · ');
+  // "Companies you want to work at", last: "at Stripe, Figma and 2 more".
+  const companies = group(facts.companies, GOAL_COMPANY_LIMIT);
+  const open = goalIsEmpty(facts) || !what;
+  const text = open
+    ? companies
+      ? t('goal.anyWithCompanies', { list: companies })
+      : t('goal.any')
+    : t('goal.line', { what: companies ? `${what} · ${t('goal.companies', { list: companies })}` : what });
 
   return (
     <>
       <p className={styles.goal} data-testid="today-goal">
-        <span className={styles.goalText}>{goalIsEmpty(facts) || !what ? t('goal.any') : t('goal.line', { what })}</span>
+        <span className={styles.goalText}>{text}</span>
         <button type="button" className={styles.textButton} onClick={() => setEditing(true)} aria-label={t('goal.changeLabel')} aria-haspopup="dialog">
           {t('goal.change')}
         </button>

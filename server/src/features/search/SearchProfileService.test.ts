@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFakePrisma } from '../../test/fakePrisma.js';
 import { createEntitlementService, DEFAULT_CREDIT_CATALOG, type AccountSnapshot } from '../../platform/credits/index.js';
+import { COMPANY_LIST_MAX } from './contract.js';
 import {
   AlertFrequencyNotAllowedError,
   InvalidFiltersError,
@@ -259,5 +260,99 @@ describe('default and active invariants', () => {
     expect(last).toBeInstanceOf(LastProfileError);
     expect(searchErrorToHttpError(last)).toMatchObject({ code: 'conflict', details: { reason: 'cannot_delete_last_profile' } });
     await expect(svc.activate('u1', 'missing')).rejects.toBeInstanceOf(SearchProfileNotFoundError);
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §8 scenario 4: the job page's "Companies you want to work at" control.
+describe('"Companies you want to work at": setTargetCompany', () => {
+  it('puts a company on the ACTIVE search in one write and keeps every other filter and every other search', async () => {
+    const { svc } = setup({ account: PRO });
+    const [main] = (await svc.list('u1')).profiles;
+    await svc.update('u1', main.id, { version: 1, filters: { titles: ['Designer'], companies: ['Acme'], preferredCompanies: ['Figma'] } });
+    const other = await svc.create('u1', { name: 'Other', filters: { titles: ['PM'], excludedCompanies: ['Globex'] }, activate: true });
+    const res = await svc.setTargetCompany('u1', { company: 'Stripe', on: true });
+    expect(res).toMatchObject({ on: true, profile: { id: other.id, version: 2, filters: { titles: ['PM'], excludedCompanies: ['Globex'], preferredCompanies: ['Stripe'] } } });
+    expect(await svc.get('u1', main.id)).toMatchObject({ version: 2, filters: { titles: ['Designer'], companies: ['Acme'], preferredCompanies: ['Figma'] } });
+  });
+
+  it('writes nothing when the list already says so in any spelling, and taking a company off removes every spelling', async () => {
+    const { svc } = setup();
+    const [main] = (await svc.list('u1')).profiles;
+    await svc.update('u1', main.id, { version: 1, filters: { companies: ['Acme'], preferredCompanies: ['Stripe', 'Figma', 'STRIPE INC'] } });
+    const same = await svc.setTargetCompany('u1', { company: 'stripe, inc.', on: true });
+    expect(same).toMatchObject({ on: true, profile: { version: 2 } });
+    const off = await svc.setTargetCompany('u1', { company: 'Stripe', on: false });
+    expect(off).toMatchObject({ on: false, profile: { version: 3, filters: { companies: ['Acme'], preferredCompanies: ['Figma'] } } });
+    // The last one off clears the field; the include-only list ("Only these companies") is left as it was.
+    const last = await svc.setTargetCompany('u1', { company: 'figma', on: false });
+    expect(last.profile.filters).toEqual({ companies: ['Acme'] });
+    expect((await svc.setTargetCompany('u1', { company: 'Figma', on: false })).profile.version).toBe(last.profile.version);
+  });
+
+  it('applies the one change to the search as it is now when another write lands first (409, read again, retry)', async () => {
+    const fake = createFakePrisma();
+    let interleave = false;
+    const db = new Proxy(fake, {
+      get(target, prop) {
+        if (prop !== 'rASearchProfile') return (target as Record<string | symbol, unknown>)[prop];
+        const model = target.rASearchProfile as Record<string | symbol, unknown>;
+        return new Proxy(model, {
+          get(m, p) {
+            if (p !== 'updateMany' || !interleave) return m[p];
+            return async (args: unknown) => {
+              interleave = false;
+              // Another tab saves first: it adds Figma and moves the version on.
+              const row = target.$rows('rASearchProfile')[0] as { filters: Record<string, unknown>; version: number };
+              row.filters = { ...row.filters, preferredCompanies: ['Figma'] };
+              row.version += 1;
+              return (m.updateMany as (a: unknown) => Promise<unknown>)(args);
+            };
+          },
+        });
+      },
+    });
+    const entitlements = createEntitlementService({
+      source: { loadAccount: async () => FREE, loadOverrides: async () => [] },
+      loadCatalog: async (b) => DEFAULT_CREDIT_CATALOG[b],
+      proSellable: () => true,
+      memoTtlMs: 0,
+    });
+    const svc = createSearchProfileService({ getDb: async () => db as never, entitlements, loadCatalog: async (b) => DEFAULT_CREDIT_CATALOG[b] });
+    await svc.list('u1');
+    interleave = true;
+    const res = await svc.setTargetCompany('u1', { company: 'Stripe', on: true });
+    expect(res).toMatchObject({ on: true, profile: { version: 3, filters: { preferredCompanies: ['Figma', 'Stripe'] } } });
+  });
+
+  it('refuses to add to a full list (422 invalid_filters, the drawer’s own limit) and writes nothing', async () => {
+    const { svc } = setup();
+    const [main] = (await svc.list('u1')).profiles;
+    const full = Array.from({ length: COMPANY_LIST_MAX }, (_, i) => `Company ${i}`);
+    await svc.update('u1', main.id, { version: 1, filters: { preferredCompanies: full } });
+    const err = await svc.setTargetCompany('u1', { company: 'Stripe', on: true }).catch((e) => e);
+    expect(err).toBeInstanceOf(InvalidFiltersError);
+    expect(searchErrorToHttpError(err)).toMatchObject({ code: 'invalid_request', status: 422, details: { reason: 'invalid_filters' } });
+    expect(await svc.get('u1', main.id)).toMatchObject({ version: 2 });
+    // Taking one off a full list still works.
+    expect((await svc.setTargetCompany('u1', { company: 'Company 0', on: false })).profile.filters.preferredCompanies).toHaveLength(COMPANY_LIST_MAX - 1);
+  });
+});
+
+describe('activeFilters (the job page’s read)', () => {
+  it('reads the active search’s filters for the market in one read; null, with no migration, for a user with no search', async () => {
+    const { svc, fake, setAccount } = setup({ seed: { rACareerGoal: [{ id: 'g', userId: 'u1', targetTitle: 'Data Analyst' }] } });
+    expect(await svc.activeFilters('u1', 'intl')).toBeNull();
+    expect(fake.$rows('rASearchProfile')).toHaveLength(0);
+    expect(fake.$sql.texts()).toEqual([]);
+
+    setAccount(PRO);
+    await svc.list('u1');
+    const other = await svc.create('u1', { name: 'Other', filters: { titles: ['PM'], preferredCompanies: ['Stripe'] }, activate: true });
+    expect(await svc.activeFilters('u1', 'intl')).toEqual(other.filters);
+    // Read for the market: a field of the other market is left out.
+    fake.$rows('rASearchProfile').forEach((r) => {
+      if (r.id === other.id) r.filters = { ...(r.filters as object), classYear: 2027 };
+    });
+    expect(await svc.activeFilters('u1', 'intl')).toEqual({ titles: ['PM'], preferredCompanies: ['Stripe'] });
   });
 });

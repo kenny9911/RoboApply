@@ -12,6 +12,9 @@
 //                     and version, so a filter change still gives a new list,
 //                     and the words the list is ranked by (useListRelevance),
 //                     so ranking by them, or clearing them, gives a new list too.
+//   ['pay-check', …]  the /pay page's answer for one title and place. Not under
+//                     'feed' either: a job action changes nothing it reads (it
+//                     counts other people's posts), so a Save never refetches it.
 
 import type { FeedSort } from '../../lib/api/contracts/feed';
 
@@ -35,6 +38,7 @@ export const feedKeys = {
   newCount: () => ['feed', 'new-count'] as const,
   explore: () => ['feed', 'explore'] as const,
   skillsCheck: () => ['feed', 'skills-check'] as const,
+  payCheck: (title: string, location: string) => ['pay-check', title, location] as const,
   listRoot: ['feed-list'] as const,
   list: (k: FeedListKeyInput) =>
     k.visit === false

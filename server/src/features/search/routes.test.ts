@@ -94,6 +94,7 @@ describe('auth', () => {
       ['DELETE', `${P}/x`],
       ['POST', `${P}/x/activate`],
       ['GET', `${P}/x/limiting`],
+      ['POST', `${P}/target-companies`],
       ['GET', `${T}/skills?q=py`],
     ] as const) {
       expect((await h.request(m, path, { body: m === 'GET' || m === 'DELETE' ? undefined : {} })).status, `${m} ${path}`).toBe(401);
@@ -178,6 +179,28 @@ describe('PATCH /search-profiles/:id', () => {
     const res = await h.request<Env<unknown>>('PATCH', `${P}/${main.id}`, { body: { baseVersion: 1, name: 'x' } });
     expect(res.status).toBe(404);
     expect(res.body).toMatchObject({ code: 'not_found', details: { reason: 'search_profile_not_found' } });
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §8 scenario 4: the job page adds its company to "Companies you want to work at".
+describe('POST /search-profiles/target-companies', () => {
+  it('puts one company on the active search and takes it off again (every spelling); rate-limited', async () => {
+    const [main] = await list();
+    await h.request('PATCH', `${P}/${main.id}`, { body: { baseVersion: 1, filters: { titles: ['Designer'], companies: ['Acme'] } } });
+    const on = await h.request<Env<{ on: boolean; profile: { id: string; version: number; filters: unknown } }>>('POST', `${P}/target-companies`, { body: { company: ' Stripe ', on: true } });
+    expect(on.status).toBe(200);
+    expect(on.body.data).toMatchObject({ on: true, profile: { id: main.id, version: 3, filters: { titles: ['Designer'], companies: ['Acme'], preferredCompanies: ['Stripe'] } } });
+    expect(limiterCalls).toEqual(['searchTargetCompany']);
+    const off = await h.request<Env<{ on: boolean; profile: { filters: unknown } }>>('POST', `${P}/target-companies`, { body: { company: 'stripe, inc.', on: false } });
+    expect(off.body.data).toMatchObject({ on: false, profile: { filters: { titles: ['Designer'], companies: ['Acme'] } } });
+    expect((await list())[0].filters).toEqual({ titles: ['Designer'], companies: ['Acme'] });
+  });
+
+  it('refuses a body that is not one company and one answer (422)', async () => {
+    for (const body of [{}, { company: '', on: true }, { company: 'x'.repeat(161), on: true }, { company: 'Stripe' }, { company: 'Stripe', on: 'yes' }, { company: 'Stripe', on: true, extra: 1 }]) {
+      const res = await h.request<Env<unknown>>('POST', `${P}/target-companies`, { body });
+      expect(res.status, JSON.stringify(body)).toBe(422);
+    }
   });
 });
 

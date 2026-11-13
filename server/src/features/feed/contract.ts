@@ -33,9 +33,10 @@
 // company fact and never a job badge.
 
 import { z } from 'zod';
+import type { Sourced } from '../../platform/http.js';
 import type { QueueState } from '../agent/contract.js';
 import type { MatchExplanation } from '../compliance/contract.js';
-import { PROVIDER_META } from '../jobs/normalize/index.js';
+import { PROVIDER_META, normalizeJobTitle } from '../jobs/normalize/index.js';
 import type { FilterSet, FilterSetPatch } from '../search/contract.js';
 import type { ApplyLink, SalaryLine, SourceFacts } from './sourceLine.js';
 
@@ -241,6 +242,18 @@ export interface FeedItem {
    * card keeps its one-tap action. Read in one statement per page.
    */
   application?: FeedApplication | null;
+  /**
+   * The job's company is on the reader's "Companies you want to work at"
+   * (the saved search's `preferredCompanies`, compared by normalized company
+   * name: search/targetCompanies.ts), so the card says "On your list of
+   * companies". Sent as `true` only, on the /jobs list's cards and on the
+   * lists other areas read through `preview` (the Dashboard's picks); left
+   * off for every other job and on lists that never read a search. It
+   * describes the reader's own list and filters nothing; in Recommended and
+   * in the picks such a job ranks ahead of an otherwise equal one by a
+   * bounded amount (ORDERING_RULES `target_companies`).
+   */
+  atTargetCompany?: boolean;
   /**
    * GoApply 网申 close date / 届别, only as the posting states them.
    * `applyClosesAt` is the stated date (yyyy-mm-dd, China time) with its
@@ -590,6 +603,109 @@ export interface NewCountResponse {
 export interface SkillsCheckResponse {
   /** Required skills absent from profile skills, with "asked in X of Y". */
   skills: Array<{ skill: string; askedIn: number; outOf: number }>;
+}
+
+// ── Pay check: GET /feed/pay-check ───────────────────────────────────────
+//
+// What live, recent posts in the reader's market state about pay for a job
+// title, with an optional place (the rules are in feed/payCheck.ts). D3: our
+// own index only, never an estimate or a prediction of an offer. Figures are
+// yearly (the posts' annualized pay) and never mix currencies; each one is a
+// `Sourced<number>` with its sample. A currency with fewer posts stating pay
+// than the shared one-sample rule (`minSample`, MIN_SAMPLE = 20) carries its
+// count and no figure, and with no currency over it the answer is
+// `status: 'not_enough'` (counts only).
+
+/** Days a pay check reads: posts first seen in this window, and posted in it when the post states a date. */
+export const PAY_CHECK_WINDOW_DAYS = 90;
+/** Posts a pay check reads at most, newest first. `capped` says there were more (the counts are then "at least"). */
+export const PAY_CHECK_ROW_CAP = 2000;
+export const PAY_CHECK_TITLE_MAX = 120;
+export const PAY_CHECK_LOCATION_MAX = 120;
+
+export const PayCheckQuerySchema = z.object({
+  /** A job title in any language; it must hold a letter or a digit. */
+  title: z
+    .string()
+    .trim()
+    .min(1)
+    .max(PAY_CHECK_TITLE_MAX)
+    .refine((t) => normalizeJobTitle(t) !== '', { message: 'The title needs a letter or a number.' }),
+  /** A city, a region, a country or "remote"; empty means anywhere in the market. */
+  location: z.string().trim().max(PAY_CHECK_LOCATION_MAX).optional(),
+  /** Language of the role label (the feed's `locale` rule; default: the locale cookie). */
+  locale: z.string().max(8).optional(),
+});
+
+/**
+ * How the title matched, the way the job search matches a saved search's
+ * titles (feed sql `predicateFor('titles')`): `role` = posts tagged with the
+ * role the title names (and its sub-roles) OR whose title contains `text`;
+ * `text` = no role matched, so posts whose title contains `text` only
+ * (case-insensitive).
+ */
+export interface PayCheckTitleMatch {
+  method: 'role' | 'text';
+  /** The taxonomy role the title names; null for `text`. */
+  roleId: string | null;
+  /** Its label in the request's language; null for `text`. */
+  roleLabel: string | null;
+  /** The normalized title the text half matched on (lower case). */
+  text: string;
+}
+
+export type PayCheckPlaceKind = 'remote' | 'city' | 'region' | 'country' | 'text';
+
+/** The place a pay check was narrowed to (null: anywhere in the market). */
+export interface PayCheckPlace {
+  /** The location as asked (trimmed). */
+  input: string;
+  /**
+   * `remote`: remote posts (open to `country` when one is named); `city`: a
+   * city of the city table, by any of its names; `region` / `country`: posts
+   * located there; `text`: a place the tables do not know, so posts whose own
+   * location text contains the words.
+   */
+  kind: PayCheckPlaceKind;
+  /** The table's English name of the city or region; null otherwise. */
+  name: string | null;
+  /** ISO 3166-1 alpha-2, when the place names or implies one. */
+  country: string | null;
+}
+
+/** Stated pay in one currency. The three figures are null below `minSample` posts (counts only). */
+export interface PayCheckCurrency {
+  /** ISO 4217. */
+  currency: string;
+  /** Posts that state pay in this currency (the sample behind the figures). */
+  sampleSize: number;
+  p25: Sourced<number> | null;
+  median: Sourced<number> | null;
+  p75: Sourced<number> | null;
+}
+
+export interface PayCheckResponse {
+  /** 'ok': at least one currency has figures; 'not_enough': counts only. */
+  status: 'ok' | 'not_enough';
+  /** The title as asked (trimmed). */
+  title: string;
+  titleMatch: PayCheckTitleMatch;
+  place: PayCheckPlace | null;
+  window: { days: number; from: string; to: string };
+  /** Posts that matched the title and place in the window (pay stated or not). */
+  matchedCount: number;
+  /** Of those, posts that state pay that can be compared: a currency and a yearly figure. */
+  withPayCount: number;
+  /** More posts matched than were read (`rowCap`, the newest first): both counts are "at least". */
+  capped: boolean;
+  rowCap: number;
+  /** Every figure is a year's pay (hourly × 2,080, daily × 260, weekly × 52, monthly × 12 or the months the post states). */
+  period: 'year';
+  /** Posts stating pay in one currency needed before its figures show (the shared MIN_SAMPLE). */
+  minSample: number;
+  /** One entry per currency stated, the largest sample first. */
+  currencies: PayCheckCurrency[];
+  asOf: string;
 }
 
 // ── Public visitor list: GET /api/v1/public/feed ─────────────────────────

@@ -7,6 +7,8 @@
 //   GET    /search-profiles              → SearchProfileListWire (first call migrates legacy prefs)
 //   POST   /search-profiles              → 201 SearchProfileWire (cap = `saved_searches` entitlement)
 //   POST   /search-profiles/count        → FeedCountResult ({count:null} until the feed counts, WP-32) · 30/min
+//   POST   /search-profiles/target-companies → SetTargetCompanyResponse: one company on or off the ACTIVE
+//                                           search's "Companies you want to work at" (the job page) · 30/min
 //   PATCH  /search-profiles/:id          → SearchProfileWire, or 409 version_conflict { currentVersion, profile }
 //   DELETE /search-profiles/:id          → null (never the last one, never the default)
 //   POST   /search-profiles/:id/activate → SearchProfileWire
@@ -40,11 +42,13 @@ import {
   CountFiltersBodySchema,
   CreateSearchProfileBodySchema,
   SearchProfileParamsSchema,
+  SetTargetCompanyBodySchema,
   SkillsQuerySchema,
   TaxonomyQuerySchema,
   UpdateSearchProfileBodySchema,
   baseVersionOf,
   type LimitingFiltersResponse,
+  type SetTargetCompanyResponse,
   type SkillSuggestionsResponse,
   type TaxonomyResponse,
 } from './contract.js';
@@ -121,6 +125,18 @@ export function createSearchProfilesRouter(deps: SearchRouterDeps = {}): Router 
         if (err instanceof NotImplementedError) return { count: null, capped: false };
         throw err;
       }
+    }),
+  );
+
+  // "Companies you want to work at": the job page adds or removes its company (contract SetTargetCompanyBodySchema).
+  router.post(
+    '/target-companies',
+    ...auth,
+    limiter('searchTargetCompany', 30),
+    route(async (req): Promise<SetTargetCompanyResponse> => {
+      const userId = requireUserId(req);
+      const body = parseBody(req, SetTargetCompanyBodySchema);
+      return guarded(() => service.setTargetCompany(userId, body));
     }),
   );
 

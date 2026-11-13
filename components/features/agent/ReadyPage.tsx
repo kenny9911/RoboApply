@@ -8,6 +8,9 @@
 //   intro          before setup, while the list is empty (ReadyIntro)
 //   header         "You submit each application yourself." · Settings
 //   allowance      kits left this week (server's `ready_kits` bucket)
+//   automatically  when "Prepare my weekly list automatically" is on or ran this
+//                  week: when the list was prepared and how many used the
+//                  allowance (AutoPrepareState; the server's real counts)
 //   progress       real counts per state group (F-AGENT-08) over this week's
 //                  list (items whose weekKey is the server's `weekKey`); when
 //                  the server does not name the week it is labelled as the
@@ -39,6 +42,7 @@ import {
   tabOf,
   useAddToList,
   useAgentSetup,
+  useAutoPrepare,
   useReadyQueue,
   useSuggestions,
   type PrepareRunResult,
@@ -46,6 +50,7 @@ import {
 } from '../../../hooks/agent';
 import { jobDetailHref } from '../job';
 import { ApplicationsSwitch } from '../tracker';
+import { AutoPrepareState } from './AutoPrepareState';
 import { KitAllowance } from './KitAllowance';
 import { KitRow } from './KitRow';
 import { PrepareSheet } from './PrepareSheet';
@@ -82,6 +87,7 @@ function Ready() {
 
   const setup = useAgentSetup({ enabled: on });
   const queue = useReadyQueue({ enabled: on });
+  const auto = useAutoPrepare({ enabled: on });
 
   const fromUrl = params?.get('tab') ?? null;
   const tab: ReadyTab = (READY_TABS as readonly string[]).includes(fromUrl ?? '') ? (fromUrl as ReadyTab) : 'prepare';
@@ -163,6 +169,7 @@ function Ready() {
         }
       />
       <KitAllowance />
+      <AutoPrepareState view={auto.data} />
 
       {!setupDone ? (
         <section className={styles.cardWarn} data-testid="setup-unfinished">
