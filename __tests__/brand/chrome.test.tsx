@@ -46,13 +46,14 @@ describe('BrandSymbol', () => {
 describe('BrandLogo', () => {
   it('RoboApply snapshot', () => {
     const { container } = renderBranded(<BrandLogo />, { brand: 'roboapply' });
-    expect(screen.getByRole('link', { name: 'RoboApply — go to Jobs' })).toHaveAttribute('href', '/jobs');
+    // Home is the Dashboard, the first nav entry (docs/agent-driven/REDESIGN.md §3).
+    expect(screen.getByRole('link', { name: 'RoboApply home' })).toHaveAttribute('href', '/dashboard');
     expect(container.innerHTML).toMatchSnapshot();
   });
 
   it('GoApply snapshot', () => {
     const { container } = renderBranded(<BrandLogo />, { brand: 'goapply', locale: 'en' });
-    expect(screen.getByRole('link', { name: 'GoApply — go to Jobs' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'GoApply home' })).toHaveAttribute('href', '/dashboard');
     expect(screen.getByText('GoApply')).toHaveClass('brand-name');
     expect(container.querySelector('[data-brand-glyph]')).toHaveAttribute('data-brand-glyph', 'goapply');
     expect(container.innerHTML).toMatchSnapshot();

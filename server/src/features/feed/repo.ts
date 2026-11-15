@@ -26,6 +26,7 @@ type Db = Pick<
   | 'rAUserAffinity'
   | 'rAUserUiState'
   | 'rATrackerEntry'
+  | 'rAAgentQueueItem'
   | 'rAProfile'
   | 'seekerProfile'
 >;
@@ -116,6 +117,12 @@ export interface FeedRepo {
   /** Run the Explore count statement. */
   queryCategoryCounts(sql: Prisma.Sql): Promise<Array<{ taxonomyId: string; count: number }>>;
   trackerStates(userId: string, jobIds: string[]): Promise<Map<string, string>>;
+  /**
+   * Of `jobIds`, the jobs on this person's list (`RAAgentQueueItem`, one per
+   * user and job), with the item's state as stored and its tracker entry. One
+   * statement for the whole page; a job not on the list is left out.
+   */
+  applicationStates(userId: string, jobIds: string[]): Promise<Map<string, { state: string; trackerEntryId: string | null }>>;
   createSession(data: FeedSessionWrite): Promise<FeedSessionRecord>;
   getSession(id: string, userId: string): Promise<FeedSessionRecord | null>;
   /** `windowEndsId` is its own column (SR-32-4); a session written before the column keeps its id in `ranks`. */
@@ -262,6 +269,18 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
         orderBy: { updatedAt: 'desc' },
       });
       for (const r of rows) if (r.jobId && !out.has(r.jobId)) out.set(r.jobId, r.status);
+      return out;
+    },
+
+    async applicationStates(userId, jobIds) {
+      const out = new Map<string, { state: string; trackerEntryId: string | null }>();
+      if (!jobIds.length) return out;
+      const p = await getDb();
+      const rows = await p.rAAgentQueueItem.findMany({
+        where: { userId, jobId: { in: jobIds } },
+        select: { jobId: true, state: true, trackerEntryId: true },
+      });
+      for (const r of rows) out.set(r.jobId, { state: r.state, trackerEntryId: r.trackerEntryId ?? null });
       return out;
     },
 

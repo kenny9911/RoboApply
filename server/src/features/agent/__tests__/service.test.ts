@@ -326,6 +326,9 @@ describe('weekly list (F-AGENT-04)', () => {
     const { service } = makeDeps(db, 'roboapply', { feedPreview: async () => ['j1', 'j2', 'j3', 'j4', 'j5'].map((j) => feedItem(j, 'good')) });
     const s = await service.suggestions('u1', { limit: 3, exclude: 'j3' });
     expect(s.items.map((i) => i.jobId)).toEqual(['j4', 'j5']);
+    // A job on the list (in any state) is never suggested, so each pick says it is not on the list (the card's
+    // "Prepare application" then needs no other read; REDESIGN §9).
+    expect(s.items.map((i) => i.application)).toEqual([null, null]);
   });
 });
 

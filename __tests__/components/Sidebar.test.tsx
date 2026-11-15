@@ -2,7 +2,8 @@
 //
 // What this file is defending (PRODUCT_PLAN.md §3.3 via the registry in
 // components/v3/shell/destinations.ts; OVERHAUL_RULINGS C11, C14):
-//   • RoboApply today: Jobs · Applications · Resume · Interview prep, then a
+//   • RoboApply today: Dashboard · Jobs · Applications · Resume · Interview
+//     prep · Profile, then a
 //     lower group with Settings (the clone's new entries stay hidden until
 //     INT flips `ready`) — no /queue, no "NEW" pill, no section headers
 //     outside /settings,
@@ -57,14 +58,20 @@ import {
 
 /** The IA, spelled out here so a change to the nav has to be a change to this
  *  list too. Route = nav label. Top group, then the lower group. */
+// Agent-driven IA (docs/agent-driven/REDESIGN.md §3) in the resume.io layout:
+// the Dashboard (with the agent desk) is the home and first; Profile moved to
+// the lower group, beside Settings.
 const IA: [string, string][] = [
+  ['/dashboard', 'Dashboard'],
   ['/jobs', 'Jobs'],
   ['/applications', 'Applications'],
   ['/resume', 'Resume'],
   ['/practice', 'Interview prep'],
-  ['/profile', 'Profile'], // WP-19 shipped in Wave 2
 ];
-const LOWER: [string, string][] = [['/settings', 'Settings']];
+const LOWER: [string, string][] = [
+  ['/profile', 'Profile'],
+  ['/settings', 'Settings'],
+];
 const ALL = [...IA, ...LOWER];
 
 describe('Sidebar', () => {
@@ -93,13 +100,13 @@ describe('Sidebar', () => {
   });
 
   it('exports the four destinations MobileNav renders (legacy DESTINATIONS)', () => {
-    // Profile sits in the More sheet on phones (mobile: 'more'), not the tab bar.
-    expect(DESTINATIONS.map((d) => d.href)).toEqual(IA.filter(([h]) => h !== '/profile').map(([h]) => h));
+    // Interview prep sits in the More sheet on phones (mobile: 'more'): the bar holds four slots plus More.
+    expect(DESTINATIONS.map((d) => d.href)).toEqual(IA.filter(([h]) => h !== '/practice').map(([h]) => h));
     expect(DESTINATIONS.map((d) => d.labelKey)).toEqual([
+      'dashboard',
       'jobs',
       'applications',
       'resume',
-      'practice',
     ]);
   });
 
@@ -113,8 +120,12 @@ describe('Sidebar', () => {
 
   it('carries none of the deleted destinations', () => {
     renderWithProviders(<Sidebar />);
+    // A home is NOT in this list any more. The July 2026 overhaul deleted the old home; the agent-driven
+    // redesign (November 2026) brings one back as the desk where the agents report (the Dashboard). "Ready to apply"
+    // joined the list instead: it is a view of Applications now, not a destination.
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
     for (const gone of [
-      /Today/,
+      /Ready to apply/,
       /Review queue/,
       /Pipeline/,
       /Activity log/,

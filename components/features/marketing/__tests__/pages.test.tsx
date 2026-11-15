@@ -130,7 +130,7 @@ describe('/pricing', () => {
     const row = (name: string) => within(table.getByRole('row', { name: new RegExp(`^${name}`) }));
     expect(row('Tailored resumes').getByText('2 a day')).toBeInTheDocument();
     expect(row('Tailored resumes').getByText('Up to 50 a day')).toBeInTheDocument();
-    expect(row('Ready-to-apply kits').getByText('Up to 30 a week')).toBeInTheDocument();
+    expect(row('Prepared applications').getByText('Up to 30 a week')).toBeInTheDocument();
     expect(row('Saved searches').getByText('10')).toBeInTheDocument();
     expect(row('Instant job alert emails').getByText('1 a day')).toBeInTheDocument();
     expect(table.getByText('Fit analyses')).toBeInTheDocument();
@@ -142,7 +142,7 @@ describe('/pricing', () => {
   it('hides caps of features that are off', async () => {
     const { container } = renderMarketing(<PricingPage />, { flags: { copilot: false, agent: false } });
     await waitFor(() => expect(container.querySelector('[data-caps-table]')).not.toBeNull());
-    expect(container.querySelector('[data-caps-table]')!.textContent).not.toMatch(/Assistant messages|Ready-to-apply kits/);
+    expect(container.querySelector('[data-caps-table]')!.textContent).not.toMatch(/Assistant messages|Prepared applications/);
   });
 
   // FIX-8 carry-over: an instant alert is an email, so the row needs a mail transport too.

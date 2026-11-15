@@ -9,6 +9,7 @@ import {
   afterSave,
   assertStepSavable,
   branchForTiming,
+  confirmsWhileMatching,
   effectiveStage,
   isPaused,
   meOf,
@@ -126,6 +127,47 @@ describe('saving a step', () => {
     const r = rec({ step: 'done', path: 'urgent', completedAt: new Date() });
     expect(() => assertStepSavable('roboapply', r, 'confirm', {})).not.toThrow();
     expect(afterSave('roboapply', r, 'basics', 'urgent').step).toBe('done');
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §9: setup no longer waits for the search.
+describe('RoboApply confirms while the search runs (the one step ahead of the stage)', () => {
+  it.each(['urgent', 'explore'] as const)('confirm is taken at `matching` (%s) and moves the stage to the tour', (branch) => {
+    const r = rec({ step: 'matching', path: branch });
+    expect(confirmsWhileMatching('roboapply', 'confirm', 'matching')).toBe(true);
+    expect(() => assertStepSavable('roboapply', r, 'confirm', { branchAfter: branch })).not.toThrow();
+    expect(afterSave('roboapply', r, 'confirm', branch)).toEqual({ step: 'tour', nextStage: 'tour', path: branch, resumed: false });
+  });
+
+  it('a user who left early at `matching` finishes setup with it (the finish banner goes)', () => {
+    const left = rec({ step: 'done', path: 'urgent', answers: { leftEarly: { at: '2026-10-10T00:00:00Z', stage: 'matching' } } });
+    expect(() => assertStepSavable('roboapply', left, 'confirm', {})).not.toThrow();
+    expect(afterSave('roboapply', left, 'confirm', 'urgent')).toMatchObject({ step: 'tour', resumed: true });
+  });
+
+  it.each([
+    ['confirm before the resume step', 'roboapply', rec({ step: 'resume', path: 'urgent' }), 'confirm'],
+    ['confirm before the basics', 'roboapply', rec({ step: 'basics', path: 'urgent' }), 'confirm'],
+    ['confirm on a fresh account', 'roboapply', rec(), 'confirm'],
+    ['`matching` itself still takes no answers', 'roboapply', rec({ step: 'matching', path: 'urgent' }), 'matching'],
+    ['jumping ahead elsewhere (the resume step at basics)', 'roboapply', rec({ step: 'basics', path: 'urgent' }), 'resume'],
+    ['GoApply keeps the strict order: confirm waits for the search', 'goapply', rec({ step: 'matching' }), 'confirm'],
+    ['GoApply confirm before its resume step', 'goapply', rec({ step: 'resume' }), 'confirm'],
+  ] as const)('still refused: %s', (_n, brand, r, step) => {
+    try {
+      assertStepSavable(brand, r, step as never, {});
+      throw new Error('expected a StageError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(StageError);
+      expect((err as StageError).reason).toBe('onboarding_step_not_available');
+    }
+  });
+
+  it('the exception is confirm at matching on RoboApply, nothing wider', () => {
+    expect(confirmsWhileMatching('goapply', 'confirm', 'matching')).toBe(false);
+    expect(confirmsWhileMatching('roboapply', 'confirm', 'resume')).toBe(false);
+    expect(confirmsWhileMatching('roboapply', 'tour', 'matching')).toBe(false);
+    expect(confirmsWhileMatching('roboapply', 'preferences', 'goal')).toBe(false);
   });
 });
 

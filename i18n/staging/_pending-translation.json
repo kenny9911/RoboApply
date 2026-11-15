@@ -11114,7 +11114,7 @@
   {
     "bundle": "web",
     "path": "credits.buckets.ready_kits",
-    "en": "Ready-to-apply kits",
+    "en": "Prepared applications",
     "reason": "new"
   },
   {
@@ -21962,7 +21962,7 @@
   {
     "bundle": "web",
     "path": "landing.features.roboapply.readyToApply.sample.line2",
-    "en": "Kit ready: tailored resume, cover letter, 4 answers",
+    "en": "Application ready: tailored resume, cover letter, 4 answers",
     "reason": "new"
   },
   {
@@ -21986,7 +21986,7 @@
   {
     "bundle": "web",
     "path": "landing.features.roboapply.readyToApply.s2.title",
-    "en": "Review each kit",
+    "en": "Review each application",
     "reason": "new"
   },
   {
@@ -29903,7 +29903,7 @@
   {
     "bundle": "web",
     "path": "onboarding.matching.cards.ready",
-    "en": "Ready-to-apply kits — you submit",
+    "en": "Prepared applications — you submit",
     "reason": "new"
   },
   {
@@ -30221,7 +30221,7 @@
   {
     "bundle": "web",
     "path": "onboarding.tour.cards.ready",
-    "en": "Ready-to-apply kits — you submit",
+    "en": "Prepared applications — you submit",
     "reason": "new"
   },
   {
@@ -38108,7 +38108,7 @@
   {
     "bundle": "web",
     "path": "ready.intro.lead",
-    "en": "Each week %BRAND% picks jobs from your search. You choose which ones to prepare a kit for.",
+    "en": "Each week %BRAND% picks jobs from your search. You choose which ones to prepare an application for.",
     "reason": "new"
   },
   {
@@ -38120,13 +38120,13 @@
   {
     "bundle": "web",
     "path": "ready.intro.point_kit",
-    "en": "For each job you choose, a kit: your resume tailored to the post, a cover letter when the post asks for one, and your saved answers.",
+    "en": "For each job you choose, an application: your resume tailored to the post, a cover letter when the post asks for one, and your saved answers.",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.intro.point_review",
-    "en": "You check every kit before you use it. Anything new in your resume must be confirmed by you.",
+    "en": "You check every application before you use it. Anything new in your resume must be confirmed by you.",
     "reason": "new"
   },
   {
@@ -38150,7 +38150,7 @@
   {
     "bundle": "web",
     "path": "ready.allowance.left",
-    "en": "{left} of {cap, plural, one {# kit} other {# kits}} left this week.",
+    "en": "{left} of {cap, plural, one {# application} other {# applications}} left this week.",
     "reason": "new"
   },
   {
@@ -38162,7 +38162,7 @@
   {
     "bundle": "web",
     "path": "ready.allowance.unknown",
-    "en": "Kits left this week: —",
+    "en": "Applications left this week: —",
     "reason": "new"
   },
   {
@@ -38174,13 +38174,13 @@
   {
     "bundle": "web",
     "path": "ready.allowance.bonus",
-    "en": "Plus {count, plural, one {# bonus kit} other {# bonus kits}} you received.",
+    "en": "Plus {count, plural, one {# bonus application} other {# bonus applications}} you received.",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.allowance.pro",
-    "en": "Pro: up to {count} kits a week.",
+    "en": "Pro: prepare up to {count} applications a week.",
     "reason": "new"
   },
   {
@@ -38234,7 +38234,7 @@
   {
     "bundle": "web",
     "path": "ready.tabs.label",
-    "en": "Kits by status",
+    "en": "Applications by status",
     "reason": "new"
   },
   {
@@ -38324,7 +38324,7 @@
   {
     "bundle": "web",
     "path": "ready.list.prepareSelected",
-    "en": "Prepare {count, plural, one {# kit} other {# kits}}",
+    "en": "Prepare {count, plural, one {# application} other {# applications}}",
     "reason": "new"
   },
   {
@@ -38348,13 +38348,13 @@
   {
     "bundle": "web",
     "path": "ready.list.empty.ready.title",
-    "en": "No kits ready yet",
+    "en": "No applications ready yet",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.list.empty.ready.sub",
-    "en": "Prepare a kit from To prepare. It shows here when it's ready for you to check.",
+    "en": "Prepare an application from To prepare. It shows here when it's ready for you to check.",
     "reason": "new"
   },
   {
@@ -38426,7 +38426,7 @@
   {
     "bundle": "web",
     "path": "ready.row.review",
-    "en": "Review kit",
+    "en": "Review application",
     "reason": "new"
   },
   {
@@ -38456,7 +38456,7 @@
   {
     "bundle": "web",
     "path": "ready.suggestions.sub",
-    "en": "Not on your list yet. Add the ones you want a kit for.",
+    "en": "Not on your list yet. Add the ones you want to prepare an application for.",
     "reason": "new"
   },
   {
@@ -38486,7 +38486,7 @@
   {
     "bundle": "web",
     "path": "ready.prepare.title",
-    "en": "Prepare {count, plural, one {# kit} other {# kits}}",
+    "en": "Prepare {count, plural, one {# application} other {# applications}}",
     "reason": "new"
   },
   {
@@ -38516,7 +38516,7 @@
   {
     "bundle": "web",
     "path": "ready.prepare.bucket.ready_kits",
-    "en": "{count, plural, one {# kit} other {# kits}}",
+    "en": "{count, plural, one {# application} other {# applications}}",
     "reason": "new"
   },
   {
@@ -38558,7 +38558,7 @@
   {
     "bundle": "web",
     "path": "ready.prepare.whatHappens",
-    "en": "Kits are prepared in the background. Nothing is sent to any company.",
+    "en": "Applications are prepared in the background. Nothing is sent to any company.",
     "reason": "new"
   },
   {
@@ -38570,7 +38570,7 @@
   {
     "bundle": "web",
     "path": "ready.prepare.confirm",
-    "en": "Prepare {count, plural, one {# kit} other {# kits}}",
+    "en": "Prepare {count, plural, one {# application} other {# applications}}",
     "reason": "new"
   },
   {
@@ -38582,25 +38582,25 @@
   {
     "bundle": "web",
     "path": "ready.prepare.started",
-    "en": "Preparing {count, plural, one {# kit} other {# kits}}. {count, plural, one {It shows} other {They show}} under Ready when done.",
+    "en": "Preparing {count, plural, one {# application} other {# applications}}. {count, plural, one {It shows} other {They show}} under Ready when done.",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.prepare.runFailed",
-    "en": "{count, plural, one {# kit} other {# kits}} couldn't start. Try again from To prepare.",
+    "en": "{count, plural, one {# application} other {# applications}} couldn't start. Try again from To prepare.",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.prepare.noTailorAi",
-    "en": "AI writing is off for your account, so kits use your resume as it is.",
+    "en": "AI writing is off for your account, so applications use your resume as it is.",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.prepare.noTailorAsIs",
-    "en": "No tailoring credits are used: kits use your resume as it is.",
+    "en": "No tailoring credits are used: applications use your resume as it is.",
     "reason": "new"
   },
   {
@@ -38888,7 +38888,7 @@
   {
     "bundle": "web",
     "path": "ready.setup.profile.lead",
-    "en": "Application forms ask for these details. Kits use what's in your profile, so check it's right.",
+    "en": "Application forms ask for these details. Your applications use what's in your profile, so check it's right.",
     "reason": "new"
   },
   {
@@ -38906,7 +38906,7 @@
   {
     "bundle": "web",
     "path": "ready.setup.profile.missingNote",
-    "en": "You can continue now. Each kit lists what's still missing so you can fill it in on the form.",
+    "en": "You can continue now. Each application lists what's still missing so you can fill it in on the form.",
     "reason": "new"
   },
   {
@@ -39074,7 +39074,7 @@
   {
     "bundle": "web",
     "path": "ready.setup.extension.skipNote",
-    "en": "You can skip this and add the extension later. Kits work without it: copy your answers from the kit.",
+    "en": "You can skip this and add the extension later. Applications work without it: copy your answers from the application.",
     "reason": "new"
   },
   {
@@ -39128,7 +39128,7 @@
   {
     "bundle": "web",
     "path": "ready.answers.lead",
-    "en": "Write answers to questions forms often ask. Kits show them with copy buttons. Only you write these answers.",
+    "en": "Write answers to questions forms often ask. Applications show them with copy buttons. Only you write these answers.",
     "reason": "new"
   },
   {
@@ -39254,7 +39254,7 @@
   {
     "bundle": "web",
     "path": "ready.weekly.targetNote",
-    "en": "A goal for the list, not a promise: it may hold fewer when fewer jobs fit. Your plan sets how many kits can be prepared.",
+    "en": "A goal for the list, not a promise: it may hold fewer when fewer jobs fit. Your plan sets how many applications can be prepared.",
     "reason": "new"
   },
   {
@@ -39290,7 +39290,7 @@
   {
     "bundle": "web",
     "path": "ready.weekly.tailorEachNote",
-    "en": "Uses a tailoring credit per kit. You check every change before it's used.",
+    "en": "Uses a tailoring credit per application. You check every change before it's used.",
     "reason": "new"
   },
   {
@@ -39410,25 +39410,25 @@
   {
     "bundle": "web",
     "path": "ready.review.notPrepared",
-    "en": "This kit isn't prepared yet.",
+    "en": "This application isn't prepared yet.",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.review.failed",
-    "en": "This kit couldn't be prepared.",
+    "en": "This application couldn't be prepared.",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.review.prepare",
-    "en": "Prepare kit",
+    "en": "Prepare application",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.review.preparing",
-    "en": "Preparing your kit. This page updates by itself.",
+    "en": "Preparing your application. This page updates by itself.",
     "reason": "new"
   },
   {
@@ -39518,7 +39518,7 @@
   {
     "bundle": "web",
     "path": "ready.review.errors.changed",
-    "en": "This kit changed in the meantime. The page now shows its latest state.",
+    "en": "This application changed in the meantime. The page now shows its latest state.",
     "reason": "new"
   },
   {
@@ -39536,7 +39536,7 @@
   {
     "bundle": "web",
     "path": "ready.review.errors.preparing",
-    "en": "This kit is still being prepared. Try again in a moment.",
+    "en": "This application is still being prepared. Try again in a moment.",
     "reason": "new"
   },
   {
@@ -39578,13 +39578,13 @@
   {
     "bundle": "web",
     "path": "ready.review.resume.use",
-    "en": "Use in this kit",
+    "en": "Use in this application",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.review.resume.asIs",
-    "en": "This kit uses your resume as it is.",
+    "en": "This application uses your resume as it is.",
     "reason": "new"
   },
   {
@@ -39608,7 +39608,7 @@
   {
     "bundle": "web",
     "path": "ready.review.letter.none",
-    "en": "No cover letter in this kit.",
+    "en": "No cover letter in this application.",
     "reason": "new"
   },
   {
@@ -39638,7 +39638,7 @@
   {
     "bundle": "web",
     "path": "ready.review.letter.use",
-    "en": "Use in this kit",
+    "en": "Use in this application",
     "reason": "new"
   },
   {
@@ -39830,7 +39830,7 @@
   {
     "bundle": "web",
     "path": "ready.review.history.none",
-    "en": "Nothing has happened to this kit yet.",
+    "en": "Nothing has happened to this application yet.",
     "reason": "new"
   },
   {
@@ -39884,13 +39884,13 @@
   {
     "bundle": "web",
     "path": "ready.review.history.used.resume",
-    "en": "Resume chosen for this kit",
+    "en": "Resume chosen for this application",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.review.history.used.letter",
-    "en": "Cover letter chosen for this kit",
+    "en": "Cover letter chosen for this application",
     "reason": "new"
   },
   {
@@ -39908,7 +39908,7 @@
   {
     "bundle": "web",
     "path": "ready.review.history.notice",
-    "en": "Reminder: this kit is ready and not opened yet",
+    "en": "Reminder: this application is ready and not opened yet",
     "reason": "new"
   },
   {
@@ -39944,7 +39944,7 @@
   {
     "bundle": "web",
     "path": "ready.review.notOnList.sub",
-    "en": "Add it to prepare a kit for it.",
+    "en": "Add it to prepare an application for it.",
     "reason": "new"
   },
   {
@@ -39968,7 +39968,7 @@
   {
     "bundle": "web",
     "path": "ready.review.aiOff",
-    "en": "AI writing is off for your account, so kits use your resume as it is.",
+    "en": "AI writing is off for your account, so applications use your resume as it is.",
     "reason": "new"
   },
   {
@@ -39980,13 +39980,13 @@
   {
     "bundle": "web",
     "path": "ready.review.failedReason.aiUnavailable",
-    "en": "AI writing wasn't available for this kit. Try again later.",
+    "en": "AI writing wasn't available for this application. Try again later.",
     "reason": "new"
   },
   {
     "bundle": "web",
     "path": "ready.review.failedReason.credits",
-    "en": "You had no credits left for this kit. Try again when they reset.",
+    "en": "You had no credits left for this application. Try again when they reset.",
     "reason": "new"
   },
   {
@@ -40004,7 +40004,7 @@
   {
     "bundle": "web",
     "path": "ready.review.skipped",
-    "en": "You skipped this job. Put it back on your list to prepare a kit for it.",
+    "en": "You skipped this job. Put it back on your list to prepare an application for it.",
     "reason": "new"
   },
   {
@@ -48848,13 +48848,13 @@
   {
     "bundle": "email",
     "path": "notify.kitReady.subject",
-    "en": "Your application kit for {title} is ready",
+    "en": "Your application for {title} is ready to review",
     "reason": "new"
   },
   {
     "bundle": "email",
     "path": "notify.kitReady.heading",
-    "en": "Your kit is ready to review",
+    "en": "Your application is ready to review",
     "reason": "new"
   },
   {
@@ -48866,13 +48866,13 @@
   {
     "bundle": "email",
     "path": "notify.kitReady.cta",
-    "en": "Review the kit",
+    "en": "Review the application",
     "reason": "new"
   },
   {
     "bundle": "email",
     "path": "notify.kitReady.preheader",
-    "en": "Review your kit for {title}.",
+    "en": "Review your application for {title}.",
     "reason": "new"
   },
   {
@@ -56138,7 +56138,7 @@
   {
     "bundle": "web",
     "path": "landing.features.goapply.readyToApply.sample.line2",
-    "en": "Kit ready: tailored resume, cover letter, 4 answers",
+    "en": "Application ready: tailored resume, cover letter, 4 answers",
     "reason": "new",
     "provided": [
       "zh"
@@ -56174,7 +56174,7 @@
   {
     "bundle": "web",
     "path": "landing.features.goapply.readyToApply.s2.title",
-    "en": "Review each kit",
+    "en": "Review each application",
     "reason": "new",
     "provided": [
       "zh"
@@ -59019,6 +59019,780 @@
     "bundle": "extension",
     "path": "extension.fit.confidence.reason.few_details",
     "en": "This post says too little to compare",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "applications.switch.label",
+    "en": "Your applications",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "applications.switch.ready",
+    "en": "Getting ready",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "applications.switch.sent",
+    "en": "Sent",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "applications.switch.waiting",
+    "en": "{count, plural, one {# application is ready and waiting for you} other {# applications are ready and waiting for you}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.label",
+    "en": "Your search:",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.all",
+    "en": "All jobs",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.loading",
+    "en": "Loading your search…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.more",
+    "en": "{count} more",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.change",
+    "en": "Change search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.panel",
+    "en": "Search and filters",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "filters.summary.done",
+    "en": "Done",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "jobs.workspace.searchLabel",
+    "en": "Your search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "nav.today",
+    "en": "Today",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "nav.brand_home",
+    "en": "%BRAND% home",
+    "reason": "changed"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.title",
+    "en": "Start with your resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.continue",
+    "en": "Continue",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.noResume",
+    "en": "I don't have a resume yet",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.working",
+    "en": "One moment…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.resume.classic",
+    "en": "Answer a few more questions instead",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.title",
+    "en": "Is this what you're looking for?",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.subtitleSuggested",
+    "en": "This is what your resume suggests. Change anything that isn't right.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.subtitleNothingSuggested",
+    "en": "Nothing could be suggested from your resume. Fill these in to find jobs.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.subtitleNoResume",
+    "en": "No resume added, so jobs are found from these answers only. You can add one later to see how well each job fits.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.filling",
+    "en": "Filling this in from your resume…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.otherPlaces",
+    "en": "Add another place",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.chosenPlaces",
+    "en": "Show chosen places only",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.aboutYou",
+    "en": "About you: {value}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.email",
+    "en": "New jobs for this search are emailed to you once a day. You can change that in Settings.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.submit",
+    "en": "Find my jobs",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.check.retry",
+    "en": "Try again",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.progress.saving",
+    "en": "Saving your answers…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.progress.searching",
+    "en": "Searching for jobs. This can take a minute or two.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.progress.finishing",
+    "en": "Finishing setup…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.failed.answers",
+    "en": "Your answers couldn't be saved, so the search didn't start.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.failed.resume",
+    "en": "Your resume choice couldn't be saved, so the search didn't start.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.failed.finish",
+    "en": "Your search is saved, but setup couldn't be finished.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.rate_limited",
+    "en": "There were too many tries in a short time. Wait a minute, then try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.invalid",
+    "en": "One of the answers wasn't accepted. Check them, then try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.conflict",
+    "en": "Setup has moved on somewhere else, maybe in another tab. Reload this page.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.unavailable",
+    "en": "This isn't available right now. Try again later.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "onboarding.express.why.unknown",
+    "en": "Everything you entered is still here. Try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.action",
+    "en": "Prepare application",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.adding",
+    "en": "Adding…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.started",
+    "en": "Being prepared. It shows under Waiting for you when it needs your OK.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.failed",
+    "en": "This couldn't be started. Nothing was used. Try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.full",
+    "en": "Your list is full. Remove a job from Getting ready, then try again.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.closed",
+    "en": "This job is no longer listed, so nothing was prepared.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.place.preparing",
+    "en": "Being prepared",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.place.review",
+    "en": "Check and open",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.place.sent",
+    "en": "See application",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "ready.oneTap.place.listed",
+    "en": "On your list",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.header.title",
+    "en": "{count, plural, one {# thing is waiting for you} other {# things are waiting for you}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.header.titleNone",
+    "en": "Nothing is waiting for you",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.header.titleLoading",
+    "en": "Checking what is waiting for you…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.header.titlePartial",
+    "en": "Part of today's list did not load",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.line",
+    "en": "Looking for {what}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.any",
+    "en": "Your search is open to any job.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.more",
+    "en": "{list} and {count} more",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.change",
+    "en": "Change",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.changeLabel",
+    "en": "Change what you are looking for",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.loading",
+    "en": "Loading your search…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.failed",
+    "en": "Your search could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.none",
+    "en": "No saved search yet.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.goal.setUp",
+    "en": "Set up your search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.agentTag",
+    "en": "Agent",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.retry",
+    "en": "Try again",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.laneFailed",
+    "en": "Some of this could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.notLoaded",
+    "en": "Not loaded",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.title",
+    "en": "Waiting for you",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.loading",
+    "en": "Checking what is waiting for you…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.empty",
+    "en": "Nothing needs you right now. The best picks are below.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.emptyLink",
+    "en": "Go to the picks",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.emptyPlain",
+    "en": "Nothing needs you right now.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.more",
+    "en": "{count, plural, one {# more is waiting. It shows here when you finish one of these.} other {# more are waiting. They show here as you finish these.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.partial",
+    "en": "Part of this list did not load, so there may be more.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.review",
+    "en": "{title} at {company} is ready to check.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.reviewTitle",
+    "en": "{title} is ready to check.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.reviewUnnamed",
+    "en": "An application is ready to check.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.open",
+    "en": "{title} at {company} is ready to open.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.openTitle",
+    "en": "{title} is ready to open.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.openUnnamed",
+    "en": "An application is ready to open.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.verify",
+    "en": "{count, plural, one {# new detail in {name} needs your OK.} other {# new details in {name} need your OK.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.noReply",
+    "en": "{count, plural, one {# application has had no reply in {days} days.} other {# applications have had no reply in {days} days.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.profile",
+    "en": "{count, plural, one {Your profile is missing # detail that application forms ask for.} other {Your profile is missing # details that application forms ask for.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.noResume",
+    "en": "You have not added a resume yet.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.fact.setup",
+    "en": "{count, plural, one {Setup has # step left.} other {Setup has # steps left.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.review",
+    "en": "Check and open",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.open",
+    "en": "Open application",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.verify",
+    "en": "Verify details",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.noReply",
+    "en": "See them",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.profile",
+    "en": "Add details",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.noResume",
+    "en": "Add a resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.waiting.action.setup",
+    "en": "Finish setting up",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.title",
+    "en": "Job search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.found",
+    "en": "{count, plural, =0 {Found no new jobs that fit since {date}.} one {Found # new job that fits since {date}.} other {Found # new jobs that fit since {date}.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.foundSinceVisit",
+    "en": "{count, plural, =0 {Found no new jobs that fit since your last visit.} one {Found # new job that fits since your last visit.} other {Found # new jobs that fit since your last visit.}}",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.foundCapped",
+    "en": "Found more than {count} new jobs that fit since {date}.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.foundCappedSinceVisit",
+    "en": "Found more than {count} new jobs that fit since your last visit.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.foundUnknown",
+    "en": "New jobs that fit since your last visit:",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.picksTitle",
+    "en": "Best picks",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.picksLoading",
+    "en": "Loading picks…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.picksNone",
+    "en": "No new picks right now.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.picksFailed",
+    "en": "The picks could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.viewJob",
+    "en": "View job",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.seeAll",
+    "en": "See all jobs",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.jobSearch.off",
+    "en": "The job list is not available on this account.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.title",
+    "en": "Applications",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.numbersLabel",
+    "en": "Applications in numbers",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.preparing",
+    "en": "Being prepared",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.waiting",
+    "en": "Waiting for you",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.sent",
+    "en": "Sent this week",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.saved",
+    "en": "Saved",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.open",
+    "en": "Open applications",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.applications.failed",
+    "en": "Some of these numbers could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.title",
+    "en": "Resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.mainLabel",
+    "en": "Main resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.loading",
+    "en": "Loading your resume…",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.none",
+    "en": "No resume yet.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.add",
+    "en": "Add a resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.improve",
+    "en": "Improve my resume",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.open",
+    "en": "Open resumes",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.failed",
+    "en": "Your resumes could not be loaded.",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.asked",
+    "en": "Jobs in your search ask for these, and your profile does not list them:",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.resume.askedIn",
+    "en": "asked in {count} of {total} jobs",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.title",
+    "en": "Ask",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.label",
+    "en": "Ask about your job search",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.placeholder",
+    "en": "For example: which of these jobs is the best fit?",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.submit",
+    "en": "Ask",
+    "reason": "new"
+  },
+  {
+    "bundle": "web",
+    "path": "today.ask.hint",
+    "en": "Opens the Assistant with your question ready to send.",
     "reason": "new"
   }
 ]

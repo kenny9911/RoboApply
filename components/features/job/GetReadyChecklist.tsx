@@ -141,7 +141,8 @@ export function GetReadyChecklist({ detail, flags, pending, onSave, onTailor, on
               {ready.status === 'full' ? <p className={styles.alert}>{t('readyFull')}</p> : null}
               {ready.status === 'closed' ? <p className={styles.alert}>{tr('review.errors.closed')}</p> : null}
               {ready.status === 'error' ? <p className={styles.alert}>{t('readyError')}</p> : null}
-              {flags.extension && open ? <FillWithExtensionButton jobId={job.id} applyUrl={job.applyUrl} /> : null}
+              {/* The page's own `autofill`: the button reads nothing more (a second read would count as opening the job). */}
+              {flags.extension && open ? <FillWithExtensionButton jobId={job.id} applyUrl={job.applyUrl} autofill={detail.autofill ?? null} /> : null}
               {open && job.applyUrl ? (
                 <button type="button" className={styles.stepAction} onClick={onApply} disabled={pending === 'apply'}>
                   {ta('apply')}

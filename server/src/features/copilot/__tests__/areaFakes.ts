@@ -8,6 +8,7 @@ import type { FeedItem } from '../../feed/contract.js';
 import type { SearchProfileWire } from '../../search/contract.js';
 import type { JobDetailResponse } from '../../jobs/detail/contract.js';
 import type { MatchFitView } from '../../match/contract.js';
+import type { JobPrepareQuote, QueueItemView, QueueJobSummary, QueueState } from '../../agent/contract.js';
 import type { CopilotAreas } from '../types.js';
 
 export const NOW = new Date('2026-10-10T08:00:00.000Z');
@@ -133,6 +134,57 @@ export function variantFitView(jobId = 'job_1', resumeVariantId = 'res_tailored'
   return { ...fitView(jobId), score: 81, tier: 'great', kind: 'ai', resumeVariantId, cached: true } as MatchFitView;
 }
 
+/** A job as the applications list shows it (agent `QueueJobSummary`). */
+export function listJob(over: Partial<QueueJobSummary> = {}): QueueJobSummary {
+  return { title: 'Data Analyst', companyName: 'Acme', location: 'Austin, TX', hasApplyUrl: true, closed: false, asksForCoverLetter: false, ...over };
+}
+
+/** One item of the user's applications list (agent `QueueItemView`). */
+export function listItem(jobId = 'job_1', state: QueueState = 'picked', over: Partial<QueueItemView> = {}): QueueItemView {
+  return {
+    id: `qi_${jobId}`,
+    jobId,
+    state,
+    weekKey: '2026-W41',
+    trackerEntryId: null,
+    resumeVariantId: null,
+    coverLetterId: null,
+    missingFields: [],
+    addedVia: 'copilot',
+    openedAt: null,
+    userMarkedSubmitted: false,
+    updatedAt: NOW.toISOString(),
+    job: listJob(),
+    tailorSessionId: null,
+    lastError: null,
+    createdAt: NOW.toISOString(),
+    ...over,
+  };
+}
+
+/** What preparing a job not on the list yet uses: one kit of the weekly allowance and one tailoring credit (agent `quoteJob`). */
+export function prepareQuote(jobId = 'job_1', over: Partial<JobPrepareQuote> = {}): JobPrepareQuote {
+  return {
+    jobId,
+    job: listJob(),
+    item: null,
+    listFull: false,
+    tailorEach: true,
+    proposal: {
+      credits: [
+        { bucket: 'ready_kits', cost: 1, remaining: 3, window: 'week', resetsAt: '2026-10-12T04:00:00.000Z' },
+        { bucket: 'tailor', cost: 1, remaining: 2, window: 'day', resetsAt: '2026-10-11T00:00:00.000Z' },
+      ],
+      confirmed: false,
+      enough: true,
+      aiAvailable: true,
+      itemIds: [],
+      notPreparable: [],
+    },
+    ...over,
+  };
+}
+
 export type FakeAreas = { [K in keyof CopilotAreas]: ReturnType<typeof vi.fn> & CopilotAreas[K] };
 
 export function fakeAreas(over: Partial<CopilotAreas> = {}): FakeAreas {
@@ -241,6 +293,19 @@ export function fakeAreas(over: Partial<CopilotAreas> = {}): FakeAreas {
     }),
     saveImportedJob: async () => ({ importId: 'job_new', status: 'done', jobId: 'job_new', missingFields: [], warnings: [], reason: null, draft: null, matched: null }),
     fixResumeIssue: async () => ({ suggestions: [{ text: 'Built weekly reports', aiWritten: true }], blocked: 0 }),
+    // The applications agent: no job on the list yet; a job id starting with "missing" is not one the user can list.
+    jobPlaces: async (_u, jobIds) => ({ items: jobIds.map((jobId) => ({ jobId, job: jobId.startsWith('missing') ? null : listJob(), item: null })), listFull: false }),
+    prepareQuote: async (_u, jobId) => (jobId.startsWith('missing') ? prepareQuote(jobId, { job: null, proposal: null }) : prepareQuote(jobId)),
+    addToList: async (_u, jobId) => listItem(jobId, 'picked'),
+    prepareApplication: async (_u, queueItemId) => ({
+      credits: [{ bucket: 'ready_kits', cost: 1, remaining: 3, window: 'week', resetsAt: '2026-10-12T04:00:00.000Z' }],
+      confirmed: true,
+      enough: true,
+      aiAvailable: true,
+      itemIds: [queueItemId],
+      notPreparable: [],
+      started: [queueItemId],
+    }),
   };
   const out = {} as FakeAreas;
   for (const [k, v] of Object.entries({ ...base, ...over })) (out as Record<string, unknown>)[k] = vi.fn(v as (...a: unknown[]) => unknown);

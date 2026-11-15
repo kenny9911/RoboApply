@@ -14,6 +14,8 @@
 //     session rank entries may carry a same-role group and its folded postings,
 //     or mark a first-window row the fit-tier view hid; `recordImpressions`
 //     counts a job once per feed session.
+//   - REDESIGN §9: `applicationStates` reads the person's list items of a
+//     page in one statement.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -249,6 +251,33 @@ describe('publicPageIds applies the public-page rules of the SEO pages', () => {
     expect([...(await repo.publicPageIds(['held_bank'], 'intl', NOW))]).toEqual([]);
     expect([...(await repo.publicPageIds(['archived'], 'intl', NOW))]).toEqual([]);
     expect([...(await repo.publicPageIds([], 'intl', NOW))]).toEqual([]);
+  });
+});
+
+describe("applicationStates (the reader's list on the cards; REDESIGN §9)", () => {
+  it("one statement for the page: this person's list items for the asked jobs, with their state and tracker entry", async () => {
+    const calls: unknown[] = [];
+    const db = {
+      rAAgentQueueItem: {
+        findMany: async (args: unknown) => {
+          calls.push(args);
+          return [
+            { jobId: 'j1', state: 'preparing', trackerEntryId: null },
+            { jobId: 'j3', state: 'opened', trackerEntryId: 'te_3' },
+          ];
+        },
+      },
+    };
+    const repo = createPrismaFeedRepo(async () => db as never);
+    const read = await repo.applicationStates('u1', ['j1', 'j2', 'j3']);
+    expect([...read]).toEqual([
+      ['j1', { state: 'preparing', trackerEntryId: null }],
+      ['j3', { state: 'opened', trackerEntryId: 'te_3' }],
+    ]);
+    expect(calls).toEqual([{ where: { userId: 'u1', jobId: { in: ['j1', 'j2', 'j3'] } }, select: { jobId: true, state: true, trackerEntryId: true } }]);
+    // No ids, no statement.
+    expect((await repo.applicationStates('u1', [])).size).toBe(0);
+    expect(calls).toHaveLength(1);
   });
 });
 

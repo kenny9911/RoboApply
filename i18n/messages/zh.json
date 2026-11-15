@@ -17,7 +17,8 @@
   },
   "nav": {
     "aria_primary": "主导航",
-    "brand_home": "%BRAND% —— 前往职位",
+    "brand_home": "%BRAND% 首页",
+    "today": "今天",
     "jobs": "职位",
     "resume": "简历",
     "applications": "申请记录",
@@ -46,11 +47,7 @@
       "refresh_limited": "最近几分钟内，你搜索或刷新职位列表的次数较多。请等几分钟再试。",
       "search_jobs": "搜索“{query}”相关的职位"
     },
-    "workspace": "你的工作台",
-    "workspace_note": "看得更清楚，下一步更从容。",
     "skip_content": "跳到主要内容",
-    "guide": "聚焦你的职业方向",
-    "guide_note": "探索。准备。向前。",
     "jump_aria": "跳转到某个页面",
     "jump_placeholder": "跳转到某个页面…",
     "aria_lower": "账号及更多",
@@ -141,6 +138,18 @@
       },
       "source": "来源：{label}",
       "view": "查看来源"
+    },
+    "dashboard": "首页",
+    "profile_card": {
+      "you": "你",
+      "set_role": "设置目标职位",
+      "percent": "{percent}%",
+      "complete": "资料完成度 {percent}%"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, other {# 份未打开}}",
+      "ready_open": "查看已备好的申请",
+      "upgrade": "升级"
     }
   },
   "jobs": {
@@ -393,7 +402,8 @@
       },
       "tabsLabel": "职位列表",
       "title": "职位",
-      "introByDate": "职位按发布时间排序，最新的在前。打开一个职位查看详情。"
+      "introByDate": "职位按发布时间排序，最新的在前。打开一个职位查看详情。",
+      "searchLabel": "你的搜索"
     },
     "zero": {
       "gain": "{count, plural, other {+# 个职位}}",
@@ -1009,7 +1019,23 @@
       },
       "title": "模板和版式"
     },
-    "ai_edit_cost": "每次用 AI 修改一条要点、你的个人简介或技能，会使用 1 个额度。"
+    "ai_edit_cost": "每次用 AI 修改一条要点、你的个人简介或技能，会使用 1 个额度。",
+    "editor_tabs": {
+      "label": "简历编辑器",
+      "edit": "编辑",
+      "customize": "样式",
+      "review": "体检",
+      "tailor": "定制",
+      "new": "新功能",
+      "check": {
+        "loading": "正在加载上次的检查结果…",
+        "load_error": "上次的检查结果没能加载出来。",
+        "counts": "按优先级分类的问题",
+        "edit_section": "编辑这个栏目",
+        "edit_section_aria": "编辑“{section}”栏目",
+        "change_template": "更换模板"
+      }
+    }
   },
   "applications": {
     "page_title": "申请记录",
@@ -1254,6 +1280,12 @@
       "title": "本周",
       "write": "生成总结",
       "writing": "生成中…"
+    },
+    "switch": {
+      "label": "你的申请",
+      "ready": "待投递",
+      "sent": "已提交",
+      "waiting": "{count, plural, other {有 # 份申请材料已备好，等你处理}}"
     }
   },
   "practice": {
@@ -1269,7 +1301,7 @@
         "noMatch": "没有职位匹配“{query}”。换个更短的词，或者直接粘贴职位描述。",
         "planLegend": "你的这场面试",
         "planHint": "已按职位配好，哪项都能改。",
-        "pickRoleFirst": "先在上面选一个职位。",
+        "pickRoleFirst": "先选一个职位。",
         "chip": {
           "focus": "重点",
           "mode": "形式",
@@ -1283,6 +1315,35 @@
         "useShorter": "改成 {minutes} 分钟",
         "previewToggle": "预览可能会问的问题",
         "costShort": "{n, plural, other {# 个额度}} —— 超出你现有的额度"
+      },
+      "side": {
+        "howTitle": "练习怎么进行",
+        "steps": {
+          "job": {
+            "title": "选职位",
+            "body": "搜索在招职位、按行业浏览，或粘贴职位描述。目标公司选填。"
+          },
+          "plan": {
+            "title": "拿到这个职位的方案",
+            "body": "这个职位会有哪些面试官、各自考察什么；填了公司，还会写明这家公司怎么面试。哪项都能改。"
+          },
+          "interview": {
+            "title": "开口练",
+            "body": "面试官用语音提问，你开口回答，屏幕上实时显示文字记录。"
+          },
+          "written": {
+            "title": "用文字作答",
+            "body": "问题逐个出现，你逐题用文字回答。"
+          },
+          "report": {
+            "title": "看报告",
+            "body": "看得分、做得好的地方和要改的地方，知道下一步该练什么。"
+          }
+        },
+        "summaryTitle": "你的这场练习",
+        "planPending": "方案准备好后，面试官、重点和时长会显示在这里。",
+        "basisSources": "来自公开资料",
+        "basisGeneral": "同类公司的常见做法"
       },
       "loading": "正在加载面试准备…",
       "startError": "这场面试没有开始成功。请重试。",
@@ -2963,7 +3024,7 @@
           "sub": "对于合适的职位，%BRAND% 会准备好定制简历、求职信和常见问题的回答。每份申请都由你自己打开并提交。",
           "sample": {
             "line1": "本周 5 个职位 · 较合适及以上",
-            "line2": "材料包已备好：定制简历、求职信、4 个回答",
+            "line2": "申请材料已备好：定制简历、求职信、4 个回答",
             "line3": "打开申请页面 → 你检查后提交"
           },
           "s1": {
@@ -2971,7 +3032,7 @@
             "body": "选择 5、10、20 或 30 个职位，以及你能接受的最低匹配档位。"
           },
           "s2": {
-            "title": "检查每份材料包",
+            "title": "检查每份申请材料",
             "body": "使用前，任何内容都可以修改。"
           },
           "s3": {
@@ -3199,7 +3260,7 @@
           },
           "s2": {
             "body": "使用前，任何内容都可以修改。",
-            "title": "检查每份材料包"
+            "title": "检查每份申请材料"
           },
           "s3": {
             "body": "打开企业的页面并提交。职位会移到“已申请”。",
@@ -3207,7 +3268,7 @@
           },
           "sample": {
             "line1": "本周 5 个职位 · 较合适及以上",
-            "line2": "材料包已备好：定制简历、求职信、4 个回答",
+            "line2": "申请材料已备好：定制简历、求职信、4 个回答",
             "line3": "打开申请页面 → 你检查后提交"
           },
           "sub": "对于合适的职位，%BRAND% 会准备好定制简历、求职信和常见问题的回答。每份申请都由你自己打开并提交。",
@@ -7636,7 +7697,23 @@
       "applying": "正在处理…",
       "inProgress": "这件事已经在处理了。如果一分钟后还没有结果，请重试。",
       "notSaved": "这条建议没有和回答一起保存，所以无法使用。请重新提问。",
-      "waitForAnswer": "回答完成后才能使用。"
+      "waitForAnswer": "回答完成后才能使用。",
+      "listAdd": {
+        "title": "把 {job} 加入你的列表",
+        "body": "不消耗额度。你提出之前，不会准备任何内容。",
+        "confirm": "加入我的列表"
+      },
+      "prepare": {
+        "title": "为 {job} 准备申请材料",
+        "addsToList": "会先加入你的列表，这一步不消耗额度。"
+      },
+      "applicationStatus": {
+        "title": "{job} 的申请",
+        "picked": "已在你的列表中。准备好后，可以在列表里准备申请材料。",
+        "open": "在“待投递”中打开",
+        "unavailable": "你的账号暂时无法使用申请材料准备功能。",
+        "closed": "这个职位已下架，所以没有加入列表。"
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -7850,7 +7927,10 @@
       "top_fit_jobs": "正在找最适合你的职位…",
       "added_jobs": "正在查看你添加的职位…",
       "show_jobs": "正在整理列表…",
-      "similar_jobs": "正在查找相似职位…"
+      "similar_jobs": "正在查找相似职位…",
+      "application_status": "正在查看你的列表…",
+      "add_to_list": "正在查看你的列表…",
+      "prepare_application": "正在核对准备所需的额度…"
     },
     "voice": {
       "blocked": "这个浏览器阻止了麦克风访问。",
@@ -8585,7 +8665,7 @@
       "job_import": "你添加的职位",
       "outreach": "消息草稿",
       "practice": "练习面试",
-      "ready_kits": "待投递材料包",
+      "ready_kits": "申请材料准备",
       "resume_check": "简历体检",
       "rewrite": "AI 改写",
       "tailor": "定制简历",
@@ -9350,7 +9430,16 @@
     },
     "unnamed": "你的主搜索",
     "unnamedNumbered": "订阅搜索 {n}",
-    "unnamedOther": "未命名的订阅搜索"
+    "unnamedOther": "未命名的订阅搜索",
+    "summary": {
+      "label": "你的搜索：",
+      "all": "全部职位",
+      "loading": "正在加载你的搜索…",
+      "more": "另有 {count} 项",
+      "change": "修改搜索",
+      "panel": "搜索和筛选",
+      "done": "完成"
+    }
   },
   "fit": {
     "analysis": {
@@ -10327,7 +10416,7 @@
       "cards": {
         "practice": "练习面试",
         "practiceBody": "回答这个职位贴近实际的面试问题，并获得反馈。",
-        "ready": "待投递材料包 —— 由你自己提交",
+        "ready": "备好的申请材料 —— 由你自己提交",
         "readyBody": "我们准备材料；你检查后，自己在公司网站上提交。",
         "tailor": "为每个职位定制简历",
         "tailorBody": "按职位要求调整你的简历，只使用关于你的真实信息。"
@@ -10528,7 +10617,7 @@
         "fitBody": "每个职位都会显示你的简历哪些地方符合要求，哪些地方不符合。",
         "practice": "练习面试",
         "practiceBody": "演练这个职位贴近实际的面试问题，并获得反馈。",
-        "ready": "待投递材料包 —— 由你自己提交",
+        "ready": "备好的申请材料 —— 由你自己提交",
         "readyBody": "我们准备材料。你检查后，自己在公司网站上提交。",
         "tailor": "为每个职位定制简历",
         "tailorBody": "针对某一个职位调整你的简历，只使用关于你的真实信息。"
@@ -10540,6 +10629,45 @@
       "prev": "上一条",
       "start": "开始",
       "title": "你可以在这里做什么"
+    },
+    "express": {
+      "resume": {
+        "title": "从你的简历开始",
+        "continue": "继续",
+        "noResume": "我还没有简历",
+        "working": "请稍候…",
+        "classic": "改为多回答几个问题"
+      },
+      "check": {
+        "title": "这是你想找的工作吗？",
+        "subtitleSuggested": "以下是根据你的简历给出的建议。不对的地方都可以改。",
+        "subtitleNothingSuggested": "没能从你的简历中得出建议。请填写以下内容来查找职位。",
+        "subtitleNoResume": "没有添加简历，所以只根据这些回答查找职位。之后可以添加简历，查看每个职位的匹配度。",
+        "filling": "正在根据你的简历填写…",
+        "otherPlaces": "添加其他地点",
+        "chosenPlaces": "只显示已选地点",
+        "aboutYou": "你的情况：{value}",
+        "email": "符合这个搜索的新职位，每天会通过邮件发给你一次。你可以在“设置”中修改。",
+        "submit": "为我查找职位",
+        "retry": "重试"
+      },
+      "progress": {
+        "saving": "正在保存你的回答…",
+        "searching": "正在开始搜索…",
+        "finishing": "正在完成初始设置…"
+      },
+      "failed": {
+        "answers": "你的回答没有保存成功，所以搜索没有开始。",
+        "resume": "你的简历选择没有保存成功，所以搜索没有开始。",
+        "finish": "你的搜索已保存，但初始设置没有完成。"
+      },
+      "why": {
+        "rate_limited": "短时间内尝试次数太多。请等一分钟再试。",
+        "invalid": "有一项回答没有通过。请检查后再试。",
+        "conflict": "初始设置已在别处继续进行，可能是在另一个标签页。请刷新这个页面。",
+        "unavailable": "这项功能暂时不可用。请稍后再试。",
+        "unknown": "你填写的内容都还在。请重试。"
+      }
     }
   },
   "practiceQuestions": {
@@ -11241,12 +11369,12 @@
   },
   "ready": {
     "allowance": {
-      "bonus": "另外，你还获赠了 {count, plural, other {# 份材料包}}。",
-      "left": "本周还剩 {left} 份材料包，共 {cap, plural, other {# 份}}。",
-      "pro": "Pro：每周最多 {count} 份材料包。",
+      "bonus": "另外，你还获赠了 {count, plural, other {# 份申请材料}}。",
+      "left": "本周还剩 {left} 份申请材料，共 {cap, plural, other {# 份}}。",
+      "pro": "Pro：每周最多准备 {count} 份申请材料。",
       "resets": "{date} 起有新的额度。",
       "seePro": "了解 Pro",
-      "unknown": "本周剩余材料包：—"
+      "unknown": "本周剩余申请材料：—"
     },
     "answers": {
       "add": "添加问题",
@@ -11261,7 +11389,7 @@
         "work_authorization": "同时说明你现在或将来是否需要签证担保。"
       },
       "inCurrency": "{question}（{currency}）",
-      "lead": "把申请表常问的问题先答好。材料包会列出这些回答，并附上复制按钮。这些回答只由你自己来写。",
+      "lead": "把申请表常问的问题先答好。申请材料会列出这些回答，并附上复制按钮。这些回答只由你自己来写。",
       "loadFailed": "你保存的回答没有加载出来。",
       "optional": "（选填）",
       "protectedNote": "AI 从不回答这个问题，只会用你自己写的回答来填。",
@@ -11282,10 +11410,10 @@
     },
     "intro": {
       "continue": "继续设置",
-      "lead": "%BRAND% 每周从你的搜索中挑选职位。为哪些职位准备材料包，由你来选。",
-      "point_kit": "你选中的每个职位都有一份材料包：按职位描述定制的简历、职位描述要求时附上的求职信，以及你保存的回答。",
+      "lead": "%BRAND% 每周从你的搜索中挑选职位。为哪些职位准备申请材料，由你来选。",
+      "point_kit": "你选中的每个职位都有一份申请材料：按职位描述定制的简历、职位描述要求时附上的求职信，以及你保存的回答。",
       "point_list": "每周一份符合你搜索条件的职位列表。你也可以自己添加任何职位。",
-      "point_review": "每份材料包都由你检查后再使用。简历里新增的任何内容，都必须经你确认。",
+      "point_review": "每份申请材料都由你检查后再使用。简历里新增的任何内容，都必须经你确认。",
       "start": "设置“待投递”",
       "title": "把每份申请准备好，再由你自己提交",
       "point_open": "你打开申请页面，自己提交申请。"
@@ -11301,12 +11429,12 @@
           "title": "没有待准备的职位"
         },
         "ready": {
-          "sub": "在“待准备”中准备一份材料包。备好后会显示在这里，等你检查。",
-          "title": "还没有备好的材料包"
+          "sub": "在“待准备”中准备一份申请材料。备好后会显示在这里，等你检查。",
+          "title": "还没有备好的申请材料"
         }
       },
       "expiredNote": "{count, plural, other {# 个职位}}已被公司下架。把它们移除，让列表保持整洁。",
-      "prepareSelected": "准备 {count, plural, other {# 份材料包}}",
+      "prepareSelected": "准备 {count, plural, other {# 份申请材料}}",
       "selectAll": "全选 {count, plural, other {# 个职位}}",
       "selected": "{count, plural, other {已选 # 个职位}}"
     },
@@ -11314,26 +11442,26 @@
     "prepare": {
       "bucket": {
         "cover_letter": "{count, plural, other {# 个求职信额度}}",
-        "ready_kits": "{count, plural, other {# 份材料包}}",
+        "ready_kits": "{count, plural, other {# 份申请材料}}",
         "tailor": "{count, plural, other {# 个简历定制额度}}"
       },
       "cancel": "取消",
-      "confirm": "准备 {count, plural, other {# 份材料包}}",
+      "confirm": "准备 {count, plural, other {# 份申请材料}}",
       "cost": "将使用 {what}；你{window, select, day {今天} week {本周} other {本月}}还剩 {left} 个。",
       "costUnknown": "将使用 {what}。剩余额度：—",
       "description": "开始之前，先看看这次会用掉什么。",
       "noTailor": "直接使用你的原简历（设置中已关闭简历定制）。",
-      "noTailorAi": "你的账号未开启 AI 写作，材料包会直接使用你的原简历。",
-      "noTailorAsIs": "不会使用简历定制额度：材料包直接使用你的原简历。",
+      "noTailorAi": "你的账号未开启 AI 写作，申请材料会直接使用你的原简历。",
+      "noTailorAsIs": "不会使用简历定制额度：申请材料直接使用你的原简历。",
       "notEnough": "现在只能准备 {left} 份。",
       "quoteFailed": "没能查到这次的用量。没有扣除任何额度。请重试。",
       "quoting": "正在查看用量…",
-      "runFailed": "{count, plural, other {# 份材料包}}没有开始准备。请在“待准备”中重试。",
+      "runFailed": "{count, plural, other {# 份申请材料}}没有开始准备。请在“待准备”中重试。",
       "running": "正在开始…",
       "someFailed": "{count, plural, other {有 # 个职位没能完成检查，这次不包含在内}}。",
-      "started": "正在准备 {count, plural, other {# 份材料包}}。完成后会显示在“已备好”中。",
-      "title": "准备 {count, plural, other {# 份材料包}}",
-      "whatHappens": "材料包会在后台准备。不会向任何公司发送任何内容。"
+      "started": "正在准备 {count, plural, other {# 份申请材料}}。完成后会显示在“已备好”中。",
+      "title": "准备 {count, plural, other {# 份申请材料}}",
+      "whatHappens": "申请材料会在后台准备。不会向任何公司发送任何内容。"
     },
     "progress": {
       "applied": "已申请",
@@ -11365,7 +11493,7 @@
       "work_model_preference": "你更倾向远程、混合办公还是现场办公？"
     },
     "review": {
-      "aiOff": "你的账号未开启 AI 写作，材料包会直接使用你的原简历。",
+      "aiOff": "你的账号未开启 AI 写作，申请材料会直接使用你的原简历。",
       "answers": {
         "add": "添加回答",
         "addToProfile": "添加到个人资料",
@@ -11381,19 +11509,19 @@
       "copyFailed": "复制没有成功。请选中文字后自己复制。",
       "errors": {
         "aiUnavailable": "你的账号现在无法使用 AI 写作。",
-        "changed": "这份材料包刚才有了变化。页面现在显示的是最新状态。",
+        "changed": "这份申请材料刚才有了变化。页面现在显示的是最新状态。",
         "closed": "这个职位已被公司下架。",
         "full": "你的列表已满。请先移除一个职位。",
         "generic": "操作没有成功。请重试。",
-        "preparing": "这份材料包还在准备中。请稍后再试。",
+        "preparing": "这份申请材料还在准备中。请稍后再试。",
         "undoExpired": "这一步在这里已经不能撤销了。",
         "unverified": "使用前，请先核对定制简历新增的细节。"
       },
       "expired": "公司已不再列出这个职位。",
-      "failed": "这份材料包没有准备成功。",
+      "failed": "这份申请材料没有准备成功。",
       "failedReason": {
-        "aiUnavailable": "准备这份材料包时无法使用 AI 写作。请稍后重试。",
-        "credits": "你没有可用于这份材料包的额度了。请等额度重置后再试。",
+        "aiUnavailable": "准备这份申请材料时无法使用 AI 写作。请稍后重试。",
+        "credits": "你没有可用于这份申请材料的额度了。请等额度重置后再试。",
         "jobClosed": "公司已下架这个职位。",
         "noResume": "请先添加一份简历，然后重试。",
         "ourSide": "我们这边出了问题。请重试。"
@@ -11423,8 +11551,8 @@
         },
         "loadFailed": "历史记录没有加载出来。",
         "moved": "当前状态：{state}",
-        "none": "这份材料包还没有任何记录。",
-        "notice": "提醒：这份材料包已备好，还没有打开",
+        "none": "这份申请材料还没有任何记录。",
+        "notice": "提醒：这份申请材料已备好，还没有打开",
         "opened": "已打开申请页面；已移到“已申请”",
         "revised": {
           "letter": "已要求修改求职信",
@@ -11433,27 +11561,27 @@
         "title": "历史记录",
         "undone": "已标记为未申请（撤销）",
         "used": {
-          "letter": "已选定这份材料包使用的求职信",
-          "resume": "已选定这份材料包使用的简历"
+          "letter": "已选定这份申请材料使用的求职信",
+          "resume": "已选定这份申请材料使用的简历"
         }
       },
       "letter": {
         "copyAria": "复制求职信",
         "edit": "编辑求职信",
         "loadFailed": "求职信没有加载出来。",
-        "none": "这份材料包里没有求职信。",
+        "none": "这份申请材料里没有求职信。",
         "off": "设置中已关闭求职信。",
         "title": "求职信",
-        "use": "用在这份材料包里"
+        "use": "用在这份申请材料里"
       },
       "notOnList": {
         "add": "添加到“待投递”",
         "failed": "这个职位没有添加成功。请重试。",
         "full": "你的列表已满。请先移除或处理完几个职位。",
-        "sub": "添加后就可以为它准备材料包。",
+        "sub": "添加后就可以为它准备申请材料。",
         "title": "这个职位不在你的列表中"
       },
-      "notPrepared": "这份材料包还没有准备。",
+      "notPrepared": "这份申请材料还没有准备。",
       "open": {
         "again": "再次打开申请页面",
         "alreadyApplied": "这个职位之前已在“申请记录”中。",
@@ -11476,18 +11604,18 @@
         "sub": "根据这份职位描述进行的一场练习面试。",
         "title": "针对这个职位练习"
       },
-      "prepare": "准备材料包",
-      "preparing": "正在准备你的材料包。这个页面会自动更新。",
+      "prepare": "准备申请材料",
+      "preparing": "正在准备你的申请材料。这个页面会自动更新。",
       "remove": "从列表中移除",
       "removeConfirm": "要把这个职位从你的列表中移除吗？",
       "removeYes": "移除",
       "resume": {
-        "asIs": "这份材料包直接使用你的原简历。",
+        "asIs": "这份申请材料直接使用你的原简历。",
         "finishBlock": "使用前，请先保存上方核对过的简历。",
         "loadFailed": "定制简历没有加载出来。请刷新页面重试。",
         "openAsIs": "打开简历",
         "title": "简历",
-        "use": "用在这份材料包里",
+        "use": "用在这份申请材料里",
         "verifyBlock": "使用这份简历前，请先核对上方的 {count, plural, other {# 处细节}}。",
         "fitNote": "“修改前”和“修改后”显示的是这份简历定制时的匹配度。职位名称旁边的匹配度是今天的，所以两者可能不同。"
       },
@@ -11498,7 +11626,7 @@
       },
       "reviseSend": "发送",
       "skip": "跳过这个职位",
-      "skipped": "你跳过了这个职位。把它放回列表，就可以为它准备材料包。"
+      "skipped": "你跳过了这个职位。把它放回列表，就可以为它准备申请材料。"
     },
     "row": {
       "loading": "正在加载职位…",
@@ -11508,7 +11636,7 @@
       "remove": "移除",
       "restore": "放回列表",
       "retry": "重试",
-      "review": "检查材料包",
+      "review": "检查申请材料",
       "reviewOpen": "检查并打开",
       "seeApplication": "在“申请记录”中查看",
       "select": "选择 {title}",
@@ -11597,7 +11725,7 @@
       },
       "extension": {
         "lead": "在你要求时，浏览器插件会用你的个人资料和回答填写申请表。表单由你检查，并由你自己提交。",
-        "skipNote": "你可以先跳过，之后再安装插件。没有插件也能使用材料包：从材料包里复制你的回答即可。"
+        "skipNote": "你可以先跳过，之后再安装插件。没有插件也能使用申请材料：从申请材料里复制你的回答即可。"
       },
       "finish": "完成设置",
       "firstList": "设置完成。本周列表里有 {count, plural, other {# 个职位}}。",
@@ -11605,9 +11733,9 @@
       "profile": {
         "allSet": "申请表通常会问到的信息，你的个人资料里都有了。",
         "complete": "完善个人资料",
-        "lead": "申请表会问到这些信息。材料包使用的是你个人资料里的内容，请确认填写无误。",
+        "lead": "申请表会问到这些信息。申请材料使用的是你个人资料里的内容，请确认填写无误。",
         "missing": "未填写",
-        "missingNote": "你现在可以继续。每份材料包都会列出还缺的信息，方便你在申请表上补填。",
+        "missingNote": "你现在可以继续。每份申请材料都会列出还缺的信息，方便你在申请表上补填。",
         "missingTitle": "{count, plural, other {申请表会问到的信息还缺 # 项}}"
       },
       "skip": "暂时跳过",
@@ -11639,12 +11767,12 @@
       "addAria": "把 {title} 添加到你的列表",
       "failed": "这个职位没有添加成功。请重试。",
       "full": "你的列表已满。请先移除或处理完几个职位。",
-      "sub": "这些职位还不在你的列表中。想要材料包的，就添加进来。",
+      "sub": "这些职位还不在你的列表中。想为哪些职位准备申请材料，就把它们添加进来。",
       "title": "更多符合你搜索条件的职位"
     },
     "tabs": {
       "done": "已完成",
-      "label": "按状态查看材料包",
+      "label": "按状态查看申请材料",
       "prepare": "待准备",
       "ready": "已备好"
     },
@@ -11679,14 +11807,28 @@
       "saved": "设置已保存。",
       "saving": "保存中…",
       "tailorEach": "为每个职位定制我的简历",
-      "tailorEachNote": "每份材料包使用一个简历定制额度。每处改动都由你检查后才会使用。",
+      "tailorEachNote": "每份申请材料使用一个简历定制额度。每处改动都由你检查后才会使用。",
       "target": "每周列表的职位数",
-      "targetNote": "这是列表的目标数量，不是承诺：符合条件的职位较少时，列表里的职位也会少一些。可以准备多少份材料包，由你的套餐决定。",
+      "targetNote": "这是列表的目标数量，不是承诺：符合条件的职位较少时，列表里的职位也会少一些。可以准备多少份申请材料，由你的套餐决定。",
       "targetValue": "每周 {count} 个",
       "tierAtLeast": {
         "good": "至少",
         "great": "仅限",
         "possible": "至少"
+      }
+    },
+    "oneTap": {
+      "action": "准备申请材料",
+      "adding": "添加中…",
+      "started": "正在准备。需要你确认时，会显示在“等你处理”中。",
+      "failed": "没能开始准备。没有扣除任何额度。请重试。",
+      "full": "你的列表已满。请先从“待投递”移除一个职位，然后重试。",
+      "closed": "这个职位已下架，所以没有准备任何内容。",
+      "place": {
+        "preparing": "准备中",
+        "review": "检查并打开",
+        "sent": "查看申请",
+        "listed": "已在你的列表中"
       }
     }
   },
@@ -12802,6 +12944,202 @@
       "source": "来源：<link>{name}</link>",
       "title": "{company} 的签证担保记录",
       "usNote": "获得认证的申请不等于签证获批，也不等于已被录用。请愿数量统计的是首次裁决，包含新聘用和续聘。"
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, other {有 # 项在等你处理}}",
+      "titleNone": "没有等你处理的事项",
+      "titleLoading": "正在查看有哪些事项在等你处理…",
+      "titlePartial": "今天的列表有一部分没有加载出来"
+    },
+    "goal": {
+      "line": "求职期望：{what}",
+      "any": "你的搜索没有限定条件，任何职位都在范围内。",
+      "more": "{list}，另有 {count} 项",
+      "change": "修改",
+      "changeLabel": "修改求职期望",
+      "loading": "正在加载你的搜索…",
+      "failed": "你的搜索没有加载出来。",
+      "none": "还没有订阅搜索。",
+      "setUp": "设置搜索"
+    },
+    "agentTag": "智能体",
+    "retry": "重试",
+    "laneFailed": "其中部分内容没有加载出来。",
+    "notLoaded": "未加载",
+    "waiting": {
+      "title": "等你处理",
+      "loading": "正在查看有哪些事项在等你处理…",
+      "empty": "现在没有需要你处理的事项。精选职位在下方。",
+      "emptyLink": "前往精选职位",
+      "emptyPlain": "现在没有需要你处理的事项。",
+      "more": "{count, plural, other {还有 # 项在等你处理。处理完这几项后，会陆续显示在这里。}}",
+      "partial": "这个列表有一部分没有加载出来，所以可能还有更多。",
+      "fact": {
+        "review": "{company} 的 {title}：申请材料已备好，等你检查。",
+        "reviewTitle": "{title}：申请材料已备好，等你检查。",
+        "reviewUnnamed": "有一份申请材料已备好，等你检查。",
+        "open": "{company} 的 {title}：可以打开申请页面了。",
+        "openTitle": "{title}：可以打开申请页面了。",
+        "openUnnamed": "有一份申请可以打开了。",
+        "verify": "{count, plural, other {{name} 中有 # 处新增细节需要你确认。}}",
+        "noReply": "{count, plural, other {有 # 份申请已 {days} 天没有回复。}}",
+        "profile": "{count, plural, other {你的个人资料还缺 # 项申请表会问到的信息。}}",
+        "noResume": "你还没有添加简历。",
+        "setup": "{count, plural, other {初始设置还剩 # 步。}}"
+      },
+      "action": {
+        "review": "检查并打开",
+        "open": "打开申请页面",
+        "verify": "核对细节",
+        "noReply": "查看这些申请",
+        "profile": "补充信息",
+        "noResume": "添加简历",
+        "setup": "完成初始设置"
+      }
+    },
+    "jobSearch": {
+      "title": "职位搜索",
+      "found": "{count, plural, =0 {自 {date} 以来，没有找到合适的新职位。} other {自 {date} 以来，找到了 # 个合适的新职位。}}",
+      "foundSinceVisit": "{count, plural, =0 {自你上次访问以来，没有找到合适的新职位。} other {自你上次访问以来，找到了 # 个合适的新职位。}}",
+      "foundCapped": "自 {date} 以来，找到了超过 {count} 个合适的新职位。",
+      "foundCappedSinceVisit": "自你上次访问以来，找到了超过 {count} 个合适的新职位。",
+      "foundUnknown": "自你上次访问以来合适的新职位：",
+      "picksTitle": "精选职位",
+      "picksLoading": "正在加载精选职位…",
+      "searching": "正在搜索符合你回答的职位。搜索完成后，精选职位会显示在这里。",
+      "picksNone": "暂时没有新的精选职位。",
+      "picksFailed": "精选职位没有加载出来。",
+      "viewJob": "查看职位",
+      "seeAll": "查看全部职位",
+      "off": "这个账号无法使用职位列表。"
+    },
+    "applications": {
+      "title": "申请",
+      "numbersLabel": "申请的各项数字",
+      "preparing": "准备中",
+      "waiting": "等你处理",
+      "sent": "本周已提交",
+      "saved": "已保存",
+      "open": "打开申请记录",
+      "failed": "其中部分数字没有加载出来。"
+    },
+    "resume": {
+      "title": "简历",
+      "mainLabel": "主简历",
+      "loading": "正在加载你的简历…",
+      "none": "还没有简历。",
+      "add": "添加简历",
+      "improve": "改进我的简历",
+      "open": "打开简历页",
+      "failed": "你的简历没有加载出来。",
+      "asked": "你搜索到的职位要求这些技能，而你的个人资料里没有列出：",
+      "askedIn": "{total} 个职位中有 {count} 个要求"
+    },
+    "ask": {
+      "title": "问一问",
+      "label": "问问和你求职有关的问题",
+      "placeholder": "例如：这些职位中哪一个最适合我？",
+      "submit": "问一问",
+      "hint": "会打开求职助手，并把你的问题填好，随时可以发送。"
+    }
+  },
+  "dashboard": {
+    "hi": "{name}，你好！",
+    "hi_anon": "你好！",
+    "subtitle": "今天想推进哪一步？",
+    "goals_aria": "你的目标",
+    "goal": {
+      "resume": "简历",
+      "jobs": "找工作",
+      "applications": "申请",
+      "interview": "面试准备"
+    },
+    "progress": "进度",
+    "progress_aria": "{goal}：步骤和进度",
+    "value_percent": "{value}%",
+    "value_count": "{value}/{target}",
+    "value_unknown": "暂不清楚",
+    "score_label": "简历检查",
+    "ask_bar": "有问题，问求职助手",
+    "steps": {
+      "resume_check": {
+        "label": "简历检查",
+        "title_no_resume": "先从简历开始",
+        "body_no_resume": "上传现有简历，或一步步新建一份。这里的其他步骤都从简历开始。",
+        "cta_no_resume": "添加简历",
+        "title_start": "看看你的简历读起来怎么样",
+        "body_start": "简历检查会看用人单位最先读的内容，并按重要程度列出要改的地方。",
+        "title_more": "你的简历还能更好",
+        "title_good": "你的简历状态不错",
+        "body_more": "上次检查得分 {score}%。打开简历按提示修改，然后再检查一次。",
+        "cta": "打开简历"
+      },
+      "tailored": {
+        "label": "定制简历",
+        "title_start": "按职位定制简历",
+        "body_start": "选择一个已收藏的职位，或粘贴职位描述。你会得到一份按该职位改写的简历副本，原简历保持不变。",
+        "title_more": "每个职位定制一份",
+        "body_more": "每个职位一份简历，能把该职位看重的经历放在前面。为每个想申请的职位都定制一份吧。",
+        "cta": "定制简历"
+      },
+      "letters": {
+        "label": "求职信",
+        "title_start": "写一封求职信",
+        "body_start": "为收藏的职位起草一封求职信，再改到像你自己写的。",
+        "title_more": "为下一份申请再写一封",
+        "body_more": "求职信针对单个职位写效果最好。从收藏的职位开始写下一封。",
+        "cta": "打开求职信"
+      },
+      "profile": {
+        "label": "个人资料",
+        "title_start": "完善个人资料",
+        "body_start": "个人资料决定我们为你展示哪些职位，也用来填写申请表。只需几分钟。",
+        "title_more": "个人资料已完成 {percent}%",
+        "body_more": "补全缺少的信息，推荐的职位和自动填写的内容才会准确。",
+        "cta": "打开个人资料"
+      },
+      "saved": {
+        "label": "收藏的职位",
+        "title_start": "收藏你喜欢的职位",
+        "body_start": "收藏的职位会进入你的申请列表，可以在那里定制简历、准备每一份申请。",
+        "title_more": "继续扩充你的候选名单",
+        "body_more": "看看新推荐的职位，把值得申请的收藏起来。",
+        "cta": "浏览职位"
+      },
+      "preparing": {
+        "label": "准备中",
+        "title_start": "准备一份申请",
+        "body_start": "我们填写申请表并定制材料。你检查所有内容，由你自己提交。",
+        "title_more": "申请正在准备中",
+        "body_more": "提交前逐一打开，检查材料和回答。",
+        "cta": "打开待投递"
+      },
+      "applied": {
+        "label": "已申请",
+        "title_start": "发出第一份申请",
+        "body_start": "申请后把职位标记为已申请，就知道什么时候该跟进。",
+        "title_more": "跟进你的申请",
+        "body_more": "申请列表会显示哪些申请已经有一段时间没有回音。",
+        "cta": "打开申请记录"
+      },
+      "interviews": {
+        "label": "面试",
+        "title_start": "管理你的面试",
+        "body_start": "收到面试邀请后，把职位移到面试阶段，并记下每一轮的笔记。",
+        "title_more": "为面试做准备",
+        "body_more": "正式面试前，先按这个职位做一次模拟面试。",
+        "cta": "打开申请记录"
+      },
+      "practice": {
+        "label": "模拟面试",
+        "title_start": "练习一次面试",
+        "body_start": "按你想要的职位做一次模拟面试，每个回答都会得到反馈。",
+        "title_more": "继续练习",
+        "body_more": "每练一轮，回答都会更好。换个职位或公司试试。",
+        "cta": "开始练习"
+      }
     }
   }
 }

@@ -8,19 +8,20 @@
  * colours, type and spacing stay shared, so every screen keeps its layout and
  * contrast budget on both brands.
  *
- * Direction (Paper, docs/design-system.md): the same paper and the same
- * layout as RoboApply, with a deep jade action instead of ink and a mint
- * highlighter instead of lime. Identity (--brand-plane / --brand-mark) works
- * as it does for RoboApply: the mark is a fill, the plane is the ink on it.
+ * Direction (Desk, docs/design-system.md): the same white canvas and the same
+ * layout as RoboApply, with a deep jade action instead of blue and a mint
+ * highlighter. Identity (--brand-plane / --brand-mark) works as it does for
+ * RoboApply: the mark is a fill, the plane is the ink on it. The washes are
+ * cool mint, matching the shared cool-grey surfaces.
  *
  * Contrast (docs/design-system.md; __tests__/brand/contrast.test.ts computes
- * every pair below for both brands × both themes):
- *   light  --action-ink on --action 10.16 · --action on --bg 9.00, on
- *          --surface-2 8.23, on --action-subtle 8.37 · --action-ink on every
+ * every pair for both brands × both themes on the shared Desk surfaces):
+ *   light  --action-ink on --action 10.16 · --action on the white --bg 10.16,
+ *          on --surface-2 9.63, on --action-subtle 8.37 · --action-ink on every
  *          --grad-brand / --grad-brand-hover stop ≥ 8.10 · --brand-mark on
  *          --brand-plane 9.30 · --text on every --grad-soft / --grad-panel
  *          stop ≥ 14
- *   dark   --action-ink on --action 11.82 · --action on --bg 14.35, on
+ *   dark   --action-ink on --action 11.82 · --action on the navy --bg 14.22 ·
  *          --action-subtle 11.07 · --action-ink on gradient stops ≥ 11.8 ·
  *          --brand-mark on --brand-plane 12.51 · --text on panel stops ≥ 12
  */
@@ -34,8 +35,8 @@ html[data-brand='goapply'] {
   --brand-plane: #0E3B32;
   --grad-brand: linear-gradient(180deg, #145A4B, #0E4A3E);
   --grad-brand-hover: linear-gradient(180deg, #10503F, #0A3A31);
-  --grad-soft: linear-gradient(135deg, #F8F6EE, #ECF2E8 58%, #F3F2E7);
-  --grad-panel: linear-gradient(140deg, #F2F3E9, #E2EFE6 48%, #EDF1E2);
+  --grad-soft: linear-gradient(135deg, #F5FBF8, #ECF7F1 58%, #F2F7FA);
+  --grad-panel: linear-gradient(140deg, #ECF7F1, #E2F3EA 48%, #EEF5F7);
 }
 
 html[data-brand='goapply'][data-theme='dark'] {
@@ -47,6 +48,6 @@ html[data-brand='goapply'][data-theme='dark'] {
   --brand-plane: #10241F;
   --grad-brand: linear-gradient(180deg, #B8F5D6, #A6F2CC);
   --grad-brand-hover: linear-gradient(180deg, #CCF8E1, #B5F4D4);
-  --grad-soft: linear-gradient(135deg, #1B1C1C, #1C211E 58%, #1A1F1C);
-  --grad-panel: linear-gradient(140deg, #1F2421, #22291F 48%, #1D2621);
+  --grad-soft: linear-gradient(135deg, #121A1E, #13211F 58%, #141C22);
+  --grad-panel: linear-gradient(140deg, #13211F, #142722 48%, #151F24);
 }

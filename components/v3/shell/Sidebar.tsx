@@ -1,6 +1,8 @@
 'use client';
 
-// Sidebar — the 248px nav rail (.side). Top→bottom: BrandLogo, the top group
+// Sidebar — the 240px nav rail (.side), laid out as resume.io's app rail
+// (docs/resume-io/TEARDOWN.md). Top→bottom: BrandLogo, the person
+// (SidebarProfile: avatar, profile completeness, target role), the top group
 // of destinations, the lower group (Coaching, Invite friends, Get the
 // extension, Settings, the plan badge, Admin), and — while the user is inside
 // /settings — the Settings section list.
@@ -10,9 +12,9 @@
 // only for its brand, when its page is ready, when its capability flag is on
 // and when its gate (admin role, coach roster, invite programme, published
 // extension) passes. Every destination is ready since INT-12, so on RoboApply
-// the rail is Jobs · Ready to apply · Applications · Resume · Interview prep ·
-// Profile, then Coaching, Invite friends, Get the extension, Settings
-// (+ Admin) — each only while its flag and gate allow it.
+// the rail is Dashboard · Jobs · Ready to apply · Applications · Resume ·
+// Interview prep · Profile, then Coaching, Invite friends, Get the extension,
+// Settings (+ Admin) — each only while its flag and gate allow it.
 //
 // Badges are named by the entry and computed by the owning area's hook
 // (hooks/shared/navBadges.ts). The rail draws what the hook returns and
@@ -25,15 +27,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useAuth } from '../../../lib/auth/useAuth';
 import { cn } from '../../../lib/utils';
 import { useNavBadges, NAV_BADGE_LABEL_KEYS, type NavBadgeValue } from '../../../hooks/shared/navBadges';
 import { SettingsRail } from '../../features/settings';
 import { PlanBadge } from '../../features/credits/PlanBadge';
 import { BrandLogo } from './BrandLogo';
 import { buildNav, useVisibleNav, type NavEntry } from './destinations';
+import { SidebarProfile } from './SidebarProfile';
 import styles from './shell.module.css';
-import { IconFile, IconSearch, IconSparkle } from '../primitives/Iconset';
 
 // Kept for existing importers: the tracker's no-reply count moved to the
 // Applications badge hook, which owns it now.
@@ -86,7 +87,6 @@ export function NavBadge({ id, value }: { id: NonNullable<NavEntry['badge']>; va
 export function Sidebar({ className }: { className?: string } = {}) {
   const pathname = usePathname() ?? '';
   const t = useTranslations('nav');
-  const { user } = useAuth();
   const nav = useVisibleNav();
   const badges = useNavBadges();
   const inSettings = pathname === '/settings' || pathname.startsWith('/settings/');
@@ -103,8 +103,8 @@ export function Sidebar({ className }: { className?: string } = {}) {
         className={cn('nav-item', badge !== null && !active && 'notif')}
         aria-current={active ? 'page' : undefined}
       >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-          <Icon size={15} />
+        <span className="nav-item-label">
+          <Icon size={22} />
           {t(item.labelKey)}
         </span>
         {item.badge ? <NavBadge id={item.badge} value={badge} /> : null}
@@ -116,15 +116,7 @@ export function Sidebar({ className }: { className?: string } = {}) {
     <aside className={cn('side', className)} aria-label={t('aria_primary')}>
       <BrandLogo />
 
-      <div className="workspace-identity">
-        <span className="workspace-avatar" aria-hidden="true">
-          {user?.name?.trim().slice(0, 1).toUpperCase() || '·'}
-        </span>
-        <div>
-          <strong>{t('workspace')}</strong>
-          <span>{t('workspace_note')}</span>
-        </div>
-      </div>
+      <SidebarProfile />
 
       <nav className="nav">
         {nav.top.map(renderLink)}
@@ -136,14 +128,6 @@ export function Sidebar({ className }: { className?: string } = {}) {
         <PlanBadge variant="rail" />
         {inSettings ? <SettingsRail /> : null}
       </nav>
-
-      <div className="workspace-guide">
-        <div className="workspace-guide-path" aria-hidden="true">
-          <IconSearch size={18} /><i /><IconFile size={18} /><i /><IconSparkle size={18} />
-        </div>
-        <strong>{t('guide')}</strong>
-        <p>{t('guide_note')}</p>
-      </div>
     </aside>
   );
 }

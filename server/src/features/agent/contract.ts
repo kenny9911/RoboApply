@@ -328,6 +328,46 @@ export interface PrepareProposal {
   started?: string[];
 }
 
+// ── The Assistant's reads (docs/agent-driven/REDESIGN.md §1, §9) ──────────
+//
+// The Assistant (copilot) puts a job on the list and prepares its application
+// through this area's public surface (`agentService` in index.ts), never its
+// tables. These two reads are what its tools see before the user confirms
+// anything; the writes are `addToQueue` and `prepare` themselves.
+
+/** One job's place on the user's list, as the Assistant reads it (`agentService.jobPlaces`). */
+export interface JobPlaceView {
+  jobId: string;
+  /**
+   * The job as the list shows it; null when it cannot go on this user's list
+   * (not found for them, another market, or no link to open on this brand).
+   */
+  job: QueueJobSummary | null;
+  /** The job's list item; null when the job is not on the list. */
+  item: QueueItemView | null;
+}
+
+export interface JobPlacesResponse {
+  items: JobPlaceView[];
+  /** The list holds MAX_ACTIVE_QUEUE_ITEMS active jobs: another one cannot be added now. */
+  listFull: boolean;
+}
+
+/** What preparing one job's application uses, before anything is spent (`agentService.quoteJob`). */
+export interface JobPrepareQuote extends JobPlaceView {
+  listFull: boolean;
+  /** The weekly setting "tailor each application" (with AI on and this off, the resume is used as it is). */
+  tailorEach: boolean;
+  /**
+   * The cost: the lines POST /agent/queue/:id/prepare answers without
+   * `confirm` for the job's item, or for the job as `addToQueue` would put it
+   * on the list (one kit, tailoring and a letter as the settings and the post
+   * ask). Null when the job cannot be prepared from here: not on this user's
+   * list (`job` null), closed, or past "To prepare" (it is not prepared twice).
+   */
+  proposal: PrepareProposal | null;
+}
+
 export const ConfirmPartBodySchema = z
   .object({ part: z.enum(['resume', 'letter']), decision: z.enum(['use', 'revise']), instruction: z.string().max(1000).optional() })
   .strict();

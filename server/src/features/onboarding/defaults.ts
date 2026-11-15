@@ -6,7 +6,7 @@
 
 import { DAY, consumeRateLimit, rateLimitKey } from '../../platform/ratelimit/index.js';
 import { aiAllowed } from '../../platform/consent/index.js';
-import { enqueue } from '../../platform/queue/index.js';
+import { enqueue, kickDrain } from '../../platform/queue/index.js';
 import { LLM_PII_KINDS, redactPii } from '../../platform/pii/index.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { logger } from '../../services/LoggerService.js';
@@ -20,7 +20,7 @@ import { ONBOARDING_RESUME_UPLOADS_PER_DAY, type TitleSuggestionView } from './c
 import { createPrismaOnboardingRepo, type OnboardingRepo, type ResumeVariantRow } from './repo.js';
 import { createSnapshotLoader, type SnapshotDb } from './snapshot.js';
 import { createOnboardingService, type OnboardingDeps, type OnboardingServiceImpl } from './service.js';
-import { fitsForRanking, type MatchPipelineDeps } from './match.js';
+import { fitsForRanking, onboardingMatchQueueItem, type MatchPipelineDeps } from './match.js';
 import { foldToSimplified } from './zhFold.js';
 
 /** O5 AI role suggestion: only waits this long (the deterministic seed already answered). */
@@ -172,6 +172,12 @@ export function createDefaultOnboardingDeps(repo: OnboardingRepo = createPrismaO
         { userId, dedupeKey: `resume.grade:onboarding:${userId}` },
       );
     },
+    // Setup was confirmed while no search was at work: the whole search runs in the background, now.
+    async queueMatch(userId, brand) {
+      const item = onboardingMatchQueueItem(userId, 'reading');
+      await enqueue(item.kind, item.payload, { ...item.options, brand: brand.id });
+      kickDrain([item.kind]);
+    },
     warn: (message, meta) => logger.warn('ONBOARDING', message, meta),
   };
 }
@@ -222,6 +228,10 @@ export function createDefaultMatchDeps(
       return isFeedPersonalized(userId, brand.market);
     },
     enqueue: (kind, payload, options) => enqueue(kind, payload, { ...options, brand: brand.id }),
+    // The rest of a run runs at once (after the response on Vercel, through `waitUntil`), not at the next cron.
+    kick: (kind) => {
+      kickDrain([kind]);
+    },
     log: (msg, meta) => logger.info('ONBOARDING_MATCH', msg, meta),
   };
 }

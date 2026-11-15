@@ -98,6 +98,18 @@ export const BRANCH_ONLY_STAGES: Readonly<Partial<Record<OnboardingStage, Onboar
 /** Stages without Skip (PRODUCT §4.1: the intl situation step and the cn identity step), plus the non-step stages. */
 export const UNSKIPPABLE_STAGES: readonly OnboardingStage[] = ['account', 'situation', 'consent', 'identity', 'matching', 'done'];
 
+/**
+ * The one exception to "no jumping ahead" (docs/agent-driven/REDESIGN.md §9):
+ * on RoboApply `confirm` may be saved while the stage is still `matching`.
+ * The search (O6) takes no answer from the user, so setup can be finished
+ * while it runs on, or after it failed or never started, instead of holding
+ * the user on the search. The run stores its result whenever it ends and
+ * never moves the stage back; a confirm that finds no search running and no
+ * result queues one (`onboarding.match`). GoApply keeps the strict order: its
+ * confirm screen shows what the search found (onboarding-cn).
+ */
+export const CONFIRM_WHILE_MATCHING: Readonly<Record<BrandId, boolean>> = { roboapply: true, goapply: false };
+
 // ── Stage → route (canonical; WP-30 may extend, never change) ─────────────
 
 /**
@@ -176,6 +188,18 @@ export function firstValueRoute(brand: BrandId, ctx: FirstValueContext = {}): st
   if (campus) return '/campus';
   if (feed) return '/jobs';
   return '/resume';
+}
+
+/**
+ * Where a signed-in user with setup finished lands when they asked for no page
+ * in particular (docs/agent-driven/REDESIGN.md §3): the Dashboard on RoboApply,
+ * which carries the agent desk. GoApply
+ * keeps its first-value page (R-14: `/campus` → `/jobs` → `/resume`), which is
+ * a market rule, not a navigation default. The `tour` stage is NOT this route:
+ * the classic flow's tour cards show on `/jobs` (`firstValueRoute`).
+ */
+export function homeRoute(brand: BrandId, ctx: FirstValueContext = {}): string {
+  return brand === 'roboapply' ? '/dashboard' : firstValueRoute(brand, ctx);
 }
 
 /** Route for a stage; `tour` resolves through `firstValueRoute`, `done` → null. */
@@ -579,6 +603,36 @@ export interface OnboardingMatchResult {
   searchCountCapped?: boolean;
 }
 
+/**
+ * `onboardingAnswers.matchRun`: the O6 search's record of its latest run, so
+ * a screen opened later (the Dashboard) can tell a search that is still at
+ * work from one that ended. Written when a live run starts, when its rest is
+ * handed to the queue, and when it fails; a result stored since `startedAt`
+ * (`answers.matching.finishedAt`) means the run ended. See `searchRunningOf`
+ * (match.ts).
+ */
+export interface OnboardingMatchRun {
+  /** When the run started (ISO): a live request, or a confirm that queued one. */
+  startedAt: string;
+  /** The rest was handed to the queue (`onboarding.match`) at this time: a worker finishes it. */
+  queuedAt?: string;
+  /** The run failed at this time and nothing was queued: no result will come of it. */
+  failedAt?: string;
+}
+
+/**
+ * How long a live run counts as running at most: the hard cap, plus what the
+ * last phase may overrun it (the ingest budget ends 30 s before the cap), plus
+ * a margin. A run whose request died without a word stops counting then.
+ */
+export const ONBOARDING_MATCH_LIVE_WINDOW_MS = ONBOARDING_MATCH_HARD_CAP_MS + 60_000;
+/**
+ * How long a run handed to the queue counts as running at most: the drain is
+ * kicked when it is queued, the queue-drain cron runs every 5 minutes, and the
+ * rest takes about a minute. A queue item that never ran stops counting then.
+ */
+export const ONBOARDING_MATCH_QUEUED_WINDOW_MS = 8 * 60_000;
+
 /** `onboardingAnswers.resumeSuggestions`: what POST /onboarding/resume suggested (O7 chips). */
 export type OnboardingResumeSuggestions = OnboardingResumeResponse & { resumeVariantId: string };
 
@@ -617,6 +671,16 @@ export interface OnboardingStateView extends OnboardingStateResponse {
    * (R-14), 社招 → `/jobs`. Where a finished user is sent from /onboarding.
    */
   firstValueRoute?: string;
+  /**
+   * The setup search (O6) is still at work for this user: a live run that
+   * started less than `ONBOARDING_MATCH_LIVE_WINDOW_MS` ago, or the rest of one
+   * handed to the queue less than `ONBOARDING_MATCH_QUEUED_WINDOW_MS` ago, with
+   * no result stored since. Setup may already be finished (RoboApply confirms
+   * while the search runs on). The Dashboard's Job search lane waits for it
+   * before it reads the picks. False once a result is stored, after a failure,
+   * and when the window ran out: a run that died never holds a screen.
+   */
+  searchRunning?: boolean;
 }
 
 /** GET /onboarding/title-suggest (extends FND's TitleSuggestion). */

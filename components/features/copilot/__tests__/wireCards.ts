@@ -13,6 +13,7 @@ import { createProposalService } from '../../../../server/src/features/copilot/p
 import type { CopilotStore, ProposalRow } from '../../../../server/src/features/copilot/store';
 import type { CopilotAreas, CopilotTool, ToolContext } from '../../../../server/src/features/copilot/types';
 import { addExternalJob, draftOutreach, findConnections, interviewPrep, tailorResume, writeCoverLetter } from '../../../../server/src/features/copilot/tools/actions';
+import { addToList, prepareApplication } from '../../../../server/src/features/copilot/tools/applications';
 import { getCurrentFilters, proposeFilterChange, setSort } from '../../../../server/src/features/copilot/tools/filters';
 import { analyzeFit, companyInsights, competitiveness, salaryContext, topFitJobs } from '../../../../server/src/features/copilot/tools/jobs';
 import { applicationSummary, campusDeadlines, getProfileGaps, remember, resumeIssues, rewriteResumeSection } from '../../../../server/src/features/copilot/tools/you';
@@ -210,6 +211,7 @@ export async function wireCards(): Promise<Record<CardType, CopilotCard>> {
     now: () => NOW,
     hasConsent: async () => true,
     newCardId: () => `card_${++cardN}`,
+    isEnabled: async () => true,
   });
 
   const out: Partial<Record<CardType, CopilotCard>> = {};
@@ -244,12 +246,16 @@ export async function wireCards(): Promise<Record<CardType, CopilotCard>> {
   take(await run(competitiveness, { jobId: 'job_1' }));
   take(await run(resumeIssues, {}));
   take(await applied(await run(rewriteResumeSection, { issueId: 'iss_1' })));
+  // The applications agent: both suggestions, and the status card an applied one answers with.
+  take(await run(addToList, { jobId: 'job_1' }));
+  take(await applied(await run(prepareApplication, { jobId: 'job_1' })));
+  take(await run(prepareApplication, { jobId: 'job_1' }));
   out.notice = { type: 'notice', id: 'card_notice', data: { code: 'copilot_budget_exhausted' } };
   return out as Record<CardType, CopilotCard>;
 }
 
 /** A tool context over the wire fakes, with a proposal store behind `propose` (for the apply paths below). */
-function wireHarness(over: Partial<CopilotAreas> = {}, opts: { market?: 'intl' | 'cn' } = {}) {
+function wireHarness(over: Partial<CopilotAreas> = {}, opts: { market?: 'intl' | 'cn'; agent?: boolean } = {}) {
   const areas = fakeAreas({ ...WIRE_AREAS, ...over });
   const store = memoryStore();
   const brand = getBrand(opts.market === 'cn' ? 'goapply' : 'roboapply');
@@ -275,8 +281,42 @@ function wireHarness(over: Partial<CopilotAreas> = {}, opts: { market?: 'intl' |
     hasConsent: async () => false,
     newCardId: () => `card_w${++n}`,
   };
-  const service = createProposalService({ store, areas, brand: () => brand, now: () => NOW, hasConsent: async () => false, newCardId: () => `card_w${++n}` });
+  const service = createProposalService({
+    store,
+    areas,
+    brand: () => brand,
+    now: () => NOW,
+    hasConsent: async () => false,
+    newCardId: () => `card_w${++n}`,
+    isEnabled: async (key) => (opts.agent === false ? key !== 'agent' : true),
+  });
   return { areas, ctx, service };
+}
+
+/**
+ * The applications agent end to end: the suggestion card the tool sends
+ * (`add_to_list` → list_add, `prepare_application` → prepare_application, or
+ * an application_status card for a job already on the list), and what
+ * `POST /proposals/:id/apply` answers once the user confirms: the body, or
+ * the error envelope's code and details as they travel.
+ */
+export async function wireApplication(
+  tool: 'add_to_list' | 'prepare_application',
+  over: Partial<CopilotAreas> = {},
+  opts: { agent?: boolean } = {},
+): Promise<{ proposal: CopilotCard; applied: { applied: boolean; result: unknown } | null; error: { code: string; details: Record<string, unknown> } | null }> {
+  const { ctx, service } = wireHarness(over, { agent: opts.agent });
+  const out = tool === 'add_to_list' ? await addToList.run({ jobId: 'job_1' }, ctx) : await prepareApplication.run({ jobId: 'job_1' }, ctx);
+  const proposal = out.cards![0]!;
+  const proposalId = (proposal.data as { proposalId?: string }).proposalId;
+  if (!proposalId) return { proposal, applied: null, error: null };
+  try {
+    const applied = await service.apply(USER, proposalId, { locale: 'en' });
+    return { proposal, applied: JSON.parse(JSON.stringify(applied)) as { applied: boolean; result: unknown }, error: null };
+  } catch (err) {
+    const e = err as { code?: string; details?: unknown };
+    return { proposal, applied: null, error: { code: e.code ?? 'internal_error', details: JSON.parse(JSON.stringify(e.details ?? {})) as Record<string, unknown> } };
+  }
 }
 
 /** Cards that only some tool runs produce (the outreach, rewrite and job-import proposals). */

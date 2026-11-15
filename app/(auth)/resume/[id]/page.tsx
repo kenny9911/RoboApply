@@ -11,6 +11,24 @@
 // sessions: pick a saved job or paste the posting → setup → Verify details →
 // Use this resume), and a Download modal.
 //
+// Tabs (resume.io's editor layout; components/features/resume/editor): a tab
+// strip under the toolbar switches the LEFT pane; the preview stays beside
+// every tab.
+//   Edit       the structured form above (default)
+//   Customize  template and layout, section order, photo and personal details
+//              (they sat folded in the preview column before)
+//   Review     this resume's latest check: rating, score, issues by section,
+//              Check again, and a link to the full check page
+//   Tailor     ("New") the hub's AI tailoring panel for this resume, opening the
+//              Tailor sheet; listed only when useTailorAvailability says AI
+//              tailoring may run (R-04)
+// The open tab lives in `?tab=` (router.replace, no scroll), so a link can open
+// a tab and Back returns to it. The Edit form stays mounted while hidden (its
+// rows keep their state); another tab's content mounts when it first opens.
+// A jump to a section (analyzer, "Show the first one", `?focus=`, a Review
+// issue) opens Edit first. `?tailor=` / `?tailorSession=` (TailorLaunchHost)
+// and `?focus=` keep working on any tab.
+//
 // Data + state model:
 //   • `useResume(id)` (existing) → seeds local `structured` parsed from
 //     `resume.resumeMarkdown` via lib/resumeStructure (CLIENT-SIDE markdown↔
@@ -71,16 +89,27 @@ import {
 import {
   AskAssistantButton,
   FitToPageControl,
-  LayoutPanel,
-  ResumeDetailsPanel,
-  SectionOrderPanel,
   docLanguageOf,
   layoutPatch,
   personalLineFor,
   resolveLayout,
 } from '../../../../components/features/resume';
+// The tab strip and its panels come from the editor's own folder (they are not
+// part of the resume area's index the toolbar and the hub use).
+import {
+  CustomizePanel,
+  EditorTabBar,
+  EditorTabPanel,
+  ReviewPanel,
+  TailorTab,
+  editorSectionIdFor,
+  useEditorTab,
+  useOpenedTabs,
+  type EditorTab,
+} from '../../../../components/features/resume/editor';
 import { useBuilderConfig } from '../../../../hooks/resume/useResumeBuilder';
 import { useResumePhoto } from '../../../../hooks/resume/useResumePhoto';
+import { useTailorAvailability } from '../../../../hooks/tailor';
 import { TailorLaunchHost, TailorSheet } from '../../../../components/features/tailor';
 import { DeleteResumeConfirm } from '../../../../components/resumes/DeleteResumeConfirm';
 import layoutStyles from '../../../../components/features/resume/ResumeHub.module.css';
@@ -110,11 +139,21 @@ import {
   YOUNG_HELPERS,
 } from '../../../../components/v3/resume-editor';
 
+// The editor reads the open tab from the query string (useSearchParams), so it
+// renders under Suspense, the App Router's rule for that hook.
 export default function ResumeEditorPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  return (
+    <Suspense fallback={<EditorLoading />}>
+      <ResumeEditor params={params} />
+    </Suspense>
+  );
+}
+
+function ResumeEditor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const t = useTranslations('resume');
   const router = useRouter();
@@ -141,9 +180,17 @@ export default function ResumeEditorPage({
   const photo = useResumePhoto(id);
   const placedPhoto = photoOffered && layout.photo ? photo.photo : null;
 
+  // Tabs: the one in the URL, shown if it is on offer (Tailor needs AI
+  // tailoring for this user, R-04), else Edit.
+  const { tab: requestedTab, select: selectTab } = useEditorTab();
+  const tailorTab = useTailorAvailability(id).available;
+  const tab: EditorTab = requestedTab === 'tailor' && !tailorTab ? 'edit' : requestedTab;
+  const openedTabs = useOpenedTabs(tab);
+
   const [resumeName, setResumeName] = useState('');
   const [coachOpen, setCoachOpen] = useState(true);
-  const [tailorOpen, setTailorOpen] = useState(false);
+  // The Tailor sheet: open (for a saved job, or with none chosen yet) or closed.
+  const [tailoring, setTailoring] = useState<{ jobId: string | null; jobTitle: string | null } | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [skillSuggestions, setSkillSuggestions] = useState<string[]>([]);
@@ -240,25 +287,33 @@ export default function ResumeEditorPage({
   const verifySessionId = unverifiedClaims > 0 ? (hubList.data?.resumes.find((r) => r.id === id)?.tailorSessionId ?? null) : null;
   const verifyHref = unverifiedClaims > 0 ? (verifySessionId ? `/resume?tailorSession=${encodeURIComponent(verifySessionId)}` : '/resume') : null;
 
-  // Analyzer anchors → editor section DOM ids (exp-<id> passes through: the
-  // experience cards carry that id directly).
-  const jumpToIssue = useCallback((anchor?: string) => {
-    if (!anchor) return;
-    const sectionMap: Record<string, string> = {
-      'section-contact': 'identity',
-      'section-target': 'identity',
-      'section-summary': 'summary',
-      'section-experience': 'experience',
-      'section-education': 'education',
-      'section-skills': 'skills',
-      'section-projects': 'extra-sections',
-    };
-    const domId = anchor.startsWith('exp-') ? anchor : sectionMap[anchor];
-    if (!domId) return;
-    document
-      .getElementById(domId)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, []);
+  // Analyzer and check anchors → editor section DOM ids (editorSectionIdFor;
+  // exp-<id> passes through: the experience cards carry that id directly).
+  // The sections are in the Edit tab: from another tab, open Edit first and
+  // scroll once it shows.
+  const pendingJumpRef = useRef<string | null>(null);
+  const jumpToIssue = useCallback(
+    (anchor?: string) => {
+      const domId = editorSectionIdFor(anchor);
+      if (!domId) return;
+      if (tab !== 'edit') {
+        pendingJumpRef.current = domId;
+        selectTab('edit');
+        return;
+      }
+      scrollToSection(domId);
+    },
+    [tab, selectTab],
+  );
+  useEffect(() => {
+    if (tab !== 'edit' || !pendingJumpRef.current) return;
+    const handle = window.setTimeout(() => {
+      const domId = pendingJumpRef.current;
+      pendingJumpRef.current = null;
+      if (domId) scrollToSection(domId);
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, [tab]);
 
   // /resume/[id]?focus=section-… (links from the resume check report): jump
   // once the structured editor has rendered.
@@ -531,12 +586,15 @@ export default function ResumeEditorPage({
           coachOpen={coachOpen}
           onToggleCoach={() => setCoachOpen((o) => !o)}
           onDownload={() => setDownloadOpen(true)}
-          onTailor={() => setTailorOpen(true)}
+          onTailor={() => setTailoring({ jobId: null, jobTitle: null })}
           onDelete={() => setDeleteOpen(true)}
           onBack={() => router.push('/resume')}
           resumeId={id}
           aiEnabled={aiEnabled}
         />
+
+        {/* Edit · Customize · Review · Tailor: what the left pane shows. */}
+        <EditorTabBar value={tab} onChange={selectTab} tailor={tailorTab} />
 
         {/* Not ready to send yet: unchecked details of a tailored version, and blanks left by an AI suggestion. */}
         {verifyHref ? (
@@ -557,8 +615,9 @@ export default function ResumeEditorPage({
         ) : null}
 
         <div className="rb-split">
-          {/* LEFT — structured editor */}
-          <div className="rb-edit-pane">
+          {/* LEFT — the open tab. Edit: the structured editor, always mounted and only
+              hidden behind another tab, so its rows keep their state. */}
+          <EditorTabPanel tab="edit" active={tab === 'edit'} className="rb-edit-pane">
             {/* The cost of an AI edit, before the click. */}
             {aiEnabled ? (
               <div className={layoutStyles.creditLine} data-credit="rewrite">
@@ -940,9 +999,41 @@ export default function ResumeEditorPage({
                 ))}
               </EditorSection>
             ) : null}
-          </div>
+          </EditorTabPanel>
 
-          {/* RIGHT — paper preview */}
+          {/* The other tabs, in the same column: each mounts when first opened, then stays while hidden. */}
+          <EditorTabPanel tab="customize" active={tab === 'customize'} className="rb-edit-pane">
+            {openedTabs.has('customize') ? (
+              <CustomizePanel
+                layout={layout}
+                defaultPage={defaultPage}
+                saving={layoutMut.isPending}
+                error={layoutMut.isError}
+                onLayoutChange={(change) => layoutMut.mutate(layoutPatch(change))}
+                resume={structured}
+                onResumeChange={updateStructured}
+                storedLayout={resume.layout}
+                personalFields={personalFields}
+                photoOffered={photoOffered}
+                photo={photo}
+                onDetailsPatch={(change) => layoutMut.mutate(change)}
+              />
+            ) : null}
+          </EditorTabPanel>
+          <EditorTabPanel tab="review" active={tab === 'review'} className="rb-edit-pane">
+            {openedTabs.has('review') ? (
+              <ReviewPanel resumeId={id} onShowSection={jumpToIssue} onCustomize={() => selectTab('customize')} />
+            ) : null}
+          </EditorTabPanel>
+          {tailorTab ? (
+            <EditorTabPanel tab="tailor" active={tab === 'tailor'} className="rb-edit-pane">
+              {openedTabs.has('tailor') ? (
+                <TailorTab resumeId={id} onTailor={(job) => setTailoring(job ? { jobId: job.jobId, jobTitle: job.title } : { jobId: null, jobTitle: null })} />
+              ) : null}
+            </EditorTabPanel>
+          ) : null}
+
+          {/* RIGHT — paper preview (beside every tab) */}
           <div className="rb-preview-pane">
             <div className="rb-preview-bar">
               <span className="rb-preview-lbl">{t('preview.label')}</span>
@@ -954,33 +1045,7 @@ export default function ResumeEditorPage({
             <div className="rb-preview-bar">
               <AskAssistantButton resumeId={id} enabled={aiEnabled} />
             </div>
-            <details className={layoutStyles.layoutDetails}>
-              <summary className={layoutStyles.layoutSummary}>{tb('order')}</summary>
-              <SectionOrderPanel resume={structured} onChange={updateStructured} />
-            </details>
-            {personalFields.length > 0 || photoOffered ? (
-              <details className={layoutStyles.layoutDetails}>
-                <summary className={layoutStyles.layoutSummary}>{tb('details')}</summary>
-                <ResumeDetailsPanel
-                  layout={resume.layout}
-                  personalFields={personalFields}
-                  photoOffered={photoOffered}
-                  photo={photo}
-                  saving={layoutMut.isPending}
-                  onPatch={(change) => layoutMut.mutate(change)}
-                />
-              </details>
-            ) : null}
-            <details className={layoutStyles.layoutDetails}>
-              <summary className={layoutStyles.layoutSummary}>{t('layout.title')}</summary>
-              <LayoutPanel
-                value={layout}
-                defaultPage={defaultPage}
-                saving={layoutMut.isPending}
-                error={layoutMut.isError}
-                onChange={(change) => layoutMut.mutate(layoutPatch(change))}
-              />
-            </details>
+            {/* Section order, details and layout are in the Customize tab. */}
             <div className="rb-paper-wrap">
               <ResumePaper
                 resume={structured}
@@ -1002,15 +1067,18 @@ export default function ResumeEditorPage({
         />
       ) : null}
 
-      {/* Tailor (toolbar): the tailor-session flow. With no job in the URL the
-          user first picks a saved job or pastes the posting (INT-10). */}
-      {tailorOpen ? (
+      {/* Tailor (toolbar, or the Tailor tab): the tailor-session flow. With no
+          job chosen the user first picks a saved job or pastes the posting
+          (INT-10); a saved job picked in the Tailor tab goes straight to setup. */}
+      {tailoring ? (
         <TailorSheet
           open
           resumeId={id}
-          onClose={() => setTailorOpen(false)}
+          jobId={tailoring.jobId}
+          jobTitle={tailoring.jobTitle}
+          onClose={() => setTailoring(null)}
           onOpenResume={(variantId) => {
-            setTailorOpen(false);
+            setTailoring(null);
             router.push(`/resume/${variantId}`);
           }}
         />
@@ -1111,6 +1179,11 @@ function EntryControls({
   );
 }
 
+/** Bring an Edit-tab section into view (it must be showing). */
+function scrollToSection(domId: string) {
+  document.getElementById(domId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 /** Inline-edit input that visually inherits the surrounding text style. */
 function inlineInput(): React.CSSProperties {
   return {
@@ -1122,6 +1195,11 @@ function inlineInput(): React.CSSProperties {
     padding: 0,
     width: '100%',
   };
+}
+
+function EditorLoading() {
+  const t = useTranslations('resume');
+  return <EditorMessage title={t('state.loading')} />;
 }
 
 function EditorMessage({

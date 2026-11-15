@@ -119,6 +119,16 @@ lint` is not usable (Next 16 removed `next lint`). CI (`.github/workflows/ci.yml
 runs both typechecks, `npm test` and `npm run check` for the root, and the
 extension and interview-agent suites separately.
 
+## Recent work
+
+The resume.io clone and the agent-driven redesign are merged (PR #17,
+2026-11-13). The design system is now Desk (`docs/design-system.md`; teardown in
+`docs/resume-io/TEARDOWN.md`), the signed-in home is `/dashboard` (`/today` and
+`/home` redirect to it), and "Ready to apply" is the Getting ready view of
+Applications (`docs/agent-driven/REDESIGN.md`, §11 for how the two meet). The
+product still never submits an application (R1/D1). Preview the UI without a
+backend: `node scripts/design-preview.mjs` (port 3612).
+
 ## Verification
 
 - Run the smallest relevant test first, then the full affected suite.

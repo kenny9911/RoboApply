@@ -3,6 +3,9 @@
 // /applications — "where did I apply, and what happened?" (WP-38; PRODUCT
 // F-TRK-01…03, F-NOTIF-08 facts, F-JOB-07).
 //
+//   switch          Getting ready · Sent (flag `agent`; this page is "Sent".
+//                   docs/agent-driven/REDESIGN.md §7). Two links, not tabs:
+//                   /ready keeps its own page. Flag off: not rendered.
 //   PageHeader      "{n} in progress" + headline + how to move cards
 //   toolbar         Add a job · Download as CSV
 //   FollowUpBanner  facts that need attention (no reply in 10 days, …; C11)
@@ -33,6 +36,7 @@ import { MetricGrid } from '../../../components/v3/primitives/MetricGrid';
 import { PipelineBoard, columnsFor, columnIndexForStatus, isInProgress, type TrackerMarket } from '../../../components/v3/pipeline';
 import {
   AddJobSheet,
+  ApplicationsSwitch,
   ApplicationsToolbar,
   ByDateView,
   EntryLoadErrorNote,
@@ -122,6 +126,7 @@ function Applications() {
 
   return (
     <>
+      <ApplicationsSwitch current="sent" />
       <PageHeader
         eyebrow={data ? t('eyebrow', { count: activeCount }) : t('loading')}
         eyebrowLive={Boolean(data)}

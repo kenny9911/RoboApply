@@ -1,8 +1,9 @@
 // No request ever reaches native fetch. CSP also rejects connections, media,
 // external images, frames, and form submissions as a second local boundary.
+import type { QueueItemView, QueueListResponse, ReadyBadgeResponse } from '../../lib/api/contracts/agent';
 import type { PublicBrand } from '../../lib/api/contracts/brand';
 import type { MatchExplanation } from '../../lib/api/contracts/compliance';
-import type { FeedItem, FeedQueryResponse, FitTier, NewCountResponse } from '../../lib/api/contracts/feed';
+import type { FeedItem, FeedQueryResponse, FitTier, NewCountResponse, SkillsCheckResponse } from '../../lib/api/contracts/feed';
 import type { JobDetailResponse, ScoreJobResponse } from '../../lib/api/contracts/jobs/detail';
 import type { SearchProfileListWire } from '../../lib/api/contracts/search';
 import type { ResolvedFlags } from '../../lib/flags';
@@ -146,6 +147,21 @@ const builderConfig = {
   personalFields: [], salaryKinds: [], certificateSuggestions: [],
 };
 
+// The Dashboard (the signed-in home, with the agent desk; /today redirects to
+// it in the app) is reviewed with Ready to apply on, which no other
+// preview route is. So that every other route renders exactly as before, the
+// `agent` flag and the fixtures below apply only when the PAGE WAS LOADED at
+// the home (a full load, decided once: flags must not flip while a page is open).
+// `/dashboard?agent=off` shows the layout without Ready to apply: the picks are
+// then the top of the example feed and the lane shows the tracker's numbers.
+// Any other route can be reviewed with Ready to apply on by loading it with
+// `?agent=on` (the job card's "Prepare application", the Getting ready · Sent
+// switch); the agent fixtures then answer there too.
+const agentParam = new URLSearchParams(window.location.search).get('agent');
+const homePaths = ['/dashboard', '/', '/today'];
+const todayPreview = homePaths.includes(window.location.pathname) || agentParam === 'on';
+const todayAgent = todayPreview && agentParam !== 'off';
+
 // Jobs feed fixtures. /jobs lists jobs only when `jobs.feed` is on, so the
 // public brand enables it alongside the resume hub's AI capabilities. Other
 // flags stay off (a missing key reads as off). The first page holds
@@ -157,7 +173,7 @@ const brand = {
   id: 'roboapply', market: 'intl', name: 'RoboApply', canonicalOrigin: 'https://www.roboapply.io',
   locales: ['en', 'zh', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'pt', 'de'], defaultLocale: 'en',
   currency: 'USD', defaultCountry: 'US', authMethods: ['email_password', 'google'], paymentRails: [],
-  flags: { hiringContacts: 'off', 'jobs.feed': true, 'ai.text': true, copilot: true },
+  flags: { hiringContacts: 'off', 'jobs.feed': true, 'ai.text': true, copilot: true, ...(todayAgent ? { agent: true } : {}) },
   otherBrand: { id: 'goapply', name: 'GoApply', canonicalOrigin: 'https://www.goapply.top' },
 } satisfies Omit<PublicBrand, 'flags'> & { flags: Partial<ResolvedFlags> };
 
@@ -274,9 +290,9 @@ const feedJobs: FeedItem[] = [
   },
 ];
 
-const feedPage: FeedQueryResponse = { items: feedJobs, cursor: null, endOfFeed: true, hiddenByTier: 0, sessionId: 'fs_preview', order: 'personalized', sort: 'recommended', thin: false };
-
-// The split detail (`/jobs?job=<id>` on a wide screen) reads the job and its fit.
+// The split detail (`/jobs?job=<id>` on a wide screen, and the first job, which
+// a wide screen opens there by itself) reads the job and its fit. The first job
+// is read with `?preview=1`; the fixtures answer by path, so both reads match.
 const fitView = (job: FeedItem): ScoreJobResponse['fit'] => ({
   jobId: job.jobId, score: job.fit?.score ?? null, tier: job.fit?.tier ?? null, kind: job.fit?.kind ?? 'pre', dimensions: [],
   summary: job.fit?.topOverlap ?? null, strengths: job.fit?.topOverlap ? [job.fit.topOverlap] : [], gaps: job.fit?.topGap ? [job.fit.topGap] : [],
@@ -311,6 +327,67 @@ const jobDetail = (job: FeedItem): JobDetailResponse => ({
 });
 const newCount: NewCountResponse = { count: 0, since: null };
 
+// Agent-desk fixtures (only when the page was loaded at the home; see `todayPreview`).
+// The list holds one application in each state the desk counts: ready to check,
+// approved and not opened, being prepared. The suggestions are the example feed's
+// jobs that are not on the list. Resumes and the tracker come from the same
+// example data as /resume and /applications.
+const kitFor = (jobId: string, state: QueueItemView['state'], daysSince: number): QueueItemView => {
+  const job = feedJobs.find((j) => j.jobId === jobId)!;
+  return {
+    id: `q_${jobId}`, jobId, state, weekKey: 'preview', trackerEntryId: null, resumeVariantId: null, coverLetterId: null,
+    missingFields: [], addedVia: 'suggestions', openedAt: null, userMarkedSubmitted: false, updatedAt: ago(daysSince), createdAt: ago(daysSince + 1),
+    job: { title: job.title, companyName: job.company.name, location: job.location, hasApplyUrl: true, closed: false, asksForCoverLetter: false },
+    tailorSessionId: null, lastError: null, tab: 'ready',
+  };
+};
+const todayKits = [kitFor('job_preview_2', 'ready_for_review', 1), kitFor('job_preview_5', 'approved', 2), kitFor('job_preview_4', 'preparing', 0)];
+const todayQueue: QueueListResponse = { items: todayKits, counts: { to_prepare: 0, ready: todayKits.length, done: 0 }, weekKey: 'preview', nextCursor: null };
+const todayBadge: ReadyBadgeResponse = { readyNotOpened: 2 };
+// A suggestion is never on the list: the server sends each with `application: null`.
+const todaySuggestions = { items: feedJobs.filter((job) => !todayKits.some((kit) => kit.jobId === job.jobId)).slice(0, 3).map((job): FeedItem => ({ ...job, application: null })) };
+// With Ready to apply on, every card of the Jobs list carries its place on the list, as the server sends it to a
+// reader with the `agent` capability: the kits above ("Check and open", "Being prepared"), null for the others.
+// Without it the cards carry no such field, as from the server.
+const onTheList = (job: FeedItem): FeedItem => {
+  const kit = todayKits.find((k) => k.jobId === job.jobId);
+  return { ...job, application: kit ? { state: kit.state, trackerEntryId: kit.trackerEntryId } : null };
+};
+const feedPage: FeedQueryResponse = {
+  items: todayAgent ? feedJobs.map(onTheList) : feedJobs,
+  cursor: null, endOfFeed: true, hiddenByTier: 0, sessionId: 'fs_preview', order: 'personalized', sort: 'recommended', thin: false,
+};
+const todayNewCount: NewCountResponse = { count: 12, since: ago(2), capped: false };
+const todaySkills: SkillsCheckResponse = { skills: [{ skill: 'Motion design', askedIn: 9, outOf: 50 }, { skill: 'Experiment design', askedIn: 6, outOf: 50 }, { skill: 'Design tokens', askedIn: 4, outOf: 50 }] };
+const weekBucket = (cap: number, remaining: number, window: 'day' | 'week') => ({ cap, window, used: cap - remaining, remaining, grantRemaining: 0, resetsAt: new Date(Date.now() + 4 * day).toISOString() });
+const todayCredits = {
+  summary: {
+    planKey: 'free', planProfile: 'free', legacyPlan: false, interval: null, periodEnd: null, cancelAtPeriodEnd: false, timezone: 'UTC', upgradable: false,
+    buckets: { ready_kits: weekBucket(3, 2, 'week'), tailor: weekBucket(2, 2, 'day'), cover_letter: weekBucket(2, 2, 'day') },
+    entitlements: {},
+  },
+  practice: null,
+};
+const todayFixtures: Record<string, unknown> = todayPreview ? {
+  [`${base}/agent/queue`]: todayQueue,
+  [`${base}/agent/suggestions`]: todaySuggestions,
+  [`${base}/agent/badge`]: todayBadge,
+  [`${base}/credits`]: todayCredits,
+  // Two details application forms ask for are missing: the "Add details" card.
+  [`${base}/profile`]: {
+    userId: 'design-preview-avery', firstName: 'Avery', lastName: 'Chen', skills: [], completeness: 82,
+    missing: [{ key: 'phoneE164', label: 'profile.fields.phone', section: 'contact' }, { key: 'city', label: 'profile.fields.city', section: 'contact' }],
+    availability: { market: 'intl' },
+  },
+  // Setup finished: no "Finish setting up" card.
+  [`${base}/onboarding/state`]: {
+    stage: 'done', nextRoute: null, branch: null, answers: {}, entry: null, brand: 'roboapply', completed: true,
+    progress: { total: 6, stepsLeft: 0, leftEarly: null }, defaults: { country: null },
+  },
+  [`${base}/feed/new-count`]: todayNewCount,
+  [`${base}/feed/skills-check`]: todaySkills,
+} : {};
+
 const fixtures: Record<string, unknown> = {
   [`${base}/v2/resumes/cm_rv_base/grade/latest`]: { grade: resumeGrade('cm_rv_base'), previous: null, stale: false, aiAvailable: true },
   [`${base}/v2/resumes/cm_rv_ats/grade/latest`]: { grade: null, previous: null, stale: false, aiAvailable: true },
@@ -332,6 +409,16 @@ const fixtures: Record<string, unknown> = {
     currentPeriodEnd: credits.currentPeriodEnd, cancelAtPeriodEnd: false,
   },
   [`${base}/billing/credits`]: credits,
+  // The Dashboard's profile ring and completeness step (example values).
+  [`${base}/profile`]: {
+    userId: 'design-preview-avery', firstName: 'Avery', middleName: null, lastName: 'Chen', headline: 'Product designer',
+    contactEmail: 'avery@example.test', phoneE164: null, phoneType: null, addressLine1: null, city: 'Seattle', region: 'WA',
+    postalCode: null, country: 'US', links: {}, summary: null, skills: [], languages: [], workAuth: [], cnFields: null,
+    twFields: null, education: [], experience: [], completeness: 68, missing: [], availability: null,
+    syncedFromVariantId: null, updatedAt: ago(5),
+  },
+  // The Dashboard's cover letter step: one example letter.
+  [`${base}/cover-letters`]: { items: [{ id: 'cl_preview_1', title: 'Cover letter for Stripe', jobId: 'job_preview_stripe', updatedAt: ago(2) }], cursor: null, aiAvailable: true },
   [`${base}/billing/history`]: { invoices: [] },
   [`${base}/billing/plan`]: {
     region: { market: 'other', currency: 'USD', method: 'stripe', source: 'design-preview' },
@@ -347,6 +434,7 @@ const fixtures: Record<string, unknown> = {
   [`${base}/search-profiles`]: searchProfiles,
   [`${base}/feed/new-count`]: newCount,
   ...Object.fromEntries(feedJobs.map((job) => [`${base}/jobs/${job.jobId}`, jobDetail(job)])),
+  ...todayFixtures,
 };
 
 // The live room and the jobs feed are the preview surfaces that POST before they can render.
@@ -363,6 +451,36 @@ const postFixtures: Record<string, unknown> = {
   },
 };
 
+// /onboarding/start (the two-screen setup) is reviewed as a NEW account: setup
+// not started, and the resume read answers with what a resume would suggest,
+// so the second screen can be seen filled in. Saving the steps and running the
+// search are live actions and stay refused.
+if (window.location.pathname === '/onboarding/start') {
+  fixtures[`${base}/onboarding/state`] = {
+    stage: 'situation', nextRoute: '/onboarding/situation', branch: null, answers: {}, entry: null, brand: 'roboapply', completed: false,
+    progress: { total: 5, stepsLeft: 5, leftEarly: null }, defaults: { country: 'US' }, firstValueRoute: '/jobs',
+  };
+  postFixtures[`${base}/onboarding/resume`] = {
+    suggestedSeniority: ['senior', 'lead_staff'], suggestedTaxonomyIds: [], suggestedSkills: ['Figma', 'Design systems', 'User research'],
+    profileDraft: { targetRoles: ['Senior Product Designer', 'Design Lead'], years: 8, aiSuggested: false },
+  };
+}
+
+// "Prepare application" shows its cost before anything is spent. With Ready to
+// apply on, the preview answers the two calls behind that sheet (the job joins
+// the list; the quote) so the sheet can be reviewed. Confirming is a live
+// action and stays refused below, like every other one.
+if (todayAgent) {
+  const previewItem: QueueItemView = {
+    id: 'q_preview', jobId: feedJobs[0]!.jobId, state: 'picked', weekKey: '2026-W46', trackerEntryId: null, resumeVariantId: null,
+    coverLetterId: null, missingFields: [], addedVia: 'feed', openedAt: null, userMarkedSubmitted: false, updatedAt: new Date().toISOString(),
+  };
+  postFixtures[`${base}/agent/queue`] = { items: [previewItem] };
+  postFixtures[`${base}/agent/queue/q_preview/prepare`] = {
+    credits: [{ bucket: 'ready_kits', cost: 1 }, { bucket: 'tailor', cost: 1 }], confirmed: false, enough: true, aiAvailable: true, itemIds: ['q_preview'],
+  };
+}
+
 // The room probes the microphone before it mounts. The preview has no devices
 // and grants no permissions, so the probe is answered with an empty stream.
 if (navigator.mediaDevices) {
@@ -377,7 +495,9 @@ window.fetch = async (input, init) => {
   const raw = input instanceof Request ? input.url : String(input);
   const url = new URL(raw, window.location.href);
   const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
-  const table = method === 'GET' ? fixtures : method === 'POST' ? postFixtures : undefined;
+  // A confirmation spends credits for real: never answered from a fixture.
+  const confirming = typeof init?.body === 'string' && /"confirm"\s*:\s*true/.test(init.body);
+  const table = method === 'GET' ? fixtures : method === 'POST' && !confirming ? postFixtures : undefined;
   const data = url.origin === window.location.origin && table ? table[url.pathname] : undefined;
   if (data !== undefined) return new Response(JSON.stringify({ success: true, data }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   blocked('Live action disabled · Example data only');

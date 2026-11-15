@@ -10,9 +10,19 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../lib/prisma.js', () => ({ default: {} }));
 
-import type { OnboardingMatchEvent } from './contract.js';
+import { ONBOARDING_MATCH_LIVE_WINDOW_MS, ONBOARDING_MATCH_QUEUED_WINDOW_MS, type OnboardingAnswers, type OnboardingMatchEvent } from './contract.js';
 import { fitFixture } from '../agent/__tests__/fitFixture.js';
-import { ONBOARDING_MATCH_CANDIDATES, candidateQueryFor, rankFits, rankPreScores, runOnboardingMatch, type MatchPipelineDeps } from './match.js';
+import {
+  ONBOARDING_MATCH_CANDIDATES,
+  candidateQueryFor,
+  hasMatchResult,
+  matchRunOf,
+  rankFits,
+  rankPreScores,
+  runOnboardingMatch,
+  searchRunningOf,
+  type MatchPipelineDeps,
+} from './match.js';
 import { createOnboardingMatchHandler, parseOnboardingMatchPayload } from './workers.js';
 import { SAMPLE_BASICS, createMemoryRepo, preScoreFixture } from './testkit.js';
 
@@ -230,7 +240,12 @@ describe('the 120 s cap', () => {
     const events: OnboardingMatchEvent[] = [];
     const result = await runOnboardingMatch(deps, 'u1', { emit: (e) => events.push(e) });
     expect(result?.continuedInBackground).toBe(true);
-    expect(enqueued).toContainEqual({ kind: 'onboarding.match', payload: { userId: 'u1', fromPhase: 'comparing' }, options: { userId: 'u1', dedupeKey: 'onboarding.match:u1' } });
+    // One item per user; an earlier one of theirs that already ran is put back with this payload.
+    expect(enqueued).toContainEqual({
+      kind: 'onboarding.match',
+      payload: { userId: 'u1', fromPhase: 'comparing' },
+      options: { userId: 'u1', dedupeKey: 'onboarding.match:u1', onConflict: 'requeue' },
+    });
     expect(deps.fits).not.toHaveBeenCalled();
     expect(events.at(-1)).toEqual({ event: 'done', data: { jobCount: 0, topJobIds: [], continuedInBackground: true } });
     expect(mem.rows.get('u1')!.step).toBe('confirm');
@@ -298,6 +313,136 @@ describe('the 120 s cap', () => {
   it('a malformed payload is permanent; an unknown phase restarts at saving', () => {
     expect(() => parseOnboardingMatchPayload({ payload: {}, userId: null })).toThrow(/userId/);
     expect(parseOnboardingMatchPayload({ payload: { fromPhase: 'warp' }, userId: 'u1' })).toEqual({ userId: 'u1', fromPhase: 'saving' });
+  });
+
+  it('the queued rest is run at once (the drain is kicked), not at the next queue-drain cron', async () => {
+    const { deps, advance } = setup();
+    deps.kick = vi.fn();
+    deps.ingest = vi.fn(async () => {
+      advance(125_000);
+    });
+    await runOnboardingMatch(deps, 'u1');
+    expect(deps.kick).toHaveBeenCalledTimes(1);
+    expect(deps.kick).toHaveBeenCalledWith('onboarding.match');
+  });
+});
+
+// ── docs/agent-driven/REDESIGN.md §9: setup finishes while the search runs ──
+
+describe('the run record (answers.matchRun) and whether the search is at work', () => {
+  const at = (ms: number) => new Date(ms).toISOString();
+  const T = Date.parse('2026-11-13T10:00:00.000Z');
+
+  it('a live run records when it started; its result ends it', async () => {
+    const { deps, mem } = setup();
+    deps.now = () => T;
+    let duringSearch: OnboardingAnswers | null = null;
+    deps.ingest = vi.fn(async () => {
+      duringSearch = (await mem.repo.read('u1'))!.answers;
+    });
+    await runOnboardingMatch(deps, 'u1');
+    expect(duringSearch).toMatchObject({ matchRun: { startedAt: at(T) } });
+    expect(searchRunningOf(duringSearch, T + 1_000)).toBe(true);
+    const after = mem.rows.get('u1')!.answers;
+    expect(after.matchRun).toEqual({ startedAt: at(T) });
+    expect(searchRunningOf(after, T + 1_000)).toBe(false);
+  });
+
+  it('a queued run (cap or client gone) records it, and counts as at work until its result or its window', async () => {
+    const { deps, mem } = setup();
+    let clock = T;
+    deps.now = () => clock;
+    const controller = new AbortController();
+    deps.applyAnswers = vi.fn(async () => {
+      controller.abort();
+      clock += 2_000;
+      return { id: 'sp1', version: 2 };
+    });
+    await runOnboardingMatch(deps, 'u1', { signal: controller.signal });
+    const answers = mem.rows.get('u1')!.answers;
+    expect(answers.matchRun).toEqual({ startedAt: at(T), queuedAt: at(T + 2_000) });
+    expect(searchRunningOf(answers, T + 60_000)).toBe(true);
+    expect(searchRunningOf(answers, T + 2_000 + ONBOARDING_MATCH_QUEUED_WINDOW_MS)).toBe(false);
+    // The queued rest stores its result: the search is no longer at work.
+    const handler = createOnboardingMatchHandler(() => ({ ...deps, now: () => T + 90_000 }));
+    await handler({ id: 'w3', kind: 'onboarding.match', brand: 'roboapply', userId: 'u1', payload: { userId: 'u1', fromPhase: 'comparing' }, attempts: 1, maxAttempts: 5, dedupeKey: null, priority: 100 });
+    expect(searchRunningOf(mem.rows.get('u1')!.answers, T + 91_000)).toBe(false);
+  });
+
+  it('a live run that dies without a word stops counting after its window', () => {
+    const answers = { matchRun: { startedAt: at(T) } };
+    expect(searchRunningOf(answers, T + ONBOARDING_MATCH_LIVE_WINDOW_MS - 1)).toBe(true);
+    expect(searchRunningOf(answers, T + ONBOARDING_MATCH_LIVE_WINDOW_MS)).toBe(false);
+  });
+
+  it('a result from an older run does not end a newer one; an unreadable record is no run', () => {
+    const older = { matchRun: { startedAt: at(T) }, matching: { jobCount: 1, compared: 1, topJobIds: [], continuedInBackground: false, finishedAt: at(T - 60_000) } };
+    expect(searchRunningOf(older, T + 5_000)).toBe(true);
+    const partial = { matchRun: { startedAt: at(T) }, matching: { jobCount: 0, compared: 0, topJobIds: [], continuedInBackground: true, finishedAt: at(T + 120_000) } };
+    // The partial result of a capped run says the rest went to the queue: still at work.
+    expect(searchRunningOf(partial, T + 125_000)).toBe(true);
+    for (const matchRun of [undefined, null, 'x', {}, { startedAt: 'not a date' }]) expect(searchRunningOf({ matchRun }, T)).toBe(false);
+    expect(matchRunOf({ matchRun: { startedAt: at(T), extra: 1 } })).toEqual({ startedAt: at(T) });
+    expect(hasMatchResult({})).toBe(false);
+    expect(hasMatchResult(older)).toBe(true);
+  });
+
+  it('a live run that fails while the user is still at the search is recorded as failed (the screen offers Try again)', async () => {
+    const { deps, mem, enqueued } = setup();
+    deps.now = () => T;
+    mem.repo.findCandidates = async () => {
+      throw new Error('db down');
+    };
+    await expect(runOnboardingMatch(deps, 'u1')).rejects.toThrow('db down');
+    expect(mem.rows.get('u1')!.answers.matchRun).toEqual({ startedAt: at(T), failedAt: at(T) });
+    expect(searchRunningOf(mem.rows.get('u1')!.answers, T + 1)).toBe(false);
+    expect(enqueued.filter((e) => e.kind === 'onboarding.match')).toEqual([]);
+    expect(mem.rows.get('u1')!.step).toBe('matching');
+  });
+
+  it('a live run that fails once setup is finished queues its rest from the phase that failed (nobody is left to try again)', async () => {
+    const { deps, mem, enqueued } = setup();
+    deps.kick = vi.fn();
+    mem.repo.findCandidates = async () => {
+      // Setup was finished while the search ran on (confirm, then complete).
+      Object.assign(mem.rows.get('u1')!, { step: 'done', completedAt: new Date('2026-11-13T10:00:30Z') });
+      throw new Error('db down');
+    };
+    await expect(runOnboardingMatch(deps, 'u1')).rejects.toThrow('db down');
+    expect(enqueued).toContainEqual({ kind: 'onboarding.match', payload: { userId: 'u1', fromPhase: 'comparing' }, options: { userId: 'u1', dedupeKey: 'onboarding.match:u1', onConflict: 'requeue' } });
+    expect(deps.kick).toHaveBeenCalledWith('onboarding.match');
+    expect(mem.rows.get('u1')!.answers.matchRun).toMatchObject({ queuedAt: expect.any(String) });
+    expect(mem.rows.get('u1')!.answers.matchRun).not.toHaveProperty('failedAt');
+  });
+
+  it('a queued (background) run that fails is left to the queue: no record, no second item', async () => {
+    const { deps, mem, enqueued } = setup({ step: 'done', completedAt: new Date('2026-11-13T10:00:30Z') });
+    mem.repo.findCandidates = async () => {
+      throw new Error('db down');
+    };
+    await expect(runOnboardingMatch(deps, 'u1', { background: true, fromPhase: 'comparing' })).rejects.toThrow('db down');
+    expect(enqueued).toEqual([]);
+    expect(mem.rows.get('u1')!.answers.matchRun).toBeUndefined();
+  });
+});
+
+describe('a confirm saved while the run is at work', () => {
+  it('the run does not write the saved search once setup has moved on (confirm wrote its part)', async () => {
+    const { deps, mem } = setup();
+    // The confirm lands after the run started and before its `saving` phase.
+    mem.repo.getResume = async (_u, id) => {
+      Object.assign(mem.rows.get('u1')!, { step: 'tour' });
+      return id === 'rv1' ? { id: 'rv1', parsedData: {}, resumeMarkdown: 'text' } : null;
+    };
+    deps.currentProfile = vi.fn(async () => ({ id: 'sp1', version: 7 }));
+    const events: OnboardingMatchEvent[] = [];
+    const result = await runOnboardingMatch(deps, 'u1', { emit: (e) => events.push(e) });
+    expect(deps.applyAnswers).not.toHaveBeenCalled();
+    expect(events).toContainEqual({ event: 'phase', data: { phase: 'saving', skipped: true } });
+    // The search still runs, for the search as it is now, and stores its result without moving the stage.
+    expect(deps.ingest).toHaveBeenCalledWith('sp1', expect.any(Number));
+    expect(result).toMatchObject({ jobCount: 2 });
+    expect(mem.rows.get('u1')).toMatchObject({ step: 'tour', answers: { matching: { jobCount: 2 } } });
   });
 });
 

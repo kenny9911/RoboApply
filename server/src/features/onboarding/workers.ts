@@ -4,10 +4,12 @@
 // drain runs each item inside `runWithBrand(item.brand)`.
 //
 //   'onboarding.match'  payload { userId, fromPhase }
-//       O6 work that passed the 120 s cap (or whose client went away)
-//       continues here: the remaining phases run without a cap and the result
-//       is stored in `onboardingAnswers.matching` (the stage is not moved:
-//       the request already moved it, or the user will run O6 again).
+//       O6 work that passed the 120 s cap (or whose client went away, or that
+//       failed after setup was finished) continues here, as does the whole
+//       search when RoboApply's confirm was saved with none at work: the
+//       remaining phases run without a cap and the result is stored in
+//       `onboardingAnswers.matching` (the stage is not moved: the request
+//       already moved it, setup is finished, or the user will run O6 again).
 
 import { PermanentWorkError, type LeasedWorkItem, type WorkerDefinition } from '../../platform/queue/index.js';
 import { getBrand, type BrandId } from '../../platform/brand/registry.js';

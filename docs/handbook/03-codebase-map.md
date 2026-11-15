@@ -1,6 +1,6 @@
 # Codebase map
 
-As of 2026-11-03 (main @ b89d5256).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-15 for PR #17 (main @ 368bf7c7).
 
 A guided tour of the source tree: what each directory is for, the conventions the code actually follows, and where to look for common tasks. For how the pieces talk to each other at runtime, read [02-architecture.md](02-architecture.md) first; models are in [05-data-model.md](05-data-model.md) and the gates in [08-testing-and-quality-gates.md](08-testing-and-quality-gates.md).
 
@@ -44,7 +44,7 @@ Routing rules that are easy to break:
 | [`components/v3/`](../../components/v3) | The app shell and design primitives. `v3/shell/` holds `HybridShell` (the frame), `Sidebar`, `MobileNav`, `CommandPalette`, and [`destinations.ts`](../../components/v3/shell/destinations.ts), the single per-brand navigation list every nav surface reads. `v3/primitives/` holds `Btn`, `Sheet`, `Modal`, `Tabs`, `FitMeter`, `EmptyState`, ... Other `v3/` folders are earlier screens still in use (resume editor, account, admin). |
 | `components/ui/`, `components/auth/`, `components/landing/`, `components/job-search/`, `AuthGate.tsx` | Older generic pieces, auth screens, landing helpers, the developer API key workspace, and the client-side session gate. |
 
-Design rules (Paper design system: warm paper, ink actions, lime highlighter) are in [docs/design-system.md](../design-system.md) and enforced by `npm run check:design`.
+Design rules (the Desk design system since PR #17, November 2026: resume.io's layout, navy ink, one blue action colour, Inter) are in [docs/design-system.md](../design-system.md) and enforced by `npm run check:design`.
 
 ### `hooks/`
 

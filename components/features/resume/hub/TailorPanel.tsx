@@ -6,13 +6,15 @@
 // the TailorSheet; this panel only starts it. Rendered only when AI tailoring
 // may run for this user (R-04). Its last line is the promise that makes it
 // safe to use: every new keyword, number or claim waits for the user's OK.
+// The editor's Tailor tab (../editor/TailorTab) shows the same panel for the
+// resume open there.
 
 import { useId } from 'react';
 import { useTranslations } from 'next-intl';
 
 import type { ResumeSummary } from '../../../../lib/api/resumes';
 import type { TailorTargetJob } from '../../../../hooks/tailor';
-import { Btn, IconArrow, IconCheck, IconSparkle } from '../../../v3/primitives';
+import { Btn, IconArrow, IconCheck, IconSparkle, type BtnVariant } from '../../../v3/primitives';
 import styles from './Hub.module.css';
 
 /** Saved jobs shown as one-tap starts; the rest are one step away in the flow. */
@@ -27,9 +29,14 @@ export interface TailorPanelProps {
   jobs: readonly TailorTargetJob[];
   /** Start tailoring `baseId`: for `jobId`, or (null) let the user pick or paste. */
   onTailor: (jobId: string | null) => void;
+  /**
+   * The start button's look. Primary on the hub; the editor's Tailor tab
+   * passes `default`, its toolbar already holds the primary Tailor button.
+   */
+  actionVariant?: BtnVariant;
 }
 
-export function TailorPanel({ bases, baseId, onBaseChange, jobs, onTailor }: TailorPanelProps) {
+export function TailorPanel({ bases, baseId, onBaseChange, jobs, onTailor, actionVariant = 'primary' }: TailorPanelProps) {
   const t = useTranslations('resume.hub.studio');
   const tr = useTranslations('resume');
   const titleId = useId();
@@ -90,7 +97,7 @@ export function TailorPanel({ bases, baseId, onBaseChange, jobs, onTailor }: Tai
       ) : null}
 
       <div className={styles.tailorActions}>
-        <Btn variant="primary" className={styles.action} icon={<IconSparkle size={14} aria-hidden="true" />} onClick={() => onTailor(null)}>
+        <Btn variant={actionVariant} className={styles.action} icon={<IconSparkle size={14} aria-hidden="true" />} onClick={() => onTailor(null)}>
           {tr('toolbar.tailor')}
         </Btn>
         {more > 0 ? (

@@ -2,6 +2,9 @@
 
 // ReadyPage — /ready (PRODUCT §5.8; F-AGENT-01, 04, 08, 10; F-FILT-07).
 //
+//   switch         Getting ready · Sent (docs/agent-driven/REDESIGN.md §7): this
+//                  page is the "Getting ready" view of Applications; "Sent" is
+//                  a link to /applications. Above every state of the page.
 //   intro          before setup, while the list is empty (ReadyIntro)
 //   header         "You submit each application yourself." · Settings
 //   allowance      kits left this week (server's `ready_kits` bucket)
@@ -42,6 +45,7 @@ import {
   type ReadyTab,
 } from '../../../hooks/agent';
 import { jobDetailHref } from '../job';
+import { ApplicationsSwitch } from '../tracker';
 import { KitAllowance } from './KitAllowance';
 import { KitRow } from './KitRow';
 import { PrepareSheet } from './PrepareSheet';
@@ -55,6 +59,8 @@ const TABS_ID = 'ready-tabs';
 export function ReadyPage() {
   return (
     <Suspense fallback={null}>
+      {/* Renders nothing with the `agent` flag off, like the page under it. */}
+      <ApplicationsSwitch current="ready" />
       <Ready />
     </Suspense>
   );

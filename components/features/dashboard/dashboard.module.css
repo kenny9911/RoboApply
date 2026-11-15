@@ -1,0 +1,357 @@
+/* components/features/dashboard/dashboard.module.css — the Dashboard, after
+ * resume.io's app dashboard (docs/resume-io/TEARDOWN.md; sizes measured on
+ * 2026-11-12: 1120px column, 32px-radius goal pills, a 352px progress card
+ * of 64px rows with 48px icon tiles and 4px bars, a 32px-padded hero). The
+ * agent desk around it (waiting cards, picks, lanes) is styled in
+ * components/features/today/today.module.css. Tokens only (ARCHITECTURE.md
+ * §10.2); type sizes come from the --fs-* scale. */
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* ── Greeting (the agent desk's header draws it, centred over the count and
+ *    the goal line: components/features/today, variant="dashboard") ───── */
+.hi {
+  margin: 8px 0 0;
+  font-size: var(--fs-display);
+  font-weight: 600;
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
+}
+
+/* ── "What's your goal today?" ──────────────────────────────────────────── */
+.goalsSection {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-top: 8px;
+}
+.goalsTitle {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: var(--lh-title);
+  letter-spacing: var(--ls-title);
+  text-align: center;
+}
+
+/* ── Goal tabs: pills joined by short rules; the rules up to the selected
+ *    goal turn blue, like resume.io's stepper. ─────────────────────────── */
+.goals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  row-gap: 12px;
+  margin: 20px 0 32px;
+}
+.goalItem { display: inline-flex; align-items: center; }
+.goalRule {
+  width: 40px;
+  height: 2px;
+  margin: 0 4px;
+  border-radius: 1px;
+  background: var(--rule);
+}
+.goalRule[data-on='true'] { background: var(--accent-line); }
+.goalTab {
+  min-height: 48px;
+  padding: 12px 20px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-subtitle);
+  line-height: var(--lh-title);
+  cursor: pointer;
+  transition:
+    background var(--dur-hover) var(--ease-out),
+    border-color var(--dur-hover) var(--ease-out),
+    color var(--dur-hover) var(--ease-out);
+}
+.goalTab:hover { border-color: var(--rule-strong); background: var(--surface-2); }
+.goalTab[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent-line) 70%, var(--bg));
+  background: var(--action-subtle);
+  color: var(--action);
+  font-weight: 500;
+}
+.goalTab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ── Progress + hero ────────────────────────────────────────────────────── */
+.focus {
+  display: grid;
+  grid-template-columns: 352px minmax(0, 1fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--e1);
+}
+.progressTitle {
+  margin: 0;
+  padding: 20px 20px 12px;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  letter-spacing: var(--ls-label);
+  text-align: center;
+}
+.progressList { margin: 0; padding: 0 0 8px; list-style: none; }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 20px;
+  border: 0;
+  border-right: 3px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease-out);
+}
+.row:hover { background: var(--surface-2); }
+.row[data-on='true'] {
+  border-right-color: var(--accent-line);
+  background: color-mix(in srgb, var(--action-subtle) 55%, transparent);
+}
+.row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--action); }
+.rowIcon {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.row[data-on='true'] .rowIcon { background: var(--action-subtle); color: var(--action); }
+.rowDone {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--ok);
+  color: var(--bg);
+}
+.rowBody { display: flex; flex: 1; flex-direction: column; gap: 8px; min-width: 0; }
+.rowHead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.rowLabel { font-size: var(--fs-subtitle); line-height: var(--lh-title); }
+.row[data-on='true'] .rowLabel { font-weight: 500; }
+.rowValue {
+  flex-shrink: 0;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+}
+.bar {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--accent-track);
+}
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-line);
+  transition: width var(--dur-modal) var(--ease-out);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 280px);
+  align-items: center;
+  gap: 24px;
+  min-height: 332px;
+  padding: 32px;
+  border-radius: var(--r-md);
+  background: var(--grad-panel);
+  color: var(--text);
+}
+.heroCopy { min-width: 0; }
+.heroTag {
+  display: inline-block;
+  margin: 0 0 16px;
+  padding: 4px 8px;
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--action);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+.heroTitle {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: var(--lh-title);
+  letter-spacing: var(--ls-title);
+}
+.heroBody {
+  max-width: 46ch;
+  margin: 12px 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+.heroCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin-top: 28px;
+  padding: 12px 18px;
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: var(--e1);
+  transition:
+    color var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out);
+}
+.heroCta:hover { color: var(--action); box-shadow: var(--e2); }
+/* The screen's one primary button when nothing waits for the user (the first
+   waiting card holds it otherwise). */
+.heroCta[data-primary='true'] {
+  background: var(--action);
+  color: var(--action-ink);
+  box-shadow: none;
+}
+.heroCta[data-primary='true']:hover { background: var(--action-hover); color: var(--action-ink); }
+.heroCta:focus-visible,
+.heroCta[data-primary='true']:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.heroVisual { display: flex; justify-content: center; align-items: center; min-width: 0; }
+.heroResume {
+  position: relative;
+  width: 260px;
+  height: 290px;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+}
+.heroScore {
+  position: absolute;
+  top: 28px;
+  right: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--warn-subtle);
+  color: var(--warn);
+  box-shadow: var(--e1);
+}
+.heroScore[data-strong='true'] { background: var(--ok-subtle); color: var(--ok); }
+.heroScore strong { font-size: var(--fs-title); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.heroScore span { font-size: var(--fs-label); font-weight: 500; }
+.heroArt { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+.heroArtTile {
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  border-radius: 32px;
+  background: var(--tile-sky);
+  color: var(--tile-ink);
+  box-shadow: var(--e2);
+}
+.heroArtTile[data-tone='jobs'] { background: var(--tile-sage); }
+.heroArtTile[data-tone='applications'] { background: var(--tile-lilac); }
+.heroArtTile[data-tone='interview'] { background: var(--tile-camel); }
+.heroArtMeter {
+  display: block;
+  width: 160px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface);
+}
+.heroArtMeter span { display: block; height: 100%; border-radius: inherit; background: var(--accent-line); }
+
+/* ── Ask bar: sticks to the foot of the workspace while the page scrolls ─ */
+.askDock {
+  position: sticky;
+  z-index: 5;
+  bottom: 24px;
+  display: flex;
+  justify-content: center;
+  margin-top: 48px;
+  pointer-events: none;
+}
+.askBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 560px);
+  min-height: 56px;
+  padding: 0 24px 0 12px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-subtitle);
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: var(--e-float);
+  transition:
+    color var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out);
+}
+.askBar:hover { color: var(--text); box-shadow: var(--e3); }
+.askBar:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.askIcon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--action-subtle);
+  color: var(--action);
+}
+
+/* ── Narrow screens ─────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .focus { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .goals {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    margin: 16px 0 24px;
+    padding: 0 0 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .goalRule { width: 16px; }
+  .goalTab { white-space: nowrap; }
+  .hero { grid-template-columns: 1fr; min-height: 0; padding: 24px; }
+  .heroVisual { display: none; }
+  .askDock { bottom: calc(84px + env(safe-area-inset-bottom)); margin-top: 32px; }
+}

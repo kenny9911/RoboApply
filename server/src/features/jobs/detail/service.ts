@@ -3,7 +3,9 @@
 //   get           GET /jobs/:id: the job, its company (sourced facts only),
 //                 the cached fit (no model call), "Why this job", tracker and
 //                 checklist state, similar ids, autofill, People links,
-//                 market card meta
+//                 market card meta. Stamps `viewedAt` (the person opened the
+//                 job), except for `preview` (`?preview=1`: the desktop list's
+//                 first job, shown before the person picked one)
 //   similar       GET /jobs/:id/similar: the nearest postings by job vector
 //                 when a vector source is wired and answers (strategy 2.3 step
 //                 6), else the same role in the same country; either way
@@ -247,6 +249,13 @@ export interface JobReadOptions {
    * ever shown uncredited by a caller that does not say so.
    */
   creditLines?: boolean;
+  /**
+   * `get` only: the page is shown without the person having opened the job
+   * (the desktop Jobs list's first job; `GET /jobs/:id?preview=1`). The read
+   * is the same, and `viewedAt` (the feed's "seen and skipped" rule) is not
+   * stamped.
+   */
+  preview?: boolean;
 }
 type FitReadOptions = JobReadOptions;
 
@@ -659,7 +668,9 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       const personalized = fit && deps.personalized ? await soft('personalized', () => deps.personalized!(userId, brand), false) : false;
       const explanation =
         fit && deps.explain ? deps.explain({ market: brand.market === 'cn' ? 'cn' : 'intl', personalized, fit }) : null;
-      await touchUserState(userId, jobId, { viewedAt: now() });
+      // Opening a job is a view (the feed's "seen and skipped" rule reads it); a page shown before the person
+      // picked the job is not (`preview`).
+      if (!opts.preview) await touchUserState(userId, jobId, { viewedAt: now() });
       const atsType = row.atsType ?? null;
       return {
         // `row` carries what the check found: a posting the ATS no longer lists is served closed, with no apply link to a dead page.

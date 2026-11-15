@@ -21,6 +21,7 @@ import type { CampusEventView } from '../cn/campus/index.js';
 import type { FixIssueResponse, LatestGradeResponse, TailorSessionView } from '../resume/index.js';
 import type { CoverLetterView, LetterLength, LetterTone } from '../coverletter/index.js';
 import type { AddedJobItem, ImportJobResponse, ManualJob } from '../jobs/import/index.js';
+import type { JobPlacesResponse, JobPrepareQuote, PrepareProposal, QueueItemView } from '../agent/index.js';
 import type { CopilotCard, CopilotToolName, ProposalKind } from './contract.js';
 import type { SalaryStatsInput, SalaryStatsResult } from '../feed/index.js';
 
@@ -93,6 +94,15 @@ export interface CopilotAreas {
     issueId: string,
     input: { variant: 'ai' | 'longer' | 'shorter' | 'stronger'; instruction?: string; idempotencyKey: string; locale?: string },
   ): Promise<FixIssueResponse>;
+  // the applications agent (Applications → Getting ready; capability `agent`)
+  /** Where these jobs stand on the user's list (agent `jobPlaces`). Read only. */
+  jobPlaces(userId: string, jobIds: readonly string[]): Promise<JobPlacesResponse>;
+  /** What preparing one job's application uses, before anything is spent (agent `quoteJob`: the cost sheet's own lines). Read only. */
+  prepareQuote(userId: string, jobId: string): Promise<JobPrepareQuote>;
+  /** Applying a proposal: put the job on the list (agent `addToQueue`, addedVia `copilot`); the item it has when the job is there already. No credit. */
+  addToList(userId: string, jobId: string): Promise<QueueItemView>;
+  /** Applying a proposal: start preparing the item (agent `prepare` with confirm); its `ready_kits` credit is reserved under `idempotencyKey`. Never submits (D1). */
+  prepareApplication(userId: string, queueItemId: string, idempotencyKey: string): Promise<PrepareProposal>;
 }
 
 export interface ProposalDraft {

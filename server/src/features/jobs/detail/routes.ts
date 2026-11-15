@@ -2,6 +2,8 @@
 // Mounted by features/index.ts at /api/v1/roboapply/jobs, AFTER /jobs/import.
 //
 //   GET    /:id                 JobDetailResponse (a posting its ATS no longer lists is answered closed)
+//                               `?preview=1`: the same read without stamping `viewedAt` (the desktop list's
+//                               first job, shown before the person opened one; JobDetailQuerySchema)
 //   POST   /:id/score           MATCH's handler (WP-18): `{ fit }`, platform-paid, 80/day/user
 //   GET    /:id/similar         { items: FeedItem[] }
 //   The two reads pass the request's UI language on, so the skill labels of the
@@ -19,10 +21,10 @@
 
 import { Router, type Request, type RequestHandler } from 'express';
 import { seekerAuth } from '../../../roboapply/engine/middleware/seekerAuth.js';
-import { parseBody, parseParams, requireUserId, route } from '../../../platform/http.js';
+import { parseBody, parseParams, parseQuery, requireUserId, route } from '../../../platform/http.js';
 import { HOUR, rateLimit } from '../../../platform/ratelimit/index.js';
 import type { FeatureRouterDeps } from '../../index.js';
-import { JobIdParamsSchema, MarkAppliedBodySchema } from './contract.js';
+import { JobDetailQuerySchema, JobIdParamsSchema, MarkAppliedBodySchema } from './contract.js';
 import type { JobDetailServiceImpl } from './service.js';
 
 export interface JobDetailRouterDeps extends FeatureRouterDeps {
@@ -59,7 +61,8 @@ export function createJobDetailRouter(deps: JobDetailRouterDeps = {}): Router {
     route(async (req) => {
       const userId = requireUserId(req);
       const jobId = id(req);
-      return (await service()).get(userId, jobId, { locale: await requestLocale(req) });
+      const { preview } = parseQuery(req, JobDetailQuerySchema);
+      return (await service()).get(userId, jobId, { locale: await requestLocale(req), ...(preview ? { preview: true } : {}) });
     }),
   );
   // MATCH's handler, loaded on first use so mounting this router at boot stays light.

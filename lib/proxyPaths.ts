@@ -49,7 +49,11 @@
 // APP_PATHS in app/robots.ts (a test keeps the two equal).
 
 export const PROTECTED_PREFIXES = [
-  // The four destinations (+ /job-search for /job-search/developers).
+  // The signed-in home (Dashboard, which carries the agent desk of
+  // docs/agent-driven/REDESIGN.md §5) and the four destinations (+ /job-search
+  // for /job-search/developers). /today redirects to /dashboard in
+  // next.config.mjs, before this proxy runs.
+  '/dashboard',
   '/jobs',
   '/job-search',
   '/resume',

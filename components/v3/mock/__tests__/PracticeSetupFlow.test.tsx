@@ -1,13 +1,15 @@
-// PracticeSetupFlow — the plan dock and the prep brief of /practice.
+// PracticeSetupFlow — the plan, the prep brief and the side panel of /practice.
 //
-// The dock shows the PLAN the prep agents wrote for the chosen job: chips for
-// the interviewer, focus, format, length and language, each opening an inline
-// tray of the plan's own alternatives (the recommended one badged "Suggested").
-// Pinned here: "Preparing your interview" while the plan is written, the plan
-// error with "Try again", a fallback plan labelled from the bundles, the
-// 15/20/30-minute lengths priced in their tray, Start, and the prep brief
-// (what the job tests, how the company interviews, how the practice runs, what
-// to prepare; the AI label renders on GoApply only).
+// The plan card shows the PLAN the prep agents wrote for the chosen job: chips
+// for the interviewer, focus, format, length and language, each opening an
+// inline tray of the plan's own alternatives (the recommended one badged
+// "Suggested"). Pinned here: "Preparing your interview" while the plan is
+// written, the plan error with "Try again", a fallback plan labelled from the
+// bundles, the 15/20/30-minute lengths priced in their tray, Start, the prep
+// brief (what the job tests, how the company interviews, how the practice
+// runs, what to prepare; the AI label renders on GoApply only), and the side
+// panel: how a practice works and the recent practices before a job, the
+// summary of what is about to start (with Start) after.
 
 import type { ComponentProps, ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +20,7 @@ import {
   PRACTICE_DURATIONS,
   PracticeSetupFlow,
   practiceDurationOptions,
+  type RecentPractice,
 } from '../PracticeSetupFlow';
 import { BrandProvider } from '../../../../lib/brand/BrandProvider';
 import { clientBrandFor } from '../../../../lib/brand/client';
@@ -88,7 +91,7 @@ describe('PracticeSetupFlow: the plan dock', () => {
   it('before a job is chosen: no plan, no brief, and Start waits for the job', () => {
     renderFlow({ hasRoleSource: false, effectiveRole: null, planState: 'idle', plan: null, canLaunch: false });
     expect(screen.getByTestId('target-section')).toBeInTheDocument();
-    expect(screen.getByText('Pick a job above to begin.')).toBeInTheDocument();
+    expect(screen.getByText('Pick a job to begin.')).toBeInTheDocument();
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Your interview' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Your prep brief/ })).toBeNull();
@@ -373,5 +376,163 @@ describe('PracticeSetupFlow: the prep brief', () => {
     renderFlow({}, 'goapply');
     const toggle = screen.getByRole('button', { name: /Your prep brief/ });
     expect(toggle.querySelector('[data-ai-label="text"]')).toHaveTextContent('AI-generated');
+  });
+});
+
+describe('PracticeSetupFlow: the side panel', () => {
+  const RECENT: RecentPractice[] = [
+    { id: 's1', role: 'Data Analyst · Acme', interviewerName: 'Maya', typeLabel: 'Past situations', score: 71, when: '2 days ago' },
+    { id: 's2', role: 'Frontend Engineer', interviewerName: 'Kai', typeLabel: 'Coding', score: null, when: '6 days ago' },
+  ];
+  const NO_JOB: Partial<FlowProps> = { hasRoleSource: false, effectiveRole: null, planState: 'idle', plan: null, canLaunch: false };
+
+  /** The value the summary shows for a row (its <dd>), by the row's label. */
+  function summaryRow(summary: HTMLElement, label: string): HTMLElement {
+    const term = within(summary).getAllByRole('term').find((item) => item.textContent === label);
+    if (!term?.nextElementSibling) throw new Error(`no summary row "${label}"`);
+    return term.nextElementSibling as HTMLElement;
+  }
+
+  it('before a job: how a practice works in four steps, Start waiting for the job, and the recent practices', () => {
+    const { props } = renderFlow({ ...NO_JOB, recentSessions: RECENT });
+    const how = screen.getByRole('region', { name: 'How a practice works' });
+    expect(within(how).getAllByRole('listitem').map((step) => step.querySelector('strong')?.textContent)).toEqual([
+      'Choose the job',
+      'Get a plan for it',
+      'Practice out loud',
+      'Read the report',
+    ]);
+    expect(how).toHaveTextContent('The interviewer asks by voice and you answer by speaking, with a live transcript on screen.');
+    // The one Start on the screen sits under the steps, off until there is a job.
+    expect(screen.getAllByRole('button', { name: /^Start/ })).toHaveLength(1);
+    expect(within(how).getByRole('button', { name: 'Start the interview' })).toBeDisabled();
+    expect(how).toHaveTextContent('Pick a job to begin.');
+
+    const recent = screen.getByRole('region', { name: 'Pick up where you left off' });
+    const items = within(recent).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent('Data Analyst · Acme');
+    expect(within(items[0]).getByText('Past situations · with Maya')).toBeInTheDocument();
+    expect(within(items[0]).getByText('2 days ago')).toBeInTheDocument();
+    expect(items[0]).toHaveTextContent('Overall 71');
+    // A session the engine never scored reads as a dash, never as 0 (D3).
+    expect(items[1]).toHaveTextContent('Overall —');
+    fireEvent.click(within(items[0]).getByRole('button', { name: 'Practice this again' }));
+    expect(props.onRepeat).toHaveBeenCalledWith(RECENT[0]);
+    fireEvent.click(within(items[1]).getByRole('button', { name: 'See the report' }));
+    expect(props.onReplay).toHaveBeenCalledWith(RECENT[1]);
+
+    // No summary before a job.
+    expect(screen.queryByRole('region', { name: 'Your practice' })).toBeNull();
+  });
+
+  it('a recent practice is deleted only after the confirmation', () => {
+    const { props } = renderFlow({ ...NO_JOB, recentSessions: RECENT });
+    const recent = screen.getByRole('region', { name: 'Pick up where you left off' });
+    fireEvent.click(within(recent).getAllByRole('button', { name: 'Delete recording' })[0]);
+    const confirm = within(recent).getByRole('group', { name: 'Delete this recording?' });
+    expect(props.onDelete).not.toHaveBeenCalled();
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+    expect(props.onDelete).toHaveBeenCalledWith(RECENT[0]);
+  });
+
+  it('shows the first three recent practices, then the rest on request', () => {
+    const many: RecentPractice[] = Array.from({ length: 5 }, (_, index) => ({
+      id: `s${index}`, role: `Role ${index}`, interviewerName: 'Maya', typeLabel: 'Past situations', score: 60 + index, when: `${index + 1} days ago`,
+    }));
+    renderFlow({ ...NO_JOB, recentSessions: many });
+    const recent = screen.getByRole('region', { name: 'Pick up where you left off' });
+    expect(within(recent).getAllByRole('listitem')).toHaveLength(3);
+    fireEvent.click(within(recent).getByRole('button', { name: 'Show 2 earlier' }));
+    expect(within(recent).getAllByRole('listitem')).toHaveLength(5);
+  });
+
+  it('where the practice runs in writing, the steps say the answers are written', () => {
+    renderFlow({ ...NO_JOB, written: true, formatChoice: false });
+    const how = screen.getByRole('region', { name: 'How a practice works' });
+    expect(within(how).getAllByRole('listitem').map((step) => step.querySelector('strong')?.textContent)).toEqual([
+      'Choose the job',
+      'Get a plan for it',
+      'Answer in writing',
+      'Read the report',
+    ]);
+    expect(how).not.toHaveTextContent('Practice out loud');
+  });
+
+  it('after a plan: the job, how the company interviews, the interviewer, the focus and the length, beside Start', () => {
+    const { props } = renderFlow({
+      company: 'Acme',
+      plan: prepPlan({ company: 'Acme', companyStyle: companyStyle() }),
+      recentSessions: RECENT,
+    });
+    const summary = screen.getByRole('region', { name: 'Your practice' });
+    expect(within(summary).getByText('Backend Engineer · Acme')).toBeInTheDocument();
+    expect(within(summary).getAllByRole('term').map((term) => term.textContent)).toEqual([
+      'How Acme interviews',
+      'Interviewer',
+      'Focus',
+      'Length',
+    ]);
+    const style = summaryRow(summary, 'How Acme interviews');
+    expect(style).toHaveTextContent('From public sources');
+    expect(style).toHaveTextContent('Acme runs a recruiter call, a technical screen and an onsite loop.');
+    expect(summaryRow(summary, 'Interviewer')).toHaveTextContent(/^Dana OkaforStaff backend engineer · Demanding$/);
+    expect(summaryRow(summary, 'Focus')).toHaveTextContent(/^Payments system design$/);
+    expect(summaryRow(summary, 'Length')).toHaveTextContent(/^20 minVideo · English$/);
+
+    // Start is under the summary, the only one on the screen, with its cost.
+    expect(screen.getAllByRole('button', { name: /^Start/ })).toHaveLength(1);
+    expect(summary).toHaveTextContent('Costs 1 credit · 5 credits left');
+    const start = within(summary).getByRole('button', { name: 'Start the interview' });
+    expect(start).toBeEnabled();
+    fireEvent.click(start);
+    expect(props.onStart).toHaveBeenCalledTimes(1);
+
+    // The steps and the recent practices give way to the summary.
+    expect(screen.queryByRole('region', { name: 'How a practice works' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Pick up where you left off' })).toBeNull();
+  });
+
+  it('a company with no reliable public description is labelled as the usual practice', () => {
+    renderFlow({
+      company: 'Tiny Co',
+      plan: prepPlan({ company: 'Tiny Co', companyStyle: companyStyle({ company: 'Tiny Co', basis: 'general', sources: [], summary: 'Usually two rounds.' }) }),
+    });
+    const style = summaryRow(screen.getByRole('region', { name: 'Your practice' }), 'How Tiny Co interviews');
+    expect(style).toHaveTextContent('Usual practice for companies like it');
+    expect(style).not.toHaveTextContent('From public sources');
+  });
+
+  it('follows the choices made in the plan, and names the written practice', () => {
+    renderFlow({ selectedInterviewerKey: 'i2', selectedFocusKey: 'f2', durationMinutes: 30, creditCost: 1.5, formatChoice: false, written: true });
+    const summary = screen.getByRole('region', { name: 'Your practice' });
+    // No company named: no company row, and the title is the role alone.
+    expect(within(summary).getAllByRole('term').map((term) => term.textContent)).toEqual(['Interviewer', 'Focus', 'Length']);
+    expect(within(summary).getByText('Backend Engineer')).toBeInTheDocument();
+    expect(summaryRow(summary, 'Interviewer')).toHaveTextContent(/^Leo MartinsEngineering manager · Balanced$/);
+    expect(summaryRow(summary, 'Focus')).toHaveTextContent(/^Ownership stories$/);
+    expect(summaryRow(summary, 'Length')).toHaveTextContent(/^30 minWritten practice · English$/);
+  });
+
+  it('while the plan is written: the job, and a line saying the choices follow; Start stays off', () => {
+    renderFlow({ planState: 'loading', plan: null, company: 'Acme', canLaunch: false });
+    const summary = screen.getByRole('region', { name: 'Your practice' });
+    expect(within(summary).getByText('Backend Engineer · Acme')).toBeInTheDocument();
+    expect(summary).toHaveTextContent('The interviewer, focus and length show here once the plan is ready.');
+    expect(within(summary).queryByRole('term')).toBeNull();
+    expect(within(summary).getByRole('button', { name: 'Start the interview' })).toBeDisabled();
+  });
+
+  it('keeps Start the same element when a job is chosen', () => {
+    const { props, view } = renderFlow({ ...NO_JOB });
+    const before = start();
+    view.rerender(
+      <BrandProvider brand={clientBrandFor('roboapply')}>
+        <PracticeSetupFlow {...props} hasRoleSource effectiveRole="Backend Engineer" planState="ready" plan={prepPlan()} canLaunch />
+      </BrandProvider>,
+    );
+    expect(screen.getByRole('region', { name: 'Your practice' })).toContainElement(before);
+    expect(start()).toBe(before);
+    expect(before).toBeEnabled();
   });
 });

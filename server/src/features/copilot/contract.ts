@@ -16,6 +16,7 @@
 
 import { z } from 'zod';
 import type { Sourced } from '../../platform/http.js';
+import type { QueueState } from '../agent/contract.js';
 
 const Id = z.string().min(1).max(64);
 
@@ -44,6 +45,10 @@ export const CARD_TYPES = [
   // WP-50 additions (F-RES-11 resume scope; PRODUCT §5.7 RESUME_TIPS):
   'resume_tips',
   'rewrite_ready',
+  // The applications agent (docs/agent-driven/REDESIGN.md §1, §9): put a job on the list, prepare its application.
+  'list_add',
+  'prepare_application',
+  'application_status',
 ] as const;
 export type CardType = (typeof CARD_TYPES)[number];
 
@@ -101,7 +106,22 @@ export const CreditActionPayloadSchema = z
   })
   .strict();
 export const MemoryAddPayloadSchema = z.object({ fact: z.string().min(1).max(200), messageId: z.string().optional() }).strict();
-export const PROPOSAL_KINDS = ['filter_change', 'credit_action', 'memory_add'] as const;
+/** `list_add`: put one job on the user's list (Applications → Getting ready). No credit. */
+export const ListAddPayloadSchema = z.object({ jobId: Id, messageId: z.string().optional() }).strict();
+/**
+ * `prepare_application`: put the job on the list when it is not there, then
+ * start preparing its application. `credits` are the lines the card showed
+ * (what the user agreed to); the applications agent checks them again when
+ * it starts and answers 402 for a bucket that is short by then.
+ */
+export const PrepareApplicationPayloadSchema = z
+  .object({
+    jobId: Id,
+    credits: z.array(z.object({ bucket: z.string(), cost: z.number().int().min(0) }).strict()).max(3),
+    messageId: z.string().optional(),
+  })
+  .strict();
+export const PROPOSAL_KINDS = ['filter_change', 'credit_action', 'memory_add', 'list_add', 'prepare_application'] as const;
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
 export type ProposalStatus = 'pending' | 'applied' | 'dismissed' | 'expired' | 'conflict';
 /** Proposals expire after 24 h. */
@@ -162,6 +182,69 @@ export interface MemoryAddCardData {
   fact: string;
   /** True on GoApply without a live `copilot_memory` consent: ask it before applying. */
   consentRequired: boolean;
+}
+
+/** `list_add`: put a job on the user's list of applications to prepare (Getting ready). No credit is used. */
+export interface ListAddCardData {
+  proposalId: string;
+  status: ProposalStatus;
+  expiresAt: string;
+  jobId: string;
+  /** The job as the list shows it; null when it was not read. */
+  jobTitle: string | null;
+  company: string | null;
+}
+
+/** One cost line of a `prepare_application` card: the applications agent's own (`PrepareCreditLine`). */
+export interface PrepareCostView {
+  /** `ready_kits` is the weekly allowance of applications prepared. */
+  bucket: 'ready_kits' | 'tailor' | 'cover_letter';
+  cost: number;
+  /** Left in the bucket's window (plus usable grants) when the card was made; null when not known. */
+  remaining: number | null;
+  window: 'day' | 'week' | 'month' | null;
+  resetsAt: string | null;
+}
+
+/**
+ * `prepare_application`: prepare the user's application for one job. The cost
+ * is on the card before anything is spent (the lines the cost sheet shows,
+ * from the applications agent's own credit proposal). Preparing tailors the
+ * resume and writes a letter when the post asks for one; nothing is sent, and
+ * the user opens the application and submits it themselves (D1).
+ */
+export interface PrepareApplicationCardData {
+  proposalId: string;
+  status: ProposalStatus;
+  expiresAt: string;
+  jobId: string;
+  jobTitle: string | null;
+  company: string | null;
+  /** The job is not on the list yet: applying puts it there first (no credit for that). */
+  addsToList: boolean;
+  credits: PrepareCostView[];
+  /** Every line fits what is left (the agent's `enough`); false: confirming answers 402 for the short bucket. */
+  enough: boolean;
+  /** False: prepared without AI (the resume as it is, no letter). */
+  aiAvailable: boolean;
+  /** The weekly setting "tailor each application". */
+  tailorEach: boolean;
+}
+
+/**
+ * `application_status`: where one application stands on the user's list. The
+ * result of an applied `list_add` / `prepare_application`, and the answer of
+ * those tools for a job that is already on the list. The client links it to
+ * the application's page (`/ready/<jobId>`, or Applications once opened).
+ */
+export interface ApplicationStatusCardData {
+  jobId: string;
+  /** The list state (picked → preparing → ready_for_review → approved → opened → applied; skipped | expired | failed). */
+  state: QueueState;
+  jobTitle: string | null;
+  company: string | null;
+  /** The application in Applications, once it was opened; null before. */
+  trackerEntryId: string | null;
 }
 
 /** `action`: a client-side action (sort change, open a link). Nothing is applied on the server. */
@@ -331,6 +414,12 @@ export interface StopTurnResponse {
  *                  outreach: { card, draft } — `card` is an `action` link to the job's
  *                  People tab (where the draft is kept), `draft` the text to copy
  *   memory_add     { memory: MemoryFactView }
+ *   list_add       { card }  (application_status: the job on the list)
+ *   prepare_application  { card }  (application_status: being prepared, or the
+ *                  state an earlier preparation already reached; nothing is used then)
+ *   Both: 409 `conflict` reason `queue_full` (no room on the list) or
+ *   `job_closed` (the post closed; the suggestion is closed with it); 404
+ *   `feature_disabled` when the account cannot prepare applications.
  * A filter conflict answers 409 `version_conflict` with
  * `details: { currentVersion, card }` (a fresh `filter_diff` card).
  */
@@ -460,5 +549,9 @@ export const COPILOT_TOOL_NAMES = [
   'campus_deadlines',
   'competitiveness',
   'explain_feature',
+  // The applications agent (capability `agent`; docs/agent-driven/REDESIGN.md §1, §9).
+  'application_status',
+  'add_to_list',
+  'prepare_application',
 ] as const;
 export type CopilotToolName = (typeof COPILOT_TOOL_NAMES)[number];

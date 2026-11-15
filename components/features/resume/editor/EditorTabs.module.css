@@ -1,0 +1,322 @@
+/* components/features/resume/editor/EditorTabs.module.css — the resume
+ * editor's tab bar (Edit · Customize · Review · Tailor) and the Customize and
+ * Review panels. Desk tokens only; light and dark come from the tokens. 44 px
+ * targets on a phone; nothing here may widen the page at 375 px. */
+
+/* ── Tab bar ──────────────────────────────────────────────────────────── */
+/* The shared underline tabs, stretched into a strip under the toolbar. The
+ * list scrolls sideways (the primitive's overflow) when the labels do not fit. */
+.tabs,
+.tabs[role='tablist'] {
+  width: 100%;
+  padding: 0 var(--sp-6);
+  background: var(--surface);
+}
+
+.newTag {
+  flex-shrink: 0;
+}
+
+/* A panel takes focus from the tab bar (tabIndex 0): mark it without a box. */
+.panel:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+  border-radius: var(--r-sm);
+}
+
+/* ── Shared ───────────────────────────────────────────────────────────── */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.card {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+}
+
+.cardTitle {
+  margin: 0;
+  padding: var(--sp-4) var(--sp-4) var(--sp-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-muted);
+}
+
+.body {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-2);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+.link,
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--action);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.link:hover,
+.linkButton:hover {
+  color: var(--action-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:focus-visible,
+.linkButton:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.error {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--danger-subtle);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.notice {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--warn-subtle);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+/* ── Review ───────────────────────────────────────────────────────────── */
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+}
+
+.badge {
+  align-self: flex-start;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  background: var(--action-subtle);
+  color: var(--action);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+
+/* The one-word rating: Excellent · Good · Fair · Needs work. */
+.rating {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  line-height: var(--lh-title);
+  letter-spacing: var(--ls-title);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.score {
+  margin: calc(var(--sp-2) * -1) 0 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-2);
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-meta);
+}
+
+.count strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--text-muted);
+}
+
+.dot[data-severity='urgent'] {
+  background: var(--danger);
+}
+
+.dot[data-severity='critical'] {
+  background: var(--warn);
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.groupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 var(--sp-3);
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.issues {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issue {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+}
+
+.issue > .dot {
+  margin-top: 7px;
+}
+
+.issueBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.sev {
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta);
+  color: var(--text-muted);
+}
+
+.issueTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The resume's own words the issue points at, kept to three lines. */
+.quote {
+  display: -webkit-box;
+  align-self: stretch;
+  margin: var(--sp-1) 0;
+  padding: var(--sp-1) var(--sp-3);
+  overflow: hidden;
+  border-left: 3px solid var(--rule-strong);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.how {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-2);
+}
+
+@media (max-width: 760px) {
+  .tabs,
+  .tabs[role='tablist'] {
+    padding: 0 var(--sp-4);
+  }
+  .summary {
+    padding: var(--sp-4);
+  }
+  .issue {
+    padding: var(--sp-3);
+  }
+}

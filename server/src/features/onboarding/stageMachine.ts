@@ -13,7 +13,9 @@
 //     and keeps the furthest stage). The client always goes to the stage after
 //     S (`nextStage`), so a user who went back walks forward again.
 //   - A step may be saved when it is shown for the brand and branch and is not
-//     beyond the current stage (no jumping ahead).
+//     beyond the current stage (no jumping ahead). One exception
+//     (`CONFIRM_WHILE_MATCHING`): RoboApply's `confirm` while the stage is
+//     `matching`, so setup can be finished while the search runs on.
 //   - `situation` (RoboApply) and `identity` / `consent` (GoApply) have no Skip.
 //   - Branch: timing "As soon as possible" → urgent, else explore. A branch
 //     change that hides the stored stage moves it to the next shown stage.
@@ -24,6 +26,7 @@
 
 import type { BrandId } from '../../platform/brand/registry.js';
 import {
+  CONFIRM_WHILE_MATCHING,
   ONBOARDING_BRANCHES,
   ONBOARDING_STAGE_ORDER,
   ONBOARDING_STAGES,
@@ -138,9 +141,18 @@ export function assertStepSavable(brand: BrandId, rec: StageRecord, step: Onboar
   const at = effectiveStage(brand, rec);
   // Finished users may re-save answers (idempotent); otherwise no jumping ahead.
   if (at === 'done' || at === 'tour') return;
-  if (ONBOARDING_STAGE_ORDER[step] > ONBOARDING_STAGE_ORDER[at]) {
+  if (ONBOARDING_STAGE_ORDER[step] > ONBOARDING_STAGE_ORDER[at] && !confirmsWhileMatching(brand, step, at)) {
     throw new StageError('onboarding_step_not_available', `Finish "${at}" first.`);
   }
+}
+
+/**
+ * RoboApply's one step ahead of the stage: `confirm` while `matching` (the
+ * search needs no answer, so setup may finish while it runs on). Every other
+ * step and stage keeps the strict order; GoApply keeps it everywhere.
+ */
+export function confirmsWhileMatching(brand: BrandId, step: OnboardingStage, at: OnboardingStage): boolean {
+  return CONFIRM_WHILE_MATCHING[brand] === true && step === 'confirm' && at === 'matching';
 }
 
 export interface StepTransition {

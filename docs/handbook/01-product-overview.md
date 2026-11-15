@@ -1,6 +1,6 @@
 # 01 · Product overview
 
-As of 2026-11-03 (main @ b89d5256).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-15 for PR #17 (main @ 368bf7c7).
 
 ## What RoboApply is
 
@@ -50,17 +50,18 @@ The July 2026 overhaul rulings ([`../roboapply/OVERHAUL_RULINGS.md`](../roboappl
 - Plain-language corrections: the tracker columns (C1: Saved · Applied · First call · Interviewing · Final round · Offer · Rejected), one fit ladder (C2: Great fit · Good fit · Possible · Unlikely), no numeric threshold control (C3), "fit" not "match" in UI copy (C4), the score is never the headline and always carries "This is not your chance of getting hired." (C5), the published rubric 35/30/15/10/10 (C6), "Not interested" instead of "Pass" (C7).
 - Its colour and type rulings (R3, R4) are superseded by the current design system.
 
-**Design direction.** The current system is **Paper** ([`../design-system.md`](../design-system.md)), adopted October 2026 from [skillry.dev](https://skillry.dev) (measured in [`../skillry-style-reference.md`](../skillry-style-reference.md)): warm paper canvas, near-black ink for text and primary actions, one lime highlighter (`--brand-mark`, a fill, never a text colour), Bricolage Grotesque for all UI text. It replaced "Clarity" (violet, September 2026) but kept Clarity's token names, so components did not change markup. GoApply swaps the action to jade and the highlighter to mint (`styles/brands/goapply.css`). Source of truth: `app/globals.css`, `styles/tokens.css`, `styles/workspace.css`. Gate: `npm run check:design`. The `roboapply-design` skill encodes the rules for agents.
+**Design direction.** The current system is **Desk** ([`../design-system.md`](../design-system.md)), adopted November 2026 as a clone of resume.io's web app (teardown and measured tokens in [`../resume-io/TEARDOWN.md`](../resume-io/TEARDOWN.md)): white canvas with cool grey recesses, navy ink, one blue for every action, Inter, and a goal dashboard as the signed-in home. It keeps RoboApply's own name, wording and artwork. Desk replaced "Paper" (skillry.dev, October 2026), which replaced "Clarity" (September 2026); all three share the same token names, so each restyle needed no markup rewrite. GoApply swaps the action to jade and the highlighter to mint (`styles/brands/goapply.css`). Source of truth: `app/globals.css`, `styles/tokens.css`, `styles/workspace.css`. Gate: `npm run check:design`. The `roboapply-design` skill encodes the rules for agents.
 
 Order of precedence when documents disagree: D1–D6, then the parity plan and market strategy, then `docs/jobright-clone/TASK_PLAN.md` §1–2, then [`PRODUCT_PLAN.md`](../jobright-clone/PRODUCT_PLAN.md), then [`ARCHITECTURE.md`](../jobright-clone/ARCHITECTURE.md), then the catalog ([`../jobright-clone/README.md`](../jobright-clone/README.md) "How to read them").
 
 ## The user journey
 
 1. **Land.** A signed-out visitor sees the brand home (`/`, or `/{locale}`), can try free tools, browse public job lists (only when enabled; see below), and read pricing.
-2. **Sign up** at `/signup` (`app/(public)`), then **onboarding** at `/onboarding/<step>` (`app/(onboarding)`). RoboApply steps: `situation → basics → goal → preferences → resume → matching → confirm`; GoApply: `consent → identity → education → intent → tags → resume → matching → confirm` (`components/features/onboarding/flow.ts`, kept equal to the server stage machine in `server/src/features/onboarding/contract.ts`). The resume is the one required input; the `matching` step triggers a targeted ingest for the new search profile so the first feed is not empty. Design rationale: [`../roboapply/ONBOARDING_SPEC.md`](../roboapply/ONBOARDING_SPEC.md).
-3. **Jobs** (`/jobs`): the ranked feed with the gap-first card, filters, natural-language search, and job detail with fit explanation.
-4. **Act** on a job: save, tailor the resume, write a cover letter, prepare a "Ready to apply" kit, open the employer page (moves the job to Applied), fill the form with the extension.
-5. **Track** at `/applications`, **practise** interviews at `/practice`, ask the **Assistant**, get **alerts** by email, web push and the inbox.
+2. **Sign up** at `/signup` (`app/(public)`), then **onboarding**. Since PR #17 a new RoboApply user gets the two-screen, resume-first `/onboarding/start` (`components/features/onboarding/express`) and lands on the Dashboard while the first search runs. The step flow at `/onboarding/<step>` (`app/(onboarding)`) remains; RoboApply steps: `situation → basics → goal → preferences → resume → matching → confirm`; GoApply: `consent → identity → education → intent → tags → resume → matching → confirm` (`components/features/onboarding/flow.ts`, kept equal to the server stage machine in `server/src/features/onboarding/contract.ts`). The resume is the one required input; the `matching` step triggers a targeted ingest for the new search profile so the first feed is not empty. Design rationale: [`../roboapply/ONBOARDING_SPEC.md`](../roboapply/ONBOARDING_SPEC.md).
+3. **Home** (RoboApply): `/dashboard`, the desk where the three agents (Job search, Resume, Applications) report what waits for the user, with the next best jobs (`homeRoute()` in `server/src/features/onboarding/contract.ts`; GoApply's home is still its first-value route).
+4. **Jobs** (`/jobs`): the ranked feed with the gap-first card, filters, natural-language search, and job detail with fit explanation.
+5. **Act** on a job: save, tailor the resume, write a cover letter, **Prepare application** (one tap; the Applications agent prepares it and the user opens and submits it), open the employer page (moves the job to Applied), fill the form with the extension.
+6. **Track** at `/applications`, **practise** interviews at `/practice`, ask the **Assistant**, get **alerts** by email, web push and the inbox.
 
 ### Signed-in routes
 
@@ -75,8 +76,9 @@ Every signed-in top-level path must be listed in `PROTECTED_PREFIXES` (`lib/prox
 | `/jobs/added` | Jobs the user imported from a link or text | `components/features/jobimport` | `features/jobs/import` |
 | `/jobs/report` | Competitiveness report | `components/features/match` | `features/match` (`CompetitivenessService`) |
 | `/job-search/developers` | API keys for the public job-search API | `components/job-search/ApiKeyWorkspace` | `server/src/job-search` |
-| `/ready`, `/ready/setup`, `/ready/[jobId]` | "Ready to apply": weekly list and prepared kits (flag `agent`) | `components/features/agent` | `features/agent` |
-| `/applications` | Applications tracker (pipeline board) | `components/v3/pipeline`, `components/features/tracker` | `features/tracker` (+ legacy `roboapply/v2/routes/tracker.ts`) |
+| `/dashboard` | The signed-in home (RoboApply): the agent desk inside resume.io's dashboard layout | `components/features/dashboard`, `components/features/today` (`TodayDesk variant="dashboard"`), `hooks/today` | `features/agent`, `features/feed`, `features/onboarding` |
+| `/ready`, `/ready/setup`, `/ready/[jobId]` | "Ready to apply" (flag `agent`), now shown as the Getting ready view of Applications | `components/features/agent` | `features/agent` |
+| `/applications` | Applications: Getting ready · Sent switch (`components/features/tracker/ApplicationsSwitch.tsx`); Sent is the tracker | `components/v3/pipeline`, `components/features/tracker` | `features/tracker` (+ legacy `roboapply/v2/routes/tracker.ts`) |
 | `/resume`, `/resume/[id]`, `/resume/new`, `/resume/[id]/check` | Resume hub, editor, builder, resume check | `components/features/resume`, `components/v3/resumes`, `components/features/tailor` | `roboapply/v2/routes/resumes.ts` + `RAResumeService`, `features/resume` (tailor, check, builder) |
 | `/resume/letters`, `/resume/letters/[id]` | Cover letters | `components/features/coverletter` | `features/coverletter` |
 | `/assistant` | Full-page Assistant (also a rail opened from the top bar "Ask") | `components/features/copilot` | `features/copilot` |
@@ -89,7 +91,7 @@ Every signed-in top-level path must be listed in `PROTECTED_PREFIXES` (`lib/prox
 | `/referrals` | GoApply 内推码 hub (flag `cn.referralCodes`, off on RoboApply) | `components/features/network` (`ReferralHub`) | `features/cn/referrals` |
 | `/admin/*` | Staff console: users, sources, system health, credits, fraud, campus, coaches, questions, announcements, invites, reports, sessions | `app/(auth)/admin`, `lib/api/admin*.ts` | `features/admin` and the per-area admin routers under `/api/v1/roboapply/admin/*`; admin "view as" is read-only (`platform/viewAs`) |
 
-Old paths (`/home`, `/tracker`, `/resumes`, `/mock-interview`, `/queue`, `/preferences`, `/account`, …) are permanent redirects in `next.config.mjs` `redirects()`, which is the only destination router. `proxy.ts` only gates auth and stamps `x-pathname`; do not add routing there.
+Old paths (`/home` and `/today` → `/dashboard`, `/tracker`, `/resumes`, `/mock-interview`, `/queue`, `/preferences`, `/account`, …) are permanent redirects in `next.config.mjs` `redirects()`, which is the only destination router. `proxy.ts` only gates auth and stamps `x-pathname`; do not add routing there.
 
 ### Public routes
 

@@ -279,10 +279,10 @@
     },
     "kitReady": {
       "body": "Dein angepasster Lebenslauf und deine Antworten für {title} bei {company} sind fertig. Sieh sie dir an und bewirb dich dann selbst auf der Seite des Unternehmens.",
-      "cta": "Paket ansehen",
-      "heading": "Dein Bewerbungspaket liegt zum Durchsehen bereit",
-      "preheader": "Sieh dir dein Bewerbungspaket für {title} an.",
-      "subject": "Dein Bewerbungspaket für {title} ist fertig"
+      "cta": "Bewerbung ansehen",
+      "heading": "Deine Bewerbung liegt zum Durchsehen bereit",
+      "preheader": "Sieh dir deine Bewerbung für {title} an.",
+      "subject": "Deine Bewerbung für {title} liegt zum Durchsehen bereit"
     },
     "readyList": {
       "body": "{count, plural, one {# Job liegt für dich zum Durchsehen bereit.} other {# Jobs liegen für dich zum Durchsehen bereit.}} Du entscheidest, welche du öffnest, und du sendest jede Bewerbung selbst ab.",

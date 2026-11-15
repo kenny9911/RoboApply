@@ -17,7 +17,8 @@
   },
   "nav": {
     "aria_primary": "Hauptnavigation",
-    "brand_home": "%BRAND% — zu den Jobs",
+    "brand_home": "Startseite von %BRAND%",
+    "today": "Heute",
     "jobs": "Jobs",
     "resume": "Lebenslauf",
     "applications": "Bewerbungen",
@@ -46,11 +47,7 @@
       "refresh_limited": "Du hast die Jobliste in den letzten Minuten sehr oft durchsucht oder aktualisiert. Warte ein paar Minuten und versuch es dann erneut.",
       "search_jobs": "Jobs zu „{query}“ suchen"
     },
-    "workspace": "Dein Arbeitsbereich",
-    "workspace_note": "Etwas mehr Klarheit für deinen nächsten großen Schritt.",
     "skip_content": "Zum Inhalt springen",
-    "guide": "Deine Karriere im Blick",
-    "guide_note": "Entdecken. Vorbereiten. Weiterkommen.",
     "aria_lower": "Konto und mehr",
     "ask": "Fragen",
     "ask_aria": "Den Assistenten fragen",
@@ -141,6 +138,18 @@
       },
       "source": "Quelle: {label}",
       "view": "Quelle ansehen"
+    },
+    "dashboard": "Übersicht",
+    "profile_card": {
+      "you": "Du",
+      "set_role": "Zielposition festlegen",
+      "percent": "{percent} %",
+      "complete": "Profil zu {percent} % vollständig"
+    },
+    "topbar": {
+      "ready_count": "{count, plural, one {# noch nicht geöffnet} other {# noch nicht geöffnet}}",
+      "ready_open": "Ansehen, was bereit ist",
+      "upgrade": "Upgrade"
     }
   },
   "jobs": {
@@ -393,7 +402,8 @@
       },
       "tabsLabel": "Joblisten",
       "title": "Jobs",
-      "introByDate": "Jobs sind nach Veröffentlichungsdatum sortiert, die neuesten zuerst. Öffne einen, um die Details zu sehen."
+      "introByDate": "Jobs sind nach Veröffentlichungsdatum sortiert, die neuesten zuerst. Öffne einen, um die Details zu sehen.",
+      "searchLabel": "Deine Suche"
     },
     "zero": {
       "gain": "{count, plural, one {+# Job} other {+# Jobs}}",
@@ -1009,7 +1019,23 @@
       },
       "title": "Vorlage und Layout"
     },
-    "ai_edit_cost": "Jede KI-Bearbeitung eines Stichpunkts, deines Kurzprofils oder deiner Fähigkeiten verbraucht 1 Credit."
+    "ai_edit_cost": "Jede KI-Bearbeitung eines Stichpunkts, deines Kurzprofils oder deiner Fähigkeiten verbraucht 1 Credit.",
+    "editor_tabs": {
+      "label": "Lebenslauf-Editor",
+      "edit": "Bearbeiten",
+      "customize": "Gestalten",
+      "review": "Prüfen",
+      "tailor": "Anpassen",
+      "new": "Neu",
+      "check": {
+        "loading": "Die letzte Prüfung wird geladen…",
+        "load_error": "Die letzte Prüfung konnte nicht geladen werden.",
+        "counts": "Punkte nach Priorität",
+        "edit_section": "Diesen Abschnitt bearbeiten",
+        "edit_section_aria": "Abschnitt {section} bearbeiten",
+        "change_template": "Vorlage ändern"
+      }
+    }
   },
   "applications": {
     "page_title": "Bewerbungen",
@@ -1254,6 +1280,12 @@
       "title": "Diese Woche",
       "write": "Zusammenfassung schreiben",
       "writing": "Wird geschrieben…"
+    },
+    "switch": {
+      "label": "Deine Bewerbungen",
+      "ready": "Vorbereiten",
+      "sent": "Gesendet",
+      "waiting": "{count, plural, one {# Bewerbung ist vorbereitet und wartet auf dich} other {# Bewerbungen sind vorbereitet und warten auf dich}}"
     }
   },
   "practice": {
@@ -1269,7 +1301,7 @@
         "noMatch": "Kein Job passt zu „{query}“. Probier ein kürzeres Wort oder füg die Stellenanzeige ein.",
         "planLegend": "Dein Gespräch",
         "planHint": "Auf den Job abgestimmt. Änder, was du willst.",
-        "pickRoleFirst": "Wähl oben einen Job, dann geht’s los.",
+        "pickRoleFirst": "Wähl einen Job, dann geht’s los.",
         "chip": {
           "focus": "Schwerpunkt",
           "mode": "Format",
@@ -1283,6 +1315,35 @@
         "useShorter": "Lieber {minutes} Min.",
         "previewToggle": "Vorschau auf mögliche Fragen",
         "costShort": "{n, plural, one {# Credit} other {# Credits}} — mehr, als du hast"
+      },
+      "side": {
+        "howTitle": "So läuft ein Übungsgespräch ab",
+        "steps": {
+          "job": {
+            "title": "Job wählen",
+            "body": "Such nach offenen Stellen, stöbere in einer Branche oder füg eine Stellenanzeige ein. Das Unternehmen kannst du angeben, musst du aber nicht."
+          },
+          "plan": {
+            "title": "Plan bekommen",
+            "body": "Die Gesprächspersonen für diesen Job und was sie prüfen – und, wenn du das Unternehmen nennst, wie es Gespräche führt. Alles lässt sich ändern."
+          },
+          "interview": {
+            "title": "Laut üben",
+            "body": "Die Gesprächsperson fragt per Stimme, du antwortest mündlich, und auf dem Bildschirm läuft eine Live-Mitschrift mit."
+          },
+          "written": {
+            "title": "Schriftlich antworten",
+            "body": "Die Fragen kommen einzeln, und du beantwortest jede schriftlich."
+          },
+          "report": {
+            "title": "Bericht lesen",
+            "body": "Eine Punktzahl, was funktioniert hat und was du ändern solltest – so weißt du, was du als Nächstes übst."
+          }
+        },
+        "summaryTitle": "Dein Übungsgespräch",
+        "planPending": "Gesprächsperson, Schwerpunkt und Länge erscheinen hier, sobald der Plan steht.",
+        "basisSources": "Aus öffentlichen Quellen",
+        "basisGeneral": "Üblich bei vergleichbaren Unternehmen"
       },
       "loading": "Vorbereitung wird geladen…",
       "startError": "Dieses Gespräch konnte nicht gestartet werden. Versuch es erneut.",
@@ -2868,7 +2929,7 @@
           },
           "s2": {
             "body": "Ändere alles, was du willst, bevor du es verwendest.",
-            "title": "Prüf jedes Paket"
+            "title": "Prüf jede Bewerbung"
           },
           "s3": {
             "body": "Öffne die Seite des Arbeitgebers und sende die Bewerbung ab. Der Job wandert zu „Beworben“.",
@@ -2876,7 +2937,7 @@
           },
           "sample": {
             "line1": "5 Jobs diese Woche · Passt gut oder besser",
-            "line2": "Paket fertig: angepasster Lebenslauf, Anschreiben, 4 Antworten",
+            "line2": "Bewerbung fertig: angepasster Lebenslauf, Anschreiben, 4 Antworten",
             "line3": "Bewerbung öffnen → du prüfst sie und sendest sie ab"
           },
           "sub": "Für passende Jobs bereitet %BRAND% einen angepassten Lebenslauf, ein Anschreiben und Antworten auf häufige Fragen vor. Du öffnest jede Bewerbung und sendest sie selbst ab.",
@@ -3126,7 +3187,7 @@
           },
           "s2": {
             "body": "Ändere alles, was du willst, bevor du es verwendest.",
-            "title": "Prüf jedes Paket"
+            "title": "Prüf jede Bewerbung"
           },
           "s3": {
             "body": "Öffne die Seite des Arbeitgebers und sende die Bewerbung ab. Der Job wandert zu „Beworben“.",
@@ -3134,7 +3195,7 @@
           },
           "sample": {
             "line1": "5 Jobs diese Woche · Passt gut oder besser",
-            "line2": "Paket fertig: angepasster Lebenslauf, Anschreiben, 4 Antworten",
+            "line2": "Bewerbung fertig: angepasster Lebenslauf, Anschreiben, 4 Antworten",
             "line3": "Bewerbung öffnen → du prüfst sie und sendest sie ab"
           },
           "sub": "Für passende Jobs bereitet %BRAND% einen angepassten Lebenslauf, ein Anschreiben und Antworten auf häufige Fragen vor. Du öffnest jede Bewerbung und sendest sie selbst ab.",
@@ -5226,7 +5287,23 @@
       "applying": "Wird bearbeitet…",
       "inProgress": "Daran wird schon gearbeitet. Wenn in einer Minute nichts erscheint, versuch es erneut.",
       "notSaved": "Dieser Vorschlag wurde nicht zusammen mit seiner Antwort gespeichert und lässt sich deshalb nicht nutzen. Frag noch einmal nach.",
-      "waitForAnswer": "Du kannst das nutzen, sobald die Antwort fertig ist."
+      "waitForAnswer": "Du kannst das nutzen, sobald die Antwort fertig ist.",
+      "listAdd": {
+        "title": "{job} auf deine Liste setzen",
+        "body": "Es wird kein Credit verbraucht, und nichts wird vorbereitet, bis du es möchtest.",
+        "confirm": "Auf meine Liste setzen"
+      },
+      "prepare": {
+        "title": "Deine Bewerbung für {job} vorbereiten",
+        "addsToList": "Der Job kommt zuerst auf deine Liste. Dafür wird kein Credit verbraucht."
+      },
+      "applicationStatus": {
+        "title": "Deine Bewerbung für {job}",
+        "picked": "Der Job steht auf deiner Liste. Bereite die Bewerbung dort vor, wenn du so weit bist.",
+        "open": "Unter „Vorbereiten“ öffnen",
+        "unavailable": "Bewerbungen vorbereiten ist für dein Konto nicht verfügbar.",
+        "closed": "Dieser Job ist nicht mehr ausgeschrieben, deshalb wurde nichts hinzugefügt."
+      }
     },
     "cheatsheet": {
       "groups": {
@@ -5440,7 +5517,10 @@
       "top_fit_jobs": "Deine am besten passenden Jobs werden gesucht…",
       "added_jobs": "Die von dir hinzugefügten Jobs werden angesehen…",
       "show_jobs": "Die Liste wird zusammengestellt…",
-      "similar_jobs": "Ähnliche Jobs werden gesucht…"
+      "similar_jobs": "Ähnliche Jobs werden gesucht…",
+      "application_status": "Deine Liste wird geprüft…",
+      "add_to_list": "Deine Liste wird geprüft…",
+      "prepare_application": "Es wird geprüft, was die Vorbereitung verbraucht…"
     },
     "voice": {
       "blocked": "Der Mikrofonzugriff ist in diesem Browser blockiert.",
@@ -6175,7 +6255,7 @@
       "job_import": "Jobs, die du hinzufügst",
       "outreach": "Nachrichtenentwürfe",
       "practice": "Übungsgespräche",
-      "ready_kits": "Bewerbungspakete",
+      "ready_kits": "Vorbereitete Bewerbungen",
       "resume_check": "Lebenslauf-Prüfungen",
       "rewrite": "KI-Bearbeitungen",
       "tailor": "Angepasste Lebensläufe",
@@ -6940,7 +7020,16 @@
     },
     "unnamed": "Deine Hauptsuche",
     "unnamedNumbered": "Gespeicherte Suche {n}",
-    "unnamedOther": "Unbenannte gespeicherte Suche"
+    "unnamedOther": "Unbenannte gespeicherte Suche",
+    "summary": {
+      "label": "Deine Suche:",
+      "all": "Alle Jobs",
+      "loading": "Deine Suche wird geladen…",
+      "more": "{count} mehr",
+      "change": "Suche ändern",
+      "panel": "Suche und Filter",
+      "done": "Fertig"
+    }
   },
   "fit": {
     "analysis": {
@@ -8532,7 +8621,7 @@
       "cards": {
         "practice": "Das Vorstellungsgespräch üben",
         "practiceBody": "Beantworte realistische Fragen zur Stelle und bekomm Feedback.",
-        "ready": "Bewerbungspakete — du sendest selbst ab",
+        "ready": "Vorbereitete Bewerbungen — du sendest selbst ab",
         "readyBody": "Wir bereiten die Unterlagen vor; du prüfst sie und sendest die Bewerbung selbst auf der Seite des Unternehmens ab.",
         "tailor": "Ein angepasster Lebenslauf für jeden Job",
         "tailorBody": "Pass deinen Lebenslauf an die Anforderungen eines Jobs an – nur mit dem, was wirklich auf dich zutrifft."
@@ -8733,7 +8822,7 @@
         "fitBody": "Jeder Job zeigt, wo dein Lebenslauf die Anforderungen erfüllt und wo nicht.",
         "practice": "Das Vorstellungsgespräch üben",
         "practiceBody": "Üb realistische Fragen zur Stelle und bekomm Feedback.",
-        "ready": "Bewerbungspakete — du sendest selbst ab",
+        "ready": "Vorbereitete Bewerbungen — du sendest selbst ab",
         "readyBody": "Wir bereiten die Unterlagen vor. Du prüfst sie und sendest die Bewerbung selbst auf der Seite des Unternehmens ab.",
         "tailor": "Ein angepasster Lebenslauf für jeden Job",
         "tailorBody": "Pass deinen Lebenslauf an einen Job an – nur mit dem, was wirklich auf dich zutrifft."
@@ -8745,6 +8834,45 @@
       "prev": "Vorheriger Tipp",
       "start": "Starten",
       "title": "Was du hier tun kannst"
+    },
+    "express": {
+      "resume": {
+        "title": "Starte mit deinem Lebenslauf",
+        "continue": "Weiter",
+        "noResume": "Ich habe noch keinen Lebenslauf",
+        "working": "Einen Moment…",
+        "classic": "Stattdessen ein paar Fragen mehr beantworten"
+      },
+      "check": {
+        "title": "Ist es das, wonach du suchst?",
+        "subtitleSuggested": "Das sind Vorschläge aus deinem Lebenslauf. Ändere, was nicht stimmt.",
+        "subtitleNothingSuggested": "Aus deinem Lebenslauf ließ sich nichts vorschlagen. Füll diese Felder aus, um Jobs zu finden.",
+        "subtitleNoResume": "Kein Lebenslauf hinzugefügt, deshalb werden Jobs nur anhand dieser Antworten gefunden. Du kannst später einen hinzufügen, um zu sehen, wie gut jeder Job passt.",
+        "filling": "Wird aus deinem Lebenslauf ausgefüllt…",
+        "otherPlaces": "Weiteren Ort hinzufügen",
+        "chosenPlaces": "Nur gewählte Orte anzeigen",
+        "aboutYou": "Über dich: {value}",
+        "email": "Neue Jobs für diese Suche bekommst du einmal am Tag per E-Mail. Das kannst du in den Einstellungen ändern.",
+        "submit": "Meine Jobs finden",
+        "retry": "Erneut versuchen"
+      },
+      "progress": {
+        "saving": "Deine Antworten werden gespeichert…",
+        "searching": "Deine Suche wird gestartet…",
+        "finishing": "Einrichtung wird abgeschlossen…"
+      },
+      "failed": {
+        "answers": "Deine Antworten konnten nicht gespeichert werden, deshalb ist die Suche nicht gestartet.",
+        "resume": "Deine Lebenslauf-Auswahl konnte nicht gespeichert werden, deshalb ist die Suche nicht gestartet.",
+        "finish": "Deine Suche ist gespeichert, aber die Einrichtung konnte nicht abgeschlossen werden."
+      },
+      "why": {
+        "rate_limited": "Es gab zu viele Versuche in kurzer Zeit. Warte eine Minute und versuch es dann erneut.",
+        "invalid": "Eine der Antworten wurde nicht angenommen. Prüf sie und versuch es dann erneut.",
+        "conflict": "Die Einrichtung ist woanders weitergegangen, vielleicht in einem anderen Tab. Lade diese Seite neu.",
+        "unavailable": "Das ist gerade nicht verfügbar. Versuch es später erneut.",
+        "unknown": "Alles, was du eingegeben hast, ist noch da. Versuch es erneut."
+      }
     }
   },
   "people": {
@@ -9624,12 +9752,12 @@
   },
   "ready": {
     "allowance": {
-      "bonus": "Dazu {count, plural, one {# Bonus-Paket, das du erhalten hast} other {# Bonus-Pakete, die du erhalten hast}}.",
-      "left": "Diese Woche noch {left} von {cap, plural, one {# Paket} other {# Paketen}} übrig.",
-      "pro": "Pro: bis zu {count} Pakete pro Woche.",
+      "bonus": "Dazu {count, plural, one {# zusätzliche Bewerbung, die du erhalten hast} other {# zusätzliche Bewerbungen, die du erhalten hast}}.",
+      "left": "Diese Woche noch {left} von {cap, plural, one {# Bewerbung} other {# Bewerbungen}} übrig.",
+      "pro": "Pro: bis zu {count} Bewerbungen pro Woche vorbereiten.",
       "resets": "Weitere gibt es am {date}.",
       "seePro": "Pro ansehen",
-      "unknown": "Diese Woche übrige Pakete: —"
+      "unknown": "Diese Woche übrige Bewerbungen: —"
     },
     "answers": {
       "add": "Frage hinzufügen",
@@ -9644,7 +9772,7 @@
         "work_authorization": "Sag auch, ob du jetzt oder später Visa-Sponsoring brauchst."
       },
       "inCurrency": "{question} ({currency})",
-      "lead": "Schreib Antworten auf Fragen, die Formulare oft stellen. Pakete zeigen sie mit Schaltflächen zum Kopieren. Diese Antworten schreibst nur du.",
+      "lead": "Schreib Antworten auf Fragen, die Formulare oft stellen. Bewerbungen zeigen sie mit Schaltflächen zum Kopieren. Diese Antworten schreibst nur du.",
       "loadFailed": "Deine gespeicherten Antworten konnten nicht geladen werden.",
       "optional": "(optional)",
       "protectedNote": "KI beantwortet diese Frage nie. Die Frage wird nur mit deiner Antwort ausgefüllt.",
@@ -9665,10 +9793,10 @@
     },
     "intro": {
       "continue": "Einrichtung fortsetzen",
-      "lead": "Jede Woche wählt %BRAND% Jobs aus deiner Suche aus. Du entscheidest, für welche ein Paket vorbereitet wird.",
-      "point_kit": "Für jeden Job, den du auswählst, ein Paket: dein Lebenslauf, angepasst an die Stellenanzeige, ein Anschreiben, wenn die Anzeige eines verlangt, und deine gespeicherten Antworten.",
+      "lead": "Jede Woche wählt %BRAND% Jobs aus deiner Suche aus. Du entscheidest, für welche eine Bewerbung vorbereitet wird.",
+      "point_kit": "Für jeden Job, den du auswählst, eine Bewerbung: dein Lebenslauf, angepasst an die Stellenanzeige, ein Anschreiben, wenn die Anzeige eines verlangt, und deine gespeicherten Antworten.",
       "point_list": "Eine Wochenliste mit Jobs, die zu deiner Suche passen. Du kannst jeden Job auch selbst hinzufügen.",
-      "point_review": "Du prüfst jedes Paket, bevor du es nutzt. Alles, was in deinem Lebenslauf neu ist, musst du selbst bestätigen.",
+      "point_review": "Du prüfst jede Bewerbung, bevor du sie nutzt. Alles, was in deinem Lebenslauf neu ist, musst du selbst bestätigen.",
       "start": "„Bereit zum Bewerben“ einrichten",
       "title": "Bereite jede Bewerbung vor und sende sie dann selbst ab",
       "point_open": "Du öffnest die Bewerbungsseite und sendest die Bewerbung selbst ab."
@@ -9684,12 +9812,12 @@
           "title": "Nichts vorzubereiten"
         },
         "ready": {
-          "sub": "Bereite unter „Vorzubereiten“ ein Paket vor. Es erscheint hier, sobald du es prüfen kannst.",
-          "title": "Noch keine Pakete bereit"
+          "sub": "Bereite unter „Vorzubereiten“ eine Bewerbung vor. Sie erscheint hier, sobald du sie prüfen kannst.",
+          "title": "Noch keine Bewerbungen bereit"
         }
       },
       "expiredNote": "{count, plural, one {# Job ist} other {# Jobs sind}} beim Unternehmen nicht mehr ausgeschrieben. Entfern {count, plural, one {ihn} other {sie}}, damit deine Liste übersichtlich bleibt.",
-      "prepareSelected": "{count, plural, one {# Paket} other {# Pakete}} vorbereiten",
+      "prepareSelected": "{count, plural, one {# Bewerbung} other {# Bewerbungen}} vorbereiten",
       "selectAll": "{count, plural, one {# Job auswählen} other {Alle # Jobs auswählen}}",
       "selected": "{count, plural, one {# Job ausgewählt} other {# Jobs ausgewählt}}"
     },
@@ -9697,26 +9825,26 @@
     "prepare": {
       "bucket": {
         "cover_letter": "{count, plural, one {# Credit für ein Anschreiben} other {# Credits für Anschreiben}}",
-        "ready_kits": "{count, plural, one {# Bewerbungspaket} other {# Bewerbungspakete}}",
+        "ready_kits": "{count, plural, one {# Bewerbung} other {# Bewerbungen}}",
         "tailor": "{count, plural, one {# Credit für eine Lebenslauf-Anpassung} other {# Credits für Lebenslauf-Anpassungen}}"
       },
       "cancel": "Abbrechen",
-      "confirm": "{count, plural, one {# Paket} other {# Pakete}} vorbereiten",
+      "confirm": "{count, plural, one {# Bewerbung} other {# Bewerbungen}} vorbereiten",
       "cost": "Verbraucht {what}; du hast {window, select, day {heute} week {diese Woche} other {diesen Monat}} noch {left} übrig.",
       "costUnknown": "Verbraucht {what}. Übrige Credits: —",
       "description": "Hier siehst du, was das verbraucht, bevor etwas startet.",
       "noTailor": "Dein Lebenslauf wird unverändert verwendet (das Anpassen ist in den Einstellungen ausgeschaltet).",
-      "noTailorAi": "Das Schreiben mit KI ist für dein Konto ausgeschaltet, deshalb verwenden Pakete deinen Lebenslauf unverändert.",
-      "noTailorAsIs": "Es werden keine Credits für Lebenslauf-Anpassungen verbraucht: Pakete verwenden deinen Lebenslauf unverändert.",
+      "noTailorAi": "Das Schreiben mit KI ist für dein Konto ausgeschaltet, deshalb verwenden Bewerbungen deinen Lebenslauf unverändert.",
+      "noTailorAsIs": "Es werden keine Credits für Lebenslauf-Anpassungen verbraucht: Bewerbungen verwenden deinen Lebenslauf unverändert.",
       "notEnough": "Im Moment reicht es nur für {left}.",
       "quoteFailed": "Die Kosten konnten nicht geprüft werden. Es wurde nichts verbraucht. Versuch es erneut.",
       "quoting": "Kosten werden geprüft…",
-      "runFailed": "{count, plural, one {# Paket konnte} other {# Pakete konnten}} nicht gestartet werden. Versuch es unter „Vorzubereiten“ erneut.",
+      "runFailed": "{count, plural, one {# Bewerbung konnte} other {# Bewerbungen konnten}} nicht gestartet werden. Versuch es unter „Vorzubereiten“ erneut.",
       "running": "Wird gestartet…",
       "someFailed": "{count, plural, one {# Job konnte nicht geprüft werden und wird ausgelassen} other {# Jobs konnten nicht geprüft werden und werden ausgelassen}}.",
-      "started": "{count, plural, one {# Paket wird vorbereitet. Es erscheint unter „Bereit“, sobald es fertig ist.} other {# Pakete werden vorbereitet. Sie erscheinen unter „Bereit“, sobald sie fertig sind.}}",
-      "title": "{count, plural, one {# Paket} other {# Pakete}} vorbereiten",
-      "whatHappens": "Pakete werden im Hintergrund vorbereitet. An Unternehmen wird nichts gesendet."
+      "started": "{count, plural, one {# Bewerbung wird vorbereitet. Sie erscheint unter „Bereit“, sobald sie fertig ist.} other {# Bewerbungen werden vorbereitet. Sie erscheinen unter „Bereit“, sobald sie fertig sind.}}",
+      "title": "{count, plural, one {# Bewerbung} other {# Bewerbungen}} vorbereiten",
+      "whatHappens": "Bewerbungen werden im Hintergrund vorbereitet. An Unternehmen wird nichts gesendet."
     },
     "progress": {
       "applied": "Beworben",
@@ -9748,7 +9876,7 @@
       "work_model_preference": "Arbeitest du lieber remote, hybrid oder vor Ort?"
     },
     "review": {
-      "aiOff": "Das Schreiben mit KI ist für dein Konto ausgeschaltet, deshalb verwenden Pakete deinen Lebenslauf unverändert.",
+      "aiOff": "Das Schreiben mit KI ist für dein Konto ausgeschaltet, deshalb verwenden Bewerbungen deinen Lebenslauf unverändert.",
       "answers": {
         "add": "Antworten hinzufügen",
         "addToProfile": "Zu deinem Profil hinzufügen",
@@ -9764,19 +9892,19 @@
       "copyFailed": "Das Kopieren hat nicht geklappt. Markier den Text und kopier ihn.",
       "errors": {
         "aiUnavailable": "Das Schreiben mit KI ist für dein Konto gerade nicht verfügbar.",
-        "changed": "Dieses Paket hat sich inzwischen geändert. Die Seite zeigt jetzt den neuesten Stand.",
+        "changed": "Diese Bewerbung hat sich inzwischen geändert. Die Seite zeigt jetzt den neuesten Stand.",
         "closed": "Dieser Job ist beim Unternehmen nicht mehr ausgeschrieben.",
         "full": "Deine Liste ist voll. Entfern zuerst einen Job.",
         "generic": "Das hat nicht geklappt. Versuch es erneut.",
-        "preparing": "Dieses Paket wird noch vorbereitet. Versuch es gleich noch einmal.",
+        "preparing": "Diese Bewerbung wird noch vorbereitet. Versuch es gleich noch einmal.",
         "undoExpired": "Das lässt sich hier nicht mehr rückgängig machen.",
         "unverified": "Prüf die Angaben, die der angepasste Lebenslauf hinzugefügt hat, bevor du ihn nutzt."
       },
       "expired": "Das Unternehmen schreibt diesen Job nicht mehr aus.",
-      "failed": "Dieses Paket konnte nicht vorbereitet werden.",
+      "failed": "Diese Bewerbung konnte nicht vorbereitet werden.",
       "failedReason": {
-        "aiUnavailable": "Das Schreiben mit KI war für dieses Paket nicht verfügbar. Versuch es später erneut.",
-        "credits": "Du hattest für dieses Paket keine Credits mehr. Versuch es erneut, sobald sie zurückgesetzt sind.",
+        "aiUnavailable": "Das Schreiben mit KI war für diese Bewerbung nicht verfügbar. Versuch es später erneut.",
+        "credits": "Du hattest für diese Bewerbung keine Credits mehr. Versuch es erneut, sobald sie zurückgesetzt sind.",
         "jobClosed": "Das Unternehmen hat die Ausschreibung dieses Jobs beendet.",
         "noResume": "Füg zuerst einen Lebenslauf hinzu und versuch es dann erneut.",
         "ourSide": "Bei uns ist etwas schiefgelaufen. Versuch es erneut."
@@ -9806,8 +9934,8 @@
         },
         "loadFailed": "Der Verlauf konnte nicht geladen werden.",
         "moved": "Jetzt: {state}",
-        "none": "Mit diesem Paket ist noch nichts passiert.",
-        "notice": "Erinnerung: Dieses Paket ist bereit und noch nicht geöffnet",
+        "none": "Mit dieser Bewerbung ist noch nichts passiert.",
+        "notice": "Erinnerung: Diese Bewerbung ist bereit und noch nicht geöffnet",
         "opened": "Bewerbung geöffnet; nach „Beworben“ verschoben",
         "revised": {
           "letter": "Änderungen am Anschreiben angefragt",
@@ -9816,27 +9944,27 @@
         "title": "Verlauf",
         "undone": "Als nicht beworben markiert (Rückgängig)",
         "used": {
-          "letter": "Anschreiben für dieses Paket ausgewählt",
-          "resume": "Lebenslauf für dieses Paket ausgewählt"
+          "letter": "Anschreiben für diese Bewerbung ausgewählt",
+          "resume": "Lebenslauf für diese Bewerbung ausgewählt"
         }
       },
       "letter": {
         "copyAria": "Anschreiben kopieren",
         "edit": "Anschreiben bearbeiten",
         "loadFailed": "Das Anschreiben konnte nicht geladen werden.",
-        "none": "Kein Anschreiben in diesem Paket.",
+        "none": "Kein Anschreiben in dieser Bewerbung.",
         "off": "Anschreiben sind in den Einstellungen ausgeschaltet.",
         "title": "Anschreiben",
-        "use": "In diesem Paket verwenden"
+        "use": "In dieser Bewerbung verwenden"
       },
       "notOnList": {
         "add": "Zu „Bereit zum Bewerben“ hinzufügen",
         "failed": "Dieser Job konnte nicht hinzugefügt werden. Versuch es erneut.",
         "full": "Deine Liste ist voll. Entfern zuerst ein paar Jobs oder schließ sie ab.",
-        "sub": "Füg ihn hinzu, um ein Paket dafür vorzubereiten.",
+        "sub": "Füg ihn hinzu, um eine Bewerbung dafür vorzubereiten.",
         "title": "Dieser Job steht nicht auf deiner Liste"
       },
-      "notPrepared": "Dieses Paket ist noch nicht vorbereitet.",
+      "notPrepared": "Diese Bewerbung ist noch nicht vorbereitet.",
       "open": {
         "again": "Bewerbungsseite erneut öffnen",
         "alreadyApplied": "Dieser Job war schon unter „Bewerbungen“.",
@@ -9859,18 +9987,18 @@
         "sub": "Ein Übungsgespräch auf Basis dieser Stellenanzeige.",
         "title": "Für diesen Job üben"
       },
-      "prepare": "Paket vorbereiten",
-      "preparing": "Dein Paket wird vorbereitet. Diese Seite aktualisiert sich von selbst.",
+      "prepare": "Bewerbung vorbereiten",
+      "preparing": "Deine Bewerbung wird vorbereitet. Diese Seite aktualisiert sich von selbst.",
       "remove": "Von der Liste entfernen",
       "removeConfirm": "Diesen Job von deiner Liste entfernen?",
       "removeYes": "Entfernen",
       "resume": {
-        "asIs": "Dieses Paket verwendet deinen Lebenslauf unverändert.",
+        "asIs": "Diese Bewerbung verwendet deinen Lebenslauf unverändert.",
         "finishBlock": "Speichere oben den geprüften Lebenslauf, bevor du ihn nutzt.",
         "loadFailed": "Der angepasste Lebenslauf konnte nicht geladen werden. Lade die Seite neu, um es erneut zu versuchen.",
         "openAsIs": "Lebenslauf öffnen",
         "title": "Lebenslauf",
-        "use": "In diesem Paket verwenden",
+        "use": "In dieser Bewerbung verwenden",
         "verifyBlock": "Prüf oben {count, plural, one {# Angabe} other {# Angaben}}, bevor du diesen Lebenslauf nutzt.",
         "fitNote": "„Vorher“ und „Nachher“ zeigen deine Passung, als dieser Lebenslauf angepasst wurde. Die Passung neben der Jobbezeichnung ist die von heute, deshalb können sich die beiden unterscheiden."
       },
@@ -9881,7 +10009,7 @@
       },
       "reviseSend": "Senden",
       "skip": "Diesen Job überspringen",
-      "skipped": "Du hast diesen Job übersprungen. Nimm ihn wieder in deine Liste auf, um ein Paket dafür vorzubereiten."
+      "skipped": "Du hast diesen Job übersprungen. Nimm ihn wieder in deine Liste auf, um eine Bewerbung dafür vorzubereiten."
     },
     "row": {
       "loading": "Job wird geladen…",
@@ -9891,7 +10019,7 @@
       "remove": "Entfernen",
       "restore": "Wieder aufnehmen",
       "retry": "Erneut versuchen",
-      "review": "Paket prüfen",
+      "review": "Bewerbung prüfen",
       "reviewOpen": "Prüfen und öffnen",
       "seeApplication": "Unter „Bewerbungen“ ansehen",
       "select": "{title} auswählen",
@@ -9980,7 +10108,7 @@
       },
       "extension": {
         "lead": "Die Browser-Erweiterung füllt Bewerbungsformulare mit deinem Profil und deinen Antworten aus, wenn du sie dazu aufforderst. Du prüfst das Formular und sendest es selbst ab.",
-        "skipNote": "Du kannst das überspringen und die Erweiterung später hinzufügen. Pakete funktionieren auch ohne sie: Kopier deine Antworten aus dem Paket."
+        "skipNote": "Du kannst das überspringen und die Erweiterung später hinzufügen. Bewerbungen funktionieren auch ohne sie: Kopier deine Antworten aus der Bewerbung."
       },
       "finish": "Einrichtung abschließen",
       "firstList": "Einrichtung abgeschlossen. {count, plural, one {# Job steht} other {# Jobs stehen}} diese Woche auf deiner Liste.",
@@ -9988,9 +10116,9 @@
       "profile": {
         "allSet": "Dein Profil enthält alles, wonach Formulare üblicherweise fragen.",
         "complete": "Profil vervollständigen",
-        "lead": "Bewerbungsformulare fragen nach diesen Angaben. Pakete verwenden, was in deinem Profil steht. Prüf also, ob es stimmt.",
+        "lead": "Bewerbungsformulare fragen nach diesen Angaben. Deine Bewerbungen verwenden, was in deinem Profil steht. Prüf also, ob es stimmt.",
         "missing": "Fehlt",
-        "missingNote": "Du kannst jetzt weitermachen. Jedes Paket listet auf, was noch fehlt, damit du es im Formular ausfüllen kannst.",
+        "missingNote": "Du kannst jetzt weitermachen. Jede Bewerbung listet auf, was noch fehlt, damit du es im Formular ausfüllen kannst.",
         "missingTitle": "{count, plural, one {# Angabe fehlt, nach der Formulare fragen} other {# Angaben fehlen, nach denen Formulare fragen}}"
       },
       "skip": "Vorerst überspringen",
@@ -10022,12 +10150,12 @@
       "addAria": "{title} zu deiner Liste hinzufügen",
       "failed": "Dieser Job konnte nicht hinzugefügt werden. Versuch es erneut.",
       "full": "Deine Liste ist voll. Entfern zuerst ein paar Jobs oder schließ sie ab.",
-      "sub": "Noch nicht auf deiner Liste. Füg die hinzu, für die du ein Paket möchtest.",
+      "sub": "Noch nicht auf deiner Liste. Füg die hinzu, für die du eine Bewerbung vorbereiten möchtest.",
       "title": "Weitere Jobs, die zu deiner Suche passen"
     },
     "tabs": {
       "done": "Erledigt",
-      "label": "Pakete nach Status",
+      "label": "Bewerbungen nach Status",
       "prepare": "Vorzubereiten",
       "ready": "Bereit"
     },
@@ -10062,14 +10190,28 @@
       "saved": "Einstellungen gespeichert.",
       "saving": "Wird gespeichert…",
       "tailorEach": "Meinen Lebenslauf für jeden Job anpassen",
-      "tailorEachNote": "Verbraucht pro Paket einen Credit für eine Lebenslauf-Anpassung. Du prüfst jede Änderung, bevor sie verwendet wird.",
+      "tailorEachNote": "Verbraucht pro Bewerbung einen Credit für eine Lebenslauf-Anpassung. Du prüfst jede Änderung, bevor sie verwendet wird.",
       "target": "Jobs auf deiner Wochenliste",
-      "targetNote": "Ein Ziel für die Liste, kein Versprechen: Sie kann weniger enthalten, wenn weniger Jobs passen. Dein Tarif legt fest, wie viele Pakete vorbereitet werden können.",
+      "targetNote": "Ein Ziel für die Liste, kein Versprechen: Sie kann weniger enthalten, wenn weniger Jobs passen. Dein Tarif legt fest, wie viele Bewerbungen vorbereitet werden können.",
       "targetValue": "{count} pro Woche",
       "tierAtLeast": {
         "good": "Mindestens",
         "great": "Nur",
         "possible": "Mindestens"
+      }
+    },
+    "oneTap": {
+      "action": "Bewerbung vorbereiten",
+      "adding": "Wird hinzugefügt…",
+      "started": "Bewerbung in Vorbereitung. Sie erscheint unter „Wartet auf dich“, sobald sie dein OK braucht.",
+      "failed": "Das konnte nicht gestartet werden. Es wurde nichts verbraucht. Versuch es erneut.",
+      "full": "Deine Liste ist voll. Entfern einen Job unter „Vorbereiten“ und versuch es dann erneut.",
+      "closed": "Dieser Job ist nicht mehr ausgeschrieben, deshalb wurde nichts vorbereitet.",
+      "place": {
+        "preparing": "In Vorbereitung",
+        "review": "Prüfen und öffnen",
+        "sent": "Bewerbung ansehen",
+        "listed": "Auf deiner Liste"
       }
     }
   },
@@ -11683,6 +11825,202 @@
       "source": "Quelle: <link>{name}</link>",
       "title": "Angaben zum Visa-Sponsoring bei {company}",
       "usNote": "Ein zertifizierter Antrag ist weder eine Visumgenehmigung noch eine Einstellung. Die Zahlen zu den Petitionen sind Erstentscheidungen und umfassen neue und fortgesetzte Beschäftigung."
+    }
+  },
+  "today": {
+    "header": {
+      "title": "{count, plural, one {# Sache wartet auf dich} other {# Dinge warten auf dich}}",
+      "titleNone": "Nichts wartet auf dich",
+      "titleLoading": "Es wird geprüft, was auf dich wartet…",
+      "titlePartial": "Ein Teil der heutigen Liste wurde nicht geladen"
+    },
+    "goal": {
+      "line": "Du suchst: {what}",
+      "any": "Deine Suche ist offen für jeden Job.",
+      "more": "{list} und {count} mehr",
+      "change": "Ändern",
+      "changeLabel": "Ändern, wonach du suchst",
+      "loading": "Deine Suche wird geladen…",
+      "failed": "Deine Suche konnte nicht geladen werden.",
+      "none": "Noch keine gespeicherte Suche.",
+      "setUp": "Suche einrichten"
+    },
+    "agentTag": "Agent",
+    "retry": "Erneut versuchen",
+    "laneFailed": "Ein Teil davon konnte nicht geladen werden.",
+    "notLoaded": "Nicht geladen",
+    "waiting": {
+      "title": "Wartet auf dich",
+      "loading": "Es wird geprüft, was auf dich wartet…",
+      "empty": "Gerade braucht nichts deine Aufmerksamkeit. Die besten Treffer stehen unten.",
+      "emptyLink": "Zu den Treffern",
+      "emptyPlain": "Gerade braucht nichts deine Aufmerksamkeit.",
+      "more": "{count, plural, one {# weitere Sache wartet auf dich. Sie erscheint hier, sobald du eine davon erledigt hast.} other {# weitere Dinge warten auf dich. Sie erscheinen hier nach und nach, wenn du diese erledigst.}}",
+      "partial": "Ein Teil dieser Liste wurde nicht geladen, es kann also mehr geben.",
+      "fact": {
+        "review": "{title} bei {company}: Die Bewerbung ist bereit zum Prüfen.",
+        "reviewTitle": "{title}: Die Bewerbung ist bereit zum Prüfen.",
+        "reviewUnnamed": "Eine Bewerbung ist bereit zum Prüfen.",
+        "open": "{title} bei {company}: Die Bewerbung ist bereit zum Öffnen.",
+        "openTitle": "{title}: Die Bewerbung ist bereit zum Öffnen.",
+        "openUnnamed": "Eine Bewerbung ist bereit zum Öffnen.",
+        "verify": "{count, plural, one {# neue Angabe in {name} braucht dein OK.} other {# neue Angaben in {name} brauchen dein OK.}}",
+        "noReply": "{count, plural, one {# Bewerbung ist seit {days} Tagen ohne Antwort.} other {# Bewerbungen sind seit {days} Tagen ohne Antwort.}}",
+        "profile": "{count, plural, one {In deinem Profil fehlt # Angabe, nach der Bewerbungsformulare fragen.} other {In deinem Profil fehlen # Angaben, nach denen Bewerbungsformulare fragen.}}",
+        "noResume": "Du hast noch keinen Lebenslauf hinzugefügt.",
+        "setup": "{count, plural, one {Dir fehlt noch # Schritt der Einrichtung.} other {Dir fehlen noch # Schritte der Einrichtung.}}"
+      },
+      "action": {
+        "review": "Prüfen und öffnen",
+        "open": "Bewerbung öffnen",
+        "verify": "Angaben prüfen",
+        "noReply": "Ansehen",
+        "profile": "Angaben ergänzen",
+        "noResume": "Lebenslauf hinzufügen",
+        "setup": "Einrichtung abschließen"
+      }
+    },
+    "jobSearch": {
+      "title": "Jobsuche",
+      "found": "{count, plural, =0 {Seit dem {date} wurden keine neuen passenden Jobs gefunden.} one {Seit dem {date} wurde # neuer passender Job gefunden.} other {Seit dem {date} wurden # neue passende Jobs gefunden.}}",
+      "foundSinceVisit": "{count, plural, =0 {Seit deinem letzten Besuch wurden keine neuen passenden Jobs gefunden.} one {Seit deinem letzten Besuch wurde # neuer passender Job gefunden.} other {Seit deinem letzten Besuch wurden # neue passende Jobs gefunden.}}",
+      "foundCapped": "Seit dem {date} wurden mehr als {count} neue passende Jobs gefunden.",
+      "foundCappedSinceVisit": "Seit deinem letzten Besuch wurden mehr als {count} neue passende Jobs gefunden.",
+      "foundUnknown": "Neue passende Jobs seit deinem letzten Besuch:",
+      "picksTitle": "Beste Treffer",
+      "picksLoading": "Treffer werden geladen…",
+      "searching": "Es wird nach Jobs gesucht, die zu deinen Antworten passen. Die besten Treffer erscheinen hier, sobald die Suche fertig ist.",
+      "picksNone": "Gerade keine neuen Treffer.",
+      "picksFailed": "Die Treffer konnten nicht geladen werden.",
+      "viewJob": "Job ansehen",
+      "seeAll": "Alle Jobs ansehen",
+      "off": "Die Jobliste ist für dieses Konto nicht verfügbar."
+    },
+    "applications": {
+      "title": "Bewerbungen",
+      "numbersLabel": "Bewerbungen in Zahlen",
+      "preparing": "In Vorbereitung",
+      "waiting": "Wartet auf dich",
+      "sent": "Diese Woche gesendet",
+      "saved": "Gemerkt",
+      "open": "Bewerbungen öffnen",
+      "failed": "Einige dieser Zahlen konnten nicht geladen werden."
+    },
+    "resume": {
+      "title": "Lebenslauf",
+      "mainLabel": "Hauptlebenslauf",
+      "loading": "Dein Lebenslauf wird geladen…",
+      "none": "Noch kein Lebenslauf.",
+      "add": "Lebenslauf hinzufügen",
+      "improve": "Meinen Lebenslauf verbessern",
+      "open": "Lebensläufe öffnen",
+      "failed": "Deine Lebensläufe konnten nicht geladen werden.",
+      "asked": "Jobs in deiner Suche verlangen diese Fähigkeiten, und in deinem Profil stehen sie nicht:",
+      "askedIn": "in {count} von {total} Jobs verlangt"
+    },
+    "ask": {
+      "title": "Fragen",
+      "label": "Stell eine Frage zu deiner Jobsuche",
+      "placeholder": "Zum Beispiel: Welcher dieser Jobs passt am besten?",
+      "submit": "Fragen",
+      "hint": "Öffnet den Assistenten mit deiner Frage, bereit zum Senden."
+    }
+  },
+  "dashboard": {
+    "hi": "Hallo {name}!",
+    "hi_anon": "Hallo!",
+    "subtitle": "Woran möchtest du heute weiterkommen?",
+    "goals_aria": "Deine Ziele",
+    "goal": {
+      "resume": "Lebenslauf",
+      "jobs": "Jobsuche",
+      "applications": "Bewerbungen",
+      "interview": "Vorstellungsgespräche"
+    },
+    "progress": "Fortschritt",
+    "progress_aria": "{goal}: Schritte und Fortschritt",
+    "value_percent": "{value} %",
+    "value_count": "{value}/{target}",
+    "value_unknown": "Noch nicht bekannt",
+    "score_label": "Lebenslauf-Check",
+    "ask_bar": "Frag den Assistenten etwas",
+    "steps": {
+      "resume_check": {
+        "label": "Lebenslauf-Check",
+        "title_no_resume": "Beginne mit deinem Lebenslauf",
+        "body_no_resume": "Lade deinen Lebenslauf hoch oder erstelle ihn Schritt für Schritt. Alle anderen Schritte hier bauen darauf auf.",
+        "cta_no_resume": "Lebenslauf hinzufügen",
+        "title_start": "Sieh dir an, wie dein Lebenslauf wirkt",
+        "body_start": "Ein Lebenslauf-Check prüft, was Arbeitgeber zuerst lesen, und listet auf, was du verbessern solltest – das Wichtigste zuerst.",
+        "title_more": "Dein Lebenslauf kann mehr",
+        "title_good": "Dein Lebenslauf ist gut aufgestellt",
+        "body_more": "Dein letzter Check ergab {score} %. Öffne deinen Lebenslauf, arbeite die Punkte ab und prüfe ihn dann noch einmal.",
+        "cta": "Lebenslauf öffnen"
+      },
+      "tailored": {
+        "label": "Angepasste Lebensläufe",
+        "title_start": "Passe deinen Lebenslauf an eine Stelle an",
+        "body_start": "Wähle einen gespeicherten Job oder füge eine Anzeige ein. Du bekommst eine Kopie deines Lebenslaufs, die zu dieser Stelle passt; dein Original bleibt unverändert.",
+        "title_more": "Eine Version für jede Stelle",
+        "body_more": "Eine eigene Version pro Job stellt die Erfahrung nach vorn, die diese Stelle verlangt. Erstelle eine für jeden Job, auf den du dich bewerben willst.",
+        "cta": "Lebenslauf anpassen"
+      },
+      "letters": {
+        "label": "Anschreiben",
+        "title_start": "Schreib ein Anschreiben",
+        "body_start": "Entwirf ein Anschreiben für einen deiner gespeicherten Jobs und bearbeite es, bis es nach dir klingt.",
+        "title_more": "Schreib eins für deine nächste Bewerbung",
+        "body_more": "Ein Anschreiben wirkt am besten, wenn es für einen Job geschrieben ist. Beginne das nächste bei einem gespeicherten Job.",
+        "cta": "Anschreiben öffnen"
+      },
+      "profile": {
+        "label": "Profil",
+        "title_start": "Vervollständige dein Profil",
+        "body_start": "Dein Profil bestimmt, welche Jobs wir dir zeigen, und füllt Bewerbungsformulare aus. Das dauert nur ein paar Minuten.",
+        "title_more": "Dein Profil ist zu {percent} % vollständig",
+        "body_more": "Ergänze, was noch fehlt, damit deine Treffer und ausgefüllten Formulare stimmen.",
+        "cta": "Profil öffnen"
+      },
+      "saved": {
+        "label": "Gespeicherte Jobs",
+        "title_start": "Speichere die Jobs, die dir gefallen",
+        "body_start": "Gespeicherte Jobs landen in deiner Bewerbungsliste. Dort kannst du einen Lebenslauf anpassen und jede Bewerbung vorbereiten.",
+        "title_more": "Bau deine Auswahl weiter aus",
+        "body_more": "Sieh dir deine neuen Treffer an und speichere die, für die sich eine Bewerbung lohnt.",
+        "cta": "Jobs ansehen"
+      },
+      "preparing": {
+        "label": "In Vorbereitung",
+        "title_start": "Bereite eine Bewerbung vor",
+        "body_start": "Wir füllen die Bewerbung aus und passen deine Unterlagen an. Du prüfst alles und schickst sie selbst ab.",
+        "title_more": "Deine Bewerbungen werden vorbereitet",
+        "body_more": "Öffne jede einzelne und prüfe Unterlagen und Antworten, bevor du sie abschickst.",
+        "cta": "Bereit zum Bewerben öffnen"
+      },
+      "applied": {
+        "label": "Beworben",
+        "title_start": "Schick deine erste Bewerbung ab",
+        "body_start": "Wenn du dich bewirbst, markiere den Job als beworben, damit du weißt, wann du nachfassen solltest.",
+        "title_more": "Fass bei deinen Bewerbungen nach",
+        "body_more": "Deine Bewerbungsliste zeigt, welche schon länger ohne Antwort sind.",
+        "cta": "Bewerbungen öffnen"
+      },
+      "interviews": {
+        "label": "Gespräche",
+        "title_start": "Behalte deine Gespräche im Blick",
+        "body_start": "Wenn du zu einem Gespräch eingeladen wirst, verschiebe den Job in diese Phase und halte Notizen zu jeder Runde fest.",
+        "title_more": "Bereite dich auf deine Gespräche vor",
+        "body_more": "Führe vor dem echten Gespräch ein Übungsgespräch für die Stelle.",
+        "cta": "Bewerbungen öffnen"
+      },
+      "practice": {
+        "label": "Übungsgespräche",
+        "title_start": "Übe ein Vorstellungsgespräch",
+        "body_start": "Führe ein Übungsgespräch für die Stelle, die du willst, und bekomm Feedback zu jeder Antwort.",
+        "title_more": "Bleib dran",
+        "body_more": "Jede Runde schärft deine Antworten. Probier eine für eine andere Stelle oder Firma.",
+        "cta": "Üben starten"
+      }
     }
   }
 }

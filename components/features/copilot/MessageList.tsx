@@ -39,6 +39,10 @@ const TOOL_KEYS = [
   'salary_context',
   'application_summary',
   'get_profile_gaps',
+  // The applications agent: where a job stands on the list, and what preparing it uses.
+  'application_status',
+  'add_to_list',
+  'prepare_application',
 ];
 const ERROR_KEYS = [
   'credits_exhausted',

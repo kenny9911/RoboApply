@@ -1,5 +1,7 @@
 // WP-20: quick bar, active chips, fit view, title/company typeahead,
 // saved-search switcher and FilterDiff.
+// Agent-driven redesign §6: the bar is one summary line with "Change search"
+// until its controls are opened (FilterBar, SearchSummary).
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,10 +11,12 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 
 import { __toastStore } from '../../v3/primitives/Toast';
 import { ActiveFilterChips, activeChips } from './ActiveFilterChips';
+import { FilterBar } from './FilterBar';
 import { FilterDiff } from './FilterDiff';
 import { FitTierFilter } from './FitTierFilter';
 import { QuickFilterBar } from './QuickFilterBar';
 import { SavedSearchSwitcher, profileLabel } from './SavedSearchSwitcher';
+import { SUMMARY_MAX_VALUES, summaryParts } from './SearchSummary';
 import { SearchTypeahead } from './SearchTypeahead';
 import { TAXONOMY_TREE, fail, installFetch, list, ok, profile, renderWith, type RecordedCall } from './filters.testkit';
 import styles from './filters.module.css';
@@ -374,5 +378,165 @@ describe('FilterDiff', () => {
     routes();
     renderWith(<FilterDiff before={{ titles: ['A'] }} after={{ titles: ['A'] }} />);
     expect(screen.getByText('Nothing changes.')).toBeInTheDocument();
+  });
+});
+
+// ── Agent-driven redesign §6: one summary line, the controls on demand ──────
+
+describe('summaryParts', () => {
+  const labels = (n: number) => Array.from({ length: n }, (_, i) => `v${i + 1}`);
+
+  it('names every value of a short search and counts nothing', () => {
+    expect(summaryParts(['Product designer', 'Remote'])).toEqual({ shown: ['Product designer', 'Remote'], more: 0 });
+    expect(summaryParts([])).toEqual({ shown: [], more: 0 });
+  });
+
+  it('names the first values of a long search and says how many more there are; one over the limit is simply named', () => {
+    expect(summaryParts(labels(SUMMARY_MAX_VALUES + 1))).toEqual({ shown: labels(SUMMARY_MAX_VALUES + 1), more: 0 });
+    expect(summaryParts(labels(SUMMARY_MAX_VALUES + 4))).toEqual({ shown: labels(SUMMARY_MAX_VALUES), more: 4 });
+  });
+
+  it('a label that has not loaded yet (empty) is not counted or named', () => {
+    expect(summaryParts(['Remote', '', '  '])).toEqual({ shown: ['Remote'], more: 0 });
+  });
+});
+
+describe('FilterBar: the search is one line until "Change search"', () => {
+  const SEARCH = { titles: ['Product designer'], workModels: ['remote' as const, 'hybrid' as const], seniority: ['senior' as const], postedWithinDays: 30 as const };
+  const withProfile = (filters: object, extra: Record<string, (c: RecordedCall) => Response> = {}) =>
+    routes({ [`GET ${P}`]: () => ok(list([profile({ filters: filters as never })])), ...extra });
+  const toggle = () => screen.getByRole('button', { name: 'Change search' });
+  const summary = () => screen.getByTestId('search-summary');
+
+  it('closed by default: the search in words, a disclosure button, and none of the search controls', async () => {
+    withProfile(SEARCH);
+    renderWith(<FilterBar />);
+    await waitFor(() => expect(summary()).toHaveTextContent('Product designer · Remote · Hybrid · Senior · Past month'));
+    // The same values the chips show, said once, with a prefix only a screen reader hears.
+    expect(summary()).toHaveTextContent(/^Your search: Product designer/);
+    const btn = toggle();
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    const panel = document.getElementById(btn.getAttribute('aria-controls')!);
+    expect(panel).not.toBeNull();
+    expect(panel).toHaveAttribute('hidden');
+    expect(panel).toBeEmptyDOMElement();
+    expect(screen.queryByRole('search')).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Quick filters' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Active filters' })).toBeNull();
+    expect(screen.queryByText('Your main search')).toBeNull();
+  });
+
+  it('the fit view and the caller\'s sort stay visible while closed, with "Hiding {n} weaker fits"', async () => {
+    withProfile({ ...SEARCH, fitTier: 'good' });
+    renderWith(<FilterBar hiddenWeakerFits={37} trailing={<label>Sort<select aria-label="Sort order" /></label>} />);
+    expect(await screen.findByRole('radio', { name: 'Good fits and better' })).toBeChecked();
+    expect(screen.getByText('Hiding 37 weaker fits.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show them.' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Sort order')).toBeInTheDocument();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    // The fit view is its own control, so it is not one of the words on the line.
+    expect(summary()).not.toHaveTextContent('Good fits');
+  });
+
+  it('"Change search" shows every control in place; "Done" hides them and gives focus back to the button', async () => {
+    withProfile(SEARCH);
+    renderWith(<FilterBar />);
+    await waitFor(() => expect(summary()).toHaveTextContent('Product designer'));
+    const btn = toggle();
+    btn.focus();
+    fireEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-expanded', 'true');
+    // Opening leaves focus on the button (a disclosure): the controls are next in the tab order.
+    expect(btn).toHaveFocus();
+    const panel = document.getElementById(btn.getAttribute('aria-controls')!)!;
+    expect(panel).not.toHaveAttribute('hidden');
+    expect(within(panel).getByRole('search')).toBeInTheDocument();
+    expect(within(panel).getByText('Your main search')).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'Save as a new search' })).toBeInTheDocument();
+    const quick = within(panel).getByRole('list', { name: 'Quick filters' });
+    expect(within(quick).getAllByRole('button').map((b) => b.textContent)).toEqual(['Location', 'Level', 'Job type', 'Work model', 'Date posted', 'Pay', 'All filters4All filters (4)']);
+    const chips = within(panel).getByRole('group', { name: 'Active filters' });
+    expect(within(chips).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Product designer', 'Remote', 'Hybrid', 'Senior', 'Past month']);
+    // The line still says the search while the controls are open.
+    expect(summary()).toHaveTextContent('Product designer · Remote · Hybrid · Senior · Past month');
+
+    const done = within(panel).getByRole('button', { name: 'Done' });
+    done.focus();
+    fireEvent.click(done);
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    expect(panel).toHaveAttribute('hidden');
+    expect(screen.queryByRole('search')).toBeNull();
+    expect(btn).toHaveFocus();
+  });
+
+  it('the button also closes the controls it opened, and focus stays on it', async () => {
+    withProfile(SEARCH);
+    renderWith(<FilterBar />);
+    await waitFor(() => expect(summary()).toHaveTextContent('Product designer'));
+    const btn = toggle();
+    btn.focus();
+    fireEvent.click(btn);
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('search')).toBeNull();
+    expect(btn).toHaveFocus();
+  });
+
+  it('stays open while it is used: removing a chip saves it, the line follows, and the controls are still there', async () => {
+    let filters: Record<string, unknown> = { ...SEARCH };
+    const net = routes({
+      [`GET ${P}`]: () => ok(list([profile({ filters: filters as never })])),
+      [`PATCH ${P}/sp_main`]: (c) => {
+        const patch = (c.body as { filtersPatch: Record<string, unknown> }).filtersPatch;
+        filters = Object.fromEntries(Object.entries({ ...filters, ...patch }).filter(([, v]) => v !== null));
+        return ok(profile({ version: 4, filters: filters as never }));
+      },
+    });
+    renderWith(<FilterBar />);
+    await waitFor(() => expect(summary()).toHaveTextContent('Product designer'));
+    fireEvent.click(toggle());
+    fireEvent.click(screen.getByRole('button', { name: 'Remove filter: Senior' }));
+    await waitFor(() => expect(net.to('PATCH', `${P}/sp_main`)).toHaveLength(1));
+    await waitFor(() => expect(summary()).toHaveTextContent(/^Your search: Product designer · Remote · Hybrid · Past month$/));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Active filters' })).getAllByRole('listitem')).toHaveLength(4);
+  });
+
+  it('no filters reads "All jobs"; while the saved search is still loading nothing is claimed about it', async () => {
+    let answer: (r: Response) => void = () => {};
+    installFetch({ [`GET ${P}`]: () => new Promise<Response>((resolve) => (answer = resolve)) });
+    renderWith(<FilterBar />);
+    expect(summary()).toHaveTextContent('Loading your search…');
+    expect(summary()).not.toHaveTextContent('All jobs');
+    await act(async () => {
+      answer(ok(list([profile({ filters: { fitTier: 'good' } })])));
+    });
+    await waitFor(() => expect(summary()).toHaveTextContent(/^Your search: All jobs$/));
+  });
+
+  it('a long search names its first values and how many more; all of them are chips once open', async () => {
+    withProfile({ ...SEARCH, jobTypes: ['full_time', 'contract'], excludedSkills: ['PHP'], recruiterJobsOnly: true, excludeAgencies: true });
+    renderWith(<FilterBar />);
+    await waitFor(() => expect(summary()).toHaveTextContent(/^Your search: Product designer · Full-time · Contract · Remote · Hybrid · Senior · 4 more$/));
+    fireEvent.click(toggle());
+    expect(within(screen.getByRole('group', { name: 'Active filters' })).getAllByRole('listitem')).toHaveLength(10);
+  });
+
+  it('the caller can hold the state: `open` shows the controls, and the button and "Done" report the change', async () => {
+    withProfile(SEARCH);
+    const onOpenChange = vi.fn();
+    const view = renderWith(<FilterBar open onOpenChange={onOpenChange} />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('group', { name: 'Active filters' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    // Controlled: nothing closes until the caller says so.
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    view.rerender(<FilterBar open={false} onOpenChange={onOpenChange} />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle());
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
   });
 });

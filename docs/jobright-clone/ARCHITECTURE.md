@@ -2337,6 +2337,9 @@ Every tool calls an **existing area service** and never writes to the database d
 | `add_external_job` `{url}` | → proposal | `credit_action` → `job_imported` | proposal | `job_import` on confirm |
 | `remember` `{fact}` | → proposal | `memory_add` (the user confirms what is stored) | proposal | — |
 | `get_profile_gaps` | `ProfileService.completeness` | `profile_gaps` | no | — |
+| `application_status` `{jobIds≤8}` (agent-driven, capability `agent`) | `agentService.jobPlaces` (where each job stands on the list) | none (context only) | no | — |
+| `add_to_list` `{jobId}` (agent-driven, capability `agent`) | → proposal; on apply `agentService.addToQueue` (`addedVia: copilot`) | `list_add` → `application_status`; a job already on the list gets `application_status` and no proposal | proposal | — |
+| `prepare_application` `{jobId}` (agent-driven, capability `agent`) | `agentService.quoteJob` (the cost sheet's own lines) → proposal; on apply `addToQueue` when needed, then `agentService.prepare` with the key `copilot:<proposalId>` | `prepare_application` (cost before anything is spent) → `application_status` (links to `/ready/<jobId>`) | proposal | `ready_kits` on confirm (the weekly allowance), then `tailor` / `cover_letter` as the cost sheet shows |
 
 Visitor copilot (`/api/v1/public/copilot`) gets only `search_jobs` (public jobs only), `salary_context`, and a static `explain_feature`. No memory and no persistence.
 
@@ -2354,7 +2357,7 @@ Visitor copilot (`/api/v1/public/copilot`) gets only `search_jobs` (public jobs 
 
 ### 5.4 Card vocabulary (wire contract in `server/src/features/copilot/contract.ts`)
 
-`job_list`, `filters`, `filter_diff`, `fit_analysis`, `company`, `contacts`, `credit_action`, `tailor_ready`, `cover_letter`, `interview_plan`, `salary`, `applications`, `job_imported`, `memory_add`, `profile_gaps`, `action`, `notice`. Every card carries `{ type, id, data, sources?: Sourced[] }`. Unknown card types render as nothing, so the server can ship ahead of the client.
+`job_list`, `filters`, `filter_diff`, `fit_analysis`, `company`, `contacts`, `credit_action`, `tailor_ready`, `cover_letter`, `interview_plan`, `salary`, `applications`, `job_imported`, `memory_add`, `profile_gaps`, `action`, `notice` (later additions: `campus_deadlines`, `competitiveness`, `resume_tips`, `rewrite_ready`, and for the applications agent `list_add`, `prepare_application`, `application_status`). Every card carries `{ type, id, data, sources?: Sourced[] }`. Unknown card types render as nothing, so the server can ship ahead of the client.
 
 ### 5.5 Guardrails
 

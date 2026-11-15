@@ -5,14 +5,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 
-const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+// `search`: the page's query string ("classic=1" = the user chose the long screens over /onboarding/start).
+const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), search: '' }));
 vi.mock('next/navigation', async (orig) => {
   const real = await orig<typeof import('next/navigation')>();
   return {
     ...real,
     usePathname: () => '/onboarding/situation',
     useRouter: () => ({ push: nav.push, replace: nav.replace, back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
-    useSearchParams: () => new URLSearchParams(),
+    useSearchParams: () => new URLSearchParams(nav.search),
   };
 });
 const tracked = vi.hoisted(() => [] as Array<[string, Record<string, unknown> | undefined]>);
@@ -64,6 +65,7 @@ function sse(events: Array<[string, unknown]>) {
 beforeEach(() => {
   nav.push.mockReset();
   nav.replace.mockReset();
+  nav.search = '';
   tracked.length = 0;
   resumes.list = [];
   resumes.query = {};
@@ -74,7 +76,9 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('O1 situation', () => {
+  // A new user is sent to /onboarding/start (below); this screen is for one who asked for the long screens.
   it('enables Next only when both questions are answered, saves and goes to the server route', async () => {
+    nav.search = 'classic=1';
     const net = installFetch({
       [`GET ${P}/state`]: () => ok(state()),
       [`PUT ${P}/steps/situation`]: () => ok({ stage: 'basics', nextStage: 'basics', nextRoute: '/onboarding/basics' }),
@@ -93,12 +97,51 @@ describe('O1 situation', () => {
     expect(tracked.map(([n]) => n)).toEqual(['onboarding_step_viewed', 'onboarding_step_completed']);
     expect(tracked[1][1]).toMatchObject({ stage: 'situation', skipped: false });
     expect(screen.getByText('Step 1 of 5')).toBeInTheDocument();
+    // The choice was honoured: nobody was sent to the start flow.
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it('sends a user who has saved nothing to the two-screen start, from this screen or any later one', async () => {
+    installFetch({ [`GET ${P}/state`]: () => ok(state()) });
+    const first = renderWith(<OnboardingStepPage step="situation" />);
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/start'));
+    // The long screen is not drawn on the way.
+    expect(screen.queryByRole('radio', { name: 'As soon as possible' })).toBeNull();
+    first.unmount();
+    nav.replace.mockReset();
+    renderWith(<OnboardingStepPage step="confirm" />);
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/start'));
+    expect(nav.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it('a user who left early before saving anything is sent there too (nothing of the long screens to come back to)', async () => {
+    installFetch({ [`GET ${P}/state`]: () => ok(state({ progress: { total: 5, stepsLeft: 5, leftEarly: { at: '2026-11-01T08:00:00.000Z', stage: 'situation' } } })) });
+    renderWith(<OnboardingStepPage step="situation" />);
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/start'));
   });
 
   it('sends a user who jumps ahead back to their current screen', async () => {
+    // Mid-way (a step is saved): the long screens, exactly as before.
+    installFetch({ [`GET ${P}/state`]: () => ok(state({ stage: 'basics', nextRoute: '/onboarding/basics', branch: 'urgent', answers: { situation: { timing: 'asap', seekerType: 'experienced' } } })) });
+    const first = renderWith(<OnboardingStepPage step="confirm" />);
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/basics'));
+    expect(nav.replace).not.toHaveBeenCalledWith('/onboarding/start');
+    first.unmount();
+    // Nothing saved, but the long screens were chosen: back to the first one, with the choice kept (no loop through the start).
+    nav.replace.mockReset();
+    nav.search = 'classic=1';
     installFetch({ [`GET ${P}/state`]: () => ok(state()) });
     renderWith(<OnboardingStepPage step="confirm" />);
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/situation'));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/situation?classic=1'));
+    expect(nav.replace).not.toHaveBeenCalledWith('/onboarding/start');
+  });
+
+  it('a user who is mid-way keeps the long screens, with or without the flag', async () => {
+    installFetch({ [`GET ${P}/state`]: () => ok(state({ stage: 'basics', nextRoute: '/onboarding/basics', branch: 'urgent', answers: { situation: { timing: 'asap', seekerType: 'experienced' } } })) });
+    // Back to the first screen: it shows the saved answers; nobody is sent anywhere.
+    renderWith(<OnboardingStepPage step="situation" />);
+    expect(await screen.findByRole('radio', { name: 'As soon as possible' })).toHaveAttribute('aria-checked', 'true');
+    expect(nav.replace).not.toHaveBeenCalled();
   });
 
   it('sends a finished user to the jobs page', async () => {
@@ -108,6 +151,7 @@ describe('O1 situation', () => {
   });
 
   it('"Finish later" leaves onboarding early and tracks it', async () => {
+    nav.search = 'classic=1';
     const net = installFetch({
       [`GET ${P}/state`]: () => ok(state()),
       [`POST ${P}/skip`]: () => ok({ stage: 'done', nextRoute: '/jobs' }),
@@ -715,6 +759,7 @@ describe('O7 confirm', () => {
 
 describe('errors and GoApply', () => {
   it('a refused save shows a plain message and keeps the answers', async () => {
+    nav.search = 'classic=1';
     installFetch({
       [`GET ${P}/state`]: () => ok(state()),
       [`PUT ${P}/steps/situation`]: () => fail(409, 'conflict', { reason: 'onboarding_step_not_available' }),
@@ -733,6 +778,7 @@ describe('errors and GoApply', () => {
     installFetch({ [`GET ${P}/state`]: () => ok(state({ brand: 'goapply', stage: 'consent', nextRoute: '/onboarding/consent', progress: { total: 8, stepsLeft: 8, leftEarly: null } })) });
     renderWith(<OnboardingStepPage step="consent" />, { brand: 'goapply' });
     await waitFor(() => expect(screen.queryByText('Loading your setup…')).toBeNull());
+    // A new GoApply user (nothing saved, no flag) is never sent to /onboarding/start.
     expect(nav.replace).not.toHaveBeenCalled();
     expect(await screen.findByRole('heading', { name: 'Before you start' })).toBeInTheDocument();
   });

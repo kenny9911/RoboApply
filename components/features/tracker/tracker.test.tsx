@@ -5,6 +5,8 @@
 // follow-up, Practice for this job, the resume download that records the file,
 // the cover letter rows), each hidden when its flag or AI is off; and
 // `/applications?entry=<id>`.
+// Agent-driven redesign §7: the "Getting ready · Sent" switch at the top of
+// /applications with the `agent` flag (its own rules: ApplicationsSwitch.test.tsx).
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -29,6 +31,13 @@ const api = vi.hoisted(() => ({
   trackerExportCsvUrl: () => 'http://api.test/api/v1/roboapply/v2/tracker/export.csv',
 }));
 vi.mock('../../../lib/api/tracker', () => api);
+
+// The switch's count (hooks/agent `useReadyBadge`); only read with the `agent` flag on.
+const agentApi = vi.hoisted(() => ({ getReadyBadge: vi.fn() }));
+vi.mock('../../../lib/api/agent', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/api/agent')>()),
+  getReadyBadge: agentApi.getReadyBadge,
+}));
 
 // Other areas' entry points, as stand-ins that show what they were given. The
 // tailoring button keeps its own rule (it renders nothing when AI tailoring is
@@ -128,6 +137,7 @@ beforeEach(() => {
   api.listTrackerEvents.mockResolvedValue({ items: [] });
   api.listTrackerArtifacts.mockResolvedValue({ items: [] });
   api.getWeeklyInsight.mockResolvedValue(weekly());
+  agentApi.getReadyBadge.mockResolvedValue({ readyNotOpened: 0 });
   seams.tailorAvailable = true;
   seams.resumes = [];
   seams.resume = null;
@@ -757,5 +767,38 @@ describe('/applications page', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByTestId('applications-entry-missing')).toBeNull();
     expect(api.getTrackerEntry).not.toHaveBeenCalled();
+  });
+
+  // ── Getting ready · Sent (agent-driven redesign §7) ──
+
+  it('`agent` flag off: no switch, nothing asked for it, and the page is as it was', async () => {
+    renderWithBrand(<ApplicationsPage />);
+    expect(screen.queryByTestId('applications-switch')).toBeNull();
+    expect(screen.queryByRole('link', { name: /Getting ready/ })).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Where did you apply, and what happened?' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'By stage' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'Applied', level: 2 })).toBeInTheDocument();
+    expect(agentApi.getReadyBadge).not.toHaveBeenCalled();
+  });
+
+  it('`agent` flag on: the switch is the first thing on the page; "Sent" is this page and "Getting ready" links to /ready with its count', async () => {
+    agentApi.getReadyBadge.mockResolvedValue({ readyNotOpened: 2 });
+    nav.params = new URLSearchParams('view=list');
+    renderWithBrand(<ApplicationsPage />, { flags: { agent: true } });
+    const sw = screen.getByRole('navigation', { name: 'Your applications' });
+    expect(within(sw).getByRole('link', { name: 'Sent' })).toHaveAttribute('href', '/applications');
+    expect(within(sw).getByRole('link', { name: 'Sent' })).toHaveAttribute('aria-current', 'page');
+    const ready = within(sw).getByRole('link', { name: /^Getting ready/ });
+    expect(ready).toHaveAttribute('href', '/ready');
+    expect(ready).not.toHaveAttribute('aria-current');
+    expect(await within(sw).findByTestId('applications-switch-count')).toHaveTextContent(/^2$/);
+    expect(ready).toHaveAccessibleName('Getting ready 2 applications are ready and waiting for you');
+    // Above the page header.
+    const h1 = screen.getByRole('heading', { level: 1, name: 'Where did you apply, and what happened?' });
+    expect(Boolean(sw.compareDocumentPosition(h1) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    // The page under it is untouched: its own view tabs, its own query parameters.
+    expect(screen.getByRole('tab', { name: /^List/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('link', { name: 'Download as CSV' })).toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
   });
 });

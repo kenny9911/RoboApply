@@ -10,7 +10,12 @@
 //     (the one-line revert), and NEXT_PUBLIC_SHOW_ALL_NAV still overrides it;
 //   • a badge renders the hook's value and nothing for null;
 //   • mobile shows 5 slots: 4 destinations + More (我的 on GoApply), and More
-//     opens a sheet with the registry's `mobile: 'more'` entries.
+//     opens a sheet with the registry's `mobile: 'more'` entries;
+//   • the agent-driven IA (docs/agent-driven/REDESIGN.md §3): the Dashboard
+//     (which carries the agent desk) is the first entry and the home on both
+//     brands; "Ready to apply" is not an
+//     entry of its own — /ready lights Applications; Profile sits in the lower
+//     group.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
@@ -100,16 +105,43 @@ describe('registry (pure)', () => {
     }
   });
 
-  it('RoboApply full IA follows PRODUCT §3.3 order when everything is on', () => {
+  it('RoboApply full IA: Dashboard · Jobs · Applications · Resume · Interview prep, then the lower group', () => {
     vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id'); // the extension is published
     const nav = buildNav(ctx({ showAll: true, isAdmin: true, coachRoster: true, flags: flagsWith({ agent: true, coaching: true, invites: true, extension: true }) }));
-    expect(nav.top.map((e) => e.href)).toEqual(['/jobs', '/ready', '/applications', '/resume', '/practice', '/profile']);
-    expect(nav.lower.map((e) => e.href)).toEqual(['/coaching', '/invite', '/extension', '/settings', '/admin']);
-    expect(nav.mobile.map((e) => e.href)).toEqual(['/jobs', '/applications', '/resume', '/practice']);
-    expect(nav.more.map((e) => e.href)).toEqual(['/ready', '/profile', '/coaching', '/invite', '/settings']);
+    expect(nav.top.map((e) => e.href)).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice']);
+    expect(nav.lower.map((e) => e.href)).toEqual(['/coaching', '/invite', '/extension', '/profile', '/settings', '/admin']);
+    expect(nav.mobile.map((e) => e.href)).toEqual(['/dashboard', '/jobs', '/applications', '/resume']);
+    expect(nav.more.map((e) => e.href)).toEqual(['/practice', '/coaching', '/invite', '/profile', '/settings']);
+    // Five top destinations, and the bottom bar never exceeds four plus More.
+    expect(nav.top).toHaveLength(5);
+    expect(nav.mobile.length).toBeLessThanOrEqual(4);
   });
 
-  it('GoApply full IA: 职位 · 校招日历 · 待投递 · 投递记录 · 简历 · 面试练习 · 我的资料', () => {
+  it('Ready to apply is not an entry: /ready is a view of Applications on both brands', () => {
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const entries = entriesForBrand(brand);
+      expect(entries.map((e) => e.href)).not.toContain('/ready');
+      const applications = entries.find((e) => e.href === '/applications')!;
+      for (const path of ['/applications', '/applications?x', '/ready', '/ready/setup', '/ready/job_1']) {
+        expect(applications.match(path.split('?')[0]), `${brand} ${path}`).toBe(true);
+      }
+      // Nothing else claims /ready, so exactly one entry is current there.
+      expect(entries.filter((e) => e.match('/ready/job_1')).map((e) => e.href)).toEqual(['/applications']);
+    }
+    // The agent flag no longer changes the rail: the views carry it.
+    const off = buildNav(ctx({ flags: flagsWith() })).all.map((e) => e.id);
+    const on = buildNav(ctx({ flags: flagsWith({ agent: true }) })).all.map((e) => e.id);
+    expect(on).toEqual(off);
+  });
+
+  it('the count of applications ready and not opened sits on Dashboard; Applications keeps the no-reply count', () => {
+    for (const [today, applications] of [['dashboard', 'applications'], ['cn.dashboard', 'cn.applications']] as const) {
+      expect(NAV_ENTRIES.find((e) => e.id === today)).toMatchObject({ href: '/dashboard', badge: 'ready', flag: null, group: 'top', mobile: 1 });
+      expect(NAV_ENTRIES.find((e) => e.id === applications)).toMatchObject({ badge: 'applications' });
+    }
+  });
+
+  it('GoApply full IA: 首页 · 职位 · 校招日历 · 投递记录 · 简历 · 面试练习, then the lower group', () => {
     const nav = buildNav(
       ctx({
         brandId: 'goapply',
@@ -120,33 +152,33 @@ describe('registry (pure)', () => {
     // 邀请好友 joins once GoApply's phone and WeChat sign-ups carry the invite
     // (INT-01 adds 'goapply' to INVITE_REWARD_BRANDS); the entry follows it.
     const cnInvite = invitesLiveFor('goapply') ? ['/invite'] : [];
-    expect(nav.top.map((e) => e.href)).toEqual(['/jobs', '/campus', '/ready', '/applications', '/resume', '/practice', '/profile']);
-    expect(nav.lower.map((e) => e.href)).toEqual(['/referrals', ...cnInvite, '/settings']);
-    // 职位 · 校招 · 投递 · 面试 (+ 我的)
-    expect(nav.mobile.map((e) => e.href)).toEqual(['/jobs', '/campus', '/applications', '/practice']);
-    // 简历, 资料, 待投递, 设置 live under 我的.
-    expect(nav.more.map((e) => e.href)).toEqual(['/ready', '/resume', '/profile', '/referrals', ...cnInvite, '/settings']);
+    expect(nav.top.map((e) => e.href)).toEqual(['/dashboard', '/jobs', '/campus', '/applications', '/resume', '/practice']);
+    expect(nav.lower.map((e) => e.href)).toEqual(['/referrals', ...cnInvite, '/profile', '/settings']);
+    // 首页 · 职位 · 校招 · 投递 (+ 我的)
+    expect(nav.mobile.map((e) => e.href)).toEqual(['/dashboard', '/jobs', '/campus', '/applications']);
+    // 简历, 面试练习, 资料, 设置 live under 我的.
+    expect(nav.more.map((e) => e.href)).toEqual(['/resume', '/practice', '/referrals', ...cnInvite, '/profile', '/settings']);
   });
 
   it('the nav differs per brand', () => {
     const ra = buildNav(ctx({ flags: flagsWith({ 'jobs.feed': true }) })).all.map((e) => e.id);
     const ga = buildNav(ctx({ brandId: 'goapply', flags: flagsWith({ 'jobs.feed': true }) })).all.map((e) => e.id);
-    expect(ra).toEqual(['jobs', 'applications', 'resume', 'practice', 'profile', 'settings']);
-    expect(ga).toEqual(['cn.jobs', 'cn.applications', 'cn.resume', 'cn.practice', 'cn.profile', 'cn.settings']);
+    expect(ra).toEqual(['dashboard', 'jobs', 'applications', 'resume', 'practice', 'profile', 'settings']);
+    expect(ga).toEqual(['cn.dashboard', 'cn.jobs', 'cn.applications', 'cn.resume', 'cn.practice', 'cn.profile', 'cn.settings']);
     expect(ga.some((id) => ra.includes(id))).toBe(false);
   });
 
   it('GoApply 职位 carries no flag, as RoboApply Jobs (D5); a flagged-off entry is absent (校招日历 without the calendar)', () => {
     expect(NAV_ENTRIES.find((e) => e.id === 'cn.jobs')).toMatchObject({ href: '/jobs', flag: null, brands: ['goapply'] });
     expect(NAV_ENTRIES.find((e) => e.id === 'jobs')).toMatchObject({ href: '/jobs', flag: null, brands: ['roboapply'] });
-    // Every flag off, and before the flags arrive: 职位 is there.
+    // Every flag off, and before the flags arrive: 首页 and 职位 are there.
     for (const flags of [flagsWith(), null]) {
       const off = buildNav(ctx({ brandId: 'goapply', showAll: true, flags }));
-      expect(off.top[0].href).toBe('/jobs');
+      expect(off.top.map((e) => e.href).slice(0, 2)).toEqual(['/dashboard', '/jobs']);
       expect(off.all.map((e) => e.href)).not.toContain('/campus');
     }
     const on = buildNav(ctx({ brandId: 'goapply', showAll: true, flags: flagsWith({ 'jobs.campusCalendar': true }) }));
-    expect(on.top.map((e) => e.href).slice(0, 2)).toEqual(['/jobs', '/campus']);
+    expect(on.top.map((e) => e.href).slice(0, 3)).toEqual(['/dashboard', '/jobs', '/campus']);
   });
 
   it('flags fail closed: nothing flagged shows before the flags arrive', () => {
@@ -195,8 +227,6 @@ describe('registry (pure)', () => {
     /** Build-time env the entry also needs. */
     env?: [string, string];
   }> = [
-    { id: 'ready', brand: 'roboapply', href: '/ready', flag: 'agent' },
-    { id: 'cn.ready', brand: 'goapply', href: '/ready', flag: 'agent' },
     { id: 'cn.campus', brand: 'goapply', href: '/campus', flag: 'jobs.campusCalendar' },
     { id: 'cn.referrals', brand: 'goapply', href: '/referrals', flag: 'cn.referralCodes' },
     { id: 'extension', brand: 'roboapply', href: '/extension', flag: 'extension', env: ['NEXT_PUBLIC_EXT_ID', 'ext-store-id'] },
@@ -234,9 +264,9 @@ describe('registry (pure)', () => {
     expect(ids({})).not.toContain('cn.extension');
     vi.stubEnv('NEXT_PUBLIC_CN_EXT_ID', 'cn-ext-store-id');
     expect(ids({})).toContain('cn.extension');
-    // In the lower group, before Settings.
+    // In the lower group, before Profile and Settings.
     const lower = buildNav(ctx({ brandId: 'goapply', flags, coachRoster: true })).lower.map((e) => e.id);
-    expect(lower).toEqual(['cn.coaching', 'cn.extension', 'cn.settings']);
+    expect(lower).toEqual(['cn.coaching', 'cn.extension', 'cn.profile', 'cn.settings']);
   });
 
   it.each(FLIPPED)('$id ($brand): shown with $flag on, absent with it off, and never on the other brand', ({ id, brand, href, flag, needs, env }) => {
@@ -257,11 +287,12 @@ describe('registry (pure)', () => {
 
   it('one entry can be taken back out with `ready: false` (the revert), and the dev override shows it again', () => {
     const flags = flagsWith({ agent: true });
-    const reverted = NAV_ENTRIES.map((e) => (e.id === 'ready' ? { ...e, ready: false } : e));
-    expect(buildNav(ctx({ flags }), reverted).all.map((e) => e.id)).not.toContain('ready');
-    expect(buildNav(ctx({ flags, showAll: true }), reverted).all.map((e) => e.id)).toContain('ready');
-    // Nothing else moved.
-    expect(buildNav(ctx({ flags }), reverted).all.map((e) => e.id)).toEqual(buildNav(ctx({ flags })).all.map((e) => e.id).filter((x) => x !== 'ready'));
+    const reverted = NAV_ENTRIES.map((e) => (e.id === 'dashboard' ? { ...e, ready: false } : e));
+    expect(buildNav(ctx({ flags }), reverted).all.map((e) => e.id)).not.toContain('dashboard');
+    expect(buildNav(ctx({ flags, showAll: true }), reverted).all.map((e) => e.id)).toContain('dashboard');
+    // Nothing else moved, and the home falls back to the next entry (Jobs).
+    expect(buildNav(ctx({ flags }), reverted).all.map((e) => e.id)).toEqual(buildNav(ctx({ flags })).all.map((e) => e.id).filter((x) => x !== 'dashboard'));
+    expect(homeHref(buildNav(ctx({ flags }), reverted))).toBe('/jobs');
   });
 
   it('crumbs come from the registry, most specific first; unknown paths get none', () => {
@@ -271,15 +302,19 @@ describe('registry (pure)', () => {
     expect(crumbKeyFor('/practice/cm1/report', 'goapply')).toBe('cn_practice');
     expect(crumbKeyFor('/campus/acme', 'goapply')).toBe('campus');
     expect(crumbKeyFor('/assistant', 'roboapply')).toBe('assistant');
+    expect(crumbKeyFor('/dashboard', 'roboapply')).toBe('dashboard');
+    // /ready is a view of Applications.
+    expect(crumbKeyFor('/ready/setup', 'roboapply')).toBe('applications');
+    expect(crumbKeyFor('/ready', 'goapply')).toBe('cn_applications');
     expect(crumbKeyFor('/nowhere', 'roboapply')).toBeNull();
   });
 
-  it('home is the first visible top entry: Jobs on both brands, whatever the flags', () => {
-    expect(homeHref(buildNav(ctx()))).toBe('/jobs');
+  it('home is the first visible top entry: the Dashboard on both brands, whatever the flags', () => {
+    expect(homeHref(buildNav(ctx()))).toBe('/dashboard');
     const cnCalendar = buildNav(ctx({ brandId: 'goapply', showAll: true, flags: flagsWith({ 'jobs.campusCalendar': true }) }));
-    expect(homeHref(cnCalendar)).toBe('/jobs');
-    expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: flagsWith() })))).toBe('/jobs');
-    expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: null })))).toBe('/jobs');
+    expect(homeHref(cnCalendar)).toBe('/dashboard');
+    expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: flagsWith() })))).toBe('/dashboard');
+    expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: null })))).toBe('/dashboard');
     // The fallback when a registry has no top entry at all.
     expect(homeHref({ top: [] })).toBe('/settings');
   });
@@ -301,12 +336,13 @@ describe('registry (pure)', () => {
 describe('Sidebar per brand', () => {
   it('RoboApply and GoApply render different rails', () => {
     const { unmount } = renderWithBrand(<Sidebar />, { brand: 'roboapply', flags: { 'jobs.feed': true } });
-    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Interview prep' })).toBeInTheDocument();
     unmount();
 
     renderWithBrand(<Sidebar />, { brand: 'goapply', flags: { 'jobs.feed': true } });
-    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
     // GoApply's own label (面试练习 in zh; English until INT translates).
     expect(screen.getByRole('link', { name: 'Interview practice' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Interview prep' })).not.toBeInTheDocument();
@@ -314,33 +350,34 @@ describe('Sidebar per brand', () => {
 
   it('GoApply always shows 职位, with the job feed capability off too', () => {
     renderWithBrand(<Sidebar />, { brand: 'goapply', flags: {} });
-    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
   });
 
-  it('GoApply shows 校招日历, 待投递 and 内推 with their flags on (no dev override)', () => {
+  it('GoApply shows 校招日历 and 内推 with their flags on (no dev override); 待投递 is a view of 投递记录, not an entry', () => {
     renderWithBrand(<Sidebar />, { brand: 'goapply', flags: { 'jobs.campusCalendar': true, agent: true, 'cn.referralCodes': true } });
-    expect(railHrefs()).toEqual(['/jobs', '/campus', '/ready', '/applications', '/resume', '/practice', '/profile', '/referrals', '/settings']);
+    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/campus', '/applications', '/resume', '/practice', '/referrals', '/profile', '/settings']);
     expect(screen.getByRole('link', { name: 'Campus calendar' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'To apply' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'To apply' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Referral codes' })).toBeInTheDocument();
   });
 
   it('RoboApply shows Get the extension once it is flagged on and published; Coaching waits for a roster', () => {
     const unpublished = renderWithBrand(<Sidebar />, { flags: { extension: true, coaching: true } });
-    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
     unpublished.unmount();
 
     vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id');
     // The roster query has no network here, so Coaching stays hidden (fail closed) and the rest shows.
     renderWithBrand(<Sidebar />, { flags: { extension: true, coaching: true } });
-    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/extension', '/settings']);
+    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/extension', '/profile', '/settings']);
     expect(screen.getByRole('link', { name: 'Get the extension' })).toBeInTheDocument();
   });
 
   it('shows the flipped entries with no dev override, and still only when flagged on', () => {
     renderWithBrand(<Sidebar />, { flags: { agent: true, invites: true } });
     const hrefs = railHrefs();
-    expect(hrefs).toContain('/ready');
+    // Ready to apply is a view of Applications now, never a rail entry.
+    expect(hrefs).not.toContain('/ready');
     expect(hrefs).toContain('/profile');
     expect(hrefs).toContain('/invite');
     // extension and coaching flags are off → absent.
@@ -359,9 +396,10 @@ describe('Sidebar per brand', () => {
     expect(within(jobs).getByText('7')).toHaveClass('count');
     expect(within(jobs).getByText('7 new jobs that fit since your last visit')).toBeInTheDocument();
 
-    const ready = screen.getByRole('link', { name: /^Ready to apply/ });
-    expect(ready.querySelector('.count')).toBeNull();
-    expect(ready.textContent).toBe('Ready to apply');
+    // Dashboard carries the count of applications ready and not opened; null draws nothing.
+    const home = screen.getByRole('link', { name: /^Dashboard/ });
+    expect(home.querySelector('.count')).toBeNull();
+    expect(home.textContent).toBe('Dashboard');
 
     expect(within(screen.getByRole('link', { name: /^Applications/ })).getByText('2 with no reply in 10 days')).toBeInTheDocument();
     expect(within(screen.getByRole('link', { name: /^Profile/ })).getByText('Your profile is missing details')).toBeInTheDocument();
@@ -370,32 +408,47 @@ describe('Sidebar per brand', () => {
       expect(screen.getByRole('link', { name: label }).querySelector('.count')).toBeNull();
     }
   });
+
+  it('Dashboard shows how many applications are ready and not opened', () => {
+    badgeValues.ready = { kind: 'count', count: 3 };
+    renderWithBrand(<Sidebar />, { flags: { agent: true } });
+    const home = screen.getByRole('link', { name: /^Dashboard/ });
+    expect(within(home).getByText('3')).toHaveClass('count');
+    expect(within(home).getByText('3 applications ready and not opened yet')).toBeInTheDocument();
+  });
+
+  it('Applications is the current entry on /ready', () => {
+    pathnameRef.current = '/ready/setup';
+    renderWithBrand(<Sidebar />, { flags: { agent: true } });
+    expect(screen.getByRole('link', { name: /^Applications/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: /^Jobs/ })).not.toHaveAttribute('aria-current');
+  });
 });
 
 describe('MobileNav per brand', () => {
-  it('RoboApply: 5 slots — Jobs · Applications · Resume · Interview prep · More', () => {
+  it('RoboApply: 5 slots — Dashboard · Jobs · Applications · Resume · More', () => {
     renderWithBrand(<MobileNav />, { flags: {} });
     const bar = screen.getByRole('navigation', { name: 'Main navigation' });
     expect(within(bar).getAllByRole('link').map((l) => l.textContent)).toEqual([
+      'Dashboard',
       'Jobs',
       'Applications',
       'Resume',
-      'Interview prep',
     ]);
     expect(within(bar).getByRole('button', { name: 'More' })).toBeInTheDocument();
     expect(bar).toHaveAttribute('data-slots', '5');
   });
 
-  it('GoApply: 5 slots — 职位 · 校招 · 投递 · 面试 · 我的', () => {
+  it('GoApply: 5 slots — 首页 · 职位 · 校招 · 投递 · 我的', () => {
     renderWithBrand(<MobileNav />, { brand: 'goapply', flags: { 'jobs.feed': true, 'jobs.campusCalendar': true } });
     const bar = screen.getByRole('navigation', { name: 'Main navigation' });
     expect(within(bar).getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual([
+      '/dashboard',
       '/jobs',
       '/campus',
       '/applications',
-      '/practice',
     ]);
-    expect(within(bar).getAllByRole('link').map((l) => l.textContent)).toEqual(['Jobs', 'Campus', 'Applied', 'Interview']);
+    expect(within(bar).getAllByRole('link').map((l) => l.textContent)).toEqual(['Dashboard', 'Jobs', 'Campus', 'Applied']);
     expect(within(bar).getByRole('button', { name: 'Me' })).toBeInTheDocument();
     expect(bar).toHaveAttribute('data-slots', '5');
   });
@@ -405,8 +458,8 @@ describe('MobileNav per brand', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Me' }));
     const sheet = await screen.findByRole('dialog', { name: 'Me' });
     expect(within(sheet).getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual([
-      '/ready',
       '/resume',
+      '/practice',
       '/profile',
       '/settings',
     ]);

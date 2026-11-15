@@ -1,15 +1,15 @@
 # 10 · Status and roadmap
 
-As of 2026-11-03 (main @ b89d5256).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-15 for PR #17 and the open branches (main @ 368bf7c7).
 
 Where the project stands, what blocks a full launch, and what to work on next. "Verified" means checked against the code or git on 2026-11-03; "doc only" means taken from a plan or carry-over list and not re-checked; "last known (date)" means from the owner's earlier session notes.
 
 ## 1. Summary
 
-- RoboApply (international, Taiwan included) is live at www.roboapply.io from `main`. `main` and `origin/main` are both at `b89d5256`; Vercel auto-deploys `main`, so that commit is presumably live (not checked against Vercel).
+- RoboApply (international, Taiwan included) is live at www.roboapply.io from `main`. `origin/main` is at `368bf7c7` (PR #17, 2026-11-13); Vercel auto-deploys `main`, and the owner's notes say it was deployed 2026-11-13 (not checked against Vercel here).
 - The jobright-style product (feed, job detail, fit scoring, tailoring, Assistant, tracker, practice, billing UI, admin console) is merged and deployed, but several capabilities are **dark in production for lack of configuration, not code**: crons never run (`CRON_SECRET` unset), Stripe cannot charge, web push is off, original resume files are not stored, mail goes out from a `robohire.io` sender, and voice practice depends on a worker with no production host.
 - GoApply (mainland) shares the codebase and has full feature parity but is **closed** in production (`ALLOWED_BRANDS=roboapply`) and has no mainland deployment; its launch waits on legal filings.
-- No feature branch is open: every local and remote branch is merged into `main` (verified with `git rev-list --count main..<branch>`). The only in-flight work is an uncommitted dependency change in the main checkout (section 3).
+- Two feature branches are open and unmerged on 2026-11-15, `feat/agent-followups` and `feat/visitor-conversion` (section 3); every other branch is merged into `main` (checked with `git branch -a --no-merged origin/main`).
 
 ## 2. What is shipped on main
 
@@ -30,6 +30,7 @@ Where the project stands, what blocks a full launch, and what to work on next. "
 | 2026-10-20 | Prep brief must-haves as a list; retired leftover mock components | merges `20936b9e`, `6150e634` |
 | 2026-10-21 | Credits enforced on legacy mock interviews | `7223616a` |
 | 2026-10-31 | Admin read-only "view as"; add-resume nudge on `/jobs`; `OPENROUTER_BASE_URL`; npm audit fixes (body-parser, multer, zod, undici, fast-uri); Next 16.4.1 security; AI-first resume hub; **Paper design system** (replaces Clarity) | merges `c3f5d2aa`, `8dbb2a24`, `0666dde7`, `e9d5449d`, `ebfc5375`, `2fa9a39b`, `b89d5256` |
+| 2026-11-13 | **PR #17: resume.io clone with the agent-driven redesign** (also carries PRs #13, #14, #16): Desk design system, `/dashboard` home with the agent desk, Ready to apply folded into Applications (Getting ready · Sent), two-screen resume-first onboarding, one-tap Prepare application, Assistant tools that add to the list and prepare, resume editor tabs, Paper job detail and fit-filter follow-ups | merge `368bf7c7` |
 
 PR numbers after #5 are not in the commit messages: the branches were merged locally with plain `git merge` and pushed, and GitHub then marked the PRs merged (all on 2026-10-31): #6 prep brief must-haves as a list, #7 `google/gemini-3.8-flash` with the Gemini thinking reserve (opened 2026-10-13), #8 admin view-as, #9 AI-first resume hub, #10 Paper design system, #11 Next 16.4.1 security. Checked with `gh pr list --state all` on 2026-11-03.
 
@@ -48,10 +49,11 @@ The product never submits an application for the user (D1); auto-apply was remov
 
 | Item | State |
 |---|---|
-| Uncommitted change in the main checkout | `package.json` and `package-lock.json` change the Prisma packages (`@prisma/client`, `prisma`). Someone else's work in progress; not analysed here. |
+| `feat/agent-followups` (4 commits ahead, 2026-11-13, not merged) | Opt-in automatic preparation of the weekly list, first-class target companies in the job search, a pay check built from what postings state. The two "not built" rows of `docs/agent-driven/REDESIGN.md` §9. |
+| `feat/visitor-conversion` (7 commits ahead, 2026-11-13, not merged) | A visit record and an `/admin/visitors` report of visitors and sign-ups, privacy-notice updates; its docs say schema SCHEMA-9 was applied to the production database. |
 | Next.js security release of 2026-11-03 | Next announced a release with seven medium advisories for today (last known 2026-10-28). `main` pins `next` 16.4.1. Check the vercel/next.js repository advisory feed, not `npm audit`, which lagged about a week in Sept and Oct. |
 | Leftover worktrees | Eight under `.claude/worktrees/`, all clean and merged. Remove only after checking each is clean and its commits are on `main` (an earlier blanket cleanup deleted uncommitted work). |
-| Stale session notes | Notes for the Paper redesign, resume hub and Next 16.4.1 still say "unmerged"; all three merged on 2026-10-31. |
+| Stale session notes | Notes for the Paper redesign, resume hub and Next 16.4.1 called them unmerged; all three merged on 2026-10-31, and the resume.io clone on 2026-11-13. |
 
 ## 4. Owner and ops items still open
 
@@ -95,7 +97,7 @@ The full lists, numbered: "Owner steps still open" (42 steps) in [`docs/jobright
 | Geocoder reads 苏州 as 肃州区 (Gansu) on some postings. | `orch/parity-verify-results.md` "Noted, not changed" | doc only |
 | Browser retests left for a person: Safari/Firefox, 375 px, Taiwan extras, sources console, closed-job notice. | `orch/parity-verify-results.md` | doc only |
 | A Taiwan-native TTS voice for zh-TW practice (the configured one was rejected by the gateway and degraded to a generic Mandarin voice). | last known 2026-07-12 | unverified |
-| Leftover Clarity styling in the open-job detail panel and the fit-tier filter after the Paper restyle. | `docs/design-system.md` | last known 2026-10-29 |
+| ~~Leftover Clarity styling in the open-job detail panel and the fit-tier filter.~~ Done: `2f3c0fb4` and `6e36ade4`, merged with PR #17. | `docs/design-system.md` | verified 2026-11-15 |
 
 ### 5.2 Larger initiatives
 

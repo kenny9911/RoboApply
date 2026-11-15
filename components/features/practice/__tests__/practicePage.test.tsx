@@ -15,6 +15,9 @@
 // notice while the balance covers a practice, no "Get credits" link where
 // nothing is on sale, and no video or voice format where the practice runs in
 // writing.
+//
+// The side panel — how a practice works and the recent practices until a job
+// is chosen, then the summary of the planned practice with Start under it.
 
 import type { ReactNode } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +25,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 import PracticePage from '../../../../app/(auth)/practice/page';
 import { RoboApiError } from '../../../../lib/api/client';
+import { interviewEngineApi, type IESessionSummary } from '../../../../lib/api/interviewEngine';
 import { BrandProvider } from '../../../../lib/brand/BrandProvider';
 import { clientBrandFor } from '../../../../lib/brand/client';
 import { renderWithProviders } from '../../../../__tests__/utils/renderWithProviders';
@@ -622,6 +626,81 @@ describe('GoApply with the same capabilities as RoboApply (D5)', () => {
     renderWithProviders(goApply(<PracticePage />));
     fireEvent.click(await screen.findByRole('button', { name: 'Change' }));
     expect(await screen.findByRole('checkbox', { name: /Also keep the video/ })).toBeTruthy();
+  });
+});
+
+describe('the side panel', () => {
+  /** A finished practice as the engine lists it (GET /sessions/recent). */
+  function recentSession(overrides: Partial<IESessionSummary> & Pick<IESessionSummary, 'id' | 'role'>): IESessionSummary {
+    return {
+      status: 'completed', source: 'app', interviewType: 'behavioral', personaId: 'maya', mode: 'video', language: 'en',
+      durationMinutes: 20, overall: 70, externalRef: null, createdAt: '2026-11-01T10:00:00.000Z', startedAt: '2026-11-01T10:00:00.000Z',
+      endedAt: '2026-11-01T10:20:00.000Z', interviewer: null, focusLabel: null, company: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    m.setup.mockResolvedValue(setupPayload({ job: null, resume: null }));
+    window.history.replaceState({}, '', '/practice');
+  });
+
+  it('says how a practice works until a job is chosen, then sums up the planned practice above Start', async () => {
+    renderWithProviders(<PracticePage />);
+    const how = await screen.findByRole('region', { name: 'How a practice works' });
+    expect(within(how).getAllByRole('listitem').map((step) => step.querySelector('strong')?.textContent)).toEqual([
+      'Choose the job',
+      'Get a plan for it',
+      'Practice out loud',
+      'Read the report',
+    ]);
+    expect(within(how).getByRole('button', { name: 'Start the interview' })).toBeDisabled();
+    expect(screen.queryByRole('region', { name: 'Your practice' })).toBeNull();
+
+    await pickFrontendRole();
+    const summary = await screen.findByRole('region', { name: 'Your practice' });
+    expect(screen.queryByRole('region', { name: 'How a practice works' })).toBeNull();
+    expect(within(summary).getByText('Frontend Engineer')).toBeTruthy();
+    // Once the plan is in: the interviewer and focus it recommends, and the length.
+    await waitFor(() => expect(within(summary).getAllByRole('term').map((term) => term.textContent)).toEqual([
+      'How Acme interviews',
+      'Interviewer',
+      'Focus',
+      'Length',
+    ]));
+    expect(summary).toHaveTextContent('Dana Okafor');
+    expect(summary).toHaveTextContent('Payments system design');
+    expect(summary).toHaveTextContent('20 min');
+    const start = await startButton();
+    expect(summary).toContainElement(start);
+    expect(screen.getAllByRole('button', { name: /^Start/ })).toHaveLength(1);
+  });
+
+  it('lists the recent practices from the engine, an unscored one as a dash, and "Practice this again" plans it', async () => {
+    vi.mocked(interviewEngineApi.recent).mockResolvedValueOnce({
+      sessions: [
+        recentSession({ id: 'ie1', role: 'Data Analyst', company: 'Acme', overall: 71, interviewer: { name: 'Maya Chen', title: 'Recruiter' }, focusLabel: 'Past situations' }),
+        recentSession({ id: 'ie2', role: 'Product Designer', overall: null, interviewer: { name: 'Sam Lee', title: 'Design lead' }, focusLabel: 'Portfolio review' }),
+        recentSession({ id: 'ie3', role: 'Still running', status: 'live' }),
+      ],
+    });
+    renderWithProviders(<PracticePage />);
+    const recent = await screen.findByRole('region', { name: 'Pick up where you left off' });
+    // Completed sessions only.
+    const items = within(recent).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent('Data Analyst · Acme');
+    expect(items[0]).toHaveTextContent('Past situations · with Maya Chen');
+    expect(items[0]).toHaveTextContent('Overall 71');
+    expect(items[1]).toHaveTextContent('Overall —');
+    expect(items[1]).not.toHaveTextContent('Overall 0');
+
+    fireEvent.click(within(items[0]).getByRole('button', { name: 'Practice this again' }));
+    const summary = await screen.findByRole('region', { name: 'Your practice' });
+    expect(within(summary).getByText('Data Analyst · Acme')).toBeTruthy();
+    await waitFor(() => expect(m.plan).toHaveBeenCalledWith({ role: 'Data Analyst', company: 'Acme' }, expect.anything()));
+    // A new interview spends credits: the plan is restored, nothing starts.
+    expect(m.create).not.toHaveBeenCalled();
   });
 });
 

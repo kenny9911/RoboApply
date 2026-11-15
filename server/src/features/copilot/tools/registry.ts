@@ -13,6 +13,7 @@ import type { LlmToolCall, LlmToolDefinition } from '../../../platform/llm/index
 import { logger } from '../../../services/LoggerService.js';
 import type { CopilotTool, ToolContext, ToolOutput } from '../types.js';
 import { addExternalJob, draftOutreach, findConnections, interviewPrep, tailorResume, writeCoverLetter } from './actions.js';
+import { addToList, applicationStatus, prepareApplication } from './applications.js';
 import { getCurrentFilters, proposeFilterChange, setSort } from './filters.js';
 import { addedJobs, analyzeFit, companyInsights, competitiveness, getJob, publicSearchJobs, salaryContext, searchJobs, showJobs, similarJobs, topFitJobs } from './jobs.js';
 import { isNotFound, isNotImplemented } from './util.js';
@@ -40,6 +41,10 @@ export const SEEKER_TOOLS: readonly AnyTool[] = [
   interviewPrep,
   salaryContext,
   applicationSummary,
+  // The applications agent (capability `agent`): where a job stands on the list, put it there, prepare it.
+  applicationStatus,
+  addToList,
+  prepareApplication,
   addExternalJob,
   remember,
   getProfileGaps,

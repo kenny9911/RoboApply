@@ -279,10 +279,10 @@
     },
     "kitReady": {
       "body": "針對 {company} 的 {title} 調整的履歷和回答已經準備好。請先檢查，再自己到公司網站應徵。",
-      "cta": "檢查應徵準備包",
-      "heading": "你的應徵準備包已準備好，可以檢查了",
-      "preheader": "檢查 {title} 的應徵準備包。",
-      "subject": "{title} 的應徵準備包已準備好"
+      "cta": "檢查應徵資料",
+      "heading": "你的應徵資料已準備好，可以檢查了",
+      "preheader": "檢查 {title} 的應徵資料。",
+      "subject": "{title} 的應徵資料已準備好"
     },
     "readyList": {
       "body": "{count, plural, one {有 # 個職缺已準備好，等你檢查。} other {有 # 個職缺已準備好，等你檢查。}}要開啟哪些由你決定，每一份應徵都由你自己送出。",

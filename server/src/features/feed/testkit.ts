@@ -257,6 +257,12 @@ export class FakeFeedRepo implements FeedRepo {
   /** Admin decisions: the interaction count when each was made (reports logged before it are decided). */
   private decidedAtSeq = new Map<string, number>();
   tracker = new Map<string, string>();
+  /** `RAAgentQueueItem` rows by job id (the reader's list; the fake has one reader). */
+  applications = new Map<string, { state: string; trackerEntryId: string | null }>();
+  /** Each `applicationStates` call's job ids, in order (one per page proves the read is batched). */
+  applicationReads: string[][] = [];
+  /** Make `applicationStates` fail (the page must still answer). */
+  failApplications = false;
   skills: string[] = [];
   goal: string | null = null;
   /** `sourcesSql` statements seen (the header facts are computed from `rows` with the statement's market and visibility scope). */
@@ -442,6 +448,12 @@ export class FakeFeedRepo implements FeedRepo {
 
   async trackerStates(_userId: string, jobIds: string[]) {
     return new Map([...this.tracker].filter(([id]) => jobIds.includes(id)));
+  }
+
+  async applicationStates(_userId: string, jobIds: string[]) {
+    this.applicationReads.push([...jobIds]);
+    if (this.failApplications) throw new Error('queue unavailable');
+    return new Map([...this.applications].filter(([id]) => jobIds.includes(id)));
   }
 
   async createSession(data: Omit<FeedSessionRecord, 'id' | 'createdAt'>) {

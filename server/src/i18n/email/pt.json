@@ -279,10 +279,10 @@
     },
     "kitReady": {
       "body": "Seu currículo adaptado e suas respostas para {title} na empresa {company} estão prontos. Revise tudo e, depois, é você quem se candidata no site da empresa.",
-      "cta": "Revisar o kit",
-      "heading": "Seu kit está pronto para revisão",
-      "preheader": "Revise seu kit para {title}.",
-      "subject": "Seu kit de candidatura para {title} está pronto"
+      "cta": "Revisar a candidatura",
+      "heading": "Sua candidatura está pronta para revisão",
+      "preheader": "Revise sua candidatura para {title}.",
+      "subject": "Sua candidatura para {title} está pronta para revisão"
     },
     "readyList": {
       "body": "{count, plural, one {# vaga está pronta para você revisar.} other {# vagas estão prontas para você revisar.}} Você decide quais abrir e é você quem envia cada candidatura.",

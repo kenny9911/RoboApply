@@ -26,6 +26,8 @@ export interface FeedListKeyInput {
   overridesKey?: string;
   /** The words the list is ranked by (never a filter), '' or absent for none: another text is another list. */
   relevance?: string | null;
+  /** `false`: a read that is not a visit to the Jobs list (the Dashboard's picks); kept apart from the list's own read. */
+  visit?: boolean;
 }
 
 export const feedKeys = {
@@ -35,5 +37,7 @@ export const feedKeys = {
   skillsCheck: () => ['feed', 'skills-check'] as const,
   listRoot: ['feed-list'] as const,
   list: (k: FeedListKeyInput) =>
-    ['feed-list', k.searchProfileId ?? '', k.version ?? 0, k.sort, k.fitTier, k.overridesKey ?? '', k.relevance ?? ''] as const,
+    k.visit === false
+      ? (['feed-list', k.searchProfileId ?? '', k.version ?? 0, k.sort, k.fitTier, k.overridesKey ?? '', k.relevance ?? '', 'no-visit'] as const)
+      : (['feed-list', k.searchProfileId ?? '', k.version ?? 0, k.sort, k.fitTier, k.overridesKey ?? '', k.relevance ?? ''] as const),
 };

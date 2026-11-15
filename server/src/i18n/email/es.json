@@ -279,10 +279,10 @@
     },
     "kitReady": {
       "body": "Tu currículum adaptado y tus respuestas para {title} en {company} están listos. Revísalos y luego postúlate tú en el sitio de la empresa.",
-      "cta": "Revisar el kit",
-      "heading": "Tu kit está listo para revisar",
-      "preheader": "Revisa tu kit para {title}.",
-      "subject": "Tu kit de candidatura para {title} está listo"
+      "cta": "Revisar la candidatura",
+      "heading": "Tu candidatura está lista para revisar",
+      "preheader": "Revisa tu candidatura para {title}.",
+      "subject": "Tu candidatura para {title} está lista para revisar"
     },
     "readyList": {
       "body": "{count, plural, one {# empleo está listo para que lo revises.} other {# empleos están listos para que los revises.}} Tú decides cuáles abrir, y cada candidatura la envías tú.",

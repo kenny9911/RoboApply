@@ -6,6 +6,7 @@
 
 import type { Market } from '../../platform/brand/registry.js';
 import { resolveEmbeddingConfig } from '../../platform/embeddings/index.js';
+import { isEnabled } from '../../platform/flags.js';
 import { logger } from '../../services/LoggerService.js';
 import { explainMatch } from '../compliance/index.js';
 import type { MarketHookContext, MarketHookJob } from '../jobs/marketHooks.js';
@@ -121,6 +122,11 @@ export async function defaultRequestIngest(searchProfileId: string): Promise<voi
   await ingestForProfile(searchProfileId, 0);
 }
 
+/** The reader's `agent` capability (their list and "Prepare application"): the /jobs cards then carry the list state. */
+export function defaultApplicationsOn(userId: string): Promise<boolean> {
+  return isEnabled('agent', { userId });
+}
+
 export function defaultFeedDeps(): FeedServiceDeps {
   return {
     repo: createPrismaFeedRepo(),
@@ -141,6 +147,7 @@ export function defaultFeedDeps(): FeedServiceDeps {
     embeddings: defaultFeedEmbeddings,
     retrieval: defaultFeedRetrieval,
     requestIngest: defaultRequestIngest,
+    applicationsOn: defaultApplicationsOn,
   };
 }
 

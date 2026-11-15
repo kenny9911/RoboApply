@@ -53,6 +53,18 @@ import type { MatchExplanation } from '../../compliance/contract.js';
 const Id = z.string().min(1).max(64);
 export const JobIdParamsSchema = z.object({ id: Id });
 
+/**
+ * GET /jobs/:id query. `preview=1` reads the same page without counting it
+ * as the person opening the job: `RAJobUserState.viewedAt` is not stamped
+ * (it feeds the feed's "seen and skipped" ordering rule). The desktop Jobs
+ * list sends it for the first job it shows in its detail pane before the
+ * person picks one (resume.io's job search opens the first job); once the
+ * person opens a job themselves the page is read without it. Nothing else
+ * about the read changes. Any other value is refused (422); other keys are
+ * ignored.
+ */
+export const JobDetailQuerySchema = z.object({ preview: z.literal('1').optional() });
+
 /** Field provenance (ARCH §2.14). Kept for older imports; prefer `Sourced<T>` from platform/http. */
 export interface SourcedValue<T> {
   value: T;
