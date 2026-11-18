@@ -5,7 +5,6 @@ export { PlanBadge } from './PlanBadge';
 export { OutOfCreditsSheet, type OutOfCreditsSheetProps } from './OutOfCreditsSheet';
 export { SettingsSection as CreditsSettingsSection } from './SettingsSection';
 export { BILLING_PLANS_HREF } from './CreditCostLine';
-export { PaymentFailedBanner } from './PaymentFailedBanner';
 export { BillingPage } from './BillingPage';
 export { PublicCancelFlow } from './PublicCancelFlow';
 export { CheckoutReturn } from './CheckoutReturn';

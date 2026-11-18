@@ -27,7 +27,7 @@ export { AdminNav } from './AdminNav';
 export { SystemConsole } from './SystemConsole';
 export { ReportsConsole } from './ReportsConsole';
 // Visitors and sign-ups (visitor conversion; RAVisitor).
-export { VisitorsConsole, conversionRate, stepRate } from './VisitorsConsole';
+export { VisitorsConsole } from './VisitorsConsole';
 // Held invite rewards (INT-08; WP-60's review routes).
 export { InviteRewardsConsole } from './InviteRewardsConsole';
 export { UserOverridesPanel, RefundQuotePanel } from './UserAdminPanels';
