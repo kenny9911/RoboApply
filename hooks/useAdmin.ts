@@ -20,6 +20,7 @@
 //   - useSystemStatus(brand?)         GET /system (refreshes every minute)
 //   - useWorkItems / useRetryWorkItem GET /system/queue · POST …/:id/retry
 //   - useAdminCosts(query)            GET /costs
+//   - useVisitorsReport / useVisitorList   GET /visitors · GET /visitors/list (visitors and sign-ups)
 //   - useSafety(query)                GET /safety
 //   - useReports / useResolveReport   GET /reports · POST /reports/:id/resolve
 //   - useUserOverrides / useCreateOverride / useDeleteOverride
@@ -192,6 +193,16 @@ export function useAdminAudit(query: ConsoleArg<typeof adminConsoleApi.listAdmin
 
 export function useAdminCosts(query: ConsoleArg<typeof adminConsoleApi.getCosts>, enabled = true) {
   return useQuery({ queryKey: ['admin', 'console', 'costs', query ?? {}], queryFn: () => adminConsoleApi.getCosts(query), enabled });
+}
+
+/** Visitors first seen in the range and how many became accounts (GET /admin/visitors). */
+export function useVisitorsReport(query: ConsoleArg<typeof adminConsoleApi.getVisitorsReport>, enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'visitors', query ?? {}], queryFn: () => adminConsoleApi.getVisitorsReport(query), enabled });
+}
+
+/** Those visitors, most recently seen first (GET /admin/visitors/list). */
+export function useVisitorList(query: ConsoleArg<typeof adminConsoleApi.listVisitors>, enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'visitorList', query ?? {}], queryFn: () => adminConsoleApi.listVisitors(query), enabled });
 }
 
 export function useSafety(query: ConsoleArg<typeof adminConsoleApi.getSafety>, enabled = true) {

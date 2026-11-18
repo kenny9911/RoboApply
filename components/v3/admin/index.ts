@@ -42,6 +42,8 @@ export { AdminNav, ADMIN_AREAS, adminAreasFor, currentAdminArea, type AdminArea 
 export { AdminGate } from './AdminGate';
 export { SystemConsole, SYSTEM_VIEWS, AUDIT_ACTIONS, fmtUsd, type SystemView } from './SystemConsole';
 export { ReportsConsole } from './ReportsConsole';
+// Visitors and sign-ups (visitor conversion; RAVisitor).
+export { VisitorsConsole, conversionRate, stepRate } from './VisitorsConsole';
 // Held invite rewards (INT-08; WP-60's review routes).
 export { InviteRewardsConsole, HOLD_REASONS, reviewOutcome, type ReviewOutcome } from './InviteRewardsConsole';
 export { UserOverridesPanel, RefundQuotePanel, parseOverrideValue } from './UserAdminPanels';

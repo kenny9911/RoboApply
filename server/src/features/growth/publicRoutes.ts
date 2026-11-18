@@ -5,7 +5,9 @@
 // cannot lift the limit. Token-route paths are stored as `:token`. Works with or without a session; optionalAuth supplies the
 // user, and the consent rules (events.ts) decide whether the batch may be
 // linked to the anonId and the account. Unknown event names are counted as
-// `rejected`, not stored. Answers `{ accepted, rejected }`.
+// `rejected`, not stored. Answers `{ accepted, rejected }`. A linked batch also
+// updates the visitor's record (visitors.ts); the User-Agent is passed for that
+// alone (device class, and to leave automated clients out).
 
 import { Router, type Request } from 'express';
 import { optionalAuth } from '../../middleware/auth.js';
@@ -45,6 +47,7 @@ export function createEventsPublicRouter(deps: EventsPublicRouterDeps = {}): Rou
         country: requestCountry(req),
         consent: parseConsentChoice((req.cookies as Record<string, unknown> | undefined)?.[ANALYTICS_CONSENT_COOKIE]),
         ip: clientIp(req),
+        userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null,
       });
     }),
   );

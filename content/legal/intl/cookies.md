@@ -1,7 +1,7 @@
 ---
 title: Cookie notice
 status: draft
-updated: 2026-10-10
+updated: 2026-11-11
 ---
 
 # Cookie notice
@@ -23,8 +23,9 @@ These keep the service working and cannot be turned off:
 We keep our own product analytics; we run no advertising pixels.
 
 - `ra_anon` is an anonymous id that links your visits to each other and, if you sign up, to your account. Visitors in the EEA, the UK and Switzerland choose first: until you allow analytics, this cookie is not set.
-- If you do not allow analytics, we still count page visits, but each visit stands alone: no id is stored and the counts are not linked to each other or to an account.
-- Product usage events are deleted after 13 months.
+- With that id we also keep a visit record: the first page you opened, the site that sent you here and any campaign label in the link, your country, your device type, how many pages you viewed, and whether you signed up. The privacy notice lists it in full.
+- If you do not allow analytics, we still count page visits, but each visit stands alone: no id is stored, no visit record is kept, and the counts are not linked to each other or to an account.
+- Product usage events are deleted after 13 months. A visit record is deleted 13 months after your last visit, or with your account.
 
 ## Your choices
 

@@ -131,6 +131,7 @@ const PLACEMENT: Record<string, string> = {
   RAAttribution: 'ra-growth.prisma',
   RAGrowthChecklist: 'ra-growth.prisma', // SCHEMA-2 (SR-23-1)
   RAReferralSignal: 'ra-growth.prisma', // SCHEMA-5 (SR-60-1)
+  RAVisitor: 'ra-growth.prisma', // SCHEMA-9 (visitor conversion)
   // ra-prep
   RAInterviewQuestion: 'ra-prep.prisma',
   RAQuestionContribution: 'ra-prep.prisma',
@@ -278,6 +279,7 @@ const SCOPE: Record<string, Scope> = {
   RAAttribution: 'user',
   RAGrowthChecklist: 'user', // SCHEMA-2 (SR-23-1)
   RAReferralSignal: 'brand', // SCHEMA-5 (SR-60-1)
+  RAVisitor: 'brand', // SCHEMA-9 (visitor conversion)
   RAInterviewQuestion: 'brand',
   RAQuestionContribution: 'brand',
   RAQuestionReport: 'user',

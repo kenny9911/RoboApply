@@ -14,6 +14,10 @@
 //   getChecklist / dismissChecklist   the seeker card (routes.ts)
 //   pruneProductEvents  retention (≈13 months), for WP-13's schedule
 //
+// Visitor conversion: every stored batch also updates the visitor's RAVisitor
+// row (visitors.ts: where they came from, how far they got toward an account).
+// The wipe and the prune above take those rows with the events.
+//
 // Every dependency is injectable; tests never touch a database or the network.
 
 import type prismaClient from '../../lib/prisma.js';
@@ -25,6 +29,7 @@ import type { PracticeGrantReason, PracticeGrantResult } from '../../platform/cr
 import { logger } from '../../services/LoggerService.js';
 import { functionalTouch, sanitizeTouch } from './attribution.js';
 import { normalizeReferralCode } from './referralCodes.js';
+import { createVisitorRecorder, type VisitEvent, type VisitorDb, type VisitorRecorder } from './visitors.js';
 import type { RawSignals } from './referralRisk.js';
 import type { AttachResult } from './referrals.js';
 import { STEP_FIELD, resolvePrismaChecklistStore, type ChecklistRow, type ChecklistStore } from './checklistStore.js';
@@ -48,6 +53,7 @@ import {
   sanitizeEventPath,
   sanitizeEventProps,
   type AnalyticsConsentChoice,
+  type EventPropValue,
 } from './events.js';
 
 type PrismaClientLike = typeof prismaClient;
@@ -67,6 +73,11 @@ export interface IngestContext {
   consent: AnalyticsConsentChoice | null;
   /** Client IP: every batch counts against a per-IP ceiling. */
   ip: string;
+  /**
+   * The request's User-Agent, for the visitor record only (reduced to a device
+   * class; automated clients get no visitor row). Never stored.
+   */
+  userAgent?: string | null;
 }
 
 export interface EventsBatchInput {
@@ -82,6 +93,8 @@ export interface GrowthServiceDeps {
   checklistStore?: ChecklistStore | null | (() => Promise<ChecklistStore | null>);
   grantPracticeCredit?: (userId: string, reason: PracticeGrantReason, idempotencyKey: string) => Promise<PracticeGrantResult>;
   consumeRateLimit?: (options: { key: string; windows: readonly RateWindow[]; cost: number }) => Promise<RateLimitResult>;
+  /** The visitor record (visitors.ts); `null` = not kept. Default: a recorder on the same database client as the events. */
+  visitors?: VisitorRecorder | null;
   /** Invite friends (WP-60): attach a new account to the invite code it signed up with. Default: referrals.ts. */
   attachReferral?: (inviteeUserId: string, code: string, options: { signals?: RawSignals }) => Promise<AttachResult>;
   now?: () => Date;
@@ -196,6 +209,15 @@ export function createGrowthService(deps: GrowthServiceDeps = {}): GrowthService
     }
   }
 
+  let visitorsCache: VisitorRecorder | null | undefined = deps.visitors;
+  function visitors(): VisitorRecorder | null {
+    if (visitorsCache === undefined) {
+      // The same database as the events (an injected client in tests, else the shared one).
+      visitorsCache = createVisitorRecorder({ db: async () => (await db()) as unknown as VisitorDb, now });
+    }
+    return visitorsCache;
+  }
+
   async function linkAnonEvents(d: GrowthDb, userId: string, anonId: string): Promise<void> {
     await d.rAProductEvent.updateMany({ where: { anonId, userId: null }, data: { userId } });
   }
@@ -222,6 +244,7 @@ export function createGrowthService(deps: GrowthServiceDeps = {}): GrowthService
 
       const at = now();
       const rows: Prisma.RAProductEventCreateManyInput[] = [];
+      const visit: VisitEvent[] = [];
       let rejected = 0;
       for (const ev of body.events) {
         if (!isProductEventName(ev.name)) {
@@ -230,17 +253,25 @@ export function createGrowthService(deps: GrowthServiceDeps = {}): GrowthService
         }
         const props = sanitizeEventProps(ev.name, ev.props);
         const withSession = sessionId ? { ...(props ?? {}), sessionId } : props;
+        const path = sanitizeEventPath(ev.path);
+        const createdAt = eventTime(ev.at, at);
         rows.push({
           brand: ctx.brand,
           userId,
           anonId,
           name: ev.name,
           props: (withSession ?? undefined) as Prisma.InputJsonValue | undefined,
-          path: sanitizeEventPath(ev.path),
-          createdAt: eventTime(ev.at, at),
+          path,
+          createdAt,
         });
+        visit.push({ name: ev.name, props: props as Record<string, EventPropValue> | null, path, at: createdAt });
       }
       if (rows.length) await (await db()).rAProductEvent.createMany({ data: rows });
+      // The visitor record: only for a linked visitor (an `ra_anon` id the
+      // consent rules accepted). `record` never throws.
+      if (anonId && visit.length) {
+        await visitors()?.record({ brand: ctx.brand, anonId, userId, country: ctx.country, userAgent: ctx.userAgent ?? null, visitId: sessionId, events: visit });
+      }
       return { accepted: rows.length, rejected };
     },
 
@@ -341,6 +372,13 @@ export function createGrowthService(deps: GrowthServiceDeps = {}): GrowthService
         ? { OR: [{ userId }, { anonId: { in: [...anonIds] }, userId: null }] }
         : { userId };
       const { count } = await d.rAProductEvent.deleteMany({ where });
+      // The visitor rows of the same person (the cascade takes the linked ones
+      // when the account row goes; a wipe that keeps the account does not).
+      try {
+        await visitors()?.deleteForUser(userId, [...anonIds]);
+      } catch (err) {
+        logger.warn('GROWTH', 'visitor rows not deleted', { userId, error: err instanceof Error ? err.message : String(err) });
+      }
       return { deleted: count };
     },
 
@@ -348,6 +386,11 @@ export function createGrowthService(deps: GrowthServiceDeps = {}): GrowthService
       const days = options.retentionDays ?? EVENT_RETENTION_DAYS;
       const cutoff = new Date((options.now ?? now()).getTime() - days * 24 * 60 * 60 * 1000);
       const { count } = await (await db()).rAProductEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });
+      try {
+        await visitors()?.prune({ now: options.now ?? now(), retentionDays: days });
+      } catch (err) {
+        logger.warn('GROWTH', 'visitor rows not pruned', { error: err instanceof Error ? err.message : String(err) });
+      }
       return { deleted: count };
     },
   };

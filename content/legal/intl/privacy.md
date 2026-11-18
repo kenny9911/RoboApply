@@ -1,7 +1,7 @@
 ---
 title: Privacy notice
 status: draft
-updated: 2026-10-10
+updated: 2026-11-11
 ---
 
 # Privacy notice
@@ -66,8 +66,9 @@ We keep our own product usage events; we run no advertising pixels.
 
 - `ra_analytics_consent` remembers whether you allowed analytics, so we do not ask on every page.
 - `ra_anon` is an anonymous id that links your visits to each other and, if you sign up, to your account. It is set only after you allow analytics where we must ask first (the EEA, the UK and Switzerland).
-- If you do not allow analytics, we still count page visits, but each visit stands alone: no id is stored and the counts are not linked to each other or to an account.
-- Product usage events are deleted after 13 months.
+- With `ra_anon` we also keep a visit record: the first page you opened, the site that sent you here and any campaign label in the link, your country (worked out from your network address, which is not kept in the record), whether you used a computer, phone or tablet, how many pages you viewed, and whether you opened sign-up and created an account.
+- If you do not allow analytics, we still count page visits, but each visit stands alone: no id is stored, no visit record is kept, and the counts are not linked to each other or to an account.
+- Product usage events are deleted after 13 months. A visit record is deleted 13 months after your last visit, or with your account.
 - `ra_tool_visitor` is set when you use a free tool without an account. It lasts 24 hours and is strictly necessary: it lets the same browser open its own result again and keeps the daily limit fair. It is not used for analytics.
 
 You can change your analytics choice anytime with the "Privacy choices" link at the bottom of any page. See the cookie notice.

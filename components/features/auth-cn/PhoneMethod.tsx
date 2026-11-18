@@ -20,6 +20,7 @@ import { useId, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import { track } from '../../../lib/analytics';
 import { sendPhoneCode, verifyPhoneCode } from '../../../lib/api/authCn';
 import { apiErrorCode, apiErrorDetails } from '../../../lib/api/contracts/wire';
 import { useAuth } from '../../../lib/auth/AuthProvider';
@@ -81,6 +82,8 @@ export function PhoneMethod({ mode, next, onSuccess }: AuthMethodProps) {
     setError(null);
     if (!phoneOk || !agreed || countdown.left > 0) return;
     setSending(true);
+    // Visitor conversion: a code was asked for (one account path for sign-up and sign-in).
+    track('signup_started', { method: 'phone', mode });
     try {
       const res = await sendPhoneCode({ phone: normalizePhoneInput(phone), purpose: 'login' });
       countdown.start(res.resendInSec);
