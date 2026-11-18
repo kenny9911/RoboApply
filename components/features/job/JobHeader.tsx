@@ -12,6 +12,10 @@
 // When it does, the header leaves its own pay, date and source lines out, so
 // each fact is on the page once. "Only you can see this job" stays here.
 //
+// Beside the pay line: "See what postings pay for this title" (PayCheckLink,
+// the pay check at /pay; with the job feed only). Under GoApply's market block
+// the panel puts the same link below that block's pay.
+//
 // Dates are three separate facts (MARKET_STRATEGY 1.5): "Posted" is the
 // employer's own date and nothing else; "First seen" is when we first read the
 // posting (shown when the posting states no date, and beside a posted date
@@ -31,6 +35,7 @@ import { marketMetaCoversBasics, marketPayWords } from '../market';
 import { foundThroughJobSearch } from '../feed/cardModel';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
 import { initialOf, jobDetailHref, payLine, validDate } from './format';
+import { PayCheckLink } from './PayCheckLink';
 import styles from './job.module.css';
 
 export interface JobHeaderProps {
@@ -39,6 +44,8 @@ export interface JobHeaderProps {
   onClose?: () => void;
   /** The actions row (built by the panel, which owns the action state). */
   actions: ReactNode;
+  /** One line under the company and title: "Companies you want to work at" (TargetCompanyToggle). */
+  companyLine?: ReactNode;
 }
 
 const DAY_MS = 86_400_000;
@@ -60,7 +67,7 @@ export function headerDates(job: Pick<JobDetailResponse['job'], 'postedAt' | 'po
 const KNOWN_EMPLOYMENT = new Set(['full_time', 'part_time', 'contract', 'internship']);
 const KNOWN_SENIORITY = new Set(['intern_newgrad', 'entry', 'mid', 'senior', 'lead_staff', 'director_exec']);
 
-export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
+export function JobHeader({ detail, mode, onClose, actions, companyLine }: JobHeaderProps) {
   const t = useTranslations('jobDetail');
   const format = useFormatter();
   const locale = useLocale();
@@ -137,6 +144,8 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
         ) : null}
       </div>
 
+      {companyLine}
+
       {chips.length ? (
         <ul className={styles.chips}>
           {chips.map((c) => (
@@ -147,24 +156,30 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
         </ul>
       ) : null}
 
-      {slotHasBasics ? null : pay ? (
-        <p className={styles.pay} data-testid="job-pay">
-          {pay.kind === 'exact'
-            ? t('header.payExact', { amount: pay.amount, period: t(`header.period.${pay.period}`) })
-            : pay.kind === 'range'
-              ? t('header.payRange', { min: pay.min, max: pay.max, period: t(`header.period.${pay.period}`) })
-              : pay.kind === 'from'
-                ? t('header.payFrom', { min: pay.min, period: t(`header.period.${pay.period}`) })
-                : t('header.payUpTo', { max: pay.max, period: t(`header.period.${pay.period}`) })}
-        </p>
-      ) : payWords ? (
-        <p className={styles.pay} data-testid="job-pay">
-          {t('header.payAsStated', { text: payWords })}
-        </p>
-      ) : (
-        <p className={styles.payMissing} data-testid="job-pay">
-          {t('header.payNotListed')}
-        </p>
+      {slotHasBasics ? null : (
+        <div className={styles.payRow}>
+          {pay ? (
+            <p className={styles.pay} data-testid="job-pay">
+              {pay.kind === 'exact'
+                ? t('header.payExact', { amount: pay.amount, period: t(`header.period.${pay.period}`) })
+                : pay.kind === 'range'
+                  ? t('header.payRange', { min: pay.min, max: pay.max, period: t(`header.period.${pay.period}`) })
+                  : pay.kind === 'from'
+                    ? t('header.payFrom', { min: pay.min, period: t(`header.period.${pay.period}`) })
+                    : t('header.payUpTo', { max: pay.max, period: t(`header.period.${pay.period}`) })}
+            </p>
+          ) : payWords ? (
+            <p className={styles.pay} data-testid="job-pay">
+              {t('header.payAsStated', { text: payWords })}
+            </p>
+          ) : (
+            <p className={styles.payMissing} data-testid="job-pay">
+              {t('header.payNotListed')}
+            </p>
+          )}
+          {/* What other posts for this title state about pay (the pay check, /pay). */}
+          <PayCheckLink job={job} />
+        </div>
       )}
 
       {slotHasBasics && job.visibility !== 'private' ? null : (

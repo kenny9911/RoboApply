@@ -42,6 +42,8 @@ const api = vi.hoisted(() => ({
   getKitDetail: vi.fn(),
   getKitHistory: vi.fn(),
   getQuestionKeys: vi.fn(),
+  getAutoPrepare: vi.fn(),
+  putAutoPrepare: vi.fn(),
 }));
 vi.mock('../../../lib/api/agent', () => ({ ...api, agentApi: api }));
 
@@ -63,6 +65,7 @@ import { PageHeader, isPlainText } from '../../v3/primitives/PageHeader';
 import { flagsWith } from '../../../__tests__/shell/helpers';
 import { KitAllowance } from './KitAllowance';
 import { eventLine, isEmployerApplyPage, safeHttpUrl } from './KitParts';
+import { autoPrepareCostLines, autoPrepareLeft } from './AutoPrepareSetting';
 import { noTailorKey } from './PrepareSheet';
 import { customQuestionKey, questionsFor, sha256Hex } from './questions';
 import { previewFileName } from './fileName';
@@ -115,6 +118,11 @@ function jobDetail(id: string, title: string, over: Record<string, unknown> = {}
     tracker: null,
   };
 }
+
+/** GET /agent/auto-prepare: off and never run (the default), then on, and a run of this week. */
+const AUTO_OFF = { on: false, since: null, lastRun: null, aiAvailable: true };
+const AUTO_ON = { ...AUTO_OFF, on: true, since: '2026-10-05T08:00:00.000Z' };
+const runThisWeek = (over: Record<string, unknown> = {}) => ({ at: '2026-10-05T11:00:00.000Z', weekKey: '2026-W41', started: 3, left: 0, stoppedBy: null, thisWeek: true, ...over });
 
 const SETTINGS: AgentSettings = { weeklyTarget: 10, minTier: 'good', tailorEach: true, coverLetterMode: 'when_required', baseVariantId: null, fileNameStyle: 'name_company_role' };
 const setupAt = (step: AgentSetupResponse['step'], checks: Partial<AgentSetupResponse['checks']> = {}): AgentSetupResponse => ({
@@ -228,6 +236,8 @@ beforeEach(() => {
   api.getQuestionKeys.mockRejectedValue(apiError(501, 'not_implemented'));
   api.completeSetupStep.mockImplementation(async (b: { step: string }) => setupAt(b.step === 'extension' || b.step === 'weekly' ? 'done' : 'calibrate'));
   api.generateList.mockResolvedValue({ weekKey: '2026-W41', added: 0, items: [], filtersDiffer: false, reason: 'no_matches' });
+  // "Prepare my weekly list automatically": off by default, never run.
+  api.getAutoPrepare.mockResolvedValue(AUTO_OFF);
   installNet();
 });
 
@@ -1647,5 +1657,212 @@ describe('PrepareSheet zero-tailoring line', () => {
     const sheet = await screen.findByTestId('prepare-sheet');
     expect(await within(sheet).findByText('AI writing is off for your account, so applications use your resume as it is.')).toBeInTheDocument();
     expect(within(sheet).getByTestId('cost-ready_kits')).toHaveTextContent('Uses 1 application; you have 2 left this week.');
+  });
+});
+
+// ── Prepare my weekly list automatically (docs/agent-driven/REDESIGN.md §9) ──
+//
+// Off by default; the user's own opt-in is the confirmation, given only after
+// the cost is stated; it saves on its own; the Getting ready page says what it
+// did with the server's real counts; nothing on it applies or submits (D1).
+
+describe('Prepare my weekly list automatically', () => {
+  const AI_ON = { ...ON, 'ai.text': true };
+
+  async function weeklyStep(flags: Record<string, boolean> = AI_ON) {
+    window.history.replaceState(null, '', '/ready/setup#weekly');
+    const view = renderWithBrand(<SetupWizard />, { flags });
+    const setting = await screen.findByTestId('auto-prepare-setting');
+    const box = await within(setting).findByRole('checkbox', { name: /Prepare my weekly list automatically/ });
+    await waitFor(() => expect(box).toBeEnabled());
+    return { view, setting, box };
+  }
+
+  async function openSheet(box: HTMLElement) {
+    fireEvent.click(box);
+    const sheet = await screen.findByTestId('auto-prepare-sheet');
+    await within(sheet).findByTestId('auto-prepare-costs');
+    return sheet;
+  }
+
+  it('is off by default; ticking it states what each job uses first, and nothing is saved until "Turn on"', async () => {
+    const { setting, box } = await weeklyStep();
+    expect(box).not.toBeChecked();
+    expect(setting).toHaveTextContent('Off. New jobs on your weekly list wait for you to tap Prepare.');
+    const sheet = await openSheet(box);
+    // Exactly what a tapped Prepare uses, each with what is left (the server's numbers).
+    const kits = await within(sheet).findByTestId('auto-cost-ready_kits');
+    expect(kits).toHaveTextContent('1 application from your weekly allowance');
+    expect(kits).toHaveTextContent('2 left this week');
+    const tailor = within(sheet).getByTestId('auto-cost-tailor');
+    expect(tailor).toHaveTextContent('1 tailoring credit (“Tailor my resume for each job” is on)');
+    expect(tailor).toHaveTextContent('2 left today');
+    const letter = within(sheet).getByTestId('auto-cost-cover_letter');
+    expect(letter).toHaveTextContent('1 cover letter credit when the post asks for a cover letter');
+    expect(letter).toHaveTextContent('1 left today');
+    expect(sheet).toHaveTextContent("It stops when your weekly allowance or a credit runs out. It never uses bonus applications or more than you have left. Jobs it can't prepare stay in To prepare.");
+    expect(sheet).toHaveTextContent('Nothing is sent to any company. You check each application, then open it and submit it yourself.');
+    expect(sheet.querySelector('[data-honesty="you_submit"]')).toHaveTextContent('You submit each application yourself.');
+    expect(api.putAutoPrepare).not.toHaveBeenCalled();
+    expectNoSubmitWording();
+    // Cancel: still off, nothing sent.
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByTestId('auto-prepare-sheet')).toBeNull());
+    expect(box).not.toBeChecked();
+    expect(api.putAutoPrepare).not.toHaveBeenCalled();
+  });
+
+  it('"Turn on" saves the opt-in on its own; unticking turns it off at once and undoes nothing', async () => {
+    api.putAutoPrepare.mockImplementation(async (b: { on: boolean }) => (b.on ? AUTO_ON : AUTO_OFF));
+    const { setting, box } = await weeklyStep();
+    await openSheet(box);
+    const turnOn = within(screen.getByRole('dialog')).getByRole('button', { name: 'Turn on' });
+    await waitFor(() => expect(turnOn).toBeEnabled());
+    fireEvent.click(turnOn);
+    await waitFor(() => expect(api.putAutoPrepare).toHaveBeenCalledWith({ on: true }));
+    expect(await within(setting).findByText('Turned on. New jobs on your weekly list will be prepared automatically.')).toBeInTheDocument();
+    await waitFor(() => expect(box).toBeChecked());
+    expect(screen.queryByTestId('auto-prepare-sheet')).toBeNull();
+    expect(setting).toHaveTextContent('On. New jobs on your weekly list are prepared without a tap, within what you have left. You check and submit each one yourself.');
+    // Off: no sheet, at once.
+    fireEvent.click(box);
+    await waitFor(() => expect(api.putAutoPrepare).toHaveBeenLastCalledWith({ on: false }));
+    expect(await within(setting).findByText('Turned off. Nothing already prepared was undone.')).toBeInTheDocument();
+    await waitFor(() => expect(box).not.toBeChecked());
+    expect(screen.queryByTestId('auto-prepare-sheet')).toBeNull();
+    // "Save settings" never carries it.
+    expect(api.putAgentSettings).not.toHaveBeenCalled();
+  });
+
+  it('a "Turn on" the server refused says so in the sheet and leaves it off', async () => {
+    api.putAutoPrepare.mockRejectedValue(apiError(500, 'server_error'));
+    const { box } = await weeklyStep();
+    await openSheet(box);
+    const dialog = screen.getByRole('dialog');
+    const turnOn = within(dialog).getByRole('button', { name: 'Turn on' });
+    await waitFor(() => expect(turnOn).toBeEnabled());
+    fireEvent.click(turnOn);
+    expect(await within(dialog).findByText("This setting wasn't saved. Try again.")).toBeInTheDocument();
+    expect(box).not.toBeChecked();
+  });
+
+  it('states the cost from the saved settings and from AI for the account: tailoring off, no letters, or AI off', async () => {
+    api.getAgentSettings.mockResolvedValue({ ...SETTINGS, tailorEach: false, coverLetterMode: 'never' });
+    const first = await weeklyStep();
+    let sheet = await openSheet(first.box);
+    const costs = within(sheet).getByTestId('auto-prepare-costs');
+    expect(costs).toHaveTextContent('No tailoring credit: tailoring is off in Settings, so your resume is used as it is');
+    expect(costs).toHaveTextContent('No cover letter credit: cover letters are off in Settings');
+    expect(within(sheet).queryByTestId('auto-cost-tailor')).toBeNull();
+    expect(within(sheet).queryByTestId('auto-cost-cover_letter')).toBeNull();
+    expect(within(sheet).getByTestId('auto-cost-ready_kits')).toBeInTheDocument();
+    first.view.unmount();
+
+    // AI writing off for this account (the server says so): the resume as it is, no tailoring or letter credit.
+    api.getAgentSettings.mockResolvedValue(SETTINGS);
+    api.getAutoPrepare.mockResolvedValue({ ...AUTO_OFF, aiAvailable: false });
+    const second = await weeklyStep();
+    sheet = await openSheet(second.box);
+    expect(within(sheet).getByTestId('auto-prepare-costs')).toHaveTextContent('No tailoring or cover letter credit: AI writing is off for your account, so your resume is used as it is');
+    expect(within(sheet).queryByTestId('auto-cost-tailor')).toBeNull();
+  });
+
+  it('applications left are the week\'s allowance only (a run never uses bonus ones); tailoring and letters count bonus credits, as a tap does', async () => {
+    extraRoutes = {
+      'GET /api/v1/roboapply/credits': () =>
+        ok({ ...CREDITS, summary: { ...CREDITS.summary, buckets: { ...CREDITS.summary.buckets, ready_kits: { ...bucket(3, 2, 'week'), grantRemaining: 4 }, tailor: { ...bucket(2, 2, 'day'), grantRemaining: 1 } } } }),
+    };
+    vi.unstubAllGlobals();
+    installNet();
+    const { box } = await weeklyStep();
+    const sheet = await openSheet(box);
+    expect(await within(sheet).findByText('2 left this week')).toBeInTheDocument();
+    expect(within(sheet).getByTestId('auto-cost-tailor')).toHaveTextContent('3 left today');
+    expect(autoPrepareLeft('ready_kits', { ...bucket(3, 5, 'week'), grantRemaining: 2 })).toBe(3);
+    expect(autoPrepareLeft('cover_letter', { ...bucket(2, 1, 'day'), grantRemaining: 2 })).toBe(3);
+    expect(autoPrepareLeft('ready_kits', null)).toBeNull();
+  });
+
+  it('the statement lines: AI not known states the credits the settings use, never fewer (pure)', () => {
+    const keys = (s: Parameters<typeof autoPrepareCostLines>[0], ai: Parameters<typeof autoPrepareCostLines>[1]) => autoPrepareCostLines(s, ai).map((l) => l.key);
+    expect(keys({ tailorEach: true, coverLetterMode: 'always' }, { brand: true, account: null })).toEqual(['auto.sheet.kit', 'auto.sheet.tailor', 'auto.sheet.letter.always']);
+    expect(keys({ tailorEach: true, coverLetterMode: 'when_required' }, { brand: true, account: true })).toEqual(['auto.sheet.kit', 'auto.sheet.tailor', 'auto.sheet.letter.when_required']);
+    expect(keys({ tailorEach: true, coverLetterMode: 'always' }, { brand: false, account: true })).toEqual(['auto.sheet.kit', 'auto.sheet.noAi']);
+    expect(keys({ tailorEach: false, coverLetterMode: 'never' }, { brand: true, account: true })).toEqual(['auto.sheet.kit', 'auto.sheet.noTailor', 'auto.sheet.letter.never']);
+  });
+
+  it('"Turn on" waits until the cost can be stated: settings that cannot be read keep it disabled and say why', async () => {
+    api.getAgentSettings.mockRejectedValue(apiError(404, 'not_found'));
+    const { box } = await weeklyStep();
+    fireEvent.click(box);
+    const sheet = await screen.findByTestId('auto-prepare-sheet');
+    expect(await within(sheet).findByText("Your settings couldn't be loaded, so the cost can't be shown yet. Try again.")).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Turn on' })).toBeDisabled();
+    expect(within(sheet).queryByTestId('auto-prepare-costs')).toBeNull();
+  });
+
+  it('the Getting ready page says when this week\'s list was prepared and how many used the allowance (the server\'s counts)', async () => {
+    api.getAutoPrepare.mockResolvedValue({ ...AUTO_ON, lastRun: runThisWeek({ started: 3, left: 2, stoppedBy: 'tailor' }) });
+    api.listQueue.mockResolvedValue({ items: [item({ id: 'q1', jobId: 'job1', state: 'preparing' })] });
+    const view = renderWithBrand(<ReadyRoute />, { flags: ON });
+    const state = await screen.findByTestId('auto-prepare-state');
+    expect(state).toHaveTextContent(/^This week's list was prepared automatically on .+: 3 applications used your weekly allowance\./);
+    expect(state).toHaveTextContent('2 jobs are left in To prepare because your tailoring credits ran out.');
+    expect(state).not.toHaveTextContent('off now');
+    expectNoSubmitWording();
+    view.unmount();
+
+    // On, and nothing has run this week (an earlier week's run is not this week's): it says what will happen.
+    api.getAutoPrepare.mockResolvedValue({ ...AUTO_ON, lastRun: runThisWeek({ weekKey: '2026-W40', thisWeek: false }) });
+    const waiting = renderWithBrand(<ReadyRoute />, { flags: ON });
+    expect(await screen.findByTestId('auto-prepare-state')).toHaveTextContent('Your weekly list is prepared automatically when jobs are added to it.');
+    waiting.unmount();
+
+    // Turned off after this week's run: the run stays true, and it says it is off now.
+    api.getAutoPrepare.mockResolvedValue({ ...AUTO_OFF, lastRun: runThisWeek({ started: 1 }) });
+    const offNow = renderWithBrand(<ReadyRoute />, { flags: ON });
+    const after = await screen.findByTestId('auto-prepare-state');
+    expect(after).toHaveTextContent(/1 application used your weekly allowance\./);
+    expect(after).toHaveTextContent('Automatic preparing is off now.');
+    offNow.unmount();
+
+    // Off and never run: no line at all.
+    api.getAutoPrepare.mockResolvedValue(AUTO_OFF);
+    renderWithBrand(<ReadyRoute />, { flags: ON });
+    await screen.findByTestId('ready-progress');
+    await waitFor(() => expect(api.getAutoPrepare).toHaveBeenCalledTimes(4));
+    expect(screen.queryByTestId('auto-prepare-state')).toBeNull();
+  });
+
+  it('a run that could start nothing says so, with why (no invented count)', async () => {
+    api.getAutoPrepare.mockResolvedValue({ ...AUTO_ON, lastRun: runThisWeek({ started: 0, left: 5, stoppedBy: 'ready_kits' }) });
+    renderWithBrand(<ReadyRoute />, { flags: ON });
+    const state = await screen.findByTestId('auto-prepare-state');
+    expect(state).toHaveTextContent(/^Nothing could be prepared automatically on .+\./);
+    expect(state).toHaveTextContent('5 jobs are left in To prepare because your weekly allowance ran out.');
+    expect(state).not.toHaveTextContent(/used your weekly allowance/);
+  });
+
+  it('a list built on demand says how many of its jobs are being prepared automatically', async () => {
+    api.generateList.mockResolvedValue({ weekKey: '2026-W41', added: 2, items: [], filtersDiffer: true, reason: null, autoPrepared: { started: ['q1', 'q2'], left: 0, stoppedBy: null } });
+    renderWithBrand(<ReadySearchCard />, { flags: ON });
+    fireEvent.click(await screen.findByRole('button', { name: 'Change filters' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Remote' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await act(async () => {
+      fireEvent.click(within(await within(dialog).findByTestId('ready-search-ask')).getByRole('button', { name: 'No, only Ready to apply' }));
+    });
+    expect(
+      await screen.findByText('2 matching jobs were added to your list. Your main search did not change; your next lists here use these filters too. 2 of them are being prepared automatically.'),
+    ).toBeInTheDocument();
+  });
+
+  it('the kit history says a job was started automatically', () => {
+    const t = ((key: string) => key) as Parameters<typeof eventLine>[1];
+    const moved = (detail: Record<string, unknown> | null) =>
+      eventLine({ id: 'e', kind: 'transition', fromState: 'picked', toState: 'preparing', actor: 'system', detail, createdAt: '2026-10-05T11:00:00.000Z' }, t);
+    expect(moved({ attempt: 1, auto: true })).toBe('review.history.autoStarted');
+    expect(moved({ attempt: 1 })).toBe('review.history.moved');
   });
 });

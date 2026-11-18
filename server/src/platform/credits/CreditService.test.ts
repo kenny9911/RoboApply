@@ -123,6 +123,16 @@ describe('caps', () => {
     await expect(kit.credits.reserve({ userId: 'u1', bucket: 'contact_lookup', idempotencyKey: 'k' })).rejects.toBeInstanceOf(CreditsExhaustedError);
     expect(kit.store.grants[0].remaining).toBe(10);
   });
+
+  it('`useGrants: false` pays from the window only: a full window is exhausted and the bonus credits stay untouched', async () => {
+    const kit = createCreditTestKit({ grants: [{ id: 'g1', userId: 'u1', bucket: 'resume_check', amount: 2 }] });
+    expect((await kit.credits.reserve({ userId: 'u1', bucket: 'resume_check', idempotencyKey: 'a', useGrants: false })).fromSource).toBe('window');
+    await expect(kit.credits.reserve({ userId: 'u1', bucket: 'resume_check', idempotencyKey: 'b', useGrants: false })).rejects.toBeInstanceOf(CreditsExhaustedError);
+    expect(kit.store.grants[0].remaining).toBe(2);
+    expect(kit.store.ledger.filter((l) => l.status === 'reserved')).toHaveLength(1);
+    // Without it (the default) the same request is paid from a grant, as before.
+    expect((await kit.credits.reserve({ userId: 'u1', bucket: 'resume_check', idempotencyKey: 'b' })).fromSource).toBe('grant:g1');
+  });
 });
 
 describe('idempotency', () => {

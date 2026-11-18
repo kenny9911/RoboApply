@@ -33,6 +33,8 @@
 //   GET    /api/v1/roboapply/agent/answers/questions
 //   GET    /api/v1/roboapply/agent/badge
 //   POST   /api/v1/roboapply/agent/queue/:id/restore
+//   GET    /api/v1/roboapply/agent/auto-prepare
+//   PUT    /api/v1/roboapply/agent/auto-prepare
 
 import { call, type CallOptions, type In, type Items, seg, withQuery } from './contracts/wire';
 import type * as A from './contracts/agent';
@@ -169,6 +171,12 @@ export type QuestionKeyView = A.QuestionKeyView;
 /** GET / PUT /agent/settings: the weekly choices plus which search the lists come from. */
 export type AgentSettingsResponse = A.AgentSettingsResponse;
 
+/** GET / PUT /agent/auto-prepare: "Prepare my weekly list automatically" (off by default) and its latest run. */
+export type AutoPrepareView = A.AutoPrepareView;
+
+/** What one automatic run did (`autoPrepared` on a list build). */
+export type AutoPrepareOutcome = A.AutoPrepareOutcome;
+
 /** `agent.completeStep` — POST /api/v1/roboapply/agent/setup/step */
 export function completeSetupStep(body: SetupStepBody, opts?: CallOptions): Promise<SetupStepResponse> {
   return call<SetupStepResponse>('POST', `/api/v1/roboapply/agent/setup/step`, { ...opts, body });
@@ -206,6 +214,18 @@ export function restoreQueueItem(id: string, opts?: CallOptions): Promise<A.Queu
   return call<A.QueueItemView>('POST', `/api/v1/roboapply/agent/queue/${seg(id)}/restore`, opts);
 }
 
+// "Prepare my weekly list automatically": the user's opt-in (off by default) and its latest run.
+/** `agent.getAutoPrepare` — GET /api/v1/roboapply/agent/auto-prepare */
+export function getAutoPrepare(opts?: CallOptions): Promise<AutoPrepareView> {
+  return call<AutoPrepareView>('GET', `/api/v1/roboapply/agent/auto-prepare`, opts);
+}
+
+// Turning it on is the user's confirmation: send `{ on: true }` only after the cost was stated.
+/** `agent.putAutoPrepare` — PUT /api/v1/roboapply/agent/auto-prepare */
+export function putAutoPrepare(body: In<typeof A.PutAutoPrepareBodySchema>, opts?: CallOptions): Promise<AutoPrepareView> {
+  return call<AutoPrepareView>('PUT', `/api/v1/roboapply/agent/auto-prepare`, { ...opts, body });
+}
+
 /** Every wrapper of this area, for callers that prefer one import. */
 export const agentApi = {
   getAgentSettings,
@@ -231,4 +251,6 @@ export const agentApi = {
   getQuestionKeys,
   getReadyBadge,
   restoreQueueItem,
+  getAutoPrepare,
+  putAutoPrepare,
 };

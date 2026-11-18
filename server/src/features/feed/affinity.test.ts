@@ -54,14 +54,20 @@ describe('affinity', () => {
     expect(faded.company.acme).toBeUndefined();
   });
 
-  it('score is 50 when neutral, rises with liked keys, falls with hidden ones; preferred companies count ≥ +0.5', () => {
+  it('score is 50 when neutral, rises with liked keys, falls with hidden ones', () => {
     const keys = affinityKeys(job);
     expect(affinityScore(EMPTY_AFFINITY, keys)).toBe(50);
     const liked = applyAffinity(EMPTY_AFFINITY, keys, 0.25, T0);
     const hidden = applyAffinity(EMPTY_AFFINITY, keys, -0.1, T0);
     expect(affinityScore(liked, keys)).toBeGreaterThan(50);
     expect(affinityScore(hidden, keys)).toBeLessThan(50);
-    expect(affinityScore(EMPTY_AFFINITY, keys, new Set(['acme']))).toBeCloseTo(50 + (50 * 0.5) / 3, 1);
+  });
+
+  it('reads only the person’s own actions: "Companies you want to work at" have their own rule (ranking.ts, target_companies)', () => {
+    // The factor takes no list of companies any more; a job's company weight comes from saves, applies and hides.
+    expect(affinityScore.length).toBe(2);
+    const keys = affinityKeys(job);
+    expect(affinityScore(EMPTY_AFFINITY, keys)).toBe(50);
   });
 
 

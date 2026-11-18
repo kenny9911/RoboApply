@@ -623,6 +623,37 @@ describe('GET /jobs/:id (service)', () => {
     expect(db.$rows('rAJobUserState').find((r) => r.jobId === 'j2')).toMatchObject({ userId: 'u1', viewedAt: NOW });
   });
 
+  // docs/agent-driven/REDESIGN.md §8 scenario 4: the page's "Companies you want to work at" control reads this.
+  it('says whether the company is on the reader’s "Companies you want to work at", as the card compares it; nothing when it cannot tell', async () => {
+    const reads: Array<[string, string]> = [];
+    const on = setup({
+      deps: {
+        targetCompanies: async (userId, market) => {
+          reads.push([userId, market]);
+          return ['ACME, Inc.', 'Globex'];
+        },
+      },
+    });
+    expect((await on.service.get('u1', 'j1')).atTargetCompany).toBe(true);
+    expect(reads).toEqual([['u1', 'intl']]);
+    expect((await setup({ deps: { targetCompanies: async () => ['Globex'] } }).service.get('u1', 'j1')).atTargetCompany).toBe(false);
+    expect((await setup({ deps: { targetCompanies: async () => [] } }).service.get('u1', 'j1')).atTargetCompany).toBe(false);
+    // The stored key first, as on the card.
+    const stored = setup({ jobs: [job({ companyName: 'Acme Europe', companyNameNormalized: 'globex' })], deps: { targetCompanies: async () => ['Globex'] } });
+    expect((await stored.service.get('u1', 'j1')).atTargetCompany).toBe(true);
+    // No saved search yet, a read that failed, or no seam: the field is left off and the page offers nothing (D3).
+    const unknown: Array<JobDetailServiceDeps['targetCompanies']> = [
+      async () => null,
+      async () => {
+        throw new Error('db down');
+      },
+      undefined,
+    ];
+    for (const targetCompanies of unknown) {
+      expect(await setup({ deps: { targetCompanies } }).service.get('u1', 'j1')).not.toHaveProperty('atTargetCompany');
+    }
+  });
+
   it('another market → 404; a private import only for its owner', async () => {
     const { service } = setup({ jobs: [job(), job({ id: 'jp', visibility: 'private', ownerUserId: 'owner' })] });
     await expect(service.get('u1', 'jp')).rejects.toMatchObject({ code: 'not_found', details: { code: 'job_not_found' } });

@@ -140,6 +140,7 @@
       "view": "查看来源"
     },
     "dashboard": "首页",
+    "pay": "薪资参考",
     "profile_card": {
       "you": "你",
       "set_role": "设置目标职位",
@@ -247,7 +248,8 @@
       "alsoIn": "另有 {count, plural, other {# 个地点}}",
       "alsoInList": "{company} 的 {title} 在其他地点的职位",
       "alsoInMore": "{count, plural, other {还有 # 个地点未在此列出。}}",
-      "firstSeen": "首次发现于 {date}"
+      "firstSeen": "首次发现于 {date}",
+      "targetCompany": "在你的目标公司名单中"
     },
     "explore": {
       "back": "全部职位类别",
@@ -3586,6 +3588,10 @@
         "wrongTitle": {
           "body": "如果你把一个职位标为“不感兴趣：职位名称不对”，该职位所属岗位的权重和该职位名称的权重会各降低 0.25（权重范围为 -1 到 1）。“你表现出的兴趣”是一个职位的岗位、公司和技能权重的平均值；当它的职位名称权重低于零时，也计入平均。所以一次标记会让其他同岗位或同名称的职位略微靠后，之后每多标一次，就降得更多。这个影响每天衰减 2%。你的筛选条件保持不变。",
           "title": "你标为不对的职位名称"
+        },
+        "targetCompanies": {
+          "title": "想去的公司",
+          "body": "如果你的搜索列出了想去的公司，这些公司的职位在“推荐”排序中加 5 分，在精选职位中按匹配度高 5 分来排序。这不是筛选条件：其他公司的职位仍会显示。"
         }
       },
       "goalTitle": "你的目标",
@@ -9215,7 +9221,7 @@
       "locations": "工作地点",
       "needsSponsorship": "签证担保",
       "postedWithinDays": "发布时间",
-      "preferredCompanies": "你喜欢的公司",
+      "preferredCompanies": "想去的公司",
       "q": "关键词",
       "recruiterJobsOnly": "招聘方发布的职位",
       "roleType": "岗位类型",
@@ -9246,7 +9252,7 @@
       "includeUndisclosedPay": "关闭时，没有写明薪资的职位仍会保留在列表中。",
       "locations": "远程职位仍会保留在列表中。",
       "needsSponsorship": "优先显示提到签证担保的职位，并隐藏写明不提供担保的职位。这个回答也会保存到你的个人资料。",
-      "preferredCompanies": "这些公司的职位会排在前面。其他职位仍会显示。",
+      "preferredCompanies": "这些公司的职位在“推荐”排序和精选职位中，会排在相似职位前面。其他职位仍会显示。",
       "recruiterJobsOnly": "只看招聘方在 {sourceName} 上发布的职位。",
       "salaryMonthsMin": "没有写明每年发几薪的职位仍会保留在列表中。",
       "schoolTiers": "隐藏要求特定院校层次而你不符合的职位。不会用于职位排序。",
@@ -9855,6 +9861,7 @@
       "payExact": "{amount}/{period}",
       "payFrom": "{min}/{period} 起",
       "payNotListed": "薪资未披露",
+      "payCheck": "查看这个职位名称的公开薪资",
       "payRange": "{min} – {max}/{period}",
       "payUpTo": "最高 {max}/{period}",
       "period": {
@@ -9956,6 +9963,71 @@
       "label": "职位详情",
       "overview": "概览",
       "people": "人脉"
+    },
+    "targets": {
+      "on": "在你的目标公司名单中",
+      "add": "把{company}加入想去的公司",
+      "remove": "移除",
+      "removeLabel": "从想去的公司中移除{company}",
+      "added": "{company}已加入名单。这家公司的职位在“推荐”排序和精选职位中，会排在相似职位前面。",
+      "removed": "{company}已从目标公司名单中移除。",
+      "failed": "未能修改你的目标公司名单，请重试。",
+      "full": "你的目标公司名单已满。请先在搜索条件中移除一家公司，再添加这一家。"
+    }
+  },
+  "payCheck": {
+    "title": "薪资参考",
+    "sub": "按职位名称，查看最近 {days} 天的职位信息写明的薪资。",
+    "loading": "加载中…",
+    "start": "输入职位名称，查看职位信息里写明的薪资。",
+    "reading": "正在读取职位信息…",
+    "error": "暂时无法加载薪资。",
+    "rateLimited": "短时间内查询次数太多，请一分钟后再试。",
+    "retry": "重试",
+    "form": {
+      "label": "按职位名称查询薪资",
+      "title": "职位名称",
+      "titlePlaceholder": "例如：数据分析师",
+      "location": "地点（选填）",
+      "locationPlaceholder": "城市、地区或国家",
+      "remote": "仅远程职位",
+      "submit": "查询薪资",
+      "prefilled": "已按你保存的搜索条件填写。"
+    },
+    "unavailable": {
+      "title": "这里暂不提供薪资参考",
+      "sub": "本站目前不展示职位信息，因此没有可查询的公开薪资。",
+      "back": "返回首页"
+    },
+    "result": {
+      "heading": "“{title}”的公开薪资",
+      "matchRole": "按岗位“{role}”，以及名称含“{text}”的职位匹配。",
+      "matchText": "按名称含“{text}”的职位匹配。",
+      "placeAny": "不限地点。",
+      "placeRemote": "仅远程职位。",
+      "placeRemoteIn": "远程职位（{country}）。",
+      "placeIn": "地点：{place}。",
+      "placeText": "地点信息含“{place}”的职位。",
+      "matched": "{count, plural, =0 {最近 {days} 天没有匹配的职位。} other {最近 {days} 天有 # 个职位匹配。}}",
+      "matchedCapped": "最近 {days} 天匹配的职位超过 {count, number} 个，已读取最新的 {count, number} 个。",
+      "withPay": "{count, plural, =0 {其中没有写明薪资的职位。} other {其中 # 个写明了薪资。}}",
+      "honesty": "这里是职位信息写明的薪资，不是对你实际录用薪资的预测。",
+      "yearly": "按小时、天、周或月写明的薪资，均折算为年薪显示：2,080 小时、260 天、52 周或 12 个月（写明“N 薪”的，按 N 个月计算）。"
+    },
+    "range": {
+      "heading": "{currency}，年薪",
+      "sample": "{count, plural, other {# 个职位}}以 {currency} 写明薪资",
+      "p25": "第 25 百分位",
+      "median": "中位数",
+      "p75": "第 75 百分位",
+      "summary": "这些职位中，有一半写明的年薪在 {low} 到 {high} 之间，中位数为 {median}。"
+    },
+    "few": "{currency}：只有 {count, plural, other {# 个职位}}写明薪资，数量太少，无法显示范围（至少需要 {min} 个）。",
+    "notEnough": {
+      "title": "写明薪资的职位还不够",
+      "sub": "同一币种中至少有 {min} 个职位写明薪资时，才会显示范围。可以换一个更宽泛的职位名称，或不填地点。",
+      "tryRole": "查询“{role}”",
+      "withoutPlace": "不限地点再查"
     }
   },
   "jobImport": {
@@ -11563,7 +11635,8 @@
         "used": {
           "letter": "已选定这份申请材料使用的求职信",
           "resume": "已选定这份申请材料使用的简历"
-        }
+        },
+        "autoStarted": "已自动开始（已开启“自动准备我的每周列表”）"
       },
       "letter": {
         "copyAria": "复制求职信",
@@ -11678,7 +11751,8 @@
       "setupNote": "每周列表来自你的主搜索，所以在这里保存，也会改变你在“职位”页看到的职位。",
       "title": "每周列表从哪里来",
       "useMainOnly": "只用我的主搜索",
-      "yes": "是，更新我的主搜索"
+      "yes": "是，更新我的主搜索",
+      "autoStarted": "其中 {count, plural, other {# 个}}正在自动准备。"
     },
     "setup": {
       "back": "上一步",
@@ -11829,6 +11903,52 @@
         "review": "检查并打开",
         "sent": "查看申请",
         "listed": "已在你的列表中"
+      }
+    },
+    "auto": {
+      "title": "自动准备我的每周列表",
+      "offNote": "已关闭。每周列表里的新职位会等你点击“准备”后再准备。",
+      "onNote": "已开启。每周列表里的新职位会在剩余额度内自动准备，无需点击。每份申请材料都由你自己检查并提交。",
+      "savedOn": "已开启。每周列表里的新职位将自动准备。",
+      "savedOff": "已关闭。已经准备好的内容不会被撤销。",
+      "failed": "这项设置没有保存成功。请重试。",
+      "loadFailed": "这项设置加载失败。请稍后再试。",
+      "sheet": {
+        "title": "要自动准备你的每周列表吗？",
+        "description": "开启之前，先看看会用掉什么。",
+        "when": "每当有职位加入你的每周列表，就会按列表顺序自动准备，无需点击。",
+        "each": "每准备一个职位会用掉：",
+        "kit": "每周额度中的 1 份申请材料",
+        "tailor": "1 个简历定制额度（已开启“为每个职位定制我的简历”）",
+        "noTailor": "不使用简历定制额度：设置中已关闭简历定制，会直接使用你的原简历",
+        "noAi": "不使用简历定制或求职信额度：你的账号未开启 AI 写作，会直接使用你的原简历",
+        "letter": {
+          "when_required": "职位描述要求求职信时，使用 1 个求职信额度",
+          "always": "1 个求职信额度（每个职位都写求职信）",
+          "never": "不使用求职信额度：设置中已关闭求职信"
+        },
+        "left": "{window, select, day {今天} week {本周} other {本月}}还剩 {left} 个",
+        "leftUnknown": "剩余：—",
+        "stops": "每周额度或任一类额度用完时就会停止。不会使用你获赠的申请材料，也绝不会超出你的剩余量。没能准备的职位会留在“待准备”中。",
+        "check": "不会向任何公司发送任何内容。每份申请材料都由你检查，然后自己打开并提交。",
+        "off": "你可以随时关闭。关闭后，已经准备好的内容不会被撤销。",
+        "loading": "正在检查你的设置…",
+        "settingsFailed": "你的设置加载失败，暂时无法显示会用掉什么。请重试。",
+        "cancel": "取消",
+        "confirm": "开启",
+        "saving": "正在开启…"
+      },
+      "state": {
+        "waiting": "有职位加入时，你的每周列表会自动准备。",
+        "ran": "本周列表已于{date}自动准备：用掉了每周额度中的 {count, plural, other {# 份申请材料}}。",
+        "ranNone": "{date}没有任何内容能自动准备。",
+        "stopped": {
+          "ready_kits": "每周额度已用完，{count, plural, other {# 个职位}}留在“待准备”中。",
+          "tailor": "简历定制额度已用完，{count, plural, other {# 个职位}}留在“待准备”中。",
+          "cover_letter": "求职信额度已用完，{count, plural, other {# 个职位}}留在“待准备”中。",
+          "error": "{count, plural, other {# 个职位}}没能自动开始，留在“待准备”中。"
+        },
+        "offNow": "自动准备现已关闭。"
       }
     }
   },
@@ -12962,7 +13082,9 @@
       "loading": "正在加载你的搜索…",
       "failed": "你的搜索没有加载出来。",
       "none": "还没有订阅搜索。",
-      "setUp": "设置搜索"
+      "setUp": "设置搜索",
+      "companies": "目标公司：{list}",
+      "anyWithCompanies": "任何职位都在范围内，目标公司：{list}"
     },
     "agentTag": "智能体",
     "retry": "重试",

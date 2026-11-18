@@ -4,13 +4,15 @@
 // in-memory repo (no database, no network, no model). Auth (401), the
 // `jobs.feed` capability (404 feature_disabled), validation (422), the 204
 // answers, the refresh limit (429 + Retry-After), limits and the GoApply
-// phone-binding gate on the AI route.
+// phone-binding gate on the AI route. GET /pay-check runs the real pay check
+// reader over a fake database that records its one statement.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RequestHandler } from 'express';
 
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
+import type { Prisma } from '../../generated/prisma/client.js';
 import { flagEnvName, setFlagOverrideLoader } from '../../platform/flags.js';
 import { explainMatch } from '../compliance/explainMatch.js';
 import { cardMeta } from '../jobs/marketHooks.js';
@@ -18,6 +20,7 @@ import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/route
 import { buildMatchUser } from '../match/index.js';
 import type { SearchProfileWire } from '../search/index.js';
 import { createFeedQueryService } from './FeedQueryService.js';
+import { createPayCheck, type PayCheckRow } from './payCheck.js';
 import { createFeedRouter } from './routes.js';
 import { FakeFeedRepo, fakeFeedMatch, feedRow } from './testkit.js';
 
@@ -78,6 +81,30 @@ const service = createFeedQueryService({
   now: () => NOW,
 } as Parameters<typeof createFeedQueryService>[0]);
 
+/** The pay check's statements and the rows its fake database answers with. */
+const paySql: Prisma.Sql[] = [];
+let payRows: PayCheckRow[] = [];
+const payCheck = createPayCheck({
+  db: async () => ({
+    $queryRaw: async <T,>(query: Prisma.Sql) => {
+      paySql.push(query);
+      return payRows as unknown as T;
+    },
+  }),
+  now: () => NOW,
+  env: {},
+});
+const usd = (annualMin: number, annualMax: number): PayCheckRow => ({
+  salaryCurrency: 'USD',
+  salaryPeriod: 'year',
+  salaryMin: annualMin,
+  salaryMax: annualMax,
+  salaryMonths: null,
+  salaryAnnualMin: annualMin,
+  salaryAnnualMax: annualMax,
+  salaryDisclosed: true,
+});
+
 const limiter = (name: string): RequestHandler => (_req, _res, next) => {
   limiterCalls.push(name);
   next();
@@ -98,7 +125,7 @@ let cnOff: RouteHarness;
 
 beforeAll(async () => {
   setFlagOverrideLoader(async () => []);
-  const deps = { seekerAuth: [fakeAuth(() => currentUser)], service, limiter, phoneGate };
+  const deps = { seekerAuth: [fakeAuth(() => currentUser)], service, limiter, phoneGate, payCheck };
   h = await startRouteHarness({ env: {}, mounts: [[P, createFeedRouter({ ...deps, env: {} })]] });
   off = await startRouteHarness({
     env: {},
@@ -123,6 +150,8 @@ beforeEach(() => {
   profileReads = 0;
   profileFilters = {};
   service.clearExploreCache();
+  paySql.length = 0;
+  payRows = [];
 });
 
 const ROUTES: Array<[string, string, unknown?]> = [
@@ -137,6 +166,7 @@ const ROUTES: Array<[string, string, unknown?]> = [
   ['POST', '/nl-query', { text: 'remote data jobs' }],
   ['GET', '/new-count'],
   ['GET', '/skills-check'],
+  ['GET', '/pay-check?title=Data%20Analyst'],
 ];
 
 describe('auth and capability', () => {
@@ -319,5 +349,73 @@ describe('reads', () => {
     expect(limiterCalls).toContain('feedNlQuery');
     const blocked = await h.request<Env<unknown>>('POST', `${P}/nl-query`, { body: { text: 'data analyst jobs' }, headers: { 'x-test-unbound': '1' } });
     expect(blocked.status).toBe(403);
+  });
+});
+
+describe('GET /pay-check', () => {
+  type PayAnswer = {
+    status: string;
+    title: string;
+    titleMatch: { method: string; roleId: string | null; roleLabel: string | null };
+    place: { kind: string; name: string | null; country: string | null } | null;
+    matchedCount: number;
+    withPayCount: number;
+    currencies: Array<{ currency: string; sampleSize: number; median: { value: number; sampleSize: number } | null }>;
+    window: { days: number };
+  };
+
+  it('answers what the brand’s posts state about pay for the title, rate limited, in the brand’s market', async () => {
+    payRows = Array.from({ length: 20 }, (_, i) => usd(90_000 + i * 1_000, 110_000 + i * 1_000));
+    const res = await h.request<Env<PayAnswer>>('GET', `${P}/pay-check?title=${encodeURIComponent(' Data Analyst ')}&location=${encodeURIComponent('Austin, TX')}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      status: 'ok',
+      title: 'Data Analyst',
+      titleMatch: { method: 'role', roleId: 'data_analyst', roleLabel: 'Data analyst' },
+      place: { kind: 'city', name: 'Austin', country: 'US' },
+      matchedCount: 20,
+      withPayCount: 20,
+      window: { days: 90 },
+    });
+    expect(res.body.data.currencies[0]).toMatchObject({ currency: 'USD', sampleSize: 20, median: { value: 109_500, sampleSize: 20 } });
+    expect(limiterCalls).toEqual(['feedPayCheck']);
+    expect(paySql).toHaveLength(1);
+    expect(paySql[0]!.values[0]).toBe('intl');
+  });
+
+  it('GoApply reads cn posts, and the role label follows the request language', async () => {
+    const res = await h.request<Env<PayAnswer>>('GET', `${P}/pay-check?title=${encodeURIComponent('Data Analyst')}&locale=zh`, { host: 'goapply.localhost:3621' });
+    expect(res.status).toBe(200);
+    expect(paySql[0]!.values[0]).toBe('cn');
+    expect(res.body.data.titleMatch.roleLabel).toBe('数据分析师');
+    // Nothing stated: counts only, never a figure.
+    expect(res.body.data).toMatchObject({ status: 'not_enough', matchedCount: 0, withPayCount: 0, currencies: [] });
+  });
+
+  it('too few posts with pay: not enough, with the counts', async () => {
+    payRows = Array.from({ length: 7 }, () => usd(60_000, 70_000));
+    const res = await h.request<Env<PayAnswer>>('GET', `${P}/pay-check?title=Barista`);
+    expect(res.body.data.status).toBe('not_enough');
+    expect(res.body.data.currencies).toEqual([{ currency: 'USD', sampleSize: 7, p25: null, median: null, p75: null }]);
+  });
+
+  it.each([
+    ['no title', ''],
+    ['a blank title', '?title=%20%20'],
+    ['a title with no letter or digit', '?title=%25%25%25'],
+    ['a title over 120 characters', `?title=${'x'.repeat(121)}`],
+    ['a location over 120 characters', `?title=Data%20Analyst&location=${'y'.repeat(121)}`],
+  ])('422 invalid_request for %s, and nothing is read', async (_name, query) => {
+    const res = await h.request<Env<unknown>>('GET', `${P}/pay-check${query}`);
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('invalid_request');
+    expect(paySql).toHaveLength(0);
+  });
+
+  it('GoApply with CN_RECRUITMENT_INFO_MODE=off: not available (no third-party posts to read)', async () => {
+    const res = await cnOff.request<Env<unknown>>('GET', `${P}/pay-check?title=Data%20Analyst`, { host: 'goapply.localhost:3621' });
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('feature_disabled');
+    expect(paySql).toHaveLength(0);
   });
 });

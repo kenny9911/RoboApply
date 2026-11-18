@@ -34,7 +34,7 @@ describe('robots ↔ PROTECTED_PREFIXES', () => {
     const rules = (await robots()).rules;
     const list = Array.isArray(rules) ? rules : [rules];
     for (const rule of list) expect(rule.disallow).toEqual(expect.arrayContaining(['/api/', ...PROTECTED_PREFIXES]));
-    for (const p of ['/onboarding', '/profile', '/assistant', '/ready', '/inbox', '/invite', '/coaching', '/referrals']) {
+    for (const p of ['/onboarding', '/profile', '/assistant', '/ready', '/inbox', '/invite', '/coaching', '/referrals', '/pay']) {
       expect(PROTECTED_PREFIXES).toContain(p);
     }
   });

@@ -232,6 +232,16 @@ describe('predicates (one snapshot per FilterSet field)', () => {
     expect(predicateFor('preferredCompanies', { preferredCompanies: ['Acme'] }, intl)).toBeNull();
   });
 
+  // REDESIGN §8 scenario 4: "Companies you want to work at" orders jobs; it never changes what the hard company filters mean.
+  it('"Only these companies" and "Companies to leave out" filter exactly as before, whatever the companies you want to work at', () => {
+    const show2 = (filters: FilterSet) => filterPredicates(filters, intl, FILTER_FIELDS).map((p) => show(p));
+    expect(show2({ companies: ['Acme'], preferredCompanies: ['Stripe', 'Acme'] })).toEqual(show2({ companies: ['Acme'] }));
+    expect(show2({ excludedCompanies: ['Globex'], preferredCompanies: ['Globex'] })).toEqual(show2({ excludedCompanies: ['Globex'] }));
+    // The list alone narrows nothing.
+    expect(filterPredicates({ preferredCompanies: ['Stripe'] }, intl, FILTER_FIELDS)).toEqual([]);
+    expect(filterPredicates({ preferredCompanies: ['Stripe'] }, cn, FILTER_FIELDS)).toEqual([]);
+  });
+
   it('absent fields contribute nothing', () => {
     for (const f of FILTER_FIELDS) expect(predicateFor(f, {}, intl)).toBeNull();
   });

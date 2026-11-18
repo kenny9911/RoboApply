@@ -19,7 +19,7 @@
 // The list is every authenticated top-level route (PRODUCT_PLAN.md §3.4):
 // the pre-clone destinations, /settings and /admin, plus the clone's
 // authenticated prefixes (FND-6a): /onboarding, /profile, /assistant, /ready,
-// /inbox, /invite, /coaching and /referrals.
+// /inbox, /invite, /coaching and /referrals, and the pay check, /pay.
 //
 // It is checked against the route tree (INT-12; __tests__/lib/proxyPaths.test.ts):
 // every first segment under app/(auth) and app/(onboarding) must be in this
@@ -71,6 +71,8 @@ export const PROTECTED_PREFIXES = [
   '/invite',
   '/coaching',
   '/referrals',
+  // The pay check (lower nav group): what job posts state about pay for a title.
+  '/pay',
 ] as const;
 
 /** True when `pathname` is exactly a protected prefix or nested under one. */

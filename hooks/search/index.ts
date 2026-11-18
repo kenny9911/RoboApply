@@ -13,6 +13,7 @@ export {
   useCreateSearchProfile,
   useDeleteSearchProfile,
   useSearchProfiles,
+  useSetTargetCompany,
   useUpdateSearchProfile,
 } from './useSearchProfiles';
 export type { SearchErrorReason, SearchProfile, SearchProfileList, UpdateSearchProfileVars } from './useSearchProfiles';

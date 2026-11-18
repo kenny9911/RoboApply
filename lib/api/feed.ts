@@ -19,6 +19,7 @@
 //   POST   /api/v1/roboapply/feed/nl-query
 //   GET    /api/v1/roboapply/feed/new-count
 //   GET    /api/v1/roboapply/feed/skills-check
+//   GET    /api/v1/roboapply/feed/pay-check   (the /pay page: what posts state about pay for a title)
 
 import { call, type CallOptions, type In, seg, withQuery } from './contracts/wire';
 import type * as F from './contracts/feed';
@@ -76,6 +77,11 @@ export function getNewCount(query?: In<typeof F.NewCountQuerySchema>, opts?: Cal
 /** `feed.skillsCheck` — GET /api/v1/roboapply/feed/skills-check */
 export function getSkillsCheck(opts?: CallOptions): Promise<F.SkillsCheckResponse> {
   return call<F.SkillsCheckResponse>('GET', `/api/v1/roboapply/feed/skills-check`, opts);
+}
+
+/** `feed.payCheck` — GET /api/v1/roboapply/feed/pay-check */
+export function getPayCheck(query: In<typeof F.PayCheckQuerySchema>, opts?: CallOptions): Promise<F.PayCheckResponse> {
+  return call<F.PayCheckResponse>('GET', withQuery(`/api/v1/roboapply/feed/pay-check`, query), opts);
 }
 
 // ── Listing contract readers (parity plan §5: "source line and apply target") ──
@@ -215,4 +221,5 @@ export const feedApi = {
   nlQuery,
   getNewCount,
   getSkillsCheck,
+  getPayCheck,
 };

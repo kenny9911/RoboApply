@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
 import { deriveKitEventKind, kitEventKind } from '../store.js';
-import { applyDislikes, nameKey } from '../service.js';
+import { PICKS_ORDER, applyDislikes, nameKey } from '../service.js';
 import { NOW, feedItem, job, makeDb, makeDeps, seedItem, usageLine } from './testkit.js';
 
 const NOW_MS = NOW.getTime();
@@ -194,6 +194,48 @@ describe('weekly list (F-AGENT-04)', () => {
     expect(ev.filter((e) => e.toState === 'picked' && e.fromState === null)).toHaveLength(2);
     // Running again tops up only: nothing new qualifies.
     expect((await service.generateList('u1', { source: 'cron' })).reason).toBe('no_matches');
+  });
+
+  // docs/agent-driven/REDESIGN.md §8 scenario 4: picks favour the search's "Companies you want to work at".
+  it('reads the search in the picks’ order (companies you want to work at favoured); the minimum tier and the ratings still apply', async () => {
+    const db = makeDb({
+      rAAgentSettings: [
+        {
+          userId: 'u1',
+          weeklyTarget: 5,
+          minTier: 'good',
+          tailorEach: true,
+          coverLetterMode: 'when_required',
+          baseVariantId: null,
+          fileNameStyle: 'name_company_role',
+          setupStep: 'done',
+          calibration: [{ jobId: 'j4', verdict: 'down', reason: 'company' }],
+          setupCompletedAt: new Date(),
+        },
+      ],
+    });
+    // The feed answers in the favoured order. Being on the list never lifts a job over the tier or past a rating.
+    const preview = vi.fn(async () => [
+      { ...feedItem('j1', 'possible'), atTargetCompany: true }, // below "Good fit"
+      { ...feedItem('j5', 'great'), company: { id: null, name: 'Company j4', logoUrl: null }, atTargetCompany: true }, // "Company I don't want"
+      { ...feedItem('j2', 'good'), atTargetCompany: true },
+      feedItem('j3', 'great'),
+    ]);
+    const { service } = makeDeps(db, 'roboapply', { feedPreview: preview });
+    const r = await service.generateList('u1', { source: 'cron' });
+    expect(PICKS_ORDER).toEqual({ sort: 'best_fit', favorTargetCompanies: true });
+    expect(preview).toHaveBeenCalledWith('u1', expect.objectContaining({ sort: 'best_fit', favorTargetCompanies: true, limit: 50 }));
+    expect(r.items.map((i) => i.jobId)).toEqual(['j2', 'j3']);
+  });
+
+  it('suggestions (the Dashboard’s picks) read the same order and keep it, with the card’s note', async () => {
+    const db = makeDb();
+    const preview = vi.fn(async () => [{ ...feedItem('j2', 'good'), atTargetCompany: true }, feedItem('j1', 'great'), feedItem('j3', 'good')]);
+    const { service } = makeDeps(db, 'roboapply', { feedPreview: preview });
+    const { items } = await service.suggestions('u1', { limit: 2 });
+    expect(preview).toHaveBeenCalledWith('u1', { sort: 'best_fit', favorTargetCompanies: true, limit: 50 });
+    expect(items.map((i) => i.jobId)).toEqual(['j2', 'j1']);
+    expect(items[0]).toMatchObject({ atTargetCompany: true, application: null, fit: { score: 70 } });
   });
 
   it('stops at the target and at the 50 active items limit', async () => {

@@ -6,8 +6,11 @@
 //   Being prepared    the list's `preparing` items            (Ready to apply)
 //   Waiting for you   `ready_for_review` + `approved`         (Ready to apply; the nav badge's rule)
 //   Sent this week    marked applied in the reader's week     (the tracker; the weeks /applications groups by)
-// Then the week's allowance (KitAllowance), "You submit each application
-// yourself." and the way to the applications.
+// Then what "Prepare my weekly list automatically" did this week, when it is on
+// or ran (AutoPrepareState: the run's date and how many used the allowance,
+// the server's real counts; nothing while it is not known), the week's
+// allowance (KitAllowance), "You submit each application yourself." and the
+// way to the applications.
 //
 // Without Ready to apply (flag `agent` off) there are no kits to count: the
 // lane shows the tracker's own numbers (Saved · Sent this week) and no allowance.
@@ -17,7 +20,7 @@ import { useTranslations } from 'next-intl';
 
 import { HonestyLine } from '../../v3/primitives';
 import type { Loadable, TodayFlags, TodaySources } from '../../../hooks/today';
-import { KitAllowance } from '../agent';
+import { AutoPrepareState, KitAllowance } from '../agent';
 import { Count, FailedNote, Lane } from './parts';
 import { applicationNumbers } from './todayModel';
 import styles from './today.module.css';
@@ -26,11 +29,13 @@ export interface ApplicationsLaneProps {
   flags: TodayFlags;
   queue: TodaySources['queue'];
   board: TodaySources['board'];
+  /** "Prepare my weekly list automatically" and its latest run; left out = not shown. */
+  autoPrepare?: TodaySources['autoPrepare'];
   /** For "this week"; injectable for tests. */
   now?: Date;
 }
 
-export function ApplicationsLane({ flags, queue, board, now }: ApplicationsLaneProps) {
+export function ApplicationsLane({ flags, queue, board, autoPrepare, now }: ApplicationsLaneProps) {
   const t = useTranslations('today');
   const numbers = applicationNumbers({ queue, board }, now);
   const failures = [queue, board].filter((r): r is Extract<Loadable<unknown>, { status: 'error' }> => r.status === 'error');
@@ -65,6 +70,7 @@ export function ApplicationsLane({ flags, queue, board, now }: ApplicationsLaneP
 
       {failures.length > 0 ? <FailedNote message={t('applications.failed')} onRetry={() => failures.forEach((f) => f.retry())} /> : null}
 
+      {flags.agent && autoPrepare?.status === 'ready' ? <AutoPrepareState view={autoPrepare.data} /> : null}
       {flags.agent ? <KitAllowance /> : null}
       <HonestyLine kind="you_submit" />
 

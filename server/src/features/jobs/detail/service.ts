@@ -79,6 +79,7 @@ import { cnPostingVisible } from '../../cn/jobs/index.js';
 import type { LiveResult, LivenessJob } from '../liveness/index.js';
 import { bankListable, bankListableWhere, cnListableWhere, creditLineHeld, creditLineHeldWhere, sponsorshipLabelsShown, type SponsorshipReader } from '../../feed/contract.js';
 import { OUTCOME_STATUS } from '../../tracker/contract.js';
+import { isTargetCompany, targetCompanyKeys } from '../../search/index.js';
 import {
   JOB_DETAIL_ERROR_CODES,
   UNDOABLE_APPLY_VIA,
@@ -211,6 +212,12 @@ export interface JobDetailServiceDeps {
   personalized?: (userId: string, brand: ProductBrand) => Promise<boolean>;
   /** Past employers and schools from the profile (for the People search links). */
   peopleContext?: (userId: string) => Promise<{ pastCompanies: string[]; schools: string[] }>;
+  /**
+   * The active saved search's "Companies you want to work at" (its
+   * `preferredCompanies`), for the page's `atTargetCompany`. Null when the
+   * reader has no saved search yet. Absent, or a throw: the field is left off.
+   */
+  targetCompanies?: (userId: string, market: ProductBrand['market']) => Promise<readonly string[] | null>;
   /** Has the user completed a practice for this job (live or written)? Null only when the seam is absent or fails. */
   practicedForJob?: (userId: string, jobId: string) => Promise<boolean | null>;
   markChecklistStep?: (userId: string, step: 'save_job') => Promise<unknown>;
@@ -636,7 +643,7 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       const row = await loadJob(userId, jobId);
       // The posting check runs beside the page's other reads, so it adds no time unless it is the slowest of
       // them, and then never more than the wait below.
-      const [listing, readingShown, tracker, tailored, letter, practiced, profile, fit, campus, similarIds, people, autofillOn] = await Promise.all([
+      const [listing, readingShown, tracker, tailored, letter, practiced, profile, fit, campus, similarIds, people, autofillOn, targets] = await Promise.all([
         stillListed(row, deps.listingWaitMs ?? LISTING_WAIT_MS),
         readingShownOn(userId, [row]),
         trackerOf(userId, jobId),
@@ -664,6 +671,8 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
           { mode: 'off' as HiringContactsMode, searchLinks: [] },
         ),
         flag('extension', userId),
+        // "Companies you want to work at": null (field left off) when there is no search or it could not be read.
+        deps.targetCompanies ? soft('targetCompanies', () => deps.targetCompanies!(userId, brand.market), null) : Promise.resolve(null),
       ]);
       const personalized = fit && deps.personalized ? await soft('personalized', () => deps.personalized!(userId, brand), false) : false;
       const explanation =
@@ -684,6 +693,8 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
         autofill: { supported: autofillOn && extensionFills(row, brand.market), atsType },
         people,
         marketMeta: deps.marketMeta ? deps.marketMeta(row, brand) : {},
+        // The card's own comparison (the posting's company name, normalized), so the page and the card agree.
+        ...(targets ? { atTargetCompany: isTargetCompany(row, targetCompanyKeys(targets)) } : {}),
       };
     },
 
