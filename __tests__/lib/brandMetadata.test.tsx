@@ -155,8 +155,11 @@ describe('RootLayout', () => {
     const el = await layoutFor('goapply.localhost:3621');
     const providers = findElement(el, (n) => n.type === Providers);
     expect(providers).not.toBeNull();
-    const props = providers!.props as { locale: string; messages: Record<string, unknown>; brand: { id: string } };
+    const props = providers!.props as { locale: string; messagesKey: string; messagesUrl: string; brand: { id: string } };
     expect(props.brand.id).toBe('goapply');
+    // The bundle is named, not passed: a messages prop would be serialized into every page's HTML.
+    expect(providers!.props).not.toHaveProperty('messages');
+    expect(props.messagesUrl).toMatch(/^\/i18n\/goapply\.zh\.[a-f0-9]{16}\.js$/);
 
     function Probe() {
       const t = useTranslations('common');
@@ -168,7 +171,7 @@ describe('RootLayout', () => {
       );
     }
     render(
-      <Providers locale={props.locale} messages={props.messages} brand={props.brand as never}>
+      <Providers locale={props.locale} messagesKey={props.messagesKey} messagesUrl={props.messagesUrl} brand={props.brand as never}>
         <Probe />
       </Providers>,
     );
@@ -178,12 +181,12 @@ describe('RootLayout', () => {
   it('the same string renders "RoboApply" on the roboapply host', async () => {
     const el = await layoutFor('www.roboapply.io');
     const providers = findElement(el, (n) => n.type === Providers)!;
-    const props = providers.props as { locale: string; messages: Record<string, unknown> };
+    const props = providers.props as { locale: string; messagesKey: string; messagesUrl: string };
     function Probe() {
       return <p>{useTranslations('auth.login')('subtitle')}</p>;
     }
     render(
-      <Providers locale={props.locale} messages={props.messages}>
+      <Providers locale={props.locale} messagesKey={props.messagesKey} messagesUrl={props.messagesUrl}>
         <Probe />
       </Providers>,
     );
