@@ -86,7 +86,3 @@ export function useActiveSettingsSection(visible: readonly SettingsSectionEntry[
   return activeSectionFor(pathname, hash, ids);
 }
 
-/** Tests: re-read the URL after a pushState the way Next does. */
-export function syncSettingsSectionHash(): void {
-  notifyAll();
-}

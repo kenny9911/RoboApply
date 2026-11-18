@@ -38,6 +38,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   constants aligned and verify both login and `/auth/me` behavior.
 - When changing user-facing copy, update every supported locale and run the
   repository's copy checks. Use the `i18n-locale-sync` skill for locale work.
+- Page weight: `package.json` declares `sideEffects` (stylesheets only), so the
+  production build drops any module whose exports nothing uses — never rely on
+  importing a module for a registration or a global in the Next app. Never pass
+  the message bundle (or other large data) from a server component to a client
+  component as a prop: props are serialized into every page's HTML; the
+  messages reach the browser as `/i18n/<brand>.<locale>.<hash>.js`. Code that
+  only shows on demand (a drawer, a signed-in frame) loads with `lazy()`.
 
 ## Common commands
 

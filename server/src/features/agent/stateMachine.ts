@@ -10,7 +10,6 @@ import { localTime } from '../alerts/index.js';
 import { windowKeyFor } from '../../platform/credits/index.js';
 import {
   AGENT_ERROR_CODES,
-  MIN_TIERS,
   QUEUE_STATES,
   QUEUE_TABS,
   QUEUE_TRANSITIONS,
@@ -57,10 +56,6 @@ const TIER_RANK: Record<string, number> = { unlikely: 0, possible: 1, good: 2, g
 export function meetsMinTier(tier: string | null | undefined, minTier: MinTier): boolean {
   if (!tier || !(tier in TIER_RANK)) return false;
   return TIER_RANK[tier]! >= TIER_RANK[minTier]!;
-}
-
-export function isMinTier(value: unknown): value is MinTier {
-  return typeof value === 'string' && (MIN_TIERS as readonly string[]).includes(value);
 }
 
 // ── Weeks (user-local, ISO weeks; the list is built Monday 06:00 local) ──

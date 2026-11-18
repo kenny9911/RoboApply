@@ -38,10 +38,6 @@ function getEgressClient(): EgressClient {
   return client;
 }
 
-export function __resetEgressClientForTest(): void {
-  egressClients.clear();
-}
-
 /**
  * Build the EncodedFileOutput that writes the recording into R2 at `filepath`.
  * Returns null when the brand has no store for new recordings (not configured,

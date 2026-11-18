@@ -11,7 +11,6 @@
 // DataSection wrapper (#privacy is the compliance area's section).
 
 export { SaveBar } from './SaveBar';
-export { WipeDataModal } from './WipeDataModal';
 export * from './controls';
 
 export { IdentitySection } from './sections/IdentitySection';

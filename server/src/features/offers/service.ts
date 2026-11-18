@@ -110,11 +110,6 @@ export function toOfferView(e: TrackerEntryView): OfferView | null {
 
 // ── Facts for the AI (every number the output may use) ───────────────────
 
-interface FactsBundle {
-  text: string;
-  allowed: AllowedNumbers;
-}
-
 function dateParts(d: string | undefined): number[] {
   return d ? d.split('-').map(Number).filter(Number.isFinite) : [];
 }

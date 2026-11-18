@@ -11,7 +11,6 @@
 
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { IconCheck } from '../primitives';
 
 // ── Headings ─────────────────────────────────────────────────────────
 
@@ -125,29 +124,6 @@ export function PrefRow({
 }
 
 // ── Inputs ──────────────────────────────────────────────────────────────
-
-export function Toggle({
-  value,
-  onChange,
-  ariaLabel,
-}: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-  ariaLabel?: string;
-}) {
-  return (
-    <button
-      type="button"
-      className={`pref-toggle ${value ? 'on' : ''}`}
-      onClick={() => onChange(!value)}
-      role="switch"
-      aria-checked={value}
-      aria-label={ariaLabel}
-    >
-      <span className="pref-toggle-thumb" />
-    </button>
-  );
-}
 
 export function TextInput({
   value,
@@ -350,49 +326,3 @@ export function ChipInput({
   );
 }
 
-export type CheckGridItem = string | { id: string; label: string; sub?: string };
-
-export function CheckGrid({
-  items,
-  values,
-  onToggle,
-  cols = 3,
-}: {
-  items: CheckGridItem[];
-  /** Either an array of selected ids or a Record<id, boolean>. */
-  values: string[] | Record<string, boolean>;
-  onToggle: (id: string) => void;
-  cols?: number;
-}) {
-  const isObj = !Array.isArray(values);
-  const has = (id: string) =>
-    isObj ? !!(values as Record<string, boolean>)[id] : (values as string[]).includes(id);
-  return (
-    <div
-      className="pref-checkgrid"
-      style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
-    >
-      {items.map((it) => {
-        const id = typeof it === 'string' ? it : it.id;
-        const lbl = typeof it === 'string' ? it : it.label;
-        const sub = typeof it === 'object' ? it.sub : null;
-        return (
-          <label key={id} className={`pref-check ${has(id) ? 'on' : ''}`}>
-            <input
-              type="checkbox"
-              checked={has(id)}
-              onChange={() => onToggle(id)}
-            />
-            <span className="pref-check-box">
-              {has(id) ? <IconCheck size={11} strokeWidthValue={3.5} /> : null}
-            </span>
-            <span className="pref-check-body">
-              <span className="pref-check-label">{lbl}</span>
-              {sub ? <span className="pref-check-sub">{sub}</span> : null}
-            </span>
-          </label>
-        );
-      })}
-    </div>
-  );
-}

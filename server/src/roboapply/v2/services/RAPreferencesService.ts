@@ -59,9 +59,6 @@ import {
 // (V2 backend cannot import the frontend types module; we mirror it here.)
 // ─────────────────────────────────────────────────────────────────────
 
-/** @deprecated Dead agent knob (ARCH §2.8): no longer stored or returned. */
-export type RAAggressiveness = 'manual' | 'balanced' | 'aggressive';
-
 /** Dead agent knobs: stripped on write, ignored on read (ARCH §2.8). */
 export const DEAD_AGENT_KNOBS = ['aggressiveness', 'matchThreshold', 'dailyCap', 'quietStart', 'quietEnd', 'autoDecline', 'autoSchedule'] as const;
 

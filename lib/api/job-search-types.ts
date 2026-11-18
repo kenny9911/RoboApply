@@ -10,8 +10,3 @@ export interface JobSearchKey {
   expiresAt: string | null;
 }
 
-export interface JobSearchKeyCreated {
-  key: JobSearchKey;
-  /** Returned once on creation; never returned by list or persisted raw. */
-  token: string;
-}

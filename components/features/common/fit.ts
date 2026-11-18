@@ -8,8 +8,6 @@
 
 export type FitTierKey = 'great' | 'good' | 'possible' | 'unlikely';
 
-export const FIT_TIERS: readonly FitTierKey[] = ['great', 'good', 'possible', 'unlikely'];
-
 export const DEFAULT_MATCH_TIERS = { great: 80, good: 65, possible: 45 } as const;
 
 export function tierForScore(

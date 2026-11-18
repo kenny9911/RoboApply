@@ -107,16 +107,6 @@ async function routingDefaultsFor(brand: Pick<ProductBrand, 'id'>, env: EnvLike)
   return getLlmRoutingDefaults(brand.id, env);
 }
 
-/** The configured default provider (LLM_PROVIDER, DB override first); null when unreadable. */
-export async function configuredDefaultProvider(): Promise<string | null> {
-  try {
-    const { getProviderSetting } = await import('../../lib/llm/llmModels.js');
-    return getProviderSetting() ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * The provider mode for an unprefixed model id on this brand, for both brands
  * from the same resolver (lib/llm getLlmRoutingDefaults): the brand's provider

@@ -12,19 +12,11 @@
 //   editorTabHref(id, 'review')                  a link that opens a tab
 
 export {
-  DEFAULT_EDITOR_TAB,
-  EDITOR_TABS,
-  EDITOR_TABS_ID,
-  EDITOR_TAB_QUERY,
   editorSectionIdFor,
-  editorTabFrom,
-  editorTabHref,
-  isEditorTab,
-  withEditorTab,
   type EditorTab,
 } from './tabs';
-export { useEditorTab, useOpenedTabs, type EditorTabState } from './useEditorTab';
-export { EditorTabBar, EditorTabPanel, type EditorTabBarProps } from './EditorTabBar';
-export { CustomizePanel, type CustomizePanelProps } from './CustomizePanel';
-export { ReviewPanel, type ReviewPanelProps } from './ReviewPanel';
-export { TailorTab, type TailorChoice, type TailorTabProps } from './TailorTab';
+export { useEditorTab, useOpenedTabs } from './useEditorTab';
+export { EditorTabBar, EditorTabPanel } from './EditorTabBar';
+export { CustomizePanel } from './CustomizePanel';
+export { ReviewPanel } from './ReviewPanel';
+export { TailorTab } from './TailorTab';

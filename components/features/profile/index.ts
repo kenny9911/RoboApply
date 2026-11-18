@@ -7,4 +7,4 @@
 
 export { SettingsSection as ProfileSettingsSection } from './SettingsSection';
 export { ProfilePage } from './ProfilePage';
-export { ProfileCompletionCard, type ProfileCompletionCardProps } from './ProfileCompletionCard';
+export { ProfileCompletionCard } from './ProfileCompletionCard';

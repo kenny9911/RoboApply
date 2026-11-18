@@ -24,16 +24,13 @@ import type { RaV2Api } from './types';
 //   1. `NEXT_PUBLIC_USE_STUB_API === 'true'` (explicit dev / demo opt-in), OR
 //   2. `NODE_ENV === 'test'` — Vitest can't set env before module import, so
 //      we default to stub in test runs. Tests never have a backend handy.
-const useStub =
-  process.env.NEXT_PUBLIC_USE_STUB_API === 'true' ||
-  process.env.NODE_ENV === 'test';
-
-export const raV2Api: RaV2Api = useStub ? stubApi : realApi;
-
-/** Debugging / test helper. `true` when the stub layer is active. Don't
- *  branch on this in product code — the whole point of the surface is the
- *  call site doesn't know which implementation it's hitting. */
-export const isStubApi: boolean = useStub;
+// In a Next.js build both are constants (next.config.mjs defines
+// NEXT_PUBLIC_USE_STUB_API, empty when unset), and the condition is written
+// inline so the bundler can fold it: a production build without the opt-in
+// keeps only `realApi`, and the stub and its fixtures stay out of the
+// browser bundle.
+export const raV2Api: RaV2Api =
+  process.env.NEXT_PUBLIC_USE_STUB_API === 'true' || process.env.NODE_ENV === 'test' ? stubApi : realApi;
 
 // Re-export the typed surface from `raV2Api.ts` so call sites can do
 // `import type { RaV2Api, ... } from '@/lib/api/v2'`.

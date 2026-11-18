@@ -71,9 +71,6 @@ export const LLM_TASK_KEYS: ReadonlyArray<[task: string, key: ModelKey]> = [
   ['vision', 'vision'],
 ];
 
-/** The same list by unprefixed env name (kept for callers that read the names). */
-export const LLM_TASK_ENV: ReadonlyArray<[task: string, name: string]> = LLM_TASK_KEYS.map(([task, key]) => [task, MODEL_ENV[key]]);
-
 // ── The AI stack a brand resolves ───────────────────────────────────────────
 //
 // One model setting is resolved per key, in the order of the LLM resolver

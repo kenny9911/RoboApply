@@ -52,11 +52,6 @@ export function unsubscribeCampus(id: string, opts?: CallOptions): Promise<{ id:
   return call<{ id: string }>('DELETE', `/api/v1/roboapply/cn/campus-events/subscriptions/${seg(id)}`, opts);
 }
 
-/** `campus.get` — GET /api/v1/roboapply/cn/campus-events/:id */
-export function getCampusEvent(id: string, opts?: CallOptions): Promise<CA.CampusEventView> {
-  return call<CA.CampusEventView>('GET', `/api/v1/roboapply/cn/campus-events/${seg(id)}`, opts);
-}
-
 /** `campus.public.list` — GET /api/v1/public/campus */
 export function listPublicCampusEvents(query?: In<typeof CA.ListCampusEventsQuerySchema>, opts?: CallOptions): Promise<CampusEventList> {
   return call<CampusEventList>('GET', withQuery(`/api/v1/public/campus`, query), opts);
@@ -111,20 +106,3 @@ export const campusPublicPaths = {
   company: (slug: string) => `/api/v1/public/campus/companies/${seg(slug)}`,
 };
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const campusApi = {
-  listCampusEvents,
-  listCampusSubscriptions,
-  subscribeCampus,
-  unsubscribeCampus,
-  getCampusEvent,
-  listPublicCampusEvents,
-  getPublicCampusCompany,
-  adminListCampusEvents,
-  adminExtractCampusEvent,
-  adminCreateCampusEvent,
-  adminUpdateCampusEvent,
-  adminVerifyCampusEvent,
-  adminPublishCampusEvent,
-  adminDeleteCampusEvent,
-};

@@ -14,28 +14,32 @@
 //   4. AuthProvider — exposes session state to all (auth) descendants. The
 //      admin "view as" banner sits right inside it, above every screen.
 //
-// We deliberately resolve the locale + load messages at the server layer
-// (app/layout.tsx) and pass them down so we don't ship the entire
-// dictionary on every public page request.
+// The messages are NOT a prop from the root layout: a prop would be
+// serialized into the HTML of every page. The layout names the bundle
+// (`messagesKey`, `messagesUrl`) and loads it as a cached script; this
+// component reads it from there (lib/i18nBundle.ts). Tests and the preview
+// harnesses pass `messages` directly instead.
 
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NextIntlClientProvider } from 'next-intl';
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
 
 import { AuthProvider } from '../lib/auth/AuthProvider';
 import { BrandProvider, type SeedCapabilities } from '../lib/brand/BrandProvider';
 import { clientBrandFor, type ClientBrand } from '../lib/brand/client';
+import { useMessagesBundle } from '../lib/i18nBundle';
 import { ThemeProvider } from '../lib/theme';
 import { ViewAsBanner } from '../components/v3/shell/ViewAsBanner';
 
 interface ProvidersProps {
   children: ReactNode;
   locale: string;
-  messages: Record<string, unknown>;
+  /** The message bundle the root layout loads (lib/server/messagesBundle.ts): its registry key… */
+  messagesKey?: string;
+  /** …and its script URL, loaded here when it is not on the page yet (a locale switched in place). */
+  messagesUrl?: string;
+  /** Messages given directly (tests, preview harnesses); wins over the bundle. */
+  messages?: Record<string, unknown>;
   /** The request's brand (publicBrand()). Defaults to RoboApply for callers that predate brands (preview harnesses). */
   brand?: ClientBrand;
   /** Optional seed for useCapabilities() (tests, previews). */
@@ -134,10 +138,14 @@ export function useViewerTimeZone(fallback: string): string {
 export function Providers({
   children,
   locale,
-  messages,
+  messagesKey,
+  messagesUrl,
+  messages: givenMessages,
   brand = DEFAULT_CLIENT_BRAND,
   initialCapabilities = null,
 }: ProvidersProps) {
+  const bundled = useMessagesBundle(givenMessages ? null : (messagesKey ?? null), messagesUrl ?? null);
+
   // Memoize so React Query state survives across navigation. One client per
   // tab is the recommended pattern from the next.js docs.
   const queryClient = useMemo(
@@ -154,17 +162,18 @@ export function Providers({
     [],
   );
 
-  // Defensive: deep-clone messages so any namespace-wrapped JSON import
-  // upstream can't leak a Module Namespace Object into the React tree.
-  // Required to avoid React error #31 in the static prerender pass for
-  // /404 and /500.
+  // Messages given as a prop may come straight from a JSON import: deep-clone
+  // those so a Module Namespace Object cannot leak into the React tree (React
+  // error #31). The bundle is plain parsed JSON already and is used as is —
+  // cloning 500 KB on every page load would cost the browser for nothing.
   const safeMessages = useMemo<Record<string, unknown>>(() => {
+    if (!givenMessages) return bundled ?? {};
     try {
-      return JSON.parse(JSON.stringify(messages ?? {}));
+      return JSON.parse(JSON.stringify(givenMessages));
     } catch {
       return {};
     }
-  }, [messages]);
+  }, [givenMessages, bundled]);
 
   // RoboApply's default is UTC, GoApply's Asia/Shanghai; both are only the
   // server-render value and the fallback.
@@ -192,7 +201,3 @@ export function Providers({
   );
 }
 
-// Exposed for advanced consumers who need to imperatively invalidate.
-export function useRoboQueryClient() {
-  return useQueryClient();
-}

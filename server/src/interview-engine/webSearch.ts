@@ -36,10 +36,6 @@ export interface InterviewWebResponse {
   results: InterviewWebResult[];
 }
 
-export function isWebSearchEnabled(): boolean {
-  return !!process.env.TAVILY_API_KEY?.trim();
-}
-
 export interface SearchJobRequirementsOptions {
   maxResults?: number;
   searchDepth?: 'basic' | 'advanced';

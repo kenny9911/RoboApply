@@ -27,8 +27,6 @@ import type { EmailTranslator } from '../i18n.js';
 import type { UnsubscribeList } from '../unsubscribe.js';
 import type { EmailCategory } from './_shell.js';
 
-export type { EmailCategory } from './_shell.js';
-
 export interface TemplateContext<P> {
   brand: ProductBrand;
   t: EmailTranslator;
@@ -85,11 +83,6 @@ export function getEmailTemplate(key: string): EmailTemplate<any> | undefined {
 
 export function registeredEmailTemplates(): string[] {
   return [...templates.keys()].sort();
-}
-
-/** Tests only. */
-export function unregisterEmailTemplateForTests(key: string): void {
-  templates.delete(key);
 }
 
 export function defaultListFor(category: EmailCategory): UnsubscribeList | undefined {

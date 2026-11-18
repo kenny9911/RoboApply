@@ -42,4 +42,3 @@ export async function resolveUserFromTokens(tokens: AuthTokenBundle) {
   return upstreamResolveUserFromTokens(tokens);
 }
 
-export type { AuthTokenBundle } from '../../../middleware/auth.js';

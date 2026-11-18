@@ -21,13 +21,10 @@ import { livekitSelfHostedProvider } from './livekitSelfHosted.js';
 import { VoiceProviderNotImplementedError, type VoiceSessionProvider } from './types.js';
 import type { VoiceSeam } from './sessionSeam.js';
 
-export type { VoiceSessionProvider, ProviderJoinToken, ProviderRecording } from './types.js';
+export type { VoiceSessionProvider } from './types.js';
 export { VoiceProviderNotImplementedError } from './types.js';
-export { createLiveKitProvider, livekitCloudProvider } from './livekitCloud.js';
-export { livekitSelfHostedProvider } from './livekitSelfHosted.js';
 export {
   DEFAULT_VOICE_SEAM,
-  VOICE_SEAM_KEY,
   isDefaultSeam,
   readRowSeam,
   readStoredVoiceSeam,
@@ -35,8 +32,6 @@ export {
   resolveSessionSeam,
   voiceSeamColumns,
   voiceSeamMetrics,
-  type OwnerBrandLookup,
-  type SessionSeamRow,
   type VoiceSeam,
 } from './sessionSeam.js';
 export { inBrand, inSeam } from './brandScope.js';

@@ -362,4 +362,3 @@ export async function itemOrThrow(db: AgentDb, userId: string, id: string): Prom
   return row as QueueRow;
 }
 
-export { json as kitDetailJson };

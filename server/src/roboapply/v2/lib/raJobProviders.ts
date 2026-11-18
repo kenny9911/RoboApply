@@ -29,9 +29,6 @@ import { logger } from '../../../services/LoggerService.js';
 import { isJSearchEnabled, searchJSearchJobs } from './raRapidApiJobs.js';
 import { activeJobsDbProvider } from './raFantasticJobs.js';
 import {
-  EXTERNAL_SOURCE_BOARDS,
-  EXTERNAL_SOURCE_BOARD_SET,
-  isExternalSourceBoard,
   type ExternalJobNormalized,
   type ExternalSearchParams,
   type ExternalSourceBoard,
@@ -40,14 +37,8 @@ import {
 
 export type {
   ExternalJobNormalized,
-  ExternalSearchParams,
   ExternalSourceBoard,
   JobSearchProvider,
-} from './raExternalJobTypes.js';
-export {
-  EXTERNAL_SOURCE_BOARDS,
-  EXTERNAL_SOURCE_BOARD_SET,
-  isExternalSourceBoard,
 } from './raExternalJobTypes.js';
 
 // ─── Per-provider kill switch ──────────────────────────────────────────────

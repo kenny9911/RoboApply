@@ -97,17 +97,6 @@ export function isProductEventName(name: unknown): name is ProductEventName {
 
 /** Events in one POST (the wire schema enforces the same). */
 export const MAX_EVENTS_PER_BATCH = 50;
-/**
- * Per-IP ceiling on events, applied to every batch on top of the per-anonId
- * window (`RATE_LIMITS.eventsPerAnon`, 120/min). The anonId comes from the
- * request body, so without this a client could rotate ids and never hit a
- * limit. Higher than the per-anonId window so a shared office or campus IP
- * is not throttled by normal use. The windows live in
- * `RATE_LIMITS.eventsPerIp` (platform/ratelimit/defaults.ts, overridable
- * with `RATE_LIMITS_JSON`); this copy of the default stays import-free
- * because the web contract re-exports this module.
- */
-export const EVENTS_PER_IP_WINDOWS: readonly { limit: number; windowSec: number }[] = [{ limit: 600, windowSec: 60 }];
 /** Rate-limit key name of the per-IP ceiling. */
 export const EVENTS_PER_IP_KEY = 'eventsPerIp';
 /** Retention: ≈13 months (H28; WP-13's retention schedule calls the prune). */

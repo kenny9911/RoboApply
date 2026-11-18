@@ -23,12 +23,7 @@
 
 export {
   LOCALES,
-  DEFAULT_LOCALE,
-  LOCALE_COOKIE,
-  READY_LOCALES,
-  isLocale,
 } from './localeConfig';
-export type { RoboLocale } from './localeConfig';
 
 import type { RoboLocale } from './localeConfig';
 import { DEFAULT_BRAND, type BrandId } from './brand/registry.generated';

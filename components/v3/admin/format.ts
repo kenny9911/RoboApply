@@ -5,7 +5,6 @@
 // `Intl.NumberFormat`. The cache keeps formatter construction cheap across the
 // many tabular cells.
 
-import { formatRelativeTime } from '../../../lib/relativeTime';
 
 const fmtCache = new Map<string, Intl.NumberFormat>();
 
@@ -31,23 +30,6 @@ export function fmtCurrency(
       currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }),
-  ).format(n);
-}
-
-/** "$1,284" — currency, no decimals (large KPI values). */
-export function fmtCurrencyWhole(
-  value: number | null | undefined,
-  locale: string,
-  currency = 'USD',
-): string {
-  const n = Number.isFinite(value as number) ? (value as number) : 0;
-  return getFormatter(`curw:${locale}:${currency}`, () =>
-    new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
     }),
   ).format(n);
 }
@@ -90,24 +72,6 @@ export function fmtCompact(value: number | null | undefined, locale: string): st
   return getFormatter(`compact:${locale}`, () =>
     new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }),
   ).format(n);
-}
-
-/** Duration in seconds → "18m" / "1h 4m". Null → "—". */
-export function fmtDuration(sec: number | null | undefined): string {
-  if (sec === null || sec === undefined || !Number.isFinite(sec)) return '—';
-  const s = Math.max(0, Math.round(sec));
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  return `${h}h ${m % 60}m`;
-}
-
-/** Relative "2 hr. ago" / "just now", with the admin tables' em-dash blank.
- *  The locale-aware ladder itself lives in lib/relativeTime (shared with the
- *  seeker-facing screens). */
-export function fmtRelative(iso: string | null | undefined, locale: string): string {
-  return formatRelativeTime(iso, locale) || '—';
 }
 
 /** Short calendar date "Jul 13" (locale-aware month). */

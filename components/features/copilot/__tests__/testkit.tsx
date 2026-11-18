@@ -32,8 +32,6 @@ export type Route = (call: RecordedCall) => Response | Promise<Response>;
 export const ok = (data: unknown, status = 200) =>
   new Response(JSON.stringify({ success: true, data }), { status, headers: { 'Content-Type': 'application/json' } });
 
-export const noContent = () => new Response(null, { status: 204 });
-
 export const fail = (status: number, code: string, details?: unknown) =>
   new Response(JSON.stringify({ success: false, code, error: code, details }), { status, headers: { 'Content-Type': 'application/json' } });
 

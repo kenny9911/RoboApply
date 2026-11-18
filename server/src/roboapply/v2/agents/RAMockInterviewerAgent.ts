@@ -404,8 +404,3 @@ Output: { "turns": [ { "who": "them", "text": "..." } ], "coachTip": { "kind": "
 // careless import away from being defeated.
 export default RAMockInterviewerAgent;
 
-export const __test = {
-  pickMockInterviewerModel,
-  difficultyGuidance,
-  coerceCoachKind,
-};

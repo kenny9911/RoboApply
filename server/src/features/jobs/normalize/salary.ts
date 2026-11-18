@@ -296,8 +296,6 @@ export const TW_FLOOR_CLAUSE_SOURCE =
   String.raw`(?:每月)?(?:` +
   String.raw`(?:${TW_FLOOR_STATUTE_SOURCE})(?:薪資|薪资|月薪)?${TW_FLOOR_LEAD}${TW_FLOOR_AMOUNT}(?:${TW_FLOOR_ABOVE}|${TW_FLOOR_NOT_LONGER})` +
   String.raw`|(?:薪資|薪资|月薪)?${TW_FLOOR_LEAD}${TW_FLOOR_AMOUNT}${TW_FLOOR_ABOVE})`;
-/** The shape of the statutory-threshold clause (first match; see `floorClauses` for the rule). */
-export const TW_FLOOR_RE = new RegExp(TW_FLOOR_CLAUSE_SOURCE);
 
 /**
  * Text that ends by naming another currency or another pay period: an amount

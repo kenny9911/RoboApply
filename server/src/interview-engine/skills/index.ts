@@ -23,9 +23,9 @@ import { INTERVIEW_PATTERNS, INTERVIEW_PATTERN_KEYS, getPattern, type InterviewP
 import { MARKET_NORMS, getMarketNorms, type InterviewMarketKey, type MarketNormPlaybook } from './markets.js';
 
 export { INTERVIEW_PATTERNS, INTERVIEW_PATTERN_KEYS, getPattern } from './patterns.js';
-export type { InterviewPatternKey, InterviewPatternPlaybook } from './patterns.js';
+export type { InterviewPatternKey } from './patterns.js';
 export { MARKET_NORMS, INTERVIEW_MARKET_KEYS, getMarketNorms, marketForCountry, resolveMarketNorms } from './markets.js';
-export type { InterviewMarketKey, MarketNormPlaybook } from './markets.js';
+export type { InterviewMarketKey } from './markets.js';
 
 export function isArchetype(value: unknown): value is InterviewArchetype {
   return typeof value === 'string' && (INTERVIEW_ARCHETYPES as readonly string[]).includes(value);

@@ -44,7 +44,6 @@ export const TW_COUNTIES = [
   'KIN', // 金門縣 Kinmen County
   'LIE', // 連江縣 Lienchiang County
 ] as const;
-export type TwCounty = (typeof TW_COUNTIES)[number];
 
 /** Pseudo-location for "remote / anywhere in Taiwan". */
 export const TW_ANYWHERE = 'ANY' as const;
@@ -56,7 +55,6 @@ export const TW_ANYWHERE = 'ANY' as const;
  *   gold_card           — holds an Employment Gold Card (就業金卡)
  */
 export const TW_WORK_PERMIT_STATUSES = ['citizen_or_resident', 'work_permit_needed', 'gold_card'] as const;
-export type TwWorkPermitStatus = (typeof TW_WORK_PERMIT_STATUSES)[number];
 
 /** Upper bounds that keep a typo (an extra zero) from being stored as an answer. */
 export const TW_PAY_LIMITS = { monthlyMax: 2_000_000, annualMax: 30_000_000 } as const;
@@ -80,7 +78,6 @@ export const TwDesiredPaySchema = z.discriminatedUnion('kind', [
   /** 依公司規定 */
   z.object({ kind: z.literal('company_policy') }).strict(),
 ]);
-export type TwDesiredPay = z.infer<typeof TwDesiredPaySchema>;
 
 const LocationCode = z.union([z.enum(TW_COUNTIES), z.literal(TW_ANYWHERE)]);
 

@@ -6,19 +6,10 @@
 //   <PayRange entry />                               one currency's 25th–75th band and median
 //   payCheckHref(ask) / payCheckHrefForJob(job)       links into the page (the job page's entry point)
 
-export { PayCheckPage, savedSearchTitle, type PayCheckPageProps } from './PayCheckPage';
-export { PayCheckResult, type PayCheckResultProps } from './PayCheckResult';
-export { PayRange, hasFigures, type PayRangeProps } from './PayRange';
+export { PayCheckPage, savedSearchTitle } from './PayCheckPage';
 export {
-  PAY_LOCATION_MAX,
-  PAY_PATH,
-  PAY_TITLE_MAX,
-  REMOTE_LOCATION,
   formatMoney,
-  isRemoteLocation,
   payCheckHref,
   payCheckHrefForJob,
   rangeBar,
-  regionName,
-  type RangeBarGeometry,
 } from './format';

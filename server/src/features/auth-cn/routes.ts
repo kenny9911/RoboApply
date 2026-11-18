@@ -41,7 +41,6 @@ import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
 import { getCurrentBrandOrDefault, type BrandedRequest } from '../../platform/brand/brandContext.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { requireFlag } from '../../platform/flags.js';
-import { logger } from '../../services/LoggerService.js';
 import { HttpError, parseBody, parseQuery, requireUserId } from '../../platform/http.js';
 import { clientIp } from '../../platform/ratelimit/index.js';
 import {

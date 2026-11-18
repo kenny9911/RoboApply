@@ -14,7 +14,7 @@ import { call, type CallOptions, type In } from './contracts/wire';
 import type * as U from './contracts/uistate';
 
 export type UiStatePatch = In<typeof U.UiStatePatchSchema>;
-export type { UiState, UiStateResponse, UiValue, Dismissal } from './contracts/uistate';
+export type { UiStateResponse } from './contracts/uistate';
 
 const PATH = '/api/v1/roboapply/ui-state';
 
@@ -53,13 +53,3 @@ export function setUiValues(values: NonNullable<UiStatePatch['values']>, opts?: 
   return patchUiState({ values }, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const uiStateApi = {
-  getUiState,
-  patchUiState,
-  markToursSeen,
-  dismiss,
-  undismiss,
-  recordPopupShown,
-  setUiValues,
-};

@@ -90,11 +90,6 @@ export function requestPublicCancel(body: In<typeof C.PublicCancelRequestBodySch
   return call<void>('POST', `/api/v1/public/cancel`, { ...opts, body });
 }
 
-/** `cancel.confirm` — POST /api/v1/public/cancel/confirm */
-export function confirmPublicCancel(body: In<typeof C.PublicCancelConfirmBodySchema>, opts?: CallOptions): Promise<C.CancelResponse> {
-  return call<C.CancelResponse>('POST', `/api/v1/public/cancel/confirm`, { ...opts, body });
-}
-
 /** `credits.admin.getCatalog` — GET /api/v1/roboapply/admin/credits/catalog */
 export function adminGetCreditCatalog(opts?: CallOptions): Promise<Out<typeof C.PutCatalogBodySchema>> {
   return call<Out<typeof C.PutCatalogBodySchema>>('GET', `/api/v1/roboapply/admin/credits/catalog`, opts);
@@ -135,21 +130,3 @@ export function adminGetTwRevenue(opts?: CallOptions): Promise<C.TwRevenueRespon
   return call<C.TwRevenueResponse>('GET', `/api/v1/roboapply/admin/credits/tw-revenue`, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const creditsApi = {
-  getCredits,
-  getCreditHistory,
-  cancelSubscription,
-  sendCancelSurvey,
-  getPlans,
-  requestPublicCancel,
-  confirmPublicCancel,
-  adminGetCreditCatalog,
-  adminPutCreditCatalog,
-  adminListOverrides,
-  adminCreateOverride,
-  adminDeleteOverride,
-  adminGetFxReference,
-  adminPutFxReference,
-  adminGetTwRevenue,
-};

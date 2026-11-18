@@ -17,17 +17,12 @@
 //   POST   /api/v1/roboapply/ext/pair-codes
 //   POST   /api/v1/public/ext/uninstall-survey
 
-import { apiUrl, call, type CallOptions, type In, type Items, seg } from './contracts/wire';
+import { apiUrl, call, type CallOptions, type In, seg } from './contracts/wire';
 import type * as E from './contracts/extension';
 
 /** `ext.createDevice` — POST /api/v1/roboapply/ext/devices */
 export function createDevice(body: In<typeof E.CreateDeviceBodySchema>, opts?: CallOptions): Promise<E.CreateDeviceResponse> {
   return call<E.CreateDeviceResponse>('POST', `/api/v1/roboapply/ext/devices`, { ...opts, body });
-}
-
-/** `ext.listDevices` — GET /api/v1/roboapply/ext/devices */
-export function listDevices(opts?: CallOptions): Promise<Items<E.DeviceView>> {
-  return call<Items<E.DeviceView>>('GET', `/api/v1/roboapply/ext/devices`, opts);
 }
 
 /** `ext.revokeDevice` — DELETE /api/v1/roboapply/ext/devices/:id */
@@ -60,12 +55,3 @@ export function extensionApiOrigin(): string {
   return typeof window !== 'undefined' ? window.location.origin : '';
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const extensionApi = {
-  createDevice,
-  listDevices,
-  revokeDevice,
-  getStatus,
-  createPairCode,
-  submitUninstallSurvey,
-};

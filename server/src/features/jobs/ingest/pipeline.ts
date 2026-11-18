@@ -295,7 +295,7 @@ export async function leaseDueQueries(db: IngestDb, market: Market, providers: s
 }
 
 // The usage counters live with the quota (one budget per provider); re-exported for callers of this module.
-export { recordProviderUsage, reserveProviderCall } from './quota.js';
+export { reserveProviderCall } from './quota.js';
 
 /** Next UTC midnight + 5 minutes (a provider's budget resets with the day key). */
 export function nextBudgetDay(now: Date): Date {

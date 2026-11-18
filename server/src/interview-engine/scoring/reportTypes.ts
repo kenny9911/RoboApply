@@ -11,7 +11,7 @@
 // dimension `key`s and the rating/priority enums are stable identifiers the
 // frontend localizes via t(); they are NOT translated by the LLM.
 
-import type { InterviewScore, ScoreBreakdownItem } from './interviewScorer.js';
+import type { ScoreBreakdownItem } from './interviewScorer.js';
 import type { CnPracticeReport } from '../../features/cn/interview/index.js';
 
 /** Fixed scoring taxonomy. Labels are localized on the frontend via t(`report.dim.${key}`). */
@@ -163,9 +163,3 @@ export interface RichInterviewReport {
   cn?: CnPracticeReport;
 }
 
-/** The Phase-A placeholder shape persisted synchronously before LLM enrichment. */
-export interface DeterministicReport {
-  version: 'deterministic';
-  score: InterviewScore;
-  durationSec: number | null;
-}

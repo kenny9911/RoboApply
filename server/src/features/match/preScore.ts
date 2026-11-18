@@ -1368,12 +1368,6 @@ export function preScoreDimensions(user: MatchUser, job: MatchJob, weights: Matc
   ];
 }
 
-/** One overlap and one gap for a card, from real fields only. */
-export function overlapAndGap(user: MatchUser, job: MatchJob): { topOverlap: string | null; topGap: string | null } {
-  const { aligned, missing, missingRequired } = splitSkills(user, job);
-  return { topOverlap: aligned[0] ?? null, topGap: missingRequired[0] ?? missing[0] ?? null };
-}
-
 /**
  * The most a quick estimate may claim for what was actually compared (see the
  * header): null = no score at all, else an upper limit for the total. A part

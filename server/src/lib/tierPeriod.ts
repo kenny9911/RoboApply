@@ -34,23 +34,6 @@ export function addBillingInterval(d: Date, interval: BillingInterval): Date {
   return x;
 }
 
-/**
- * Compute the new `currentPeriodEnd` for a self-service RENEWAL. Extends from
- * the LATER of (now, existing currentPeriodEnd) so an early renewal never burns
- * the customer's remaining days — it stacks one full interval onto whatever is
- * left. Mirrors the admin record-external-payment stacking math. End-of-month
- * clamped via addBillingInterval.
- */
-export function renewPeriodEnd(
-  currentPeriodEnd: Date | null | undefined,
-  interval: BillingInterval,
-  now: Date = new Date(),
-): Date {
-  const base =
-    currentPeriodEnd && currentPeriodEnd.getTime() > now.getTime() ? currentPeriodEnd : now;
-  return addBillingInterval(base, interval);
-}
-
 export interface TierPeriod {
   currentPeriodStart: Date;
   currentPeriodEnd: Date;

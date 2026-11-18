@@ -110,10 +110,8 @@ export function CopilotCardView({ card, ctx = {} }: { card: CopilotCard; ctx?: C
   );
 }
 
-export type { CardContext, CardProps } from './types';
+export type { CardContext } from './types';
 export * from './model';
 export { ACTION_CARD_CAPS, sortHref } from './ActionCard';
 export { countText } from './FilterDiffCard';
-export { creditResult } from './CreditActionCard';
 export { applicationLink } from './ApplicationStatusCard';
-export { formatRange } from './SalaryCard';

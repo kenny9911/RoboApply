@@ -206,11 +206,6 @@ export function numberTokens(text: string): NumberToken[] {
   return [...digitTokens(stripped), ...cnTokens(stripped), ...enTokens(stripped)];
 }
 
-/** The raw number strings in `text` (kept for callers and logs). */
-export function numberRuns(text: string): string[] {
-  return numberTokens(text).map((t) => t.raw);
-}
-
 function sourceValues(sources: readonly string[]): Set<string> {
   const set = new Set<string>();
   for (const s of sources) {

@@ -9,8 +9,6 @@
 
 export type HonestyKind = 'fit' | 'ai_written' | 'search_results' | 'sponsorship' | 'you_submit';
 
-export const HONESTY_KINDS: readonly HonestyKind[] = ['fit', 'ai_written', 'search_results', 'sponsorship', 'you_submit'];
-
 /** Full message key (namespace included) for each kind. */
 export const HONESTY_KEYS: Record<HonestyKind, string> = {
   fit: 'jobs.score.disclaimer',

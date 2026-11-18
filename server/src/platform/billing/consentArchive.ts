@@ -36,7 +36,6 @@ import { parseBrandId, type BrandId } from '../brand/registry.js';
 
 /** Consent types that record a purchase term the buyer accepted (checkout, plan switch, "Keep my plan", the mainland payment terms). */
 export const BILLING_CONSENT_TYPES = ['auto_renew_ack', 'withdrawal_waiver', 'cn_pay_terms_ack'] as const;
-export type BillingConsentType = (typeof BILLING_CONSENT_TYPES)[number];
 
 /** Kept at least this long after the acknowledgement was given. */
 export const BILLING_CONSENT_KEEP_YEARS = 3;

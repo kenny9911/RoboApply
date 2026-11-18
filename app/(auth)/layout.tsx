@@ -46,15 +46,17 @@
 import { useEffect, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 
-import { AppShell, isPracticeLivePath } from '../../components/v3/shell/HybridShell';
+import { AppShell } from '../../components/v3/shell/AppShell';
+import { isPracticeLivePath } from '../../components/v3/shell/practiceLive';
 import { AuthGate } from '../../components/AuthGate';
 import { RoboApplyAccessGate } from '../../components/RoboApplyAccessGate';
 import { CopilotRail } from '../../components/features/copilot/CopilotRail';
 import { AnnouncementModal } from '../../components/features/notifications/AnnouncementModal';
-import { OutOfCreditsSheet, PaymentFailedBanner } from '../../components/features/credits';
+import { OutOfCreditsSheet } from '../../components/features/credits/OutOfCreditsSheet';
+import { PaymentFailedBanner } from '../../components/features/credits/PaymentFailedBanner';
 import { InstallPrompt } from '../../components/features/extension/InstallPrompt';
 import { TourOverlay } from '../../components/features/onboarding/TourOverlay';
-import { ToolResultClaimHost } from '../../components/features/tools';
+import { ToolResultClaimHost } from '../../components/features/tools/ToolResultClaimHost';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useBrand } from '../../lib/brand/BrandProvider';
 import { notePageView, usePopupGateSync } from '../../lib/ui/popupGate';

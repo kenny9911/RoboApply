@@ -163,4 +163,3 @@ export async function researchCompanyStyle(
   ).catch(() => null);
 }
 
-export { describeCompanyStyle } from './contract.js';

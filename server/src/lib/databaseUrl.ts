@@ -104,10 +104,3 @@ export function resolveGoHireDatabaseUrl(): string | undefined {
   );
 }
 
-export function resolveDirectRoboHireDatabaseUrl(): string | undefined {
-  return process.env.DIRECT_DATABASE_URL_ROBOHIRE || resolveRoboHireDatabaseUrl();
-}
-
-export function resolveDirectGoHireDatabaseUrl(): string | undefined {
-  return process.env.DIRECT_DATABASE_URL_GOHIRE || resolveGoHireDatabaseUrl();
-}

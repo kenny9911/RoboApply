@@ -22,12 +22,8 @@ import type * as CO from './contracts/jobs/companies';
 
 export type {
   CompanySponsorshipResponse,
-  DolLcaFact,
   SponsorshipFact,
-  SponsorshipFactKind,
   SponsorshipFactSource,
-  UkSponsorRegisterFact,
-  UscisH1bHubFact,
 } from './contracts/jobs/companies';
 
 /** `companies.sponsorship` — GET /api/v1/roboapply/companies/:id/sponsorship */
@@ -40,7 +36,3 @@ export function companySponsorshipKey(companyId: string, jobId: string | null | 
   return ['companyFacts', 'sponsorship', companyId, jobId ?? ''] as const;
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const companyFactsApi = {
-  getCompanySponsorship,
-};

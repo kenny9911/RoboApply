@@ -42,44 +42,6 @@ export function formatDateKey(date: Date, timeZone: string): string {
   }
 }
 
-/** `YYYY-MM-DD HH:00` hour bucket of an instant in the given timezone. */
-export function formatHourKey(date: Date, timeZone: string): string {
-  try {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      hourCycle: 'h23',
-    }).formatToParts(date);
-    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:00`;
-  } catch {
-    return `${date.toISOString().slice(0, 13)}:00`;
-  }
-}
-
-/**
- * `YYYY-MM-DD` of the Monday starting the ISO week that contains the instant,
- * evaluated on the local calendar of the given timezone. Matches Postgres
- * `date_trunc('week', ts AT TIME ZONE tz)`.
- */
-export function formatWeekKey(date: Date, timeZone: string): string {
-  const dayKey = formatDateKey(date, timeZone);
-  // Interpreting the local calendar date at UTC midnight preserves its weekday.
-  const asUtc = new Date(`${dayKey}T00:00:00Z`);
-  const dow = asUtc.getUTCDay(); // 0=Sun..6=Sat
-  const diff = (dow + 6) % 7; // days since Monday
-  asUtc.setUTCDate(asUtc.getUTCDate() - diff);
-  return asUtc.toISOString().slice(0, 10);
-}
-
-/** `YYYY-MM-01` month bucket of an instant in the given timezone. */
-export function formatMonthKey(date: Date, timeZone: string): string {
-  return `${formatDateKey(date, timeZone).slice(0, 7)}-01`;
-}
-
 /**
  * SQL expression converting a UTC `timestamp without time zone` column to
  * local wall time for `date_trunc` / `to_char` / `DATE()` bucketing.

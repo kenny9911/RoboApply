@@ -76,7 +76,3 @@ export const WORD_LIKE_TOOL_NAMES: ReadonlySet<string> = new Set([
   'unity', 'sketch', 'swift', 'rust', 'spark', 'hive', 'presto', 'jest', 'flask', 'excel', 'cypress', 'postman', 'looker', 'intercom', 'illustrator',
 ]);
 
-/** Acronyms that are not skills (stop list for the posting fallback). */
-export const ACRONYM_STOPLIST: ReadonlySet<string> = new Set([
-  'USA', 'US', 'UK', 'EU', 'EEO', 'EOE', 'USD', 'CEO', 'CTO', 'CFO', 'HR', 'PTO', 'FAQ', 'LLC', 'INC', 'LTD', 'OR', 'AND', 'THE', 'WE', 'YOU', 'NA', 'TBD', 'ETC',
-]);

@@ -17,8 +17,6 @@ import { feishuAdapter } from './feishu';
 import { genericCnAdapter } from './generic';
 import { mokaAdapter } from './moka';
 
-export { isCnAdapter, type CnAdapter } from './kit';
-
 /** The portal adapters with a form host of their own (store listing, server's supported list). */
 export const CN_PORTAL_ADAPTERS = [mokaAdapter, beisenAdapter, feishuAdapter, dayeeAdapter] as const;
 

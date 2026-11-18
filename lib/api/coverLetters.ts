@@ -63,15 +63,3 @@ export function coverLetterExportUrl(id: string, query: In<typeof CL.ExportLette
   return apiUrl(withQuery(`/api/v1/roboapply/cover-letters/${seg(id)}/export`, query));
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const coverLettersApi = {
-  listCoverLetters,
-  createCoverLetter,
-  getCoverLetter,
-  patchCoverLetter,
-  deleteCoverLetter,
-  rewriteCoverLetter,
-  regenerateCoverLetter,
-  restoreCoverLetter,
-  coverLetterExportUrl,
-};

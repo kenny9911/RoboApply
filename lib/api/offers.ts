@@ -55,13 +55,3 @@ export function createNegotiationDraft(
   return call<OF.NegotiationDraft>('POST', `/api/v1/roboapply/offers/${seg(trackerEntryId)}/negotiation-draft`, { ...opts, body });
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const offersApi = {
-  listOffers,
-  compareOffers,
-  explainOffers,
-  putOffer,
-  deleteOffer,
-  getOfferBenchmark,
-  createNegotiationDraft,
-};

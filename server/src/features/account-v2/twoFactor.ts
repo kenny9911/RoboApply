@@ -26,7 +26,7 @@ import type { TotpEnrolResponse, TotpVerifyResponse, TwoFactorStatus } from './c
 import { ACCOUNT_V2_ERROR_CODES } from './contract.js';
 import { totpAvailability, type SignInPath } from './readiness.js';
 import { SealError, seal, totpKey, totpKeys, unsealWithAny } from './sealing.js';
-import { StoreUnavailableError, createPrismaTwoFactorStore, type TwoFactorRow, type TwoFactorStore } from './store.js';
+import { createPrismaTwoFactorStore, type TwoFactorRow, type TwoFactorStore } from './store.js';
 import { generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, matchRecoveryCode, otpauthUri, verifyTotp } from './totp.js';
 
 export interface TwoFactorDeps {
@@ -227,7 +227,3 @@ export class TwoFactorService {
   }
 }
 
-/** Maps the store's "table missing" error to 503 for callers outside the service. */
-export function isStoreUnavailable(err: unknown): boolean {
-  return err instanceof StoreUnavailableError;
-}

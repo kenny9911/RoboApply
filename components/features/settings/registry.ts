@@ -114,8 +114,6 @@ export const SETTINGS_REGISTRY: readonly SettingsSectionEntry[] = [
   { id: 'danger', labelKey: 'settings.nav.danger', brands: BOTH, ready: true, owner: 'auth', wp: 'WP-10', danger: true },
 ];
 
-export const SETTINGS_SECTION_IDS: readonly SettingsSectionId[] = SETTINGS_REGISTRY.map((s) => s.id);
-
 export interface SettingsVisibilityContext {
   brandId: BrandId;
   flags: Partial<ResolvedFlags> | null;

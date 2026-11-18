@@ -33,10 +33,6 @@ export {
   eligibleSteps,
   stepForTemplate,
 };
-export type { LifecycleFacts, LifecycleStep, SentRecord } from './rules.js';
-export { canSendWith, createLifecycleTask, runForPerson } from './service.js';
-export type { LifecycleDeps } from './service.js';
-export type { LifecyclePerson, LifecycleRepo } from './repo.js';
 
 export interface LifecycleService {
   /** Whether a step is allowed for this user now (consent, quiet hours, one-a-day). */

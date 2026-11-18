@@ -771,9 +771,6 @@ export function parseMemoryAdd(d: unknown): MemoryAddData | null {
   };
 }
 
-/** The reason a 403 on a memory proposal names when the consent is missing (server COPILOT_ERROR_CODES). */
-export const MEMORY_CONSENT_REASON = 'copilot_memory_consent_required';
-
 // ── profile_gaps ─────────────────────────────────────────────────────────
 
 export interface ProfileGapsData {

@@ -147,7 +147,7 @@ describe('plan selection rules', () => {
   });
 
   it('GoApply student passes are hidden unless the buyer is a verified student, and are never preselected', () => {
-    const { plans, defaultSelection } = buildPlanViews('goapply', { env: GA_ENV, studentEnabled: true });
+    const { plans } = buildPlanViews('goapply', { env: GA_ENV, studentEnabled: true });
     expect(visiblePlans(plans).some((p) => p.requiresFlag === 'student')).toBe(false);
     const shown = visiblePlans(plans, { studentEnabled: true }).filter((p) => p.requiresFlag === 'student');
     expect(shown.map((p) => [p.key, p.amountMinor, p.passDays, p.studentDiscountPercent])).toEqual([

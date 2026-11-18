@@ -20,8 +20,6 @@ import type { BoardReader } from './types';
 import { wellfoundReader } from './wellfound';
 import { zipRecruiterReader } from './ziprecruiter';
 
-export type { BoardReader } from './types';
-
 export const BOARD_READERS: readonly BoardReader[] = [linkedinReader, indeedReader, glassdoorReader, zipRecruiterReader, wellfoundReader, tw104Reader, cakeReader];
 
 function buildMarket(): Market {

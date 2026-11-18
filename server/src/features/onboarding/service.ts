@@ -66,7 +66,6 @@ import {
   parsedResumeSkills,
   preferencesToFilters,
   seedSeniorityToLevels,
-  sponsorshipToWorkAuth,
   titlesToTaxonomyIds,
   validFieldsOf,
 } from './mapping.js';

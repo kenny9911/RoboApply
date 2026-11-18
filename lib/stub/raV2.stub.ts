@@ -148,12 +148,6 @@ function getStore(): StubStore {
   return store;
 }
 
-/** Test/devtools helper: clear the store so a fresh fixture set re-loads
- *  on the next call. Exposed for Playwright walks and Vitest setup. */
-export function resetRaV2Stub(): void {
-  store = null;
-}
-
 // ─────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────

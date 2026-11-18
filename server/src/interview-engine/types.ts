@@ -8,16 +8,6 @@
 
 export type InterviewMode = 'voice' | 'video';
 
-export type InterviewStatus =
-  /** Row exists; blueprint + prompt are being generated (POST /prepare). */
-  | 'preparing'
-  | 'created'
-  | 'live'
-  | 'finalizing'
-  | 'completed'
-  | 'failed'
-  | 'expired';
-
 export type InterviewSource = 'roboapply' | 'recruiter' | 'external';
 
 /** Reasoning levels accepted by LiveKit Inference's chat-completion contract. */
@@ -92,46 +82,6 @@ export interface WorkerMetricEvent {
   ts: number;
   [key: string]: unknown;
 }
-
-/** Body of the worker → control-plane metrics callback. */
-export interface WorkerMetricsCallbackBody {
-  events: WorkerMetricEvent[];
-}
-
-/** Body of the worker → control-plane lifecycle callback. 'started' may carry
- *  join telemetry; 'ended' triggers finalize. */
-export interface WorkerLifecycleCallbackBody {
-  event: 'started' | 'ended' | 'error';
-  /** ms from job accept to room join (event:'started' only). */
-  joinMs?: number;
-  /** How the opening line was delivered, e.g. 'verbatim' | 'llm' (event:'started' only). */
-  greeting?: string;
-  /** ms until the greeting audibly started (event:'started', newer workers). */
-  greetingMs?: number;
-  /** Whether/how the browser signalled client_ready (newer workers). */
-  clientReady?: unknown;
-  /** Machine reason, e.g. 'greeting_no_audio' (event:'error'). */
-  reason?: string;
-  /** Human-readable detail (event:'error'). */
-  message?: string;
-}
-
-/** Data message the control plane sends to the room on topic 'ie' when the
- *  candidate ends the interview (C8). Newer workers stop taking turns, flush
- *  the transcript and post 'ended'; older workers ignore it. */
-export interface InterviewEndDataMessage {
-  type: 'end';
-}
-
-/** Error codes of the session endpoints' JSON envelope { error, message? }. */
-export type InterviewEngineErrorCode =
-  | 'insufficient_credits'
-  | 'llm_unavailable'
-  | 'prepare_failed'
-  | 'not_ready'
-  | 'session_failed'
-  | 'session_ended'
-  | 'worker_unavailable';
 
 export interface InterviewCharacteristics {
   /** 1 (gentle) .. 5 (adversarial). */

@@ -397,59 +397,13 @@ export async function waive(params: {
   }
 }
 
-/**
- * Sum of charged overages for a user in the current UTC month. Used by
- * the user-facing billing page and by charge() itself. Excludes voided
- * rows so waived charges don't count toward the monthly cap.
- */
-export async function monthToDateOverageMinor(userId: string, now?: Date): Promise<number> {
-  const monthStart = firstOfMonthUtc(now);
-  const agg = await prisma.overageCharge.aggregate({
-    where: { userId, status: 'charged', createdAt: { gte: monthStart } },
-    _sum: { amountMinor: true },
-  });
-  return agg._sum.amountMinor ?? 0;
-}
-
 // ── Internals ───────────────────────────────────────────────────────────────
 
 function firstOfMonthUtc(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
-// ── Seed ────────────────────────────────────────────────────────────────────
-
-/**
- * Boot-time upsert of the PRD §5.1 rate matrix into OverageRate. Idempotent
- * on `[market, sku]` unique. Safe to run on every start — admin edits
- * are preserved by not overwriting existing rows whose updatedBy != null.
- */
-const SEED_RATES: Array<{
-  market: Market;
-  sku: PayPerUseSku;
-  currency: Currency;
-  amountMinor: number;
-}> = [
-  // CN market — CNY (fen = 1/100 yuan)
-  { market: 'cn', sku: 'resume_match', currency: 'CNY', amountMinor: 20 }, // ¥0.20
-  { market: 'cn', sku: 'interview', currency: 'CNY', amountMinor: 900 }, // ¥9.00
-  { market: 'cn', sku: 'agent_run_resume', currency: 'CNY', amountMinor: 20 },
-
-  // TW market — TWD (no minor unit; stored as whole dollars)
-  { market: 'tw', sku: 'resume_match', currency: 'TWD', amountMinor: 2 }, // NT$2
-  { market: 'tw', sku: 'interview', currency: 'TWD', amountMinor: 49 }, // NT$49
-  { market: 'tw', sku: 'agent_run_resume', currency: 'TWD', amountMinor: 2 },
-
-  // JP market — JPY (no minor unit)
-  { market: 'jp', sku: 'resume_match', currency: 'JPY', amountMinor: 30 }, // ¥30
-  { market: 'jp', sku: 'interview', currency: 'JPY', amountMinor: 300 }, // ¥300
-  { market: 'jp', sku: 'agent_run_resume', currency: 'JPY', amountMinor: 30 },
-
-  // Other (USD — cents)
-  { market: 'other', sku: 'resume_match', currency: 'USD', amountMinor: 20 }, // $0.20
-  { market: 'other', sku: 'interview', currency: 'USD', amountMinor: 200 }, // $2.00
-  { market: 'other', sku: 'agent_run_resume', currency: 'USD', amountMinor: 20 },
-];
+// ── Top-up balance ──────────────────────────────────────────────────────────
 
 /**
  * Credit a top-up to both the legacy `topUpBalance` (Float, backward
@@ -565,20 +519,3 @@ export async function migrateLegacyTopUpBalance(): Promise<{
   return { migrated, totalCandidates: candidates.length };
 }
 
-export async function seedOverageRatesIfMissing(): Promise<void> {
-  for (const row of SEED_RATES) {
-    await prisma.overageRate.upsert({
-      where: { market_sku: { market: row.market, sku: row.sku } },
-      create: {
-        market: row.market,
-        sku: row.sku,
-        currency: row.currency,
-        amountMinor: row.amountMinor,
-        updatedBy: null, // null => seed, distinguishes from admin edits
-      },
-      // Do NOT overwrite admin edits. We only fill rows that don't
-      // exist; an admin-edited row (updatedBy != null) is preserved.
-      update: {},
-    });
-  }
-}

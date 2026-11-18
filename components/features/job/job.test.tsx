@@ -31,7 +31,6 @@ const api = vi.hoisted(() => ({
   markApplied: vi.fn(),
   shareJob: vi.fn(),
   getKeywordCheck: vi.fn(),
-  getFitAnalysis: vi.fn(),
   getCredits: vi.fn(),
   getUiState: vi.fn(),
   dismiss: vi.fn(),
@@ -63,7 +62,7 @@ vi.mock('../../../lib/api/jobs', async (orig) => ({
   markApplied: api.markApplied,
   shareJob: api.shareJob,
 }));
-vi.mock('../../../lib/api/match', () => ({ getKeywordCheck: api.getKeywordCheck, getFitAnalysis: api.getFitAnalysis }));
+vi.mock('../../../lib/api/match', () => ({ getKeywordCheck: api.getKeywordCheck }));
 vi.mock('../../../lib/api/credits', () => ({ getCredits: api.getCredits }));
 vi.mock('../../../lib/api/uiState', () => ({ getUiState: api.getUiState, dismiss: api.dismiss, setUiValues: api.setUiValues }));
 vi.mock('../../../lib/api/agent', () => ({ addToQueue: api.addToQueue }));

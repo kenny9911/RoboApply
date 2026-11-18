@@ -9,7 +9,6 @@
 
 import { headers } from 'next/headers';
 
-import { resolveMarket, type BillingMarket } from './pricing';
 
 const COUNTRY_HEADERS = ['x-vercel-ip-country', 'cf-ipcountry', 'x-country', 'x-geo-country'];
 
@@ -24,10 +23,6 @@ async function readCountryHeader(): Promise<string | null> {
     /* prerender context — no request to read */
   }
   return null;
-}
-
-export async function resolveVisitorMarket(locale: string): Promise<BillingMarket> {
-  return resolveMarket({ countryHeader: await readCountryHeader(), locale });
 }
 
 /**

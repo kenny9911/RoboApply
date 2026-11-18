@@ -78,28 +78,6 @@ const DEFAULT_PLAN_LIMITS: Record<string, { interviews: number; matches: number 
   custom: { interviews: Infinity, matches: Infinity },
 };
 
-/**
- * Default storage quotas per tier (BigInt bytes). null = unlimited.
- *
- * Locked by the File Vault PRD (see docs/prd-file-vault.md):
- *   Free      25 MB
- *   Starter  500 MB
- *   Growth     5 GB
- *   Business  20 GB
- *   Custom unlimited
- *
- * Admin can override per-tier via AppConfig keys `storage_limit_{tier}`
- * (value is a string of bytes, parsed as BigInt). Per-user override lives
- * on `User.customMaxStorageBytes`.
- */
-const STORAGE_PLAN_LIMITS: Record<string, bigint | null> = {
-  free:     25n * 1024n * 1024n,            // 25 MiB
-  starter:  500n * 1024n * 1024n,           // 500 MiB
-  growth:   5n * 1024n * 1024n * 1024n,     // 5 GiB
-  business: 20n * 1024n * 1024n * 1024n,    // 20 GiB
-  custom:   null,                            // unlimited
-};
-
 /** Default pay-per-use prices in USD. Kept aligned with the
  *  multi-currency OverageRate seed (backend/src/services/
  *  OverageBillingService.ts SEED_RATES → market='other').
@@ -116,19 +94,8 @@ const DEFAULT_PAY_PER_USE = {
 // ---------------------------------------------------------------------------
 let cachedLimits: Record<string, { interviews: number; matches: number }> | null = null;
 let cachedPayPerUse: { interview: number; match: number } | null = null;
-let cachedStorageLimits: Record<string, bigint | null> | null = null;
 let cacheTimestamp = 0;
-let storageCacheTimestamp = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-/** Clear the in-memory cache (called after admin updates limits). */
-export function clearLimitsCache(): void {
-  cachedLimits = null;
-  cachedPayPerUse = null;
-  cachedStorageLimits = null;
-  cacheTimestamp = 0;
-  storageCacheTimestamp = 0;
-}
 
 async function loadConfigFromDb(): Promise<void> {
   if (cachedLimits && cachedPayPerUse && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
@@ -201,63 +168,6 @@ export async function getPlanLimits(): Promise<Record<string, { interviews: numb
 export async function getPayPerUseRates(): Promise<{ interview: number; match: number }> {
   await loadConfigFromDb();
   return cachedPayPerUse!;
-}
-
-/**
- * Storage tier defaults loader. Reads AppConfig rows keyed
- * `storage_limit_{tier}` whose value is a stringified byte count, falls
- * back to STORAGE_PLAN_LIMITS for missing tiers. The `custom` tier is
- * always unlimited (null) — admin can't downgrade that.
- *
- * Cached 5 min in-memory like the interview/match limits; cleared on
- * admin update via `clearLimitsCache()`.
- */
-async function loadStorageLimitsFromDb(): Promise<void> {
-  if (cachedStorageLimits && Date.now() - storageCacheTimestamp < CACHE_TTL_MS) return;
-  try {
-    const rows = await prisma.appConfig.findMany({
-      where: { key: { startsWith: 'storage_limit_' } },
-    });
-    const out: Record<string, bigint | null> = {};
-    for (const [tier, defaultBytes] of Object.entries(STORAGE_PLAN_LIMITS)) {
-      out[tier] = defaultBytes;
-    }
-    for (const row of rows) {
-      const m = row.key.match(/^storage_limit_(\w+)$/);
-      if (!m) continue;
-      const tier = m[1];
-      // value is a decimal string of bytes; "0" or empty = use default; "-1" = unlimited
-      const trimmed = (row.value || '').trim();
-      if (!trimmed) continue;
-      if (trimmed === '-1') {
-        out[tier] = null;
-        continue;
-      }
-      try {
-        const bn = BigInt(trimmed);
-        if (bn >= 0n) out[tier] = bn;
-      } catch {
-        // ignore malformed value, keep default
-      }
-    }
-    out.custom = null; // custom is always unlimited
-    cachedStorageLimits = out;
-    storageCacheTimestamp = Date.now();
-  } catch {
-    cachedStorageLimits = { ...STORAGE_PLAN_LIMITS };
-    storageCacheTimestamp = Date.now();
-  }
-}
-
-/** Get storage tier defaults (DB-backed with fallback). null = unlimited. */
-export async function getStoragePlanLimits(): Promise<Record<string, bigint | null>> {
-  await loadStorageLimitsFromDb();
-  return cachedStorageLimits!;
-}
-
-/** Default tier values, exposed for admin config UI seeding. */
-export function getStoragePlanLimitsDefaults(): Record<string, bigint | null> {
-  return { ...STORAGE_PLAN_LIMITS };
 }
 
 function serializeLimit(limit: number): number | null {
@@ -824,24 +734,6 @@ export async function peekBatchUsage(
   }
 
   return { ok: true, snapshot, planUnits, overageUnits, overageCost };
-}
-
-/**
- * Reset usage counters for a user. Called when subscription renews (Stripe/
- * Alipay webhooks) and from the AnniversaryUsageResetService daily cron.
- * Stamps `lastUsageResetAt` so admins can audit the per-user reset history
- * and diagnose missed-webhook cases.
- */
-export async function resetUsageCounters(userId: string): Promise<void> {
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      interviewsUsed: 0,
-      resumeMatchesUsed: 0,
-      assessmentInvitesUsed: 0,
-      lastUsageResetAt: new Date(),
-    },
-  });
 }
 
 // ---------------------------------------------------------------------------

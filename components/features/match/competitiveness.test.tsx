@@ -13,7 +13,6 @@ const api = vi.hoisted(() => ({
   createCompetitivenessReport: vi.fn(),
   getLatestCompetitivenessReport: vi.fn(),
   getKeywordCheck: vi.fn(),
-  getFitAnalysis: vi.fn(),
   getCredits: vi.fn(),
   listSearchProfiles: vi.fn(),
   updateSearchProfile: vi.fn(),
@@ -26,7 +25,6 @@ vi.mock('../../../lib/api/match', () => ({
   createCompetitivenessReport: api.createCompetitivenessReport,
   getLatestCompetitivenessReport: api.getLatestCompetitivenessReport,
   getKeywordCheck: api.getKeywordCheck,
-  getFitAnalysis: api.getFitAnalysis,
 }));
 vi.mock('../../../lib/api/credits', () => ({ getCredits: api.getCredits }));
 vi.mock('../../../lib/api/search', async (orig) => ({

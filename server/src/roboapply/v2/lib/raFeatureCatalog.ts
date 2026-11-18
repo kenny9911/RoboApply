@@ -103,15 +103,6 @@ export function featureForSku(sku: string): FeatureDef {
   return FEATURE_BY_SKU[sku] ?? FEATURE_OTHER;
 }
 
-/** All distinct feature keys → label (for building the i18n key list + legends). */
-export function allFeatureKeys(): { key: string; label: string }[] {
-  const seen = new Map<string, string>();
-  for (const def of Object.values(FEATURE_BY_SKU)) {
-    if (!seen.has(def.key)) seen.set(def.key, def.label);
-  }
-  return Array.from(seen.entries()).map(([key, label]) => ({ key, label }));
-}
-
 /** SKUs whose cost is SHARED/platform (not one user's) — attributed to the
  *  cron sentinel userId. Surfaced as a "Shared / platform" bucket; excluded
  *  from per-user margin. */
