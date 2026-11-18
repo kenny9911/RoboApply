@@ -138,7 +138,7 @@ describe('the onboarding header, which reuses .topbar > .crumbs for the brand na
     const onboarding = read('app/(onboarding)/layout.tsx');
     expect(onboarding).toMatch(/<header className="topbar">\s*<div className="crumbs">/);
     expect(onboarding).not.toMatch(/className="main"/);
-    expect(read('components/v3/shell/HybridShell.tsx')).toMatch(/<main className="main"[^>]*>\s*<Topbar \/>/);
+    expect(read('components/v3/shell/AppShell.tsx')).toMatch(/<main className="main"[^>]*>\s*<Topbar \/>/);
     expect(read('components/v3/shell/Topbar.tsx')).toMatch(/<div className="topbar">\s*<div className="crumbs">/);
   });
 
