@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
+  "sideEffects": [
+    "*.css",
+    "**/*.css"
+  ],
   "description": "RoboApply — AI candidate-facing job-application app (Next.js frontend + Express API, deployed on Vercel).",
   "engines": {
     "node": "24.x"

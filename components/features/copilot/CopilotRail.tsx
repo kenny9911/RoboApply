@@ -37,18 +37,25 @@
 // while the floating button is on screen); the server derives the kind from
 // the user's real signals, and only that kind is used.
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { clearAssistantNudge, markNudgeShown, useCopilotAvailability, useCopilotChat, usePendingNudge, useRailMemory, useServerNudge } from '../../../hooks/copilot';
 import { openAssistantRail, useAssistantRail } from '../../../hooks/shared/useOpenAssistant';
 import { usePopupGate } from '../../../lib/ui/popupGate';
-import { Btn, Drawer, IconChat } from '../../v3/primitives';
+import { Btn } from '../../v3/primitives/Btn';
+import { Drawer } from '../../v3/primitives/Drawer';
+import { IconChat } from '../../v3/primitives/Iconset';
 import { SURFACES_READY, showAllNav } from '../../v3/shell/destinations';
 import { AssistantAvatar } from './AssistantAvatar';
-import { CopilotThread, FullPageLink } from './CopilotThread';
 import styles from './copilot.module.css';
+
+// The conversation (messages, cards, markdown, the composer) is most of the
+// assistant's code, and the drawer renders it only while open. It loads then,
+// so every signed-in page does not download it up front.
+const CopilotThread = lazy(() => import('./CopilotThread').then((m) => ({ default: m.CopilotThread })));
+const FullPageLink = lazy(() => import('./CopilotThread').then((m) => ({ default: m.FullPageLink })));
 
 export type CopilotRailProps = Record<string, never>;
 
@@ -242,25 +249,27 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
           </span>
         }
       >
-        <CopilotThread
-          chat={chat}
-          variant="rail"
-          prefill={prefill}
-          onNavigate={onNavigate}
-          canAsk={availability.canAsk}
-          checking={availability.loading}
-          pageJobId={pageJobId}
-          toolbarExtra={
-            <>
-              {!onAssistantPage ? <FullPageLink threadId={chat.threadId} onNavigate={rail.close} /> : null}
-              {entryVisible && memory.fabHidden === false ? (
-                <button type="button" className={styles.toolBtn} onClick={memory.hideFab}>
-                  {t('toolbar.hideFab')}
-                </button>
-              ) : null}
-            </>
-          }
-        />
+        <Suspense fallback={null}>
+          <CopilotThread
+            chat={chat}
+            variant="rail"
+            prefill={prefill}
+            onNavigate={onNavigate}
+            canAsk={availability.canAsk}
+            checking={availability.loading}
+            pageJobId={pageJobId}
+            toolbarExtra={
+              <>
+                {!onAssistantPage ? <FullPageLink threadId={chat.threadId} onNavigate={rail.close} /> : null}
+                {entryVisible && memory.fabHidden === false ? (
+                  <button type="button" className={styles.toolBtn} onClick={memory.hideFab}>
+                    {t('toolbar.hideFab')}
+                  </button>
+                ) : null}
+              </>
+            }
+          />
+        </Suspense>
       </Drawer>
     </>
   );

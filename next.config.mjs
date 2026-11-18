@@ -81,6 +81,10 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL:
       process.env.NEXT_PUBLIC_API_URL ??
       (process.env.NODE_ENV === 'development' ? 'http://localhost:4607' : ''),
+    // Always defined (empty when unset) so lib/api/v2/index.ts can compare
+    // it at build time: without the opt-in, the stub API and its fixtures are
+    // left out of the browser bundle instead of shipping beside the real one.
+    NEXT_PUBLIC_USE_STUB_API: process.env.NEXT_PUBLIC_USE_STUB_API ?? '',
   },
   // The legal pages read content/legal/<market>/*.md at request time
   // (app/legal/legalSource.ts, WP-13); file tracing cannot see those reads,
