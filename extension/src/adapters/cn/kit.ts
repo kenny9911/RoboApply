@@ -8,7 +8,7 @@
 // presses anything (filling goes through the _kit setters and interact.ts).
 
 import { cleanLabel, genericLabel, type ListFieldsOptions } from '../_kit/fields';
-import { defineAdapter, firstText, hostIs, metaContent, type AdapterSpec } from '../_kit/page';
+import { defineAdapter, firstText, metaContent, type AdapterSpec } from '../_kit/page';
 import type { AtsAdapter, AtsType, JobOnPage } from '../types';
 
 /** What the cn layer (fields.ts, the panel) needs beyond the base adapter contract. */
@@ -285,11 +285,6 @@ export function defineCnAdapter(spec: CnAdapterSpec): CnAdapter {
       formRegions: (root) => cnFormRegions(root, spec.form, labelFor).regions,
     },
   };
-}
-
-/** Host test shared by the specific adapters. */
-export function onHosts(url: URL, domains: string[]): boolean {
-  return (url.protocol === 'https:' || url.protocol === 'http:') && hostIs(url, domains);
 }
 
 export type { AtsType };
