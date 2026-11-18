@@ -21,7 +21,6 @@
 // in sight can still practice the role itself.
 
 import { logger } from '../../services/LoggerService.js';
-import type { ProductBrand } from '../../platform/brand/registry.js';
 import { searchTaxonomy } from '../../features/jobs/taxonomy/index.js';
 import { createTtlCache, keyPart } from './cache.js';
 import { clip, clipBlock, type PrepPosting, type PrepRoleSuggestion, type PrepSearchResult, type PrepSourceStatus } from './contract.js';
@@ -74,11 +73,6 @@ export const PROVIDER_MIN_INDEX = 6;
 // ─── Default sources ───────────────────────────────────────────────────────
 
 const resolveCache = createTtlCache<RoleResolverOutput>({ ttlMs: 24 * 60 * 60 * 1000, max: 2000 });
-
-/** Test seam. */
-export function clearJobFinderCache(): void {
-  resolveCache.clear();
-}
 
 async function defaultResolve(input: Parameters<JobFinderDeps['resolve']>[0]): Promise<RoleResolverOutput | null> {
   const key = [keyPart(input.query), keyPart(input.company), keyPart(input.industry), input.locale, input.ctx.marketKey, input.ctx.country ?? ''].join('|');

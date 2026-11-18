@@ -16,9 +16,6 @@ import { call, type CallOptions, type In, seg, withQuery } from './contracts/wir
 import type * as CJ from './contracts/cn/jobs';
 import { feedIsThin, feedSources } from './feed';
 
-/** A blacklist row (admin). */
-export type BlacklistEntryView = CJ.BlacklistEntryView;
-
 /**
  * `cnJobs.externalLinks` — GET /api/v1/roboapply/cn/jobs/external-links
  *
@@ -114,12 +111,3 @@ export function cnFeedSummary(response: unknown): CnFeedSummary {
   return { header: boards > 0 ? { kind: 'boards', boards } : null, thin };
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const cnJobsApi = {
-  getExternalLinks,
-  adminListFraudQueue,
-  adminResolveFraud,
-  adminListBlacklist,
-  adminAddBlacklist,
-  adminRemoveBlacklist,
-};

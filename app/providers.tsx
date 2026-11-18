@@ -18,11 +18,7 @@
 // (app/layout.tsx) and pass them down so we don't ship the entire
 // dictionary on every public page request.
 
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NextIntlClientProvider } from 'next-intl';
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
 
@@ -192,7 +188,3 @@ export function Providers({
   );
 }
 
-// Exposed for advanced consumers who need to imperatively invalidate.
-export function useRoboQueryClient() {
-  return useQueryClient();
-}

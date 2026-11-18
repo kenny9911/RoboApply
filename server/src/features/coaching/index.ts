@@ -5,9 +5,6 @@
 import { getCoachingService } from './service.js';
 
 export * from './contract.js';
-export { createCoachingRouter, COACHING_REQUEST_WINDOWS } from './routes.js';
-export { createCoachingAdminRouter } from './adminRoutes.js';
-export { createCoachingService, getCoachingService, coachingAdminAddress, type CoachingDb, type CoachingServiceDeps } from './service.js';
 
 export interface CoachingService {
   hasActiveCoaches(brand: 'roboapply' | 'goapply'): Promise<boolean>;

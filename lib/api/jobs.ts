@@ -92,16 +92,6 @@ export function searchCompanies(query: In<typeof CO.CompanyTypeaheadQuerySchema>
   return call<CO.CompanyTypeaheadResponse>('GET', withQuery(`/api/v1/roboapply/companies`, query), opts);
 }
 
-/** `companies.profile` — GET /api/v1/roboapply/companies/:idOrSlug */
-export function getCompany(idOrSlug: string, opts?: CallOptions): Promise<CO.CompanyProfile> {
-  return call<CO.CompanyProfile>('GET', `/api/v1/roboapply/companies/${seg(idOrSlug)}`, opts);
-}
-
-/** `companies.h1b` — GET /api/v1/roboapply/companies/:id/h1b */
-export function getCompanyH1b(id: string, opts?: CallOptions): Promise<CO.H1bHistoryResponse> {
-  return call<CO.H1bHistoryResponse>('GET', `/api/v1/roboapply/companies/${seg(id)}/h1b`, opts);
-}
-
 /** `companies.jobs` — GET /api/v1/roboapply/companies/:id/jobs */
 export function getCompanyJobs(id: string, query?: In<typeof CO.CompanyJobsQuerySchema>, opts?: CallOptions): Promise<CO.CompanyJobsResponse> {
   return call<CO.CompanyJobsResponse>('GET', withQuery(`/api/v1/roboapply/companies/${seg(id)}/jobs`, query), opts);
@@ -124,21 +114,3 @@ export function jobListing(detail: Pick<D.JobDetailResponse, 'job'> | null | und
   return { source: listingSource(job), apply: listingApply(job) };
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const jobsApi = {
-  getJob,
-  getJobPreview,
-  scoreJob,
-  getSimilarJobs,
-  saveJob,
-  unsaveJob,
-  applyClick,
-  markApplied,
-  undoApplied,
-  shareJob,
-  getCompanyNews,
-  searchCompanies,
-  getCompany,
-  getCompanyH1b,
-  getCompanyJobs,
-};

@@ -61,12 +61,3 @@ export function decryptField(encoded: string): string {
   return plaintext.toString('utf8');
 }
 
-/** Convenience: encrypt a JSON-serializable object and return the base64 string. */
-export function encryptJson(obj: unknown): string {
-  return encryptField(JSON.stringify(obj));
-}
-
-/** Convenience: decrypt + JSON.parse. */
-export function decryptJson<T = unknown>(encoded: string): T {
-  return JSON.parse(decryptField(encoded)) as T;
-}

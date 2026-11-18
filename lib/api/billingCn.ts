@@ -24,8 +24,3 @@ export function getWechatPayOrder(orderId: string, opts?: CallOptions): Promise<
   return call<B.CnOrderStatus>('GET', `/api/v1/roboapply/billing-cn/wechatpay/orders/${seg(orderId)}`, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const billingCnApi = {
-  createWechatPayOrder,
-  getWechatPayOrder,
-};

@@ -36,7 +36,7 @@ import {
   type AnonAlertView,
   type CreateAnonAlertResponse,
 } from './contract.js';
-import { VISITOR_EMAIL_TEMPLATES, type AlertConfirmParams } from './emails.js';
+import { type AlertConfirmParams } from './emails.js';
 import type { AnonAlertRow, VisitorAlertsRepo } from './repo.js';
 
 export interface VisitorRate {
@@ -246,5 +246,3 @@ export class VisitorAlertsService {
   }
 }
 
-/** Template key re-exported for callers wiring `sendConfirm` to EmailService. */
-export const ALERT_CONFIRM_TEMPLATE = VISITOR_EMAIL_TEMPLATES.confirm;

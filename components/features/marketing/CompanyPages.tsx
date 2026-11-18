@@ -23,7 +23,7 @@ import { useBrand } from '../../../lib/brand';
 import { CancelFooterLink } from '../credits';
 import { COMPANY_SPREAD, FIT_PARTS, FIT_TIER_FLOORS, GOAL_ADJUSTMENTS, HELP_FAQ_KEYS, ORDERING_RULES, OTHER_SORTS, RANKING_FACTORS } from './catalog';
 import { ContactForm } from './ContactForm';
-import { useMarketingFlag, useMarketingFlagOff } from './hooks';
+import { useMarketingFlagOff } from './hooks';
 import { Faq } from './Sections';
 import styles from './marketing.module.css';
 

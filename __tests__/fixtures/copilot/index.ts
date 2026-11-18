@@ -19,13 +19,6 @@ export const message = {
   feedback: null,
 } satisfies CP.MessageView;
 
-/** A complete SSE turn, as `postStream` delivers it. */
-export const sseTurn: CP.CopilotSseEvent[] = [
-  { event: 'meta', data: { threadId: thread.id, messageId: message.id } },
-  { event: 'delta', data: { text: 'The post asks for GraphQL' } },
-  { event: 'done', data: { messageId: message.id, usage: { inputTokens: 900, outputTokens: 40 }, creditsRemaining: 7 } },
-];
-
 export const copilotRequests: RequestFixture[] = [
   { contract: 'copilot', schema: 'SendMessageBodySchema', value: { text: 'What am I missing for this job?', contextJobId: 'job_fixture_1' } },
   { contract: 'copilot', schema: 'SendMessageBodySchema', value: { text: '   ' }, valid: false },

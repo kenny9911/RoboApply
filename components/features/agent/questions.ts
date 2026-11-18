@@ -82,7 +82,6 @@ export const HINT_KEYS: ReadonlySet<string> = new Set(['why_this_company', 'sala
 export const ANSWER_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'SGD', 'HKD', 'TWD', 'CNY', 'JPY', 'INR'] as const;
 
 export const CUSTOM_PREFIX = 'custom:';
-const CUSTOM_RE = /^custom:[a-f0-9]{8,40}$/;
 const CURRENCY_RE = /^[A-Z]{3}$/;
 
 // SHA-256 (FIPS 180-4) over UTF-8, so a question saved here gets the same key
@@ -156,10 +155,6 @@ export function sha256Hex(text: string): string {
 export function customQuestionKey(text: string): string {
   const norm = text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
   return `${CUSTOM_PREFIX}${sha256Hex(norm).slice(0, 16)}`;
-}
-
-export function isCustomKey(key: string): boolean {
-  return CUSTOM_RE.test(key);
 }
 
 /** `salary_expectation:EUR` → { base: 'salary_expectation', currency: 'EUR' }; null for any other shape. */

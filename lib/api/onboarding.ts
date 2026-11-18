@@ -64,15 +64,3 @@ export function skipOnboarding(opts?: CallOptions): Promise<O.OnboardingStageRes
   return call<O.OnboardingStageResponse>('POST', `/api/v1/roboapply/onboarding/skip`, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const onboardingApi = {
-  getOnboardingState,
-  putOnboardingStep,
-  suggestTitles,
-  getMarketSnapshot,
-  submitOnboardingResume,
-  streamOnboardingMatch,
-  confirmOnboarding,
-  completeOnboarding,
-  skipOnboarding,
-};

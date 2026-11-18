@@ -14,7 +14,6 @@ vi.mock('../../lib/flags', () => ({ useFlag: (key: string) => flags[key] === tru
 
 import { creditsResponse, freeSummary } from '../../__tests__/fixtures/credits';
 import { CREDITS_QUERY_KEY, bucketSummary, creditsLeft, primeCredits, useCredits } from './useCredits';
-import { useEntitlement, useEntitlements } from './useEntitlements';
 import { __outOfCreditsStore, creditsExhaustedFrom, useCreditGate, useOutOfCredits } from './useCreditGate';
 import { __assistantRailStore, useAssistantRail, useOpenAssistant } from './useOpenAssistant';
 import { tailorHref, useLaunchTailor } from './useLaunchTailor';
@@ -56,9 +55,9 @@ function wrapper(client = new QueryClient({ defaultOptions: { queries: { retry: 
   };
 }
 
-// ── useCredits / useEntitlements ─────────────────────────────────────────────
+// ── useCredits ───────────────────────────────────────────────────────────────
 
-describe('useCredits / useEntitlements', () => {
+describe('useCredits', () => {
   it('fetches GET /credits once and exposes the summary', async () => {
     handler = () => ok(creditsResponse);
     const { Wrapper } = wrapper();
@@ -75,24 +74,11 @@ describe('useCredits / useEntitlements', () => {
     expect(bucketSummary(freeSummary, 'nope')).toBeNull();
   });
 
-  it('fails closed until the summary arrives, then reads entitlements', async () => {
-    let release!: () => void;
-    handler = () => new Promise<Response>((r) => (release = () => r(ok(creditsResponse))));
-    const { Wrapper } = wrapper();
-    const { result } = renderHook(() => ({ e: useEntitlements(), saved: useEntitlement('saved_searches') }), { wrapper: Wrapper });
-    expect(result.current.e).toMatchObject({ status: 'loading', isPro: false, upgradable: false, entitlements: null });
-    expect(result.current.saved).toBeNull();
-    await act(async () => release());
-    await waitFor(() => expect(result.current.e.status).toBe('ready'));
-    expect(result.current.saved).toBe(1);
-    expect(result.current.e.upgradable).toBe(true);
-  });
 
   it('primeCredits seeds the cache from /auth/me without a request, and clears on sign-out', async () => {
-    const { client, Wrapper } = wrapper();
+    const { client } = wrapper();
     primeCredits(client, freeSummary);
-    const { result } = renderHook(() => useEntitlements(), { wrapper: Wrapper });
-    expect(result.current.status).toBe('ready');
+    expect(client.getQueryData(CREDITS_QUERY_KEY)).toBeDefined();
     expect(calls).toHaveLength(0);
     primeCredits(client, null);
     expect(client.getQueryData(CREDITS_QUERY_KEY)).toBeUndefined();

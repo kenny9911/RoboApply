@@ -22,7 +22,6 @@ import {
   type QuestionCategory,
   type QuestionDifficulty,
   type QuestionLocale,
-  type QuestionSourceKind,
   type ScreenFlag,
 } from './contract.js';
 
@@ -44,10 +43,6 @@ export function assertAttribution(q: AttributionFields): void {
       sourceKind: q.sourceKind,
     });
   }
-}
-
-export function isSourceKind(v: unknown): v is QuestionSourceKind {
-  return typeof v === 'string' && (QUESTION_SOURCE_KINDS as readonly string[]).includes(v);
 }
 
 export function asCategory(v: unknown, fallback: QuestionCategory = 'behavioral'): QuestionCategory {

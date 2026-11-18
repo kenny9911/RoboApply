@@ -3,11 +3,10 @@
 //
 // WP-63a added NetworkPrecheck.tsx (Wave 4); exported here at the Wave 4 gate (R3).
 
-export { RecordingConsentSheet, type RecordingConsentSheetProps } from './RecordingConsentSheet';
-export { RecordingRow, type RecordingRowProps } from './RecordingRow';
-export { PracticeJobBanner, type PracticeJobBannerProps } from './PracticeJobBanner';
-export { PracticeNotices, PRACTICE_NOTICE_LINKS, type PracticeNoticeKind } from './PracticeNotices';
-export { PracticeReportEnd, PRACTICE_PLANS_HREF, type PracticeReportEndProps } from './PracticeReportEnd';
-export { TextPracticeRoom, type TextPracticeRoomProps } from './TextPracticeRoom';
-export { setupNotices, type SetupNoticeInput } from './setupNotices';
-export { NetworkPrecheck, NETWORK_PROBES, NETWORK_THRESHOLDS, type NetworkLevel, type NetworkPrecheckProps } from './NetworkPrecheck';
+export { RecordingConsentSheet } from './RecordingConsentSheet';
+export { RecordingRow } from './RecordingRow';
+export { PracticeJobBanner } from './PracticeJobBanner';
+export { PracticeNotices } from './PracticeNotices';
+export { PracticeReportEnd } from './PracticeReportEnd';
+export { TextPracticeRoom } from './TextPracticeRoom';
+export { setupNotices } from './setupNotices';

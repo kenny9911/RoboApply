@@ -40,7 +40,7 @@ import {
   type FileNameStyleKey,
   type PageSize,
 } from '../lib/resumeExport.js';
-import { LEGACY_JOB_SCOPE_SELECT, legacyJobVisible, loadLegacyVisibleJob } from '../lib/legacyJobScope.js';
+import { LEGACY_JOB_SCOPE_SELECT, legacyJobVisible } from '../lib/legacyJobScope.js';
 
 export type RAResumeKind = 'base' | 'tailored_for_jd' | 'from_template';
 
@@ -185,7 +185,6 @@ const LAYOUT_KEYS = [
  * failed). Only the first counts as AI-written.
  */
 export const TAILORED_AI_SOURCE = 'tailored';
-export const TAILORED_COPY_SOURCE = 'tailored_copy';
 
 /**
  * Whether AI wrote part of a variant: a tailored version the tailor agent

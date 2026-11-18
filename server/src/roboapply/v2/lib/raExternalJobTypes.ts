@@ -19,28 +19,6 @@
 export type ExternalSourceBoard = 'jsearch' | 'activejobs' | 'linkedin';
 
 /**
- * Every `RAJob.sourceBoard` that is an external RapidAPI provider. The consumer
- * (RAOnboardingRecommendService) uses this to generalize the behaviours that
- * were previously hard-coded to `'jsearch'`: `isExternal` classification, the
- * lazy staleness sweep, and the "non-remote workType is UNKNOWN, never onsite"
- * distrust rule (only `workType === 'remote'` is a trusted signal for any
- * external board — their payloads carry no reliable hybrid/onsite signal).
- */
-export const EXTERNAL_SOURCE_BOARDS: readonly ExternalSourceBoard[] = [
-  'jsearch',
-  'activejobs',
-  'linkedin',
-];
-
-/** O(1) membership test over EXTERNAL_SOURCE_BOARDS (accepts any string). */
-export const EXTERNAL_SOURCE_BOARD_SET: ReadonlySet<string> = new Set(EXTERNAL_SOURCE_BOARDS);
-
-/** True when a RAJob row was materialized from an external RapidAPI provider. */
-export function isExternalSourceBoard(board: string | null | undefined): boolean {
-  return board != null && EXTERNAL_SOURCE_BOARD_SET.has(board);
-}
-
-/**
  * The taxonomy labels Fantastic Jobs assigns to a posting (`ai_taxonomies_a`,
  * up to five per row, the first the primary one) and accepts as the filter of
  * the same name. EXACTLY the 33 values the vendor documents: the enum of the

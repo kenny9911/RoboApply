@@ -146,40 +146,6 @@ export const feedResponseCnBoards = {
   thin: true,
 };
 
-export const feedQueryResponse = {
-  items: [feedItem],
-  cursor: null,
-  endOfFeed: true,
-  hiddenByTier: 0,
-  sessionId: 'sess_fixture_1',
-} satisfies F.FeedQueryResponse;
-
-/** The pay check (/pay): stated pay of the brand's posts for a title, per currency; EUR has too few posts for figures. */
-export const payCheckResponse = {
-  status: 'ok',
-  title: 'Data Analyst',
-  titleMatch: { method: 'role', roleId: 'data_analyst', roleLabel: 'Data analyst', text: 'data analyst' },
-  place: { input: 'Austin, TX', kind: 'city', name: 'Austin', country: 'US' },
-  window: { days: 90, from: '2026-08-15T12:00:00.000Z', to: '2026-11-13T12:00:00.000Z' },
-  matchedCount: 412,
-  withPayCount: 125,
-  capped: false,
-  rowCap: 2000,
-  period: 'year',
-  minSample: 20,
-  currencies: [
-    {
-      currency: 'USD',
-      sampleSize: 120,
-      p25: { value: 95000, source: 'index', sampleSize: 120, asOf: '2026-11-13T12:00:00.000Z', method: 'computed' },
-      median: { value: 120000, source: 'index', sampleSize: 120, asOf: '2026-11-13T12:00:00.000Z', method: 'computed' },
-      p75: { value: 150000, source: 'index', sampleSize: 120, asOf: '2026-11-13T12:00:00.000Z', method: 'computed' },
-    },
-    { currency: 'EUR', sampleSize: 5, p25: null, median: null, p75: null },
-  ],
-  asOf: '2026-11-13T12:00:00.000Z',
-} satisfies F.PayCheckResponse;
-
 export const feedRequests: RequestFixture[] = [
   { contract: 'feed', schema: 'FeedQueryBodySchema', value: { sort: 'newest', fitTier: 'good' } },
   { contract: 'feed', schema: 'FeedQueryBodySchema', value: { sort: 'loudest' }, valid: false },

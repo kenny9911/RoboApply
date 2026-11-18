@@ -126,7 +126,6 @@ const skillsField = z
 export const REQUIREMENT_KINDS = ['skill', 'experience', 'education', 'domain', 'scope'] as const;
 export type RequirementKind = (typeof REQUIREMENT_KINDS)[number];
 export const REQUIREMENT_IMPORTANCES = ['must', 'preferred'] as const;
-export type RequirementImportance = (typeof REQUIREMENT_IMPORTANCES)[number];
 
 /**
  * One requirement line as the model returns it. The text is the posting's own

@@ -10,10 +10,5 @@
 
 export { PeoplePanel, type PeoplePanelProps } from './PeoplePanel';
 export { SettingsSection as NetworkSettingsSection } from './SettingsSection';
-export { FollowUpDraftButton, type FollowUpDraftButtonProps } from './FollowUpDraftButton';
-export { OutreachComposer, type OutreachComposerProps } from './OutreachComposer';
-export { ConnectionsImport } from './ConnectionsImport';
-export { ConnectionsList } from './ConnectionsList';
-export { ReferralHub, type ReferralHubProps } from './ReferralHub';
-export { ReferralCodeCard } from './ReferralCodeCard';
-export { mailtoHref, linkedinPeopleSearch } from './links';
+export { FollowUpDraftButton } from './FollowUpDraftButton';
+export { ReferralHub } from './ReferralHub';

@@ -379,10 +379,6 @@ export async function recordCoachCost(sessionId: string, requestId: string): Pro
   }
 }
 
-export function recordSessionDuration(sessionId: string, durationSec: number | null): Promise<void> {
-  return applyCost(sessionId, { durationSec });
-}
-
 /** Meter the recording's egress + one-month storage cost from the bytes the
  *  LiveKit egress-ended webhook reports. Resolves rates from the rate card
  *  (egress.usdPerGb / storage.usdPerGbMonth, both default 0 ⇒ no-op until

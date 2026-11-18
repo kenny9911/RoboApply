@@ -32,8 +32,3 @@ export function setLocalePreference(locale: RoboLocale, opts?: CallOptions): Pro
   return call<{ locale: string }>('PUT', LOCALE_PREFERENCE_PATH, { ...opts, body: { locale } });
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const brandApi = {
-  getPublicBrand,
-  setLocalePreference,
-};

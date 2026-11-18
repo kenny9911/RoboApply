@@ -70,16 +70,3 @@ export function submitUnsubscribeSurvey(body: In<typeof N.UnsubscribeSurveyBodyS
   return call<void>('POST', `/api/v1/public/email/unsubscribe/survey`, { ...opts, body });
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const notificationsApi = {
-  listNotifications,
-  getUnreadCount,
-  markAllRead,
-  getNotificationPreferences,
-  patchNotificationPreferences,
-  markRead,
-  respondToInvitation,
-  getUnsubscribePreview,
-  unsubscribeEmail,
-  submitUnsubscribeSurvey,
-};

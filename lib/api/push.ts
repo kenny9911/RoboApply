@@ -39,10 +39,3 @@ export function deletePushSubscription(id: string, opts?: CallOptions): Promise<
   return call<void>('DELETE', `/api/v1/roboapply/push/subscriptions/${seg(id)}`, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const pushApi = {
-  getVapidPublicKey,
-  createPushSubscription,
-  lookupPushSubscription,
-  deletePushSubscription,
-};

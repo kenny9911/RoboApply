@@ -206,12 +206,3 @@ export function CampusCalendar({ initial = null, filter = {} }: CampusCalendarPr
   );
 }
 
-/** Shown when the capability is off (the server page normally 404s first). */
-export function CampusUnavailable() {
-  const t = useTranslations('campus.page');
-  return (
-    <div className={styles.page}>
-      <EmptyState title={t('unavailableTitle')} sub={t('unavailableSub')} />
-    </div>
-  );
-}

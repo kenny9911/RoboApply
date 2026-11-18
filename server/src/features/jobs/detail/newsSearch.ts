@@ -33,10 +33,6 @@ export interface NewsSearchDeps {
   timeoutMs?: number;
 }
 
-export function tavilyConfigured(env: EnvSource = process.env): boolean {
-  return !!env.TAVILY_API_KEY?.trim();
-}
-
 function publisherOf(url: string): string | null {
   try {
     const u = new URL(url);

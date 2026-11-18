@@ -14,7 +14,6 @@ import {
   adminDeleteCoach,
   adminListCoaches,
   adminUpdateCoach,
-  getCoach,
   listCoaches,
   requestCoach,
 } from '../../lib/api/coaching';
@@ -41,15 +40,6 @@ export function useCoaches(filters: { specialty?: string | null; language?: stri
       listCoaches({ ...(specialty ? { specialty } : {}), ...(language ? { language } : {}) }, { signal }),
     enabled,
     staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-}
-
-export function useCoach(id: string | null) {
-  return useQuery({
-    queryKey: coachingKeys.coach(id ?? ''),
-    queryFn: ({ signal }) => getCoach(id!, { signal }),
-    enabled: Boolean(id),
     retry: false,
   });
 }

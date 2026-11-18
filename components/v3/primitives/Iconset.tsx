@@ -79,11 +79,6 @@ export const IconTrash = (p: IconProps) => (
     <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6" />
   </Icon>
 );
-export const IconPause = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M8 5v14M16 5v14" />
-  </Icon>
-);
 export const IconPlay = (p: IconProps) => <Icon d="M6 4l14 8-14 8V4Z" {...p} />;
 export const IconUpload = (p: IconProps) => (
   <Icon {...p}>
@@ -124,11 +119,6 @@ export const IconStack = (p: IconProps) => (
     <path d="M12 3 2 8l10 5 10-5-10-5Z" />
     <path d="M2 16l10 5 10-5" />
     <path d="M2 12l10 5 10-5" />
-  </Icon>
-);
-export const IconList = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
   </Icon>
 );
 export const IconClock = (p: IconProps) => (
@@ -216,19 +206,6 @@ export const IconEndCall = (p: IconProps) => (
     <path d="M3.6 14.2a1.4 1.4 0 0 1-.4-1.4C4 9.6 7.6 7.5 12 7.5s8 2.1 8.8 5.3a1.4 1.4 0 0 1-.4 1.4l-1.6 1.4a1.4 1.4 0 0 1-1.8 0l-1.5-1.2a1.4 1.4 0 0 1-.5-1.3l.2-1.2a10 10 0 0 0-6.4 0l.2 1.2a1.4 1.4 0 0 1-.5 1.3L7 16.6a1.4 1.4 0 0 1-1.8 0Z" />
   </Icon>
 );
-export const IconPanel = (p: IconProps) => (
-  <Icon {...p}>
-    <rect x="3" y="4.5" width="18" height="15" rx="2" />
-    <path d="M14.5 4.5v15" />
-  </Icon>
-);
-export const IconSliders = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
-    <circle cx="16" cy="7" r="2" />
-    <circle cx="8" cy="17" r="2" />
-  </Icon>
-);
 export const IconHistory = (p: IconProps) => (
   <Icon {...p}>
     <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
@@ -236,7 +213,6 @@ export const IconHistory = (p: IconProps) => (
     <path d="M12 7.5V12l3 1.8" />
   </Icon>
 );
-
 
 // ── Shell additions (FND-6a): nav entries for Ready to apply, Coaching,
 // Invite friends, the extension, the campus calendar, More and Ask. ──────

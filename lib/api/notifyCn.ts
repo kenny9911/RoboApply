@@ -24,8 +24,3 @@ export function getJsSdkSignature(query: In<typeof NC.JsSdkSignatureQuerySchema>
   return call<NC.JsSdkSignatureResponse>('GET', withQuery(`/api/v1/roboapply/notify-cn/js-sdk-signature`, query), opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const notifyCnApi = {
-  subscribeWechatMessages,
-  getJsSdkSignature,
-};

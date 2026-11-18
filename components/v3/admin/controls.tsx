@@ -345,7 +345,3 @@ const STAT_BASE = {
   overflow: 'hidden' as const,
 };
 
-/** A de-emphasized unit suffix span (the "$" / "%" one step down). */
-export function Unit({ children }: { children: ReactNode }) {
-  return <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontWeight: 500 }}>{children}</span>;
-}

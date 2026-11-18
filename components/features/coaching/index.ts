@@ -3,6 +3,4 @@
 
 export { PracticeReportCoachLine, type PracticeReportCoachLineProps } from './PracticeReportCoachLine';
 export { CoachingPage } from './CoachingPage';
-export { CoachCard, type CoachCardProps } from './CoachCard';
-export { CoachRequestDialog, type CoachRequestDialogProps } from './CoachRequestDialog';
 export { AdminCoachesConsole } from './AdminCoachesConsole';

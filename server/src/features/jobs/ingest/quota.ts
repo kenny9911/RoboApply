@@ -109,8 +109,6 @@ export const QUOTA_WRITE_ATTEMPTS = 3;
 
 /** States in which the provider serves nothing. */
 const CLOSED: ReadonlySet<ProviderQuotaState> = new Set(['exhausted', 'not_subscribed', 'unauthorized']);
-/** Closed states that say the key or the subscription is wrong: nothing in them says when that ends. */
-const REFUSED: ReadonlySet<ProviderQuotaState> = new Set(['not_subscribed', 'unauthorized']);
 
 /**
  * Providers a metered call may ever be made to for market cn (JC-6). JSearch

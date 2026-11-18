@@ -33,12 +33,7 @@ import type {
   OnboardingTopic,
   OnboardingWorkMode,
 } from '../types/onboarding.js';
-import type { RaLocale } from './raLocale.js';
-import { getMessages } from './raOnboardingMessages.js';
-import {
-  RA_PREFERENCE_OPTIONS,
-  type RAPreferencesUpdateInput,
-} from '../services/RAPreferencesService.js';
+import { RA_PREFERENCE_OPTIONS } from '../services/RAPreferencesService.js';
 
 // ─── Enum normalization tables (PRD §7 taxonomy) ───────────────────────
 //
@@ -647,28 +642,6 @@ export function replaceDraft(
   return next;
 }
 
-// ─── Locale → market defaults ──────────────────────────────────────────
-
-export interface OnboardingMarketDefaults {
-  /** ISO-3166 alpha-2, lowercase — the JSearch (Google for Jobs) market. */
-  country: string;
-  /** ISO-4217 — the inferred salary currency (always confirmable in chat). */
-  currency: string;
-}
-
-const MARKET_DEFAULTS: Partial<Record<RaLocale, OnboardingMarketDefaults>> = {
-  en: { country: 'us', currency: 'USD' },
-  zh: { country: 'cn', currency: 'CNY' },
-  'zh-TW': { country: 'tw', currency: 'TWD' },
-  ja: { country: 'jp', currency: 'JPY' },
-  // es / fr / pt / de intentionally absent → en market, mirroring the
-  // catalog's English fallback for those locales.
-};
-
-export function marketDefaultsForLocale(locale: RaLocale): OnboardingMarketDefaults {
-  return MARKET_DEFAULTS[locale] ?? MARKET_DEFAULTS.en!;
-}
-
 // ─── Dedup fingerprint ─────────────────────────────────────────────────
 
 export interface FingerprintInput {
@@ -703,121 +676,3 @@ export function jobFingerprint(input: FingerprintInput): string {
 
 // ─── Draft → persistence mappers ───────────────────────────────────────
 
-export interface DraftGoalInput {
-  targetTitle: string;
-  targetSalaryMin?: number;
-  targetSalaryMax?: number;
-  targetSalaryCurrency?: string;
-  seniority?: OnboardingSeniority;
-  preferredLocations?: {
-    countries: string[];
-    cities: string[];
-    remoteOk: boolean;
-    hybridOk: boolean;
-  };
-  preferredWorkType?: OnboardingWorkMode;
-}
-
-/**
- * Draft → RACareerGoal upsert fields. Sparse: keys are present only when the
- * conversation captured them (RACareerGoalService.upsert keeps previous
- * values for unset fields — returning-user deep-merge for free). The title
- * falls back to the localized catalog `defaultTargetTitle` — never a
- * hardcoded literal, never a client-side string split.
- */
-export function draftToGoalInput(
-  draft: OnboardingDraftPreferences,
-  locale: RaLocale,
-): DraftGoalInput {
-  const out: DraftGoalInput = {
-    targetTitle: draft.targetRoles?.[0] ?? getMessages(locale).defaultTargetTitle,
-  };
-
-  if (draft.salary?.min != null || draft.salary?.max != null) {
-    if (draft.salary.min != null) out.targetSalaryMin = draft.salary.min;
-    if (draft.salary.max != null) out.targetSalaryMax = draft.salary.max;
-    // Stated currency wins; otherwise the locale market default (which the
-    // chat confirmed before relying on it).
-    out.targetSalaryCurrency =
-      draft.salary.currency ?? marketDefaultsForLocale(locale).currency;
-  }
-
-  if (draft.seniority) out.seniority = draft.seniority;
-
-  if (draft.locations !== undefined || draft.workModes !== undefined) {
-    const modes = draft.workModes ?? [];
-    out.preferredLocations = {
-      countries: draft.locations?.countries ?? [],
-      cities: draft.locations?.cities ?? [],
-      remoteOk: draft.locations?.remoteOk ?? modes.includes('remote'),
-      hybridOk: modes.includes('hybrid'),
-    };
-  }
-
-  if (draft.workModes && draft.workModes.length > 0) {
-    out.preferredWorkType = draft.workModes[0];
-  }
-
-  return out;
-}
-
-/**
- * Draft → sparse RAPreferences-blob PATCH. Only conversation-captured keys
- * (defined on the draft) appear — the service's replace-wholesale array
- * semantics make sending unset keys destructive. Shape conversions:
- *   - workModes[] → FULL boolean record (a stated set of acceptable modes is
- *     a closed choice over exactly three keys);
- *   - companyStages[] → partial true-only record (deep-merged in the service,
- *     so unstated stages keep their stored values);
- *   - targetRoles → the existing `roleTitles` key — the one
- *     `preferencesToFilters()` turns into the feed's `q`, which is what makes
- *     this whole mapper matter rather than being bookkeeping;
- *   - salary.min/max (absolute) → salaryMinK/MaxK (blob's K units). Stored for
- *     Settings only: it is deliberately never sent as a search filter, because
- *     `salaryMax >= min` is a Prisma `gte` and `gte` does not match NULL, so a
- *     floor deletes every posting without a published range.
- * Session-level keys (intentMarkdown, defaultResumeId, dailyCap, huntActive,
- * onboarding) are the orchestrator's to add on top.
- */
-export function draftToPreferencesPatch(
-  draft: OnboardingDraftPreferences,
-): RAPreferencesUpdateInput {
-  const patch: RAPreferencesUpdateInput = {};
-
-  if (draft.targetRoles !== undefined) patch.roleTitles = draft.targetRoles;
-
-  if (draft.workModes !== undefined) {
-    patch.workModes = {
-      remote: draft.workModes.includes('remote'),
-      hybrid: draft.workModes.includes('hybrid'),
-      onsite: draft.workModes.includes('onsite'),
-    };
-  }
-
-  if (draft.companyStages !== undefined) {
-    const stages: Record<string, boolean> = {};
-    for (const id of draft.companyStages) stages[id] = true;
-    patch.companyStages = stages;
-  }
-
-  if (draft.employmentTypes !== undefined) {
-    patch.employmentTypes = draft.employmentTypes;
-  }
-
-  if (draft.locations?.cities !== undefined) {
-    patch.cities = draft.locations.cities;
-  }
-
-  if (draft.salary?.min != null) patch.salaryMinK = Math.round(draft.salary.min / 1000);
-  if (draft.salary?.max != null) patch.salaryMaxK = Math.round(draft.salary.max / 1000);
-  if (draft.salary?.period != null) patch.salaryPeriod = draft.salary.period;
-
-  if (draft.targetCompanies !== undefined) patch.targetCompanies = draft.targetCompanies;
-  if (draft.industriesTarget !== undefined) patch.industriesTarget = draft.industriesTarget;
-  if (draft.industriesAvoid !== undefined) patch.industriesAvoid = draft.industriesAvoid;
-  if (draft.companySizes !== undefined) patch.companySizes = draft.companySizes;
-  if (draft.mustHaves !== undefined) patch.mustHaves = draft.mustHaves;
-  if (draft.dealbreakers !== undefined) patch.dealbreakers = draft.dealbreakers;
-
-  return patch;
-}

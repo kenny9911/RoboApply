@@ -46,11 +46,6 @@ export function patchTrackerEntry(id: string, body: In<typeof TR.TrackerPatchBod
   return call<{ entry: TR.TrackerEntryView }>('PATCH', `${BASE}/${seg(id)}`, { ...opts, body });
 }
 
-/** Legacy route: DELETE /v2/tracker/:id (soft delete). */
-export function deleteTrackerEntry(id: string, opts?: CallOptions): Promise<void> {
-  return call<void>('DELETE', `${BASE}/${seg(id)}`, opts);
-}
-
 /** `tracker.followUps` — GET /api/v1/roboapply/v2/tracker/follow-ups */
 export function listFollowUps(opts?: CallOptions): Promise<TR.FollowUpsResponse> {
   return call<TR.FollowUpsResponse>('GET', `/api/v1/roboapply/v2/tracker/follow-ups`, opts);
@@ -108,18 +103,3 @@ export function refreshWeeklyInsight(scope?: WeeklyInsightScope, opts?: CallOpti
   return call<TR.WeeklyInsightResponse>('POST', `${INSIGHTS}/refresh`, body ? { ...opts, body } : opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const trackerApi = {
-  listTracker,
-  getTrackerEntry,
-  createTrackerEntry,
-  patchTrackerEntry,
-  deleteTrackerEntry,
-  listFollowUps,
-  trackerExportCsvUrl,
-  listTrackerEvents,
-  addTrackerNote,
-  listTrackerArtifacts,
-  getWeeklyInsight,
-  refreshWeeklyInsight,
-};

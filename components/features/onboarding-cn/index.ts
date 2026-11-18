@@ -32,44 +32,27 @@ import type { CnOnboardingStep, CnOnboardingStepProps } from './types';
 
 export { CN_ONBOARDING_SCREENS, CN_ONBOARDING_STEPS, cnStepPosition, isCnOnboardingStep } from './types';
 export type { CnMatchSummary, CnOnboardingStep, CnOnboardingStepProps } from './types';
-export { ConsentStep, INITIAL_CONSENT_STATE, REQUIRED_CONSENTS, consentFormFromLedger, consentsAlreadyGiven, consentsGivenToEarlierText, type ConsentFormState } from './ConsentStep';
+export { ConsentStep, INITIAL_CONSENT_STATE, consentsAlreadyGiven, consentsGivenToEarlierText } from './ConsentStep';
 export { IdentityStep } from './IdentityStep';
-export { EducationStep, SchoolTags } from './EducationStep';
+export { EducationStep } from './EducationStep';
 export { IntentStep, intentBody, intentProblems, type IntentForm } from './IntentStep';
 export { TagsStep } from './TagsStep';
 export { CnConfirmStep, classOfProgram } from './CnConfirmStep';
-export { CnResumeGate, type CnResumeGateProps } from './CnResumeGate';
+export { CnResumeGate } from './CnResumeGate';
 export {
   EMPTY_MANUAL_PROFILE,
-  ManualProfileForm,
   manualProfileParts,
   manualProfileProblems,
   normalizeMonth,
-  type ManualProfileProblem,
   parseSkills,
-  type ManualProfileFormProps,
-  type ManualProfileFormState,
 } from './ManualProfileForm';
-export { ConfirmSummary, confirmSummaryRows, type ConfirmConsents, type ConfirmSummaryRow } from './ConfirmSummary';
-export { CnFirstValueTour, tourCards, type CnFirstValueTourProps, type CnTourCard } from './CnFirstValueTour';
-export { CnFirstValueScreen, useCnAiAllowed, type CnFirstValueScreenProps } from './CnFirstValueScreen';
-export { OpportunityPanel } from './OpportunityPanel';
+export { confirmSummaryRows } from './ConfirmSummary';
+export { CnFirstValueTour } from './CnFirstValueTour';
+export { CnFirstValueScreen } from './CnFirstValueScreen';
 export {
   CnOnboardingApiProvider,
-  campusOpenFrom,
-  cnSnapshotView,
-  defaultCnOnboardingApi,
-  payFromOnboarding,
-  snapshotScope,
-  useCnOnboardingApi,
   type CnOnboardingApi,
-  type CnPayView,
-  type CnProgramList,
-  type CnSnapshotQuery,
-  type CnSnapshotScope,
-  type CnSnapshotView,
 } from './api';
-export { defaultGraduationClass, currentCampusClass, formatMonthlyK } from './logic';
 
 export const CN_ONBOARDING_STEP_COMPONENTS: Readonly<Record<CnOnboardingStep, ComponentType<CnOnboardingStepProps>>> = {
   consent: ConsentStep,

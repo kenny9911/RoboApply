@@ -45,12 +45,3 @@ export function adminDeleteAnnouncement(id: string, opts?: CallOptions): Promise
   return call<void>('DELETE', `/api/v1/roboapply/admin/announcements/${seg(id)}`, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const announcementsApi = {
-  getNextAnnouncement,
-  markAnnouncementSeen,
-  adminListAnnouncements,
-  adminCreateAnnouncement,
-  adminUpdateAnnouncement,
-  adminDeleteAnnouncement,
-};

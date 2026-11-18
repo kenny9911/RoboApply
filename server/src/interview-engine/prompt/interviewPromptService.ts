@@ -190,7 +190,7 @@ function blueprintToSeedQuestions(bp: InterviewBlueprint): SeedQuestion[] {
 export class InterviewPromptService {
   async generate(input: PromptGenerationInput): Promise<PromptGenerationResult> {
     const startedAt = Date.now();
-    const { requestId, signal } = input;
+    const { requestId } = input;
 
     // 0) Domain expert (deterministic classify from role + JD, or explicit key).
     //    Resolved ONCE here so question design, the live voice prompt, and the
@@ -395,4 +395,3 @@ export const interviewPromptService = new InterviewPromptService();
 export default interviewPromptService;
 
 export { fallbackBlueprint };
-export const __test = { fallbackBlueprint, blueprintToSeedQuestions };

@@ -38,7 +38,7 @@
 
 import { SHOWN_BY, termKey } from '../skills/index.js';
 
-export { dedupeTerms, displayTerm, EVERYDAY_WORDS, isEverydayWord, SHOWN_BY, termKey, termParts, termWords } from '../skills/index.js';
+export { dedupeTerms, displayTerm, EVERYDAY_WORDS, isEverydayWord, SHOWN_BY, termKey, termParts } from '../skills/index.js';
 
 // ── Named technology → the broader term a post may use ────────────────────
 

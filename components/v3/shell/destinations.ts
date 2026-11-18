@@ -124,7 +124,6 @@ export interface NavEntry {
 
 const RA: readonly BrandId[] = ['roboapply'];
 const GA: readonly BrandId[] = ['goapply'];
-const BOTH: readonly BrandId[] = ['roboapply', 'goapply'];
 
 /** `p === prefix` or under it, by path segment. */
 export function under(prefix: string): (pathname: string) => boolean {

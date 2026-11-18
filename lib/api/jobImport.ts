@@ -36,10 +36,3 @@ export function removeAddedJob(jobId: string, opts?: CallOptions): Promise<void>
   return call<void>('DELETE', `/api/v1/roboapply/jobs/import/jobs/${seg(jobId)}`, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const jobImportApi = {
-  importJob,
-  getImportStatus,
-  listAddedJobs,
-  removeAddedJob,
-};

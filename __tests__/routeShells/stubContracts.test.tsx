@@ -58,7 +58,6 @@ import * as coaching from '../../components/features/coaching';
 import * as notifyCn from '../../components/features/notify-cn';
 import * as practiceCn from '../../components/features/practice-cn';
 import * as onboardingCn from '../../components/features/onboarding-cn';
-import * as auth from '../../components/features/auth';
 import * as search from '../../components/features/search';
 import * as notifications from '../../components/features/notifications';
 import * as compliance from '../../components/features/compliance';
@@ -136,7 +135,6 @@ describe('props contracts (compile-time)', () => {
       expectTypeOf(Method).toMatchTypeOf<ComponentType<AuthMethodProps>>();
     }
     for (const Section of [
-      auth.AuthSettingsSection,
       search.SearchSettingsSection,
       notifications.NotificationsSettingsSection,
       credits.CreditsSettingsSection,
@@ -192,7 +190,6 @@ describe('stubs render nothing (while still stubs)', () => {
   });
 
   it.each([
-    ['account', 'auth', auth.AuthSettingsSection],
     ['search', 'search', search.SearchSettingsSection],
     ['notifications', 'notifications', notifications.NotificationsSettingsSection],
     ['credits', 'credits', credits.CreditsSettingsSection],
@@ -278,7 +275,7 @@ describe('no seam is still a stub (INT-12, WP-93 "no dead ends")', () => {
     `${F}/coaching/PracticeReportCoachLine.tsx`,
     `${F}/practice-cn/CnReport.tsx`,
     `${F}/notify-cn/SubscribeOnTap.tsx`,
-    ...['auth', 'search', 'notifications', 'credits', 'compliance', 'brand', 'copilot', 'extension', 'network', 'growth', 'profile'].map(
+    ...['search', 'notifications', 'credits', 'compliance', 'brand', 'copilot', 'extension', 'network', 'growth', 'profile'].map(
       (area) => `${F}/${area}/SettingsSection.tsx`,
     ),
   ];
@@ -378,7 +375,6 @@ describe('area index files expose the seams (TASK_PLAN.md §2.1 rule 4)', () => 
     ['notify-cn', notifyCn, ['SubscribeOnTap']],
     ['practice-cn', practiceCn, ['CnReport']],
     ['onboarding-cn', onboardingCn, ['CN_ONBOARDING_STEPS', 'CN_ONBOARDING_STEP_COMPONENTS', 'isCnOnboardingStep']],
-    ['auth', auth, ['AuthSettingsSection']],
     ['search', search, ['SearchSettingsSection']],
     ['notifications', notifications, ['MessageCenterButton', 'AnnouncementModal', 'NotificationsSettingsSection']],
     ['compliance', compliance, ['ComplianceSettingsSection']],

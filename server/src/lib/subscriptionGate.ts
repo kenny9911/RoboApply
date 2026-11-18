@@ -48,22 +48,6 @@ export type SubscriptionLockReason =
   | 'incomplete_expired'
   | 'admin_disabled';
 
-/**
- * Coarse lifecycle bucket for admin display. Distinct from the raw
- * `subscriptionStatus` string because it folds in computed signals
- * (grace window, T-5 expiry, admin disable). Single source of truth for the
- * admin pills + the dedicated Subscriptions view.
- */
-export type SubscriptionState =
-  | 'free'
-  | 'active'
-  | 'trialing'
-  | 'expiring_soon' // active/trialing, ≤ WARN_DAYS to currentPeriodEnd
-  | 'in_grace' // lapsed/past_due but within the grace window (NOT locked)
-  | 'expired' // locked: past the grace window
-  | 'canceled'
-  | 'admin_disabled';
-
 export interface SubscriptionGateResult {
   locked: boolean;
   /** Underlying reason — populated even during grace so banners can show context. */
@@ -105,9 +89,6 @@ export interface SubscriptionGateInput {
   trialEnd?: Date | string | null;
   createdAt?: Date | string | null;
 }
-
-/** Days-to-expiry threshold at/below which the T-5 renewal banner shows. */
-export const WARN_DAYS = 5;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -275,91 +256,3 @@ export function evaluateSubscriptionGate(
   };
 }
 
-export interface SubscriptionDescription {
-  state: SubscriptionState;
-  gate: SubscriptionGateResult;
-  graceEndsAt: string | null;
-  daysUntilExpiration: number | null;
-  daysUntilGraceEnd: number | null;
-}
-
-/**
- * Compute the coarse `SubscriptionState` (for admin pills + the Subscriptions
- * view) alongside the full gate result. Single source of truth so the admin
- * UI and the gate never disagree.
- */
-export function describeSubscription(
-  user: SubscriptionGateInput,
-  now: Date = new Date(),
-): SubscriptionDescription {
-  const gate = evaluateSubscriptionGate(user, now);
-  const role = (user.role ?? '').toLowerCase();
-  const tier = (user.subscriptionTier ?? 'free').toLowerCase();
-  const status = (user.subscriptionStatus ?? 'active').toLowerCase();
-
-  let state: SubscriptionState;
-  if (user.isActive === false) {
-    state = 'admin_disabled';
-  } else if (EXEMPT_ROLES.has(role)) {
-    state = tier === 'free' ? 'free' : 'active';
-  } else if (tier === 'free') {
-    // A free user within/after their (gating) trial shows lifecycle states like
-    // a paid sub — status-agnostic, mirroring evaluateSubscriptionGate's anchor.
-    // A free user without ANY anchor (or with gating disabled) is plain 'free'.
-    const createdAt = toDate(user.createdAt);
-    const anchor =
-      toDate(user.currentPeriodEnd) ??
-      toDate(user.trialEnd) ??
-      (createdAt ? addDays(createdAt, FREE_TRIAL_DAYS) : null);
-    const gatingOn = process.env.FREE_TRIAL_GATING !== 'disabled';
-    if (!gatingOn || !anchor) {
-      state = 'free';
-    } else if (gate.locked) {
-      state = 'expired';
-    } else if (gate.inGracePeriod) {
-      state = 'in_grace';
-    } else if (
-      gate.daysUntilExpiration != null &&
-      gate.daysUntilExpiration >= 0 &&
-      gate.daysUntilExpiration <= WARN_DAYS
-    ) {
-      state = 'expiring_soon';
-    } else {
-      state = 'trialing';
-    }
-  } else if (gate.locked) {
-    state = gate.reason === 'canceled' ? 'canceled' : 'expired';
-  } else if (gate.inGracePeriod) {
-    state = 'in_grace';
-  } else if (status === 'canceled') {
-    state = 'canceled';
-  } else if (status === 'trialing') {
-    state = 'trialing';
-  } else if (
-    gate.daysUntilExpiration != null &&
-    gate.daysUntilExpiration >= 0 &&
-    gate.daysUntilExpiration <= WARN_DAYS
-  ) {
-    state = 'expiring_soon';
-  } else {
-    state = 'active';
-  }
-
-  return {
-    state,
-    gate,
-    graceEndsAt: gate.graceEndsAt,
-    daysUntilExpiration: gate.daysUntilExpiration,
-    daysUntilGraceEnd: gate.daysUntilGraceEnd,
-  };
-}
-
-/**
- * Convenience helper for the auditor / admin tools — returns the
- * `subscriptionStatus` value we want to set on a paid user whose period
- * has lapsed without a renewal webhook. `'past_due'` matches our locked-
- * status set so the (grace-aware) gate fires once the grace window closes.
- */
-export function deriveStaleStatus(): 'past_due' {
-  return 'past_due';
-}

@@ -11,11 +11,6 @@ import { formatMoney } from '../../../lib/pricing';
 /** Format minor units (cents / fen) into `currency` for `locale`. */
 export const money = formatMoney;
 
-/** Trim float dust from a credit count (e.g. 10 → "10", 1.5 → "1.5"). */
-export function fmtCredits(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
-}
-
 /**
  * True for the generated address of an account that has no email: GoApply
  * phone and WeChat sign-ups get `u-<random>@users.goapply.invalid` (server:

@@ -52,12 +52,3 @@ export function toolForm(input: { resume: File; postingTitle?: string; postingTe
   return form;
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const toolsApi = {
-  getToolsConfig,
-  runResumeCheck,
-  runResumeJobMatch,
-  getToolResult,
-  claimToolResult,
-  toolForm,
-};

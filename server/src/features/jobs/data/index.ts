@@ -25,7 +25,6 @@ import { TAXONOMY_AS_OF, TAXONOMY_SOURCES } from '../taxonomy/index.js';
 export {
   DOL_LCA_SOURCE,
   DOL_LCA_URL,
-  UK_RATING_SEPARATOR,
   UK_SPONSOR_REGISTER_COUNTRY,
   UK_SPONSOR_REGISTER_LICENCE,
   UK_SPONSOR_REGISTER_SOURCE,
@@ -36,9 +35,8 @@ export {
   fiscalYearOfPeriod,
   sponsorshipDataSource,
   sponsorshipDataSources,
-  uscisPeriod,
 } from './sponsorSources.js';
-export type { SponsorRegisterSource, SponsorshipDataKind, SponsorshipDataSource } from './sponsorSources.js';
+export type { SponsorshipDataKind, SponsorshipDataSource } from './sponsorSources.js';
 
 export interface DataSource {
   id: string;

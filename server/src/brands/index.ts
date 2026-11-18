@@ -19,8 +19,4 @@ export function getBrand(id: string | undefined | null): BrandConfig {
   return BRANDS[DEFAULT_BRAND_ID];
 }
 
-export function listBrandIds(): BrandId[] {
-  return Object.keys(BRANDS) as BrandId[];
-}
-
-export type { BrandConfig, BrandId, BrandFeatureFlags, BrandSeoConfig } from './types.js';
+export type { BrandConfig, } from './types.js';

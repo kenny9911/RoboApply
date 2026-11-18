@@ -6,6 +6,6 @@
 //   WhatsNew           "What's new": one announcement at most (rendered by the shell's
 //                      AnnouncementModal slot, components/features/notifications/AnnouncementModal.tsx)
 
-export { PwaInstallPrompt, PWA_INSTALL_POPUP_KEY, PWA_INSTALL_POPUP_PRIORITY } from './InstallPrompt';
-export { PushOptIn, PUSH_OPT_IN_CATEGORIES, pushChannelPatch } from './PushOptIn';
-export { WhatsNew, announcementPopupKey } from './WhatsNew';
+export { PwaInstallPrompt } from './InstallPrompt';
+export { PushOptIn } from './PushOptIn';
+export { WhatsNew } from './WhatsNew';

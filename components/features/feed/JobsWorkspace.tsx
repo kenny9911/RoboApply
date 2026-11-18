@@ -90,8 +90,6 @@ import styles from './feed.module.css';
 /** `/jobs?edit=search` opens the list with the search controls showing. */
 export const SEARCH_EDIT_PARAM = 'edit';
 export const SEARCH_EDIT_VALUE = 'search';
-/** Where "Change" on a search shown elsewhere (Today's goal line) sends the user. */
-export const JOBS_SEARCH_EDIT_HREF = `/jobs?${SEARCH_EDIT_PARAM}=${SEARCH_EDIT_VALUE}`;
 
 export function JobsWorkspace() {
   const t = useTranslations('jobs.workspace');

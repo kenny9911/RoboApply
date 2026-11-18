@@ -84,10 +84,6 @@ const SUBSETS = ['en', 'zh-TW', 'zh-CN', 'cross'] as const;
 
 // ── What the suite loads from the code under test ─────────────────────────
 
-interface SqlLike {
-  text: string;
-  values: unknown[];
-}
 type Sql = Prisma.Sql;
 
 interface FeedRowLike {

@@ -7,12 +7,6 @@ import type { ProductBrand } from '../../platform/brand/registry.js';
 import { getCurrentBrand } from '../../platform/brand/brandContext.js';
 
 export * from './contract.js';
-export { createAccountRouter, createAuthRouter } from './routes.js';
-export { AuthError, authErrors } from './errors.js';
-export { createAuthFeatureService, onboardingFor, authService } from './service.js';
-export type { AuthFeatureServiceImpl, AuthServiceDeps, OAuthSignupContext, SignupRequestContext } from './service.js';
-export { signupRequestContext } from './requestContext.js';
-export type { GoApplySignupDeps, GoApplySignupPlan } from './goapplySignup.js';
 
 /** The FND-5 interface, now backed by the real service (brand from the current request/unit of work). */
 export interface AuthFeatureService {

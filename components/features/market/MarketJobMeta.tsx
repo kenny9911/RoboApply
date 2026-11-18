@@ -19,8 +19,6 @@ import { JobMetaCn, cnPayWords, isNegotiablePay, readCnMeta } from './cn';
 import { JobMetaTw } from './tw';
 import type { MarketCardMeta, MarketJobMetaProps } from './types';
 
-export type { MarketJobMetaProps } from './types';
-
 export function MarketJobMeta(props: MarketJobMetaProps) {
   const brand = useBrand();
   return brand.market === 'cn' ? <JobMetaCn {...props} /> : <JobMetaTw {...props} />;

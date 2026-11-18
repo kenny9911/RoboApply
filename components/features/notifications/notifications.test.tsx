@@ -13,7 +13,6 @@ import type { ResolvedFlags } from '../../../server/src/platform/flags';
 import { fail, installFetch, list, ok, profile, type RecordedCall } from '../filters/filters.testkit';
 import { __toastStore } from '../../v3/primitives/Toast';
 import type { NotificationPreferencesView, NotificationView } from '../../../lib/api/contracts/notifications';
-import { NotifSection } from '../../v3/preferences/sections/NotifSection';
 import { MessageCenterButton, formatUnread } from './MessageCenterButton';
 import { MessageList } from './MessageList';
 import { messageJobs } from './messageText';
@@ -492,12 +491,6 @@ describe('NotificationsSettings (/settings#notifications)', () => {
     fireEvent.change(screen.getByLabelText('Email summary'), { target: { value: 'weekly' } });
     await waitFor(() => expect(net.to('PATCH', `${SP}/sp_main`)[0]?.body).toEqual({ alertDigest: 'weekly', baseVersion: 3 }));
     expect(document.body.textContent).not.toMatch(/unlimited/i);
-  });
-
-  it('the legacy settings section renders the same content', async () => {
-    setup();
-    renderUi(<NotifSection />, { flags: { 'jobs.alerts': true } });
-    await waitFor(() => expect(screen.getAllByTestId('notifications-settings')).toHaveLength(2));
   });
 });
 
