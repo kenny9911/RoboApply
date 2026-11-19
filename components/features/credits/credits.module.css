@@ -367,6 +367,13 @@
 .badge:hover {
   border-color: var(--rule-strong);
 }
+/* In the rail the badge is a white tile on the rail's margins. */
+:global(.side) .badge {
+  margin: var(--sp-3) 12px 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
 
 .badge:focus-visible {
   outline: 2px solid var(--action);
