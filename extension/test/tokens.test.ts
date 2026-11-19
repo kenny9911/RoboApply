@@ -11,13 +11,13 @@ import { readClarity, tokenCss } from '../scripts/tokens.mjs';
 
 const REPO = resolve(__dirname, '../..');
 
-describe('Paper tokens', () => {
+describe('Pulse tokens', () => {
   const t = readClarity(REPO);
 
   it('reads the light, dark and GoApply blocks from the app stylesheets', () => {
-    expect(t.light).toMatch(/--action: #1170CD;/);
+    expect(t.light).toMatch(/--action: #2B4DFF;/);
     expect(t.light).toMatch(/--fs-body:/);
-    expect(t.dark).toMatch(/--bg: #0F141E;/);
+    expect(t.dark).toMatch(/--bg: #07080F;/);
     expect(t.goLight).toMatch(/--action: #0E4A3E;/);
     expect(t.goDark).toMatch(/--action: #A6F2CC;/);
   });
