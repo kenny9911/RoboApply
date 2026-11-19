@@ -1,90 +1,91 @@
-# RoboApply — Desk
+# RoboApply — Pulse
 
 November 2026 · Implemented design system
 
-RoboApply helps people make a considered next move. Desk lays the product out the way resume.io's app does: a white canvas with cool grey recesses, navy ink, one blue for every action, a light-blue wash for where you are, 12 px corners and navy-tinted hairline shadows, with a goal dashboard as the signed-in home. Discovery is inviting; evaluation is grounded in evidence; operational screens are orderly.
+RoboApply helps people make a considered next move, and most of the people making one are early in their careers. Pulse is the product's own brand, not a clone of another product's: plum-black ink on a plum-tinted ground, one hot pink, flat white tiles fitted edge to edge with narrow gaps, pill controls, and Space Grotesk headlines over DM Sans. Nothing is a gradient, nothing blurs, and nothing at rest casts a shadow.
 
-The user asked on 2026-11-12 for RoboApply to be a clone of [resume.io](https://resume.io)'s web app. The teardown and the measured source values are in [resume-io/TEARDOWN.md](resume-io/TEARDOWN.md) (its colour, spacing, type and shadow tokens were read from resume.io's shipped token module; layout sizes were measured on the signed-in dashboard). The clone takes resume.io's layout, information architecture and palette; it keeps RoboApply's own name, logo, wording and artwork, and resume.io's proprietary typeface is replaced by Inter. Desk replaces the October "Paper" system (skillry.dev; [skillry-style-reference.md](skillry-style-reference.md)), which replaced Clarity and Fieldwork before it; it keeps their token names, components and page recipes, so every screen restyled without a markup rewrite. Existing functionality, truthful claims, localization, accessibility and API boundaries remain applicable, as do the product rulings in `docs/roboapply/OVERHAUL_RULINGS.md` (no auto-submit — so resume.io's "Auto Apply" becomes RoboApply's "Ready to apply", which prepares and the user submits — and the gap positioning).
+Pulse was drawn on 2026-11-19 with two design skills used together. `design-taste-frontend` dealt the composition ("the well-kept board": one grid, filled tiles, no bands) and the palette ("plum-black and pink"), and its inspector measured the result in a real browser at 1440, 768 and 390 px. `ui-ux-pro-max` recommended the same structure under another name (bento grids, block-based, flat fills), the type pairing (Space Grotesk with DM Sans) and the review rules (4.5:1 text, 44 px targets, visible focus, reduced motion). Where the two disagreed the reason is recorded: the first palette dealt was signal red, which is the colour of an error and of a rejected application in a tracker, so the palette was redrawn once; `ui-ux-pro-max` proposed violet, which RoboApply already wore as "Clarity" and which the taste skill bans as the default look of AI products.
 
-## Reference synthesis
+Pulse replaces Desk (the resume.io clone of 2026-11-12; its teardown stays in [resume-io/TEARDOWN.md](resume-io/TEARDOWN.md) as the record of the layout the app still follows). It keeps Desk's token names, components and page recipes, so every screen restyled without a markup rewrite; only the marketing pages changed structure. Existing functionality, truthful claims, localization, accessibility and API boundaries remain applicable, as do the product rulings in `docs/roboapply/OVERHAUL_RULINGS.md` (no auto-submit, and the gap positioning).
 
-| Reference | Principle used | Product expression |
-| --- | --- | --- |
-| resume.io (app) | A goal dashboard as home, a person-first rail, one blue action, white cards on a white canvas with hairline shadows, large friendly type | The Dashboard (goal tabs, progress card, hero, job matches, ask bar), the rail with the profile ring, the light-blue active item, the `Upgrade` and `Ready to apply` header actions |
-| Welcome to the Jungle | Candidate discovery with company context | Recognizable employers, searchable opportunities, role essentials before evaluation |
-| Gem | Explainable evaluation with human judgment | Resume evidence beside gaps, criteria breakdown, actionable resume checks |
-| Wellfound | Practical information before commitment | Salary, currency, work mode, location, source; undisclosed facts named explicitly |
-| Teamtailor | Employer identity and authored storytelling | Editorial marketing and structured company/benefits context from actual postings |
+## What makes it Pulse
 
-See [the source-linked research](design-reference-research.md) for the recruiting-product sources and data limitations.
+| Decision | Rule |
+| --- | --- |
+| Tiles, not cards | A surface is a flat filled field. It is separated from what is under it by tone and at most a 1 px ring (`--e1`), never by a drop shadow. Tiles sit 8 px apart on the marketing board and 8–24 px apart in the app. |
+| One hue family | Plum-black, plum, raspberry, hot pink, pale pink. Status colours (green, amber, vermilion) are the only other hues, and they always carry a word. |
+| Pink is spent, not sprayed | The hot pink is the strongest tile on a screen, the progress fill, a queue that needs the user, the selected tab of the Example. Navigation, borders and body text never take it. |
+| Pills | Buttons, chips, the search field, segmented controls and the current page in the rail are fully round. Tiles and fields are 16–24 px. |
+| Big type, few sizes | Marketing headlines run to 96 px in Space Grotesk at -0.045 em. The app keeps its titles at 26–32 px: a screen people work in is not a poster. |
+| The brand plane | `--brand-plane` (plum) is a field in its own right: the statement tile, the first step, the footer. Type on it is `--on-plane` (white) in both themes. |
 
 ## Foundations
 
-The production source of truth is `app/globals.css`. `styles/tokens.css` maps existing component aliases to these values; feature files never define a second palette. `styles/workspace.css` holds the shared composition (shell, page header, buttons, metrics, stage columns, resume cards).
+The production source of truth is `app/globals.css`. `styles/tokens.css` maps existing component aliases to these values; feature files never define a second palette. `styles/workspace.css` holds the shared composition (shell, page header, buttons, metrics, stage columns, resume cards). `components/features/marketing/marketing.module.css` holds the marketing board.
 
 ### Colour
 
-Three roles, never confused:
-
-- **Ink** (`--text`) is navy and carries every title and label. **Action** (`--action`) is one blue for every primary button, link and focus ring: resume.io's Blue60 `#1170CD` (its lighter Blue50 `#1A91F0` is 3.31:1 on white, so it never carries text). In dark the action is the lighter Blue40 `#54AFF8`.
-- **Canvas** (`--bg`, `--surface`, `--surface-2`, `--surface-3`) is the white page and cards with cool grey recesses (resume.io's Neutral5/10).
-- **Highlight** (`--brand-mark`, with `--brand-plane` as the ink written on it) is a light-blue fill: plan and "Example" chips, the direct-posting badge, text selection and the brand tile. It is a **fill**, never a text colour, and it never carries state alone. "You are here" (the active nav item, the selected goal) is `--action-subtle` with the action colour and a heavier weight.
-- **Decorative blue** (`--accent-line`, `--accent-track`) draws lines and fills that carry no text: progress bars, the selected row's edge. **Upgrade** (`--upgrade`) is the indigo of resume.io's paid-plan button.
+- **Ink** (`--text`) is plum-black and carries every title and label.
+- **Action** (`--action`) is the primary button, links and the focus ring: raspberry `#C81E64` in light, hot pink `#FF5C98` in dark. Hot pink is 3.2:1 on white, so in light it never carries text.
+- **Canvas.** In the app `--bg` is the plum-tinted ground and `--surface` is the white tile on it; `--surface-2` and `--surface-3` are recesses and pressed fills. The marketing pages reverse it (`--mkt-page` white, `--mkt-tile` tinted). In dark every step is lighter than the one under it.
+- **Highlight** (`--brand-mark`, with `--brand-plane` as the ink written on it) is the hot pink fill: the action tile, the recommended plan, plan and example chips, text selection, the brand tile's glyph. A **fill**, never a text colour on a light surface, and it never carries state alone.
+- **Decorative pink** (`--accent-line`, `--accent-track`) draws lines and fills that carry no text: progress bars, the profile ring, the selected row's edge. **Upgrade** (`--upgrade`) is the plum field of the paid-plan button.
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `--bg` | `#FFFFFF` | `#0F141E` | The canvas |
-| `--surface` | `#FFFFFF` | `#161C28` | Cards and work areas |
-| `--surface-2` | `#F7F9FC` | `#1E2532` | Recessed fills, stage columns, hover |
-| `--surface-3` | `#EFF2F9` | `#273041` | Tracks, icon tiles, pressed fills |
-| `--rule` | `#E7EAF4` | `#303848` | Hairlines |
-| `--text` | `#1E2532` | `#F7F9FC` | Titles and primary copy |
-| `--text-2` | `#495163` | `#D9DEEB` | Supporting copy |
-| `--text-muted` | `#5E6679` | `#A3AABE` | Metadata (≥ 4.5:1 on every surface, the pressed `--surface-3` included) |
-| `--action` | `#1170CD` | `#54AFF8` | Primary buttons, links, focus, selected segments |
-| `--action-ink` | `#FFFFFF` | `#0F141E` | Content on action fills |
-| `--action-subtle` | `#EAF6FF` | `#132D4B` | "You are here": the active nav item, selected goal, selection tint |
-| `--brand-mark` | `#92CDFC` | `#92CDFC` | The highlight fill |
-| `--brand-plane` | `#0F3871` | `#0C264C` | Ink on the highlight; the brand tile |
-| `--accent-line` / `--accent-track` | `#54AFF8` / `#C3E5FE` | `#54AFF8` / `#10529B` | Progress fill and track, selected-row edge (no text) |
-| `--upgrade` | `#282B8F` | `#5660E8` | The paid-plan button |
-| `--ok` / `--warn` / `--danger` | `#217D47` / `#A85A0E` / `#DA0C22` | `#96D0AD` / `#F9BA44` / `#FE7D8B` | Labelled status, each with a `-subtle` fill |
-| `--surface-glass` | `rgba(255,255,255,.72)` | `rgba(255,255,255,.04)` | Secondary buttons, stat cards, segmented tracks |
-| `--tile-*` | resume.io's pastel steps (green, orange, blue, red, indigo, amber) | same | Sticker tiles; always with `--tile-ink` icons |
+| `--bg` | `#F6F2F4` | `#0D060B` | The app's ground |
+| `--surface` | `#FFFFFF` | `#1A0E16` | Tiles and work areas |
+| `--surface-2` | `#F1ECEF` | `#25161F` | Recessed fills, stage columns, hover |
+| `--surface-3` | `#E8E1E5` | `#33212C` | Tracks, count chips, pressed fills |
+| `--rule` / `--rule-strong` | `#E6DEE3` / `#D3C8CF` | `#38252F` / `#54404C` | Hairlines and control borders |
+| `--text` | `#170B13` | `#FFFFFF` | Titles and primary copy |
+| `--text-2` | `#4B3F47` | `#E6DBE1` | Supporting copy |
+| `--text-muted` | `#675A63` | `#B7A8B0` | Metadata (≥ 4.5:1 on every surface, the pressed `--surface-3` included) |
+| `--action` | `#C81E64` | `#FF5C98` | Primary buttons, links, focus |
+| `--action-ink` | `#FFFFFF` | `#1F0612` | Content on action fills |
+| `--action-subtle` | `#FFE4EE` | `#3D1026` | Selection tints, the selected goal |
+| `--brand-mark` | `#FF488B` | `#FF488B` | The highlight fill |
+| `--brand-plane` | `#470C35` | `#470C35` | Ink on the highlight; the plum field |
+| `--accent-line` / `--accent-track` | `#FF488B` / `#FFD6E4` | `#FF488B` / `#4A1730` | Progress fill and track (no text) |
+| `--upgrade` | `#470C35` | `#5C1245` | The paid-plan button |
+| `--ok` / `--warn` / `--danger` | `#1F7A46` / `#8A5A00` / `#BF3310` | `#8FD3AB` / `#F4C152` / `#FF9A7A` | Labelled status, each with a `-subtle` fill. Danger is a vermilion, kept well apart from the pinks |
+| `--tile-*` | seven pale pinks and plum greys | same | Sticker tiles; always with `--tile-ink` icons |
+| `--mkt-page` / `--mkt-tile` / `--mkt-tile-2` | `--surface` / `--surface-2` / `--surface-3` | `--bg` / `--surface` / `--surface-2` | The marketing board |
+| `--on-plane` / `--on-plane-2` | white / white at 80% | same | Type on `--brand-plane` |
 
-GoApply (`styles/brands/goapply.css`) keeps the same canvas and swaps the action to deep jade `#0E4A3E` (mint `#A6F2CC` in dark) and the highlight to mint `#9DF0C6` on a jade plane, with cool mint washes. `__tests__/brand/contrast.test.ts` computes every brand-token pair for both brands in both themes, including ink on the highlight.
+GoApply (`styles/brands/goapply.css`) keeps the same ground, tiles, type and shapes and swaps the action to deep jade `#0E4A3E` (mint `#A6F2CC` in dark) and the highlight to mint `#9DF0C6` on a jade plane. `__tests__/brand/contrast.test.ts` computes every brand-token pair for both brands in both themes, including ink on the highlight.
 
-**Washes.** `--grad-panel` is resume.io's light-blue panel (the dashboard hero); `--grad-soft` is a lighter version for introductions. `--grad-brand` is a flat blue, as resume.io's buttons are. Dense work areas and document paper stay on solid surfaces.
+**No gradients.** `--grad-brand`, `--grad-brand-hover`, `--grad-soft` and `--grad-panel` keep their names because components paint with them, and each is now a single colour. Do not write `linear-gradient` in app chrome. The one exception is the loading shimmer bound to a request in flight.
 
 ### Typography
 
-Self-hosted **Inter** (variable, weights 100–900) carries the complete interface; resume.io's own face (TT Talent) is proprietary. Headlines differ from body by weight (600) and slightly tighter tracking. Source Han provides Simplified and Traditional Chinese glyphs. Resume document fonts remain the user's choice. The UI scale is 12 / 13 / 15 / 17 / 20 / 28 px, plus fluid page titles (28–34 px) and marketing headlines (40–72 px). resume.io sets its app larger (19 px body, 33 px titles); Desk keeps RoboApply's scale and uses the 17 px step where resume.io's rows and nav are read at a glance (nav items, progress rows, job card titles). Use `--font-ui` and `--font-display`, never literal font-family names that bypass `next/font`.
+Two self-hosted variable faces: **DM Sans** (`--font-ui`, weights 100–1000) for everything that is read and **Space Grotesk** (`--font-display`, 300–700) for h1–h3, figures and tile titles. Source Han provides Simplified and Traditional Chinese glyphs. Resume document fonts remain the user's choice. The UI scale is 12 / 13 / 15 / 17 / 20 px, `--fs-stat` 30 px, `--fs-display` 26–32 px (app titles) and `--fs-hero` 36–96 px (marketing). The marketing sheet derives its section headings from `--fs-display` (×1.65, capped at 8vw) so a headline stays within two lines on a phone. Use `--font-ui` and `--font-display`, never literal font-family names that bypass `next/font`.
 
-resume.io's uppercase tracked labels ("PROGRESS") are deliberately not copied (the design gate bans uppercase). Desk eyebrows and card labels are sentence case at 13 px in `--text-muted`.
+No uppercase labels, no monospace, no numerals as decoration ("01", "02"): order is carried by a real `<ol>`. A short label inside a tile sits under its title in sentence case at 13 px.
 
 ### Geometry and elevation
 
-The spacing scale is 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 px (resume.io's own). Cards, nav items and inputs use 12 px corners, sheets and panels 16 px; buttons and fields are nearly square (`--r-control`, 4 px), as resume.io's are; chips, goal tabs, search and badges stay pills. Main controls are 40 px on desktop and 44 px on mobile. Keep visible focus states (blue ring).
+The spacing scale is 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 px. Radii are 10 (`--r-sm`), 16 (`--r-md`) and 24 px (`--r-lg`); controls are pills (`--r-control`). Main controls are 40 px on desktop and 44 px on mobile; marketing buttons are 48–52 px. Keep visible focus states (a 2 px ring in the action colour; on the highlight and the plane, an outline in the ink of that field).
 
-Elevation is resume.io's: navy-tinted shadows with the hairline built into the low step, so a card at rest (`--e1`) needs no separate border. `--e2` lifts, `--e-float` is for floating sheets and the ask bar, `--e3` for dialogs. No shadow ever takes a hue beyond the navy tint.
+`--e1` is a 1 px ring, not a shadow. `--e2` is the hover step (a firmer ring and a short drop). `--e-float` and `--e3` are the only real shadows, for what sits above the page: menus, sheets, the ask bar, dialogs.
 
 ### Motion
 
-State transitions run 120–240 ms. Cards lift on hover; overlays blur the page behind them. Animate a user action or a real loading state. Avoid perpetual decorative movement. Respect `prefers-reduced-motion`.
+State transitions run 120–260 ms on `cubic-bezier(0.2, 0.8, 0.2, 1)`. Buttons press to 97%. A tile that is a link changes field on hover (to the highlight) instead of lifting. On the marketing board the first three tiles rise in on load and later blocks rise as they enter the viewport; the travel never includes opacity, so nothing is hidden when scroll-driven animation is unsupported. The app has no entrances: motion there is feedback. Respect `prefers-reduced-motion`.
 
 ## The shell
 
-One flat white sheet, as resume.io's app: a 240 px rail and the workspace share the canvas (navy in dark). The rail holds the brand tile, the person (`SidebarProfile`: the avatar inside a ring that fills to profile completeness, the name and the target role, opening /profile), then 40 px nav rows with 22 px grey icons; the current page is the light-blue wash with a blue label and icon. The workspace header is 72 px, white over the scrolling page, and carries resume.io's two calls to action (`Ready to apply`, `Upgrade`) before the search, Ask, inbox, theme, language and account buttons. The rail's top group is five destinations (Dashboard, Jobs, Applications, Resume, Interview prep); Profile and Settings sit in the lower group, and Ready to apply is the Getting ready view of Applications (the reasoning is in `docs/agent-driven/REDESIGN.md`). The signed-in home is the Dashboard (`/dashboard`): a greeting, four goal tabs joined by short rules, what waits for the user and what each agent did (the agent desk of `docs/agent-driven/REDESIGN.md` §5), a progress card beside a hero card for the selected step, the user's job matches as bordered two-column cards, and a floating ask bar. Below 760 px the rail leaves and the shared bottom navigation (Dashboard · Jobs · Applications · Resume · More) takes over.
+An open plane: a 240 px rail and the workspace share the plum-tinted ground, and everything the user works on is a white tile on it. The rail holds the brand tile (pink glyph on plum), the person (`SidebarProfile`: initials on plum inside a pink ring that fills to profile completeness), then 40 px pill rows with 20 px grey icons. The current page is a white pill with an ink label one step heavier and its icon in the action colour. Counts are quiet grey chips; only a queue that needs the user takes the highlight. The workspace header is 68 px, opaque, with no blur and no hairline, and carries `Ready to apply` and `Upgrade` before the search, Ask, inbox, theme, language and account buttons. The rail's top group is five destinations (Dashboard, Jobs, Applications, Resume, Interview prep); Profile and Settings sit in the lower group. The signed-in home is the Dashboard (`/dashboard`). Below 760 px the rail leaves and the shared bottom navigation takes over.
 
 ## Reusable components
 
 | Component | Responsibility | Usage |
 | --- | --- | --- |
-| `BrandSymbol` | Shared R / next-step glyph | Highlighter glyph on the ink tile across public, auth and workspace |
-| `PageHeader` | Title, context, optional actions | Muted supporting copy below the title; eyebrow led by a small light-blue swatch |
-| `Btn` | Native button/link with shared variants | `primary` flat blue block (4 px corners), default white hairline button, `violet` = light-blue highlight (the stronger of two adjacent CTAs), `ghost` |
-| `Tabs` | Segmented control | Glass pill track; the selected tab is the action pill |
-| `MetricGrid` | Labeled summary of measured values | Separate glass cards; `—` for pending/unknown; only show zero after data has loaded |
+| `BrandSymbol` | Shared R / next-step glyph | Pink glyph on the plum tile across public, auth and workspace |
+| `PageHeader` | Title, context, optional actions | Muted supporting copy below the title; eyebrow led by a small pink dot |
+| `Btn` | Native button/link with shared variants | `primary` flat pill in the action colour, default white pill with a hairline, `violet` = the hot pink highlight with plum ink (the stronger of two adjacent CTAs), `ghost` |
+| `Tabs` | Segmented control | Pill track; the selected tab is the action pill |
+| `MetricGrid` | Labeled summary of measured values | Flat white tiles 8 px apart, the figure in Space Grotesk; `—` for pending/unknown; only show zero after data has loaded |
 | `EmptyState` | Explain an empty/error state and offer recovery | Dashed glass panel, sticker tile, specific next step, no invented activity |
 | `Modal` / `Drawer` / `Sheet` | Focus management, escape, backdrop | Drawers float 8 px inset with 22 px corners on desktop; the scrim blurs |
 | `MatchCard` / feed card | Company identity, role essentials, evidence, actions | 22 px card that lifts on hover; separate strengths and questions; preserve score semantics |
@@ -96,18 +97,18 @@ React components accept data and action callbacks rather than hide API calls in 
 
 ## Page recipes
 
-- **Marketing:** a centred hero — eyebrow, print-shadow headline, muted sub, ink and glass pills — with the labelled interactive Example below it on a print block → the four verbs on sticker-tile cards → features → real counters → quick search → transparent pricing (the recommended plan outlined in ink) → questions → the highlighter CTA band → a recessed footer. Samples are clearly labeled and never presented as the visitor's account data.
-- **Login / signup:** a terracotta illustration tile (ink type, the hand-drawn path, highlighter check stickers) beside a focused form of pill controls. Mobile prioritizes the form. Preserve Google sign-in, password behavior, return destinations, locale, and theme.
+- **Marketing:** a board, not a sequence of bands. The first screen is three tiles: the statement on the plum plane (the h1, the page's largest type, and its supporting sentence), the action on the hot pink (what the product does in one line, `Start free`, `See an example`, the reassurance) and the labelled interactive Example. Then: how it works as four tiles in four fields, each carrying one line of the product's own output for the Example's made-up job, with the "made-up data" note under the row → every feature as a link tile that turns pink on hover (a last row of one spans the board) → real counters → quick search → pricing with the claim on the left and the two plans on the right (the recommended plan on the highlight) → questions with the heading held beside the answers → the closing action tile flanked by two tiles that run off the edges → the plum footer with the name built as wide as the page. No eyebrow labels, no step numerals, no gradients, no sticky glass header. Samples are clearly labeled and never presented as the visitor's account data.
+- **Login / signup:** a pale pink illustration tile (ink type, the hand-drawn path, pink check stickers) beside a focused form of pill controls. Mobile prioritizes the form. Preserve Google sign-in, password behavior, return destinations, locale, and theme.
 - **Today:** the signed-in home. The title states how many things wait for the user; the goal line sits under it. "Waiting for you" comes first, at most four cards of one fact and one action, and its first action is the screen's only primary button (when nothing waits, the first pick's button is). Then one lane per agent, labelled by its job, never by a name: a past-tense line of real counts, the lane's items, one action. A count that has not loaded is a dash. A lane that fails says so and offers Retry without blocking the others.
 - **Jobs:** the search is one summary line with `Change search` until the user opens it, so the first job card is near the top. The card's primary action is `Prepare application` when the `agent` flag is on; `Apply on company site` is second. Then, as before: an unboxed introduction → measured collection summary → visibly labeled local filters → role and company identity → practical facts → evidence. Local filters explicitly operate on loaded results. Scores never imply a hiring probability.
 - **Resume:** AI first, without hiding the user's own documents. The hub opens with AI tailoring (pick a saved job without a tailored version, or paste a posting; the promise that every new keyword, number or claim waits for the user's OK sits under the action) beside "Up next" (only what needs attention: details to verify, the main resume's check) and Assistant questions → the library, where each card's preview is the resume itself (the editor's paper, scaled) with its latest checklist result and target title edited in place, and a last cell for new resumes (upload, guided builder, template, LinkedIn PDF; a file can be dropped on it) → versions per job. A first visit with no resume replaces all of it with one start panel led by upload. AI entries render only when AI may run for the user (R-04). Editing happens in the workspace with contextual review. The resume paper remains visually separate from application chrome.
-- **Applications:** one destination with two views behind one switch, Getting ready (`/ready`) and Sent (`/applications`). On Sent: actual stage counts as glass cards → actionable follow-ups → recessed stage columns of lifting cards. Dragging has a native stage-menu alternative. Unknown and loading states never masquerade as zero.
+- **Applications:** one destination with two views behind one switch, Getting ready (`/ready`) and Sent (`/applications`). On Sent: actual stage counts as flat tiles → actionable follow-ups → recessed stage columns of flat cards. Dragging has a native stage-menu alternative. Unknown and loading states never masquerade as zero.
 - **Interview prep:** one screen, not a wizard. Past practice → the job (the only required choice) → a pre-matched plan shown as editable chips with inline option trays → a launch dock that is live from the moment a job is chosen. During a live interview the screen is shaped like a call — the interviewer holds the stage, the candidate's own tile is pinned into it, coach and transcript share an on-demand rail, and mic / camera / end sit in a bottom control bar. Reports state the score once, lead with the single next action, and put recommendations, per-question review, recording and transcript behind one tab strip.
 - **Settings / billing / admin:** grouped forms and operational tables share the same tokens, type scale, focus states, and spacing. Preserve existing save, error, pending, permission, and confirmation behavior.
 
 ## Responsive and accessible behavior
 
-At 760 px, desktop navigation becomes the shared bottom navigation and the inset frame dissolves. Page padding decreases, metrics wrap to two columns, and creation cards become a vertical list. Company/role text may wrap; do not truncate the only copy of a qualification or salary. Long tables and stage collections may scroll within a clearly bounded region. Dialogs fit the viewport and keep their actions reachable. The shell includes a keyboard skip link.
+At 760 px, desktop navigation becomes the shared bottom navigation. Page padding decreases, metrics wrap to two columns, and creation cards become a vertical list. Company/role text may wrap; do not truncate the only copy of a qualification or salary. Long tables and stage collections may scroll within a clearly bounded region. Dialogs fit the viewport and keep their actions reachable. The shell includes a keyboard skip link.
 
 All interactive controls have a visible label or an accessible name. Use `aria-expanded`, `aria-selected`, `aria-current`, and native form elements for actual state. Decorative marks are hidden from assistive technology. Preserve focus after filtering and avoid reordering an open item while someone is reading it. Verify 4.5:1 text contrast and both themes; state is never carried by a colour fill alone.
 
@@ -121,8 +122,18 @@ New visible copy must be translated across all nine locales with `i18n-locale-sy
 
 ## Validation
 
-Run the smallest affected test first, then `npm test`, `npm run check`, and the frontend TypeScript check. Verify desktop, mobile, light, dark, and at least one CJK locale in a browser. Build using Node 24 after stopping any Next dev process sharing `.next`. Live backend, payment, and voice behavior require their services; component fixtures alone do not prove those integrations.
+Run the smallest affected test first, then `npm test`, `npm run check`, and the frontend TypeScript check. For a visual change also run the taste inspector on what you touched (`node ~/.claude/skills/design-taste-frontend/scripts/inspect.mjs <url>`, with `--app` for a signed-in screen) and read its screenshots at all three widths; its known open findings are listed under "Open findings" below. Verify desktop, mobile, light, dark, and at least one CJK locale in a browser. Build using Node 24 after stopping any Next dev process sharing `.next`. Live backend, payment, and voice behavior require their services; component fixtures alone do not prove those integrations.
 
 Run `node scripts/design-preview.mjs` to inspect the actual authenticated components with isolated fixture data at `http://localhost:3612/jobs`. The loopback-only harness blocks live API requests and visibly labels example data; it is not a substitute for end-to-end integration tests.
 
 [The visual style guide](design-system.html) shows this system in light and dark, for both brands: tokens, type, controls, cards and the inset workspace. It is a standalone page served at `/design-system` by the design preview, so its token blocks are copies of `app/globals.css` and `styles/brands/goapply.css`; update them together. This document and `app/globals.css` remain authoritative.
+
+## Open findings
+
+Measured on 2026-11-19 by the taste inspector; recorded so nobody rediscovers them.
+
+- **Pictures.** The marketing home has no photographs or footage. Its pictures are the product's own output (the Example and the four step fragments). The inspector's floor of four real pictures is not met.
+- **Headline length.** The English h1 ("Find out why you're not getting interviews.") is two lines at 1440 and 768 px and three at 390 px. Getting it to two on a phone means shorter copy in nine locales, which is a product decision (ruling R2), not a style one.
+- **Typeface.** The taste skill's sheet dealt another face; DM Sans and Space Grotesk are the `ui-ux-pro-max` pairing, chosen on purpose.
+- **Resume paper.** The resume thumbnail keeps document typography (sizes under 11 px, an uppercase line) and a soft shadow under the sheet. It is the user's document, exempt from the chrome rules (ruling C25).
+- **The style guide page** ([design-system.html](design-system.html)) has the new tokens, fonts and headline; some of its section captions still describe Desk's layout.
