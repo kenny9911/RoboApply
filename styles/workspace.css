@@ -1,8 +1,8 @@
 /* Pulse: shared workspace composition (docs/design-system.md). Tokens live in
  * app/globals.css. The shell is an open plane: a 240px rail and the workspace
- * share the plum-tinted ground, and everything the user works on is a flat
+ * share the cool-white ground, and everything the user works on is a flat
  * white tile on it. The current page is a white pill in the rail with an ink
- * label and a pink icon; controls are pills. Feature-specific evidence styles
+ * label and a blue icon; controls are pills. Feature-specific evidence styles
  * live in discovery.css. */
 .app {
   grid-template-columns: 240px minmax(0, 1fr);
@@ -11,7 +11,7 @@
   max-width: none;
   background: var(--bg);
 }
-/* One flat plane: the rail and the workspace share the ground (plum-black
+/* One flat plane: the rail and the workspace share the ground (blue-black
  * in dark). Below 760px the rail leaves and the bottom bar takes over (see
  * the end). */
 .main {
@@ -115,7 +115,7 @@
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
 /* Where you are: a white pill on the tinted rail, the label in ink and one
  * step heavier, the icon in the action colour. The fill and the weight carry
- * the state; the pink is the accent on top of them. */
+ * the state; the yellow is the accent on top of them. */
 .nav-item[aria-current="page"],
 .nav-item[aria-current="page"]:hover {
   background: var(--surface);
@@ -181,7 +181,7 @@
 .page-h { gap: 24px; margin-bottom: 28px; }
 .page-h-copy { flex: 1; min-width: min(100%, 240px); }
 .page-h h1 { max-width: 24ch; font-size: var(--fs-display); font-weight: 600; line-height: var(--lh-display); letter-spacing: var(--ls-display); margin: 0; text-wrap: balance; }
-/* Eyebrow: sentence case, muted, led by a small pink swatch. */
+/* Eyebrow: sentence case, muted, led by a small yellow swatch. */
 .page-h .eyebrow {
   margin-bottom: 12px;
   padding: 0;
@@ -203,7 +203,7 @@
 .page-h .sub { text-align: left; max-width: 64ch; margin: 10px 0 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-muted); }
 /* Buttons are flat pills. The primary action is the action colour; the
  * secondary one is a white pill with a hairline; `violet` — the stronger of
- * two adjacent CTAs — is the hot pink highlight with ink on it. */
+ * two adjacent CTAs — is the sunny yellow highlight with ink on it. */
 .btn {
   min-height: var(--control-md);
   padding: 8px 20px;

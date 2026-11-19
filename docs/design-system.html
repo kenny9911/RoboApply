@@ -20,29 +20,29 @@
 
 /* ── Tokens: app/globals.css ─────────────────────────────────────────── */
 :root {
-  --bg: #F6F2F4;
+  --bg: #F4F6FB;
   --surface: #FFFFFF;
-  --surface-2: #F1ECEF;
-  --surface-3: #E8E1E5;
-  --rule: #E6DEE3;
-  --rule-strong: #D3C8CF;
-  --text: #170B13;
-  --text-2: #4B3F47;
-  --text-muted: #675A63;
+  --surface-2: #ECEFF7;
+  --surface-3: #E1E5F0;
+  --rule: #E0E4EE;
+  --rule-strong: #C8CEDD;
+  --text: #0B0D1A;
+  --text-2: #3A3F54;
+  --text-muted: #596079;
   --disabled: #A4979F;
-  --action: #C81E64;
-  --action-hover: #A3154F;
+  --action: #2B4DFF;
+  --action-hover: #1F3AD6;
   --action-ink: #FFFFFF;
-  --action-subtle: #FFE4EE;
-  --brand-mark: #FF488B;
-  --brand-plane: #470C35;
-  /* The pink of lines and fills that carry no text: progress bars, the
+  --action-subtle: #E4E9FF;
+  --brand-mark: #FFD43B;
+  --brand-plane: #1D32D8;
+  /* The yellow of lines and fills that carry no text: progress bars, the
    * selected row's edge, rings. */
-  --accent-line: #FF488B;
-  --accent-track: #FFD6E4;
-  /* The plum field: the paid-plan call to action and the landing's dark
+  --accent-line: #FFD43B;
+  --accent-track: #DCE3FF;
+  /* The cobalt field: the paid-plan call to action and the landing's dark
    * tiles. White type on it in both themes. */
-  --upgrade: #470C35;
+  --upgrade: #1D32D8;
   --upgrade-ink: #FFFFFF;
   --ok: #1F7A46;
   --ok-subtle: #E2F3E9;
@@ -53,18 +53,18 @@
   /* A lighter sheet on any recess: secondary buttons, segmented tracks. */
   --surface-glass: rgba(255, 255, 255, 0.72);
   /* Sticker tiles (icon squares on empty states and create cards): one hue
-   * family, pale pink to pale plum, so a row of them reads as one brand
+   * family, pale blue to pale cobalt, so a row of them reads as one brand
    * rather than a rainbow. Ink icons sit on them in both themes. */
-  --tile-sage: #F4DCE8;
-  --tile-clay: #FFD6E4;
-  --tile-sky: #EBE2E8;
-  --tile-blush: #FFC4D8;
-  --tile-mint: #F1E7EC;
-  --tile-lilac: #E7D3E0;
-  --tile-camel: #FFE1EB;
-  --tile-ink: #170B13;
+  --tile-sage: #D9F7EA;
+  --tile-clay: #DCE3FF;
+  --tile-sky: #DCE8FF;
+  --tile-blush: #FFE9A8;
+  --tile-mint: #D4F5F0;
+  --tile-lilac: #E3E0FF;
+  --tile-camel: #E0E6FF;
+  --tile-ink: #0B0D1A;
   /* Kept for sheets that still name it; the hero no longer prints a shadow. */
-  --print-ink: #FF488B;
+  --print-ink: #FFD43B;
   --font-ui: var(--font-dm-sans), -apple-system, BlinkMacSystemFont,
     'Segoe UI', system-ui, 'Hiragino Sans', 'Yu Gothic', 'PingFang SC',
     'PingFang TC', 'Microsoft YaHei', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
@@ -107,14 +107,14 @@
   /* Elevation. A tile at rest is flat: --e1 is a 1px ring, not a shadow.
    * --e2 is the hover step (a firmer ring and a short drop). --e-float and
    * --e3 are the only real shadows, for what sits above the page. */
-  --e1: 0 0 0 1px rgba(23, 11, 19, 0.07);
-  --e2: 0 0 0 1px rgba(23, 11, 19, 0.16), 0 6px 16px -8px rgba(23, 11, 19, 0.18);
-  --e3: 0 0 0 1px rgba(23, 11, 19, 0.08), 0 24px 64px -16px rgba(23, 11, 19, 0.28);
-  --e-float: 0 0 0 1px rgba(23, 11, 19, 0.1), 0 12px 32px -12px rgba(23, 11, 19, 0.24);
+  --e1: 0 0 0 1px rgba(11, 13, 26, 0.07);
+  --e2: 0 0 0 1px rgba(11, 13, 26, 0.16), 0 6px 16px -8px rgba(11, 13, 26, 0.18);
+  --e3: 0 0 0 1px rgba(11, 13, 26, 0.08), 0 24px 64px -16px rgba(11, 13, 26, 0.28);
+  --e-float: 0 0 0 1px rgba(11, 13, 26, 0.1), 0 12px 32px -12px rgba(11, 13, 26, 0.24);
   /* The hard offset block of the old showcase panel is gone. */
-  --e-print: 0 0 0 1px rgba(23, 11, 19, 0.07);
+  --e-print: 0 0 0 1px rgba(11, 13, 26, 0.07);
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--action);
-  --scrim: rgba(23, 11, 19, 0.48);
+  --scrim: rgba(11, 13, 26, 0.48);
   --dur-hover: 120ms;
   --dur-enter: 200ms;
   --dur-exit: 140ms;
@@ -130,33 +130,33 @@
   --on-plane: #FFFFFF;
   --on-plane-2: rgba(255, 255, 255, 0.8);
   /* Single colours under their old names (see the note above). */
-  --grad-brand: #C81E64;
-  --grad-brand-hover: #A3154F;
-  --grad-soft: #FFEEF4;
-  --grad-panel: #FFE1EB;
+  --grad-brand: #2B4DFF;
+  --grad-brand-hover: #1F3AD6;
+  --grad-soft: #EEF1FF;
+  --grad-panel: #E0E6FF;
   color-scheme: light;
 }
 
 html[data-theme='dark'] {
-  --bg: #0D060B;
-  --surface: #1A0E16;
-  --surface-2: #25161F;
-  --surface-3: #33212C;
-  --rule: #38252F;
-  --rule-strong: #54404C;
+  --bg: #07080F;
+  --surface: #10121C;
+  --surface-2: #191C2A;
+  --surface-3: #24283A;
+  --rule: #262A3C;
+  --rule-strong: #3D4259;
   --text: #FFFFFF;
-  --text-2: #E6DBE1;
-  --text-muted: #B7A8B0;
-  --disabled: #7C6C75;
-  --action: #FF5C98;
-  --action-hover: #FF8AB5;
-  --action-ink: #1F0612;
-  --action-subtle: #3D1026;
-  --brand-mark: #FF488B;
-  --brand-plane: #470C35;
-  --accent-line: #FF488B;
-  --accent-track: #4A1730;
-  --upgrade: #5C1245;
+  --text-2: #DADDEA;
+  --text-muted: #A4A9BF;
+  --disabled: #6A6F85;
+  --action: #8098FF;
+  --action-hover: #A3B5FF;
+  --action-ink: #05081F;
+  --action-subtle: #1B2452;
+  --brand-mark: #FFD43B;
+  --brand-plane: #1D32D8;
+  --accent-line: #FFD43B;
+  --accent-track: #1F2A63;
+  --upgrade: #2B4DFF;
   --upgrade-ink: #FFFFFF;
   --ok: #8FD3AB;
   --ok-subtle: #10291C;
@@ -165,7 +165,7 @@ html[data-theme='dark'] {
   --danger: #FF9A7A;
   --danger-subtle: #3A1A10;
   --surface-glass: rgba(255, 255, 255, 0.05);
-  --print-ink: #FF488B;
+  --print-ink: #FFD43B;
   --e1: 0 0 0 1px rgba(255, 255, 255, 0.06);
   --e2: 0 0 0 1px rgba(255, 255, 255, 0.16);
   --e3: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 24px 64px -16px rgba(0, 0, 0, 0.7);
@@ -174,10 +174,10 @@ html[data-theme='dark'] {
   --mkt-page: var(--bg);
   --mkt-tile: var(--surface);
   --mkt-tile-2: var(--surface-2);
-  --grad-brand: #FF5C98;
-  --grad-brand-hover: #FF8AB5;
-  --grad-soft: #24101B;
-  --grad-panel: #3A0F27;
+  --grad-brand: #8098FF;
+  --grad-brand-hover: #A3B5FF;
+  --grad-soft: #11152B;
+  --grad-panel: #1A2250;
   --scrim: rgba(0, 0, 0, 0.66);
   color-scheme: dark;
 }
@@ -685,8 +685,8 @@ html[data-theme='dark'] .pipe-col{background:var(--surface)}
 <section class="hero" id="direction" aria-labelledby="h-direction">
   <div class="wrap">
     <p class="eyebrow">Internal design guide</p>
-    <h1 class="hero-title" id="h-direction">Flat tiles.<br>Plum ink.<br>One hot pink.</h1>
-    <p class="hero-sub">RoboApply helps people make a considered next move. Pulse is its own brand: plum-black ink on a plum-tinted ground, one hot pink, flat white tiles fitted edge to edge, pill controls, Space Grotesk headlines over DM Sans. Nothing is a gradient and nothing at rest casts a shadow.</p>
+    <h1 class="hero-title" id="h-direction">Flat tiles.<br>Cobalt ink.<br>One sunny yellow.</h1>
+    <p class="hero-sub">RoboApply helps people make a considered next move. Pulse is its own brand: blue-black ink on a cool-white ground, one sunny yellow, flat white tiles fitted edge to edge, pill controls, Space Grotesk headlines over DM Sans. Nothing is a gradient and nothing at rest casts a shadow.</p>
     <div class="actions">
       <a class="btn primary lg" href="http://localhost:3611">Open the website <svg class="ic" aria-hidden="true"><use href="#i-arrow-up-right"/></svg></a>
       <a class="btn lg" href="#workspace">See the workspace</a>
@@ -720,7 +720,7 @@ html[data-theme='dark'] .pipe-col{background:var(--surface)}
       <article class="role">
         <div class="role-art ink" aria-hidden="true">Aa</div>
         <h3>Ink</h3>
-        <p>Plum-black carries every label. The primary action is raspberry in light and hot pink in dark; the hot pink highlight is a fill with plum ink on it, never text on white.</p>
+        <p>Blue-black carries every label. The primary action is electric blue in light and sunny yellow in dark; the sunny yellow highlight is a fill with cobalt ink on it, never text on white.</p>
       </article>
       <article class="role">
         <div class="role-art paper" aria-hidden="true"><b><i></i></b></div>

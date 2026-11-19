@@ -8,9 +8,9 @@
  * colours, type and spacing stay shared, so every screen keeps its layout and
  * contrast budget on both brands.
  *
- * Direction (Pulse, docs/design-system.md): the same plum-tinted ground, flat
+ * Direction (Pulse, docs/design-system.md): the same cool-white ground, flat
  * tiles, pills and type as RoboApply, with a deep jade action instead of
- * raspberry and a mint highlight instead of hot pink. Identity
+ * electric blue and a mint highlight instead of sunny yellow. Identity
  * (--brand-plane / --brand-mark) works as it does for RoboApply: the mark is a
  * fill, the plane is the ink on it. Flat by rule: the --grad-* tokens are
  * single colours.

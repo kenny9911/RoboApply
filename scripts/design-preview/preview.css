@@ -9,7 +9,7 @@
 @font-face { font-family: 'Preview Source Han TW'; src: url('/fonts/source-han-sans-tw-vf.woff2') format('woff2'); font-weight: 250 900; font-display: swap; }
 :root { --font-dm-sans: 'Preview DM Sans'; --font-space-grotesk: 'Preview Space Grotesk'; --font-bricolage: 'Preview Bricolage'; --font-inter: 'Preview Inter'; --font-source-sans: 'Preview Source Sans'; --font-merriweather: 'Preview Merriweather'; --font-lora: 'Preview Lora'; --font-source-han-sc: 'Preview Source Han SC'; --font-source-han-tw: 'Preview Source Han TW'; }
 body { padding-top: 32px; }
-#design-preview-banner { position: fixed; inset: 0 0 auto; height: 32px; z-index: 10000; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; background: #170B13; color: #FF488B; font: 600 12px/1.2 'Preview DM Sans', sans-serif; }
+#design-preview-banner { position: fixed; inset: 0 0 auto; height: 32px; z-index: 10000; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; background: #0B0D1A; color: #FFD43B; font: 600 12px/1.2 'Preview DM Sans', sans-serif; }
 #design-preview-banner span { color: #fff; font-weight: 400; }
 .app > .side { top: 32px; height: calc(100dvh - 32px); }
 .preview-error { margin: 32px; padding: 24px; white-space: pre-wrap; background: var(--surface); border: 1px solid var(--rule); color: var(--text); }
