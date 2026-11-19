@@ -277,16 +277,65 @@
   }
 }
 
-/* The statement: the page's largest type, on the brand plane. */
+/* The statement: the page's largest type, on the brand plane, with the 3D
+ * scene (HeroScene.tsx) filling the tile behind it. The copy keeps the left
+ * half; the cards sort themselves into a board in the right half. */
 .tileStatement {
+  position: relative;
+  overflow: hidden;
   justify-content: flex-end;
-  min-height: min(52vh, 460px);
+  min-height: min(74vh, 680px);
   padding: var(--sp-7) var(--sp-7) var(--sp-6);
   background: var(--brand-plane);
   color: var(--on-plane);
 }
-.tileStatement .heroTitle { color: var(--on-plane); }
+.tileStatement > :not(.scene) {
+  position: relative;
+  z-index: 1;
+  max-width: 50%;
+}
+.tileStatement .heroTitle { color: var(--on-plane); font-size: min(var(--fs-hero), 5.6vw); }
 .tileStatement .heroSub { color: var(--on-plane-2); }
+
+/* The 3D layer. Decoration: it never takes the pointer from the copy. */
+.scene {
+  --scene-split: 1;
+  --scene-ink: var(--action);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.scene canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 700ms var(--ease-out);
+}
+.scene[data-ready] canvas { opacity: 1; }
+.ctaBand .wrap { position: relative; overflow: hidden; }
+.ctaBand .wrap > :not(.scene) { position: relative; z-index: 1; }
+
+/* The headline's words rise in one after another. */
+@keyframes wordIn {
+  from {
+    opacity: 0;
+    transform: translateY(0.5em) rotate(4deg);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .word {
+    display: inline-block;
+    transform-origin: 0 100%;
+    animation: wordIn 720ms var(--ease-out) backwards;
+    animation-delay: calc(var(--i, 0) * 70ms + 160ms);
+  }
+  /* Cards lean toward the pointer (CardTilt writes --tx/--ty). */
+  .card {
+    transform: perspective(900px) rotateX(calc(var(--ty, 0) * -4deg)) rotateY(calc(var(--tx, 0) * 5deg));
+    transition: transform 260ms var(--ease-out);
+  }
+}
 
 /* The action: the one tile in the highlight, ink on it. */
 .tileAction {
@@ -1208,6 +1257,20 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     grid-column: span 12;
   }
   .tileAction .actions { flex-direction: row; }
+  /* The scene moves under the copy. */
+  .tileStatement {
+    justify-content: flex-start;
+    min-height: 0;
+    padding-bottom: min(58vw, 440px);
+  }
+  .tileStatement > :not(.scene) { max-width: none; }
+  .tileStatement .heroTitle { font-size: var(--fs-hero); }
+  .tileStatement .scene {
+    --scene-split: 0;
+    inset: auto 0 0 0;
+    height: min(58vw, 440px);
+  }
+  .ctaBand .scene { display: none; }
   .sectionAlt[data-pricing-summary] .sectionHead,
   .sectionAlt[data-pricing-summary] .grid2,
   .faqWrap > .h2,
@@ -1241,8 +1304,7 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .tile { padding: var(--sp-5); }
   .tileExample { padding: 0; }
   .tileStatement {
-    min-height: 0;
-    padding: var(--sp-7) var(--sp-5) var(--sp-5);
+    padding: var(--sp-7) var(--sp-5) min(64vw, 400px);
   }
   .tileAction .actions { flex-direction: column; }
   .steps > .card { min-height: 0; }

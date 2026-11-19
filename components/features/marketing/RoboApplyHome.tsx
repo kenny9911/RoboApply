@@ -2,7 +2,7 @@
 
 // RoboApply home (`/`, `/{locale}`) — TASK_PLAN.md WP-40, PRODUCT §3.2, F-MKT-01/02.
 //
-//   the board (statement tile, action tile, the labelled interactive Example;
+//   the board (statement tile with the 3D scene, action tile, the labelled interactive Example;
 //   gap first, ruling R2; the "{count}+ open roles" clause only when the
 //   public index holds ≥ 1,000 jobs) → labelled interactive Example → the four
 //   verbs → feature links → real counters → the job ticker slot → quick
@@ -22,6 +22,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { useBrand } from '../../../lib/brand';
 import { HOME_FAQ_KEYS } from './catalog';
 import { useIndexStats } from './hooks';
+import { CardTilt, HeroScene, RisingWords } from './HeroScene';
 import { heroCount } from './links';
 import { Faq, FeatureGrid, HomeExample, IndexCounters, PricingSummary, QuickSearch } from './Sections';
 import { SignupLink } from './SignupLink';
@@ -62,11 +63,13 @@ export function RoboApplyHome({ ticker = null }: RoboApplyHomeProps = {}) {
   const brand = useBrand();
   return (
     <SitePage from="home" localeLinks>
+      <CardTilt />
       <section className={`${styles.hero} ${styles.heroCenter}`} aria-labelledby="home-title">
         <div className={`${styles.wrap} ${styles.board}`}>
           <div className={`${styles.tile} ${styles.tileStatement} ${styles.span12}`}>
+            <HeroScene variant="board" />
             <h1 className={styles.heroTitle} id="home-title">
-              {t('hero.headline')}
+              <RisingWords text={t('hero.headline')} />
             </h1>
             <HomeHeroSub />
           </div>
@@ -116,6 +119,7 @@ export function RoboApplyHome({ ticker = null }: RoboApplyHomeProps = {}) {
 
       <section className={styles.ctaBand} aria-labelledby="home-final-title">
         <div className={`${styles.wrap} ${styles.narrow}`}>
+          <HeroScene variant="stacks" />
           <h2 className={styles.h2} id="home-final-title">
             {t('final.title')}
           </h2>
