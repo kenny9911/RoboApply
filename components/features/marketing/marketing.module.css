@@ -1,20 +1,27 @@
 /* components/features/marketing — the public marketing site per brand (WP-40).
-   Paper tokens only (docs/design-system.md): colours, type and spacing resolve
+   Pulse tokens only (docs/design-system.md): colours, type and spacing resolve
    through app/globals.css (light + dark) and the brand identity tokens in
-   styles/brands/<brand>.css. The composition follows skillry.dev
-   (docs/skillry-style-reference.md §5): a translucent sticky header, a centred
-   headline with an offset "print" shadow, pill CTAs, sticker tiles on cards,
-   a highlighter CTA band and a recessed footer.
+   styles/brands/<brand>.css.
+
+   The composition is a well-kept board: flat filled tiles fitted edge to edge
+   with 8px gaps, on one 12-column grid with one pair of margins. A tile is
+   separated from the page by its tone, never by a line or a shadow. The first
+   screen is three tiles: the statement on the brand plane, the action on the
+   brand highlight, and the live Example. Nothing is a gradient, nothing blurs.
    Every interactive control is at least 44 px tall. Layout is single column
    below 760 px and never scrolls sideways at 375 px. */
 
 /* ── Page frame ─────────────────────────────────────────────────────────── */
 
+/* The marketing page is white with tinted tiles (the app is the reverse: a
+ * tinted ground with white tiles). The --mkt-* tokens live in app/globals.css
+ * because the inner pages render inside the shared marketing shell
+ * (components/v3/shell), not inside .page. */
 .page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--mkt-page);
   color: var(--text);
   overflow-x: clip;
 }
@@ -26,15 +33,15 @@
 
 .wrap {
   width: 100%;
-  max-width: 1160px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 0 var(--sp-6);
+  padding: 0 var(--sp-4);
   box-sizing: border-box;
   min-width: 0;
 }
 
 .narrow {
-  max-width: 760px;
+  max-width: 860px;
 }
 
 .skip {
@@ -52,16 +59,13 @@
   box-shadow: var(--focus-ring);
 }
 
-/* ── Header ─────────────────────────────────────────────────────────────── */
+/* ── Header: a plain bar. Wordmark, a few links, one action. ───────────── */
 
+/* It scrolls away with the page: nothing ever lies over a headline. */
 .header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 20;
-  background: color-mix(in srgb, var(--bg) 90%, transparent);
-  -webkit-backdrop-filter: saturate(1.2) blur(20px);
-  backdrop-filter: saturate(1.2) blur(20px);
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  background: var(--mkt-page);
 }
 
 .headerRow {
@@ -69,7 +73,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  min-height: 64px;
+  min-height: 68px;
 }
 
 .brandLink {
@@ -78,8 +82,10 @@
   gap: var(--sp-2);
   min-height: 44px;
   color: var(--text);
-  font-size: var(--fs-subtitle);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
   font-weight: 600;
+  letter-spacing: var(--ls-title);
   text-decoration: none;
 }
 
@@ -94,10 +100,10 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding: 0 var(--sp-3);
+  padding: 0 var(--sp-4);
   border-radius: var(--r-pill);
-  color: var(--text-2);
-  font-size: var(--fs-meta);
+  color: var(--text);
+  font-size: var(--fs-body);
   font-weight: 500;
   text-decoration: none;
   transition:
@@ -106,8 +112,7 @@
 }
 .navLink:hover,
 .textLink:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 6%, transparent);
+  background: var(--mkt-tile);
 }
 .navLink:focus-visible,
 .textLink:focus-visible,
@@ -129,7 +134,7 @@
   gap: var(--sp-2);
 }
 
-/* ── Buttons ────────────────────────────────────────────────────────────── */
+/* ── Buttons: flat pills, one fill ──────────────────────────────────────── */
 
 .ctaPrimary,
 .ctaSecondary {
@@ -137,48 +142,55 @@
   align-items: center;
   justify-content: center;
   gap: var(--sp-2);
-  min-height: var(--control-lg);
+  min-height: 48px;
   padding: 0 var(--sp-5);
   border-radius: var(--r-pill);
   font-size: var(--fs-body);
   font-weight: 600;
   text-decoration: none;
-  border: 1px solid transparent;
+  border: 0;
   cursor: pointer;
   white-space: nowrap;
   transition:
     background var(--dur-hover) var(--ease-out),
-    border-color var(--dur-hover) var(--ease-out),
+    color var(--dur-hover) var(--ease-out),
     transform var(--dur-hover) var(--ease-out);
 }
 
 .ctaPrimary {
   background: var(--action);
   color: var(--action-ink);
-  box-shadow: 0 10px 26px -12px rgba(18, 19, 19, 0.6);
 }
 .ctaPrimary:hover {
   background: var(--action-hover);
-  transform: translateY(-1px);
+}
+.ctaPrimary:active,
+.ctaSecondary:active {
+  transform: scale(0.97);
 }
 .ctaPrimary[disabled] {
   opacity: 0.6;
   cursor: progress;
   transform: none;
 }
-/* Its drop shadow would otherwise replace the focus ring. */
-.ctaPrimary:focus-visible {
-  box-shadow: var(--focus-ring);
-}
 
 .ctaSecondary {
-  background: var(--surface-glass);
+  background: var(--mkt-tile);
   color: var(--text);
-  border-color: color-mix(in srgb, var(--text) 15%, transparent);
 }
 .ctaSecondary:hover {
-  background: var(--surface);
-  border-color: color-mix(in srgb, var(--text) 28%, transparent);
+  background: var(--mkt-tile-2);
+}
+/* On a tile the secondary button steps to the page tone to stay visible. */
+.card .ctaSecondary,
+.sectionAlt .ctaSecondary,
+.intro .ctaSecondary {
+  background: var(--mkt-page);
+}
+.card .ctaSecondary:hover,
+.sectionAlt .ctaSecondary:hover,
+.intro .ctaSecondary:hover {
+  background: var(--mkt-tile-2);
 }
 
 .ctaSmall {
@@ -191,83 +203,140 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
 }
 
 .inlineLink {
   color: var(--action);
   font-weight: 600;
   text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
   border-radius: var(--r-sm);
 }
 
-/* ── Hero ───────────────────────────────────────────────────────────────── */
+/* ── The board (the home pages' first screen) ───────────────────────────── */
 
-/* A soft warm bloom behind the headline, fading into the paper. */
 .hero {
-  background:
-    radial-gradient(56% 60% at 50% 34%, color-mix(in srgb, var(--print-ink) 20%, transparent), transparent 72%),
-    var(--bg);
-  padding: var(--sp-8) 0 var(--sp-7);
+  padding: var(--mkt-gap) 0 var(--sp-8);
 }
 
+/* Feature pages: copy beside the labelled Example. */
 .heroGrid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-  gap: var(--sp-7);
-  align-items: center;
+  gap: var(--mkt-gap);
+  align-items: stretch;
+}
+.heroGrid > :first-child {
+  padding: var(--sp-7) var(--sp-6);
+  border-radius: var(--r-lg);
+  background: var(--brand-plane);
+  color: var(--on-plane);
+}
+.heroGrid > :first-child .heroTitle { color: var(--on-plane); font-size: calc(var(--fs-display) * 1.4); line-height: 1.04; letter-spacing: var(--ls-display); }
+.heroGrid > :first-child .pageTitle { color: var(--on-plane); }
+.heroGrid > :first-child .heroSub,
+.heroGrid > :first-child .reassure,
+.heroGrid > :first-child .eyebrow { color: var(--on-plane-2); }
+.heroGrid > :first-child .ctaPrimary { background: var(--brand-mark); color: var(--brand-plane); }
+.heroGrid > :first-child .ctaSecondary { background: rgba(255, 255, 255, 0.12); color: var(--on-plane); }
+
+.heroCenter {
+  padding: var(--mkt-gap) 0 var(--sp-8);
 }
 
-/* The home pages: one centred column — eyebrow, headline, sub, CTAs — with
- * the labelled Example below it, the way skillry.dev stacks its hero. */
-.heroCenter {
-  padding: calc(var(--sp-8) + var(--sp-5)) 0 var(--sp-8);
-  text-align: center;
+.board {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--mkt-gap);
 }
-.heroCenter .heroGrid {
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-  gap: var(--sp-7);
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--sp-6);
+  border-radius: var(--r-lg);
+  background: var(--mkt-tile);
+  color: var(--text);
+  animation: tileIn 520ms var(--ease-out) backwards;
 }
-.heroCenter .heroSub {
-  margin-inline: auto;
+.tile:nth-child(2) { animation-delay: 70ms; }
+.tile:nth-child(3) { animation-delay: 140ms; }
+.span12 { grid-column: span 12; }
+.span8 { grid-column: span 8; }
+.span7 { grid-column: span 7; }
+.span5 { grid-column: span 5; }
+.span4 { grid-column: span 4; }
+
+@keyframes tileIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
 }
-.heroCenter .actions {
-  justify-content: center;
+
+/* The statement: the page's largest type, on the brand plane. */
+.tileStatement {
+  justify-content: flex-end;
+  min-height: min(52vh, 460px);
+  padding: var(--sp-7) var(--sp-7) var(--sp-6);
+  background: var(--brand-plane);
+  color: var(--on-plane);
 }
-/* The hero's pair is the reference's 48px "Browse Skills" size. */
-.heroCenter .ctaPrimary,
-.heroCenter .ctaSecondary {
-  min-height: 48px;
+.tileStatement .heroTitle { color: var(--on-plane); }
+.tileStatement .heroSub { color: var(--on-plane-2); }
+
+/* The action: the one tile in the highlight, ink on it. */
+.tileAction {
+  justify-content: space-between;
+  gap: var(--sp-6);
+  background: var(--brand-mark);
+  color: var(--brand-plane);
 }
-.heroCenter .sample {
-  width: min(100%, 760px);
-  text-align: left;
+.tileAction .ctaPrimary {
+  background: var(--brand-plane);
+  color: var(--on-plane);
+  min-height: 52px;
 }
+.tileAction .ctaPrimary:hover { background: color-mix(in srgb, var(--brand-plane) 86%, #000); }
+.tileAction .ctaSecondary {
+  background: transparent;
+  color: var(--brand-plane);
+  border: 2px solid currentColor;
+}
+.tileAction .ctaSecondary:hover { background: color-mix(in srgb, var(--brand-plane) 10%, transparent); }
+.tileAction .ctaPrimary:focus-visible,
+.tileAction .ctaSecondary:focus-visible { box-shadow: none; outline: 2px solid currentColor; outline-offset: 2px; }
+.tileAction .actions { flex-direction: column; align-items: stretch; }
+.tileAction .reassure { color: var(--brand-plane); margin: 0; font-weight: 500; }
+
+/* The line that used to sit above the headline is a statement of its own. */
+.statement {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: min(calc(var(--fs-display) * 1.05), 6.1vw);
+  font-weight: 600;
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
+  text-wrap: balance;
+}
+
+/* The Example is a tile like the others; its frame carries no edge. */
+.tileExample {
+  padding: 0;
+  background: transparent;
+}
+.tileExample .sample { flex: 1 1 auto; }
 
 .eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin: 0 0 var(--sp-4);
+  margin: 0 0 var(--sp-3);
   color: var(--text-muted);
-  font-size: var(--fs-meta);
+  font-size: var(--fs-body);
   font-weight: 500;
 }
-.eyebrow::before {
-  content: '';
-  width: 10px;
-  height: 10px;
-  flex-shrink: 0;
-  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
-  border-radius: 3px;
-  background: var(--brand-mark);
-}
 
-/* The headline carries a misregistered second ink — the offset print shadow
- * of skillry.dev's hero. A text-shadow, not a glow: hard edges, no blur. */
 .heroTitle {
   margin: 0;
   font-family: var(--font-display);
@@ -278,86 +347,103 @@
   color: var(--text);
   overflow-wrap: break-word;
   text-wrap: balance;
-  text-shadow:
-    0.035em 0.045em 0 var(--print-ink),
-    0.055em 0.07em 0 color-mix(in srgb, var(--text) 12%, transparent);
+  max-width: 22ch;
 }
 
 .heroSub {
-  margin: var(--sp-5) 0 var(--sp-6);
-  max-width: 60ch;
-  color: var(--text-muted);
+  margin: var(--sp-5) 0 0;
+  max-width: 62ch;
+  color: var(--text-2);
   font-size: var(--fs-subtitle);
-  line-height: 1.55;
+  line-height: 1.5;
 }
+.heroGrid .heroSub { margin-bottom: var(--sp-6); }
 
 .reassure {
   margin: var(--sp-4) 0 0;
   color: var(--text-muted);
   font-size: var(--fs-meta);
+  line-height: 1.5;
 }
 
 .pageTitle {
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--fs-display);
+  font-size: min(calc(var(--fs-display) * 1.65), 7.2vw);
   font-weight: 600;
-  line-height: var(--lh-display);
-  letter-spacing: var(--ls-display);
-  color: var(--text);
-}
-
-.lead {
-  margin: var(--sp-3) 0 0;
-  max-width: 64ch;
-  color: var(--text-muted);
-  font-size: var(--fs-subtitle);
-  line-height: 1.55;
-}
-
-.intro {
-  background: var(--grad-soft);
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
-  padding: var(--sp-7) 0;
-}
-
-/* ── Sections ───────────────────────────────────────────────────────────── */
-
-.section {
-  padding: var(--sp-8) 0;
-}
-
-.sectionAlt {
-  padding: var(--sp-8) 0;
-  background: var(--surface-2);
-}
-
-/* Section headings are display-sized and tight, like the reference's
- * "Every Skill is designed in-house". */
-.h2 {
-  margin: 0 0 var(--sp-3);
-  font-family: var(--font-display);
-  font-size: var(--fs-display);
-  font-weight: 600;
-  line-height: var(--lh-display);
-  letter-spacing: var(--ls-display);
+  line-height: 1.02;
+  letter-spacing: var(--ls-hero);
   color: var(--text);
   text-wrap: balance;
 }
 
+.lead {
+  margin: var(--sp-4) 0 0;
+  max-width: 64ch;
+  color: var(--text-2);
+  font-size: var(--fs-subtitle);
+  line-height: 1.5;
+}
+
+/* Inner pages open on one tile that holds the title. */
+.intro {
+  padding: var(--mkt-gap) 0 0;
+}
+.intro > .wrap > :first-child:last-child,
+.intro > .wrap {
+  min-width: 0;
+}
+.intro > .wrap {
+  width: calc(100% - 2 * var(--sp-4));
+  max-width: calc(1320px - 2 * var(--sp-4));
+  padding: var(--sp-8) var(--sp-7) var(--sp-7);
+  border-radius: var(--r-lg);
+  background: var(--mkt-tile);
+}
+
+/* ── Sections ───────────────────────────────────────────────────────────── */
+
+.section,
+.sectionAlt {
+  padding: var(--sp-8) 0;
+}
+
+/* A section on its own tile: the whole block is one filled field. */
+.sectionAlt > .wrap {
+  width: calc(100% - 2 * var(--sp-4));
+  max-width: calc(1320px - 2 * var(--sp-4));
+  padding: var(--sp-7);
+  border-radius: var(--r-lg);
+  background: var(--mkt-tile);
+}
+
+.h2 {
+  margin: 0 0 var(--sp-5);
+  font-family: var(--font-display);
+  font-size: min(calc(var(--fs-display) * 1.65), 7.2vw);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: var(--ls-hero);
+  color: var(--text);
+  text-wrap: balance;
+  max-width: 30ch;
+}
+
 .h3 {
   margin: 0;
-  font-size: var(--fs-subtitle);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
   font-weight: 600;
-  letter-spacing: var(--ls-subtitle);
-  color: var(--text);
+  line-height: var(--lh-title);
+  letter-spacing: var(--ls-title);
+  color: inherit;
 }
 
 .body {
   margin: 0;
   color: var(--text-2);
-  font-size: var(--fs-body);
-  line-height: 1.6;
+  font-size: var(--fs-subtitle);
+  line-height: 1.5;
 }
 
 .muted {
@@ -371,15 +457,16 @@
   margin-bottom: var(--sp-6);
   max-width: 64ch;
 }
+.sectionHead .h2 { margin-bottom: var(--sp-3); }
 .sectionHead .body {
-  color: var(--text-muted);
+  color: var(--text-2);
 }
 
 .grid2,
 .grid3,
 .grid4 {
   display: grid;
-  gap: var(--sp-4);
+  gap: var(--mkt-gap);
 }
 .grid2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -391,51 +478,99 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* A tile: a flat filled field. No outline, no shadow, at rest or hovered. */
 .card {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--sp-5);
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border: 0;
   border-radius: var(--r-lg);
-  background: var(--surface);
+  background: var(--mkt-tile);
   color: var(--text);
   text-decoration: none;
   min-width: 0;
   transition:
-    transform var(--dur-hover) var(--ease-out),
-    box-shadow var(--dur-hover) var(--ease-out);
+    background var(--dur-enter) var(--ease-out),
+    color var(--dur-enter) var(--ease-out);
 }
-.sectionAlt .card {
-  background: var(--bg);
+.card .body { font-size: var(--fs-body); line-height: 1.55; }
+.sectionAlt .card,
+.intro .card {
+  background: var(--mkt-page);
 }
-a.card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--e-float);
+/* A tile that is a link answers the pointer by changing field. */
+a.card {
+  min-height: 148px;
+  justify-content: space-between;
 }
+a.card:hover,
+a.card:focus-visible {
+  background: var(--brand-mark);
+  color: var(--brand-plane);
+}
+a.card:hover .stepNumber,
+a.card:focus-visible .stepNumber { color: var(--brand-plane); }
+a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
-/* The recommended plan: an ink outline, like the reference's popular plan. */
-.cardFeatured {
-  border: 2px solid var(--text);
-}
+/* No orphan cells: a last row of one tile spans the board, a last row of two
+ * splits it two to one. */
+.grid3 > :last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
+.grid3 > :nth-last-child(2):nth-child(3n + 1) { grid-column: span 2; }
+.grid3 > a.card:last-child:nth-child(3n + 1) { min-height: 0; flex-direction: row; align-items: baseline; }
 
-/* Sticker labels: the step number or feature eyebrow on a coloured tile,
- * cycling through the illustration palette card by card. */
+/* The steps of how it works: four tiles in four fields. The order is the
+ * list's own (<ol>); no numerals are printed. */
+.steps > .card {
+  min-height: 320px;
+  padding: var(--sp-5);
+}
+.steps > .card .h3 { font-size: calc(var(--fs-title) * 1.3); line-height: 1.12; letter-spacing: var(--ls-display); text-wrap: balance; }
+.steps > .card:nth-child(4n + 1) { background: var(--brand-plane); color: var(--on-plane); }
+.steps > .card:nth-child(4n + 1) .body { color: var(--on-plane-2); }
+.steps > .card:nth-child(4n + 3) { background: var(--action-subtle); }
+
+/* What the step produces, docked to the foot of its tile: one line of the
+ * product's own output (the same made-up job as the Example above; the note
+ * under the row says so). A sheet in the page tone, ink on it, in every
+ * tile field. */
+.fragment {
+  margin: auto 0 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--mkt-page);
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  line-height: 1.4;
+}
+.stepsNote { margin-top: var(--sp-3); }
+
+/* The recommended plan sits on the highlight, ink on it. */
+.cardFeatured,
+.sectionAlt .cardFeatured,
+.intro .cardFeatured {
+  background: var(--brand-mark);
+  color: var(--brand-plane);
+}
+.cardFeatured :is(.body, .muted, .price, .h3, .list, .inlineLink) {
+  color: var(--brand-plane);
+}
+.cardFeatured .ctaPrimary { background: var(--brand-plane); color: var(--on-plane); }
+.cardFeatured .ctaSecondary { background: transparent; color: var(--brand-plane); border: 2px solid currentColor; }
+.cardFeatured :is(.ctaPrimary, .ctaSecondary, .inlineLink):focus-visible { box-shadow: none; outline: 2px solid currentColor; outline-offset: 2px; }
+.cardFeatured .badge { background: var(--brand-plane); color: var(--on-plane); }
+
+/* A short label inside a tile (a feature's name, a weight). Sentence case,
+ * readable size, under the title: it is a caption, not an eyebrow. */
 .stepNumber {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  min-height: 28px;
-  padding: 0 var(--sp-3);
-  border-radius: var(--r-pill);
-  background: var(--tile-clay);
-  color: var(--tile-ink);
-  font-size: var(--fs-label);
-  font-weight: 600;
+  order: 2;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  transition: color var(--dur-enter) var(--ease-out);
 }
-.card:nth-child(4n + 2) .stepNumber { background: var(--tile-sky); }
-.card:nth-child(4n + 3) .stepNumber { background: var(--tile-sage); }
-.card:nth-child(4n + 4) .stepNumber { background: var(--tile-lilac); }
 
 .list {
   margin: 0;
@@ -458,14 +593,28 @@ a.card:hover {
   margin-top: var(--sp-5);
 }
 
+/* How it works: the heading beside nothing would leave half a screen empty,
+ * so it shares its row with the supporting line. */
+.split {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--mkt-gap);
+  align-items: end;
+  margin-bottom: var(--sp-6);
+}
+.split > .h2 { grid-column: span 7; margin: 0; }
+.split > .body { grid-column: span 5; }
+
 /* ── Example sample (always labelled "Example") ─────────────────────────── */
 
-/* A showcase panel: hairline sheet over a hard offset print block. */
 .sample {
-  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border: 0;
   border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: var(--e-print);
+  background: var(--mkt-tile);
+  box-shadow: none;
   overflow: hidden;
   min-width: 0;
 }
@@ -475,9 +624,7 @@ a.card:hover {
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--rule);
-  background: var(--surface-glass);
+  padding: var(--sp-5) var(--sp-5) 0;
 }
 
 .exampleChip {
@@ -485,8 +632,8 @@ a.card:hover {
   align-items: center;
   padding: var(--sp-1) var(--sp-3);
   border-radius: var(--r-pill);
-  background: var(--brand-mark);
-  color: var(--brand-plane);
+  background: var(--brand-plane);
+  color: var(--on-plane);
   font-size: var(--fs-label);
   font-weight: 600;
 }
@@ -496,24 +643,25 @@ a.card:hover {
   display: flex;
   gap: 2px;
   width: fit-content;
-  max-width: calc(100% - 2 * var(--sp-4));
-  margin: var(--sp-3) var(--sp-4) 0;
+  max-width: calc(100% - 2 * var(--sp-5));
+  margin: var(--sp-4) var(--sp-5) 0;
   padding: 4px;
   overflow-x: auto;
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border: 0;
   border-radius: var(--r-pill);
-  background: var(--surface-glass);
+  background: var(--mkt-page);
   scrollbar-width: none;
 }
 
 .tab {
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 var(--sp-4);
   border: 0;
   border-radius: var(--r-pill);
   background: transparent;
   color: var(--text-2);
-  font-size: var(--fs-meta);
+  font-family: inherit;
+  font-size: var(--fs-body);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -525,38 +673,41 @@ a.card:hover {
   color: var(--text);
 }
 .tab[aria-selected='true'] {
-  color: var(--action-ink);
-  background: var(--action);
+  color: var(--brand-plane);
+  background: var(--brand-mark);
 }
 
 .sampleBody {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--sp-3);
-  padding: var(--sp-5) var(--sp-4);
-  min-height: 176px;
+  padding: var(--sp-5);
+  min-height: 232px;
 }
 
 .sampleRole {
   margin: 0;
   color: var(--text);
-  font-size: var(--fs-body);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
   font-weight: 600;
+  letter-spacing: var(--ls-title);
 }
 
 .sampleLine,
 .sampleGap,
 .sampleOverlap {
   margin: 0;
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-4);
   border-radius: var(--r-md);
   color: var(--text);
-  font-size: var(--fs-body);
-  line-height: 1.5;
+  font-size: var(--fs-subtitle);
+  line-height: 1.45;
 }
 
 .sampleLine {
-  background: var(--surface-2);
+  background: var(--mkt-page);
   color: var(--text-2);
 }
 
@@ -570,37 +721,44 @@ a.card:hover {
 
 .sampleNote {
   margin: 0;
-  padding: var(--sp-3) var(--sp-4);
-  border-top: 1px solid var(--rule);
+  padding: 0 var(--sp-5) var(--sp-5);
   color: var(--text-muted);
-  font-size: var(--fs-label);
+  font-size: var(--fs-meta);
 }
 
 /* ── Counters ───────────────────────────────────────────────────────────── */
 
 .counters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-  margin: var(--sp-5) 0 var(--sp-3);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mkt-gap);
+  margin: 0 0 var(--sp-4);
 }
 
 .counterValue {
   margin: 0;
-  padding: var(--sp-4) var(--sp-5);
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  padding: var(--sp-6) var(--sp-5);
+  border: 0;
   border-radius: var(--r-lg);
-  background: var(--surface-glass);
-  font-size: var(--fs-stat);
+  background: var(--mkt-tile);
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-display);
+  font-variant-numeric: tabular-nums;
   color: var(--text);
 }
+.counterValue:first-child {
+  background: var(--brand-plane);
+  color: var(--on-plane);
+}
+.counterValue:only-child { grid-column: 1 / -1; }
 
 .sourceNote {
   margin: 0;
   color: var(--text-muted);
-  font-size: var(--fs-label);
+  font-size: var(--fs-meta);
   line-height: 1.5;
 }
 
@@ -617,10 +775,9 @@ a.card:hover {
   gap: var(--sp-3);
   align-items: end;
   padding: var(--sp-5);
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border: 0;
   border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: var(--e-float);
+  background: var(--mkt-tile);
 }
 
 .field {
@@ -642,9 +799,9 @@ a.card:hover {
   width: 100%;
   min-height: var(--control-lg);
   padding: 0 var(--sp-4);
-  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border: 1px solid var(--rule-strong);
   border-radius: var(--r-md);
-  background: var(--bg);
+  background: var(--mkt-page);
   color: var(--text);
   font: inherit;
   font-size: var(--fs-body);
@@ -690,21 +847,36 @@ a.card:hover {
 
 /* ── Pricing ────────────────────────────────────────────────────────────── */
 
+/* The summary: the claim on the left, the two plans on the right, so the
+ * tile is used edge to edge. */
+.sectionAlt[data-pricing-summary] > .wrap {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--sp-5) var(--mkt-gap);
+  align-items: start;
+}
+.sectionAlt[data-pricing-summary] .sectionHead { grid-column: span 6; margin: 0; padding-right: var(--sp-5); }
+.sectionAlt[data-pricing-summary] .grid2 { grid-column: span 6; }
+.sectionAlt[data-pricing-summary] .card { min-height: 260px; }
+.sectionAlt[data-pricing-summary] .price { font-size: var(--fs-display); line-height: var(--lh-display); letter-spacing: var(--ls-display); }
+
 .price {
   margin: var(--sp-1) 0;
   color: var(--text);
-  font-size: var(--fs-display);
+  font-family: var(--font-display);
+  font-size: calc(var(--fs-display) * 1.4);
   font-weight: 600;
-  letter-spacing: var(--ls-display);
-  line-height: var(--lh-display);
+  letter-spacing: var(--ls-hero);
+  line-height: 1.02;
+  font-variant-numeric: tabular-nums;
 }
 
 .badge {
   align-self: flex-start;
   padding: var(--sp-1) var(--sp-3);
   border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--text) 7%, transparent);
-  color: var(--text-2);
+  background: var(--mkt-tile-2);
+  color: var(--text);
   font-size: var(--fs-label);
   font-weight: 600;
 }
@@ -712,9 +884,9 @@ a.card:hover {
 .tableWrap {
   width: 100%;
   overflow-x: auto;
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border: 0;
   border-radius: var(--r-lg);
-  background: var(--surface);
+  background: var(--mkt-page);
 }
 
 .table {
@@ -725,47 +897,66 @@ a.card:hover {
 
 .table th,
 .table td {
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-4);
   border-bottom: 1px solid var(--rule);
   text-align: left;
   color: var(--text-2);
 }
 
 .table th {
-  color: var(--text);
+  color: var(--text-muted);
   font-size: var(--fs-meta);
-  font-weight: 600;
-  background: var(--surface-2);
+  font-weight: 500;
+  background: transparent;
 }
 
 .table tr:last-child td {
   border-bottom: 0;
 }
 
-/* ── FAQ ────────────────────────────────────────────────────────────────── */
+/* ── FAQ: the heading stays while the answers pass ──────────────────────── */
+
+.faqWrap {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--mkt-gap);
+  align-items: start;
+}
+.faqWrap > .h2 {
+  grid-column: span 4;
+  position: sticky;
+  top: 96px;
+  margin: 0;
+}
+.faqWrap > .faq { grid-column: span 8; }
 
 .faq {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  gap: var(--mkt-gap);
+  border: 0;
 }
 
 .faqItem {
-  padding: var(--sp-5) 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  padding: var(--sp-5);
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--mkt-tile);
 }
 
 .faqItem h3 {
   margin: 0 0 var(--sp-2);
-  font-size: var(--fs-subtitle);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
   font-weight: 600;
-  letter-spacing: var(--ls-subtitle);
+  letter-spacing: var(--ls-title);
   color: var(--text);
 }
 
 .faqItem .body {
-  color: var(--text-muted);
-  max-width: 68ch;
+  color: var(--text-2);
+  font-size: var(--fs-subtitle);
+  max-width: 62ch;
 }
 
 /* ── Campus preview (GoApply) ───────────────────────────────────────────── */
@@ -784,46 +975,68 @@ a.card:hover {
   flex-direction: column;
   gap: var(--sp-1);
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border: 0;
   border-radius: var(--r-md);
-  background: var(--bg);
+  background: var(--mkt-page);
 }
 
-/* ── Closing CTA band ───────────────────────────────────────────────────── */
+/* ── Closing CTA: one row of the board ──────────────────────────────────── */
 
-/* The highlighter band ("Ready to extend your agent?"): a lime sheet with
- * ink type and an ink button. --brand-plane is the ink on --brand-mark in both
- * themes (≥ 13:1), so the band reads the same in light and dark. */
+/* The action tile in the highlight, flanked by two plain tiles that run off
+ * the edges, as if the row had been cropped from a longer one. */
 .ctaBand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1000px) minmax(0, 1fr);
+  gap: var(--mkt-gap);
   padding: var(--sp-7) 0 var(--sp-8);
 }
+.ctaBand::before,
+.ctaBand::after {
+  content: '';
+  border-radius: var(--r-lg);
+}
+.ctaBand::before {
+  margin-left: calc(-1 * var(--sp-6));
+  background: var(--brand-plane);
+}
+.ctaBand::after {
+  margin-right: calc(-1 * var(--sp-6));
+  background: var(--mkt-tile);
+}
 .ctaBand .wrap {
-  max-width: 1112px;
-  padding: var(--sp-7) var(--sp-7);
-  border-radius: 28px;
+  max-width: none;
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--sp-7);
+  border-radius: var(--r-lg);
   background: var(--brand-mark);
   color: var(--brand-plane);
 }
 .ctaBand .h2 {
   color: var(--brand-plane);
-  max-width: 20ch;
+  max-width: 18ch;
+  margin-bottom: 0;
 }
 .ctaBand .body {
   margin-top: var(--sp-4);
-  max-width: 56ch;
+  max-width: 52ch;
   color: var(--brand-plane);
   font-size: var(--fs-subtitle);
 }
 .ctaBand .ctaPrimary {
   background: var(--brand-plane);
-  color: var(--brand-mark);
-  box-shadow: 0 10px 26px -12px rgba(18, 19, 19, 0.7);
+  color: var(--on-plane);
+  min-height: 52px;
 }
 .ctaBand .ctaPrimary:hover {
-  background: var(--brand-plane);
+  background: color-mix(in srgb, var(--brand-plane) 86%, #000);
 }
 .ctaBand .ctaPrimary:focus-visible {
-  box-shadow: var(--focus-ring);
+  box-shadow: none;
+  outline: 2px solid var(--brand-plane);
+  outline-offset: 2px;
 }
 .ctaBand .textLink {
   color: var(--brand-plane);
@@ -831,14 +1044,15 @@ a.card:hover {
   text-underline-offset: 3px;
 }
 .ctaBand .textLink:hover {
-  background: color-mix(in srgb, var(--brand-plane) 8%, transparent);
+  background: color-mix(in srgb, var(--brand-plane) 10%, transparent);
 }
 
-/* ── Footer ─────────────────────────────────────────────────────────────── */
+/* ── Footer: a field of its own, the name built large ───────────────────── */
 
 .footer {
   margin-top: auto;
-  background: var(--surface-2);
+  background: var(--brand-plane);
+  color: var(--on-plane);
   padding: var(--sp-8) 0 var(--sp-5);
 }
 
@@ -848,17 +1062,28 @@ a.card:hover {
   gap: var(--sp-5);
 }
 
+/* Everything nested in the field (the wordmark, the legal links) reads the
+ * same tokens as anywhere else, re-pointed for type on the plane. */
+.footer > .wrap {
+  --surface: transparent;
+  --text: var(--on-plane);
+  --text-2: var(--on-plane-2);
+  --text-muted: var(--on-plane-2);
+  --rule: transparent;
+}
+.footer .muted { color: var(--on-plane-2); }
+.footer footer { padding-inline: 0; }
+
 .footerTagline {
   margin-top: var(--sp-3);
   max-width: 40ch;
-  color: var(--text-muted);
 }
 
 .footerTitle {
   margin: 0 0 var(--sp-2);
-  color: var(--text);
+  color: var(--on-plane-2);
   font-size: var(--fs-meta);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .footerLinks {
@@ -873,15 +1098,28 @@ a.card:hover {
   display: inline-flex;
   align-items: center;
   min-height: 40px;
-  color: var(--text-2);
-  font-size: var(--fs-meta);
+  color: var(--on-plane);
+  font-size: var(--fs-body);
   text-decoration: none;
   border-radius: var(--r-sm);
 }
 .footerLink:hover {
-  color: var(--text);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--brand-mark);
+}
+.footer .footerLink:focus-visible { box-shadow: none; outline: 2px solid var(--brand-mark); outline-offset: 2px; }
+
+/* The name, as wide as the page allows. Decoration: the wordmark above
+ * already names the brand to assistive technology. */
+.footerMark {
+  margin: var(--sp-7) 0 0;
+  color: var(--brand-mark);
+  font-family: var(--font-display);
+  font-size: min(calc(var(--fs-hero) * 2.8), 18.6vw);
+  font-weight: 700;
+  line-height: 0.82;
+  letter-spacing: -0.06em;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .footerBottom {
@@ -889,14 +1127,12 @@ a.card:hover {
   flex-direction: column;
   gap: var(--sp-3);
   margin-top: var(--sp-6);
-  padding-top: var(--sp-4);
-  border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 .localeLinks {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 var(--sp-3);
+  gap: 0 var(--sp-4);
 }
 
 /* The light/dark switch of the home pages on a phone: the header's icon
@@ -908,22 +1144,49 @@ a.card:hover {
   gap: var(--sp-2);
   min-height: 44px;
   padding: 0 var(--sp-4);
-  border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+  border: 0;
   border-radius: var(--r-pill);
-  background: var(--surface-glass);
-  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--on-plane);
   font: inherit;
   font-size: var(--fs-meta);
   font-weight: 500;
   cursor: pointer;
 }
 .footerTheme:hover {
-  border-color: color-mix(in srgb, var(--text) 28%, transparent);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.2);
 }
 .footerTheme:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: none;
+  outline: 2px solid var(--brand-mark);
+  outline-offset: 2px;
+}
+
+/* ── Entrances: each block rises into place as it enters the viewport ────
+ * Travel only, never opacity: nothing on the page is ever hidden, whether or
+ * not the browser runs scroll-driven animations. */
+
+@keyframes tileRise {
+  from {
+    transform: translateY(32px);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .section .h2,
+    .sectionAlt .h2,
+    .section .card,
+    .sectionAlt .card,
+    .faqItem,
+    .searchForm,
+    .counterValue,
+    .ctaBand .wrap {
+      animation: tileRise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+  }
 }
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
@@ -938,41 +1201,70 @@ a.card:hover {
   .footerGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .span8,
+  .span7,
+  .span5,
+  .span4 {
+    grid-column: span 12;
+  }
+  .tileAction .actions { flex-direction: row; }
+  .sectionAlt[data-pricing-summary] .sectionHead,
+  .sectionAlt[data-pricing-summary] .grid2,
+  .faqWrap > .h2,
+  .faqWrap > .faq,
+  .split > .h2,
+  .split > .body {
+    grid-column: span 12;
+  }
+  .faqWrap > .h2 { position: static; margin-bottom: var(--sp-4); }
 }
 
-@media (max-width: 760px) {
-  .wrap {
-    padding: 0 var(--sp-4);
-  }
+@media (max-width: 900px) {
   .nav {
     display: none;
   }
-  .hero {
-    padding: var(--sp-6) 0;
-  }
-  .heroCenter {
-    padding: var(--sp-7) 0 var(--sp-6);
-  }
+}
+
+@media (max-width: 760px) {
   .heroGrid,
   .grid2,
   .grid3,
   .grid4,
   .searchForm,
-  .footerGrid {
+  .footerGrid,
+  .counters {
     grid-template-columns: minmax(0, 1fr);
   }
+  .grid3 > :last-child:nth-child(3n + 1),
+  .grid3 > :nth-last-child(2):nth-child(3n + 1) { grid-column: auto; }
+  .grid3 > a.card:last-child:nth-child(3n + 1) { flex-direction: column; }
+  .tile { padding: var(--sp-5); }
+  .tileExample { padding: 0; }
+  .tileStatement {
+    min-height: 0;
+    padding: var(--sp-7) var(--sp-5) var(--sp-5);
+  }
+  .tileAction .actions { flex-direction: column; }
+  .steps > .card { min-height: 0; }
   .section,
-  .sectionAlt,
-  .intro {
+  .sectionAlt {
     padding: var(--sp-7) 0;
   }
+  .sectionAlt > .wrap,
+  .intro > .wrap {
+    padding: var(--sp-6) var(--sp-5);
+  }
   .ctaBand {
-    padding: var(--sp-5) 0 var(--sp-7);
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--sp-5) var(--sp-4) var(--sp-7);
+  }
+  .ctaBand::before,
+  .ctaBand::after {
+    display: none;
   }
   .ctaBand .wrap {
-    width: calc(100% - 2 * var(--sp-4));
+    min-height: 0;
     padding: var(--sp-6) var(--sp-5);
-    border-radius: var(--r-lg);
   }
   .ctaPrimary,
   .ctaSecondary {
@@ -990,12 +1282,10 @@ a.card:hover {
 @media (prefers-reduced-motion: reduce) {
   .tab,
   .card,
+  .tile,
   .ctaPrimary,
   .ctaSecondary {
     transition: none;
-  }
-  a.card:hover,
-  .ctaPrimary:hover {
-    transform: none;
+    animation: none;
   }
 }

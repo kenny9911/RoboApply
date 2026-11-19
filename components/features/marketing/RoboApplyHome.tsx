@@ -2,7 +2,8 @@
 
 // RoboApply home (`/`, `/{locale}`) — TASK_PLAN.md WP-40, PRODUCT §3.2, F-MKT-01/02.
 //
-//   hero (gap first, ruling R2; the "{count}+ open roles" clause only when the
+//   the board (statement tile, action tile, the labelled interactive Example;
+//   gap first, ruling R2; the "{count}+ open roles" clause only when the
 //   public index holds ≥ 1,000 jobs) → labelled interactive Example → the four
 //   verbs → feature links → real counters → the job ticker slot → quick
 //   search → pricing summary → FAQ (FAQPage JSON-LD is rendered by the page) →
@@ -29,6 +30,14 @@ import styles from './marketing.module.css';
 
 const VERBS = ['find', 'understand', 'fix', 'practice'] as const;
 
+/** What each step produces, shown in its tile: one line of the Example's made-up job. */
+const STEP_OUTPUT = {
+  find: 'sample.find.line3',
+  understand: 'sample.understand.gap',
+  fix: 'sample.fix.line2',
+  practice: 'sample.practice.line2',
+} as const;
+
 export function HomeHeroSub() {
   const t = useTranslations('landing.home.hero');
   const format = useFormatter();
@@ -49,46 +58,51 @@ export interface RoboApplyHomeProps {
 export function RoboApplyHome({ ticker = null }: RoboApplyHomeProps = {}) {
   const t = useTranslations('landing.home');
   const tc = useTranslations('landing.cta');
+  const te = useTranslations('landing.example');
   const brand = useBrand();
   return (
     <SitePage from="home" localeLinks>
       <section className={`${styles.hero} ${styles.heroCenter}`} aria-labelledby="home-title">
-        <div className={`${styles.wrap} ${styles.heroGrid}`}>
-          <div>
-            <p className={styles.eyebrow}>{t('hero.eyebrow')}</p>
+        <div className={`${styles.wrap} ${styles.board}`}>
+          <div className={`${styles.tile} ${styles.tileStatement} ${styles.span12}`}>
             <h1 className={styles.heroTitle} id="home-title">
               {t('hero.headline')}
             </h1>
             <HomeHeroSub />
+          </div>
+          <div className={`${styles.tile} ${styles.tileAction} ${styles.span4}`}>
+            <p className={styles.statement}>{t('hero.eyebrow')}</p>
             <div className={styles.actions}>
               <SignupLink from="home:hero">{tc('start')}</SignupLink>
-              <a className={styles.ctaSecondary} href="#how">
+              <a className={styles.ctaSecondary} href="#example">
                 {t('hero.ctaSecondary')}
               </a>
+              <p className={styles.reassure}>{t('hero.reassure')}</p>
             </div>
-            <p className={styles.reassure}>{t('hero.reassure')}</p>
           </div>
-          <HomeExample />
+          <div className={`${styles.tile} ${styles.tileExample} ${styles.span8}`} id="example">
+            <HomeExample />
+          </div>
         </div>
       </section>
 
       <section className={styles.section} id="how" aria-labelledby="home-verbs-title">
         <div className={styles.wrap}>
-          <div className={styles.sectionHead}>
-            <p className={styles.eyebrow}>{t('verbs.eyebrow')}</p>
-            <h2 className={styles.h2} id="home-verbs-title">
-              {t('verbs.title')}
-            </h2>
-          </div>
-          <ol className={`${styles.grid4} ${styles.plainList}`}>
-            {VERBS.map((key, i) => (
+          <h2 className={styles.h2} id="home-verbs-title">
+            {t('verbs.title')}
+          </h2>
+          <ol className={`${styles.grid4} ${styles.plainList} ${styles.steps}`}>
+            {VERBS.map((key) => (
               <li key={key} className={styles.card}>
-                <span className={styles.stepNumber}>{String(i + 1).padStart(2, '0')}</span>
                 <h3 className={styles.h3}>{t(`verbs.${key}.title`)}</h3>
                 <p className={styles.body}>{t(`verbs.${key}.body`)}</p>
+                <p className={styles.fragment} data-ui="" data-example="">
+                  {t(STEP_OUTPUT[key])}
+                </p>
               </li>
             ))}
           </ol>
+          <p className={`${styles.muted} ${styles.stepsNote}`}>{te('note')}</p>
         </div>
       </section>
 

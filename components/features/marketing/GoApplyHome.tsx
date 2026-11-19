@@ -145,19 +145,23 @@ export function GoApplyHome({ ticker = null }: GoApplyHomeProps = {}) {
   return (
     <SitePage from="home">
       <section className={`${styles.hero} ${styles.heroCenter}`} aria-labelledby="cn-home-title">
-        <div className={`${styles.wrap} ${styles.narrow}`}>
-          <p className={styles.eyebrow}>{t('hero.eyebrow')}</p>
-          <h1 className={styles.heroTitle} id="cn-home-title">
-            {t('hero.headline')}
-          </h1>
-          <p className={styles.heroSub}>{ai ? t('hero.sub') : t('hero.subNoAi')}</p>
-          <div className={styles.actions}>
-            <SignupLink from="home:hero">{tc('start')}</SignupLink>
-            <a className={styles.ctaSecondary} href="#free">
-              {t('hero.ctaSecondary')}
-            </a>
+        <div className={`${styles.wrap} ${styles.board}`}>
+          <div className={`${styles.tile} ${styles.tileStatement} ${styles.span8}`}>
+            <h1 className={styles.heroTitle} id="cn-home-title">
+              {t('hero.headline')}
+            </h1>
+            <p className={styles.heroSub}>{ai ? t('hero.sub') : t('hero.subNoAi')}</p>
           </div>
-          <p className={styles.reassure}>{t('hero.reassure')}</p>
+          <div className={`${styles.tile} ${styles.tileAction} ${styles.span4}`}>
+            <p className={styles.statement}>{t('hero.eyebrow')}</p>
+            <div className={styles.actions}>
+              <SignupLink from="home:hero">{tc('start')}</SignupLink>
+              <a className={styles.ctaSecondary} href="#free">
+                {t('hero.ctaSecondary')}
+              </a>
+              <p className={styles.reassure}>{t('hero.reassure')}</p>
+            </div>
+          </div>
         </div>
       </section>
 

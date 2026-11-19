@@ -57,9 +57,8 @@ function FeatureBody({ def }: { def: FeatureDef }) {
             {tc('howTitle')}
           </h2>
           <ol className={`${styles.grid3} ${styles.plainList}`}>
-            {STEPS.map((k, i) => (
+            {STEPS.map((k) => (
               <li key={k} className={styles.card}>
-                <span className={styles.stepNumber}>{String(i + 1).padStart(2, '0')}</span>
                 <h3 className={styles.h3}>{t(`${k}.title`)}</h3>
                 <p className={styles.body}>{t(`${k}.body`)}</p>
               </li>

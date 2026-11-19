@@ -165,28 +165,34 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--mkt-page);
   color: var(--text);
 }
+/* A plain bar on the page tone, on the same margins as the home page's. */
 .mktHeader {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-6);
-  background: var(--bg);
-  border-bottom: 1px solid var(--rule);
+  width: 100%;
+  max-width: 1320px;
+  min-height: 68px;
+  margin: 0 auto;
+  padding: 0 var(--sp-4);
+  background: var(--mkt-page);
+  border-bottom: 0;
 }
 .mktBrand {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
   color: var(--text);
-  font-size: var(--fs-subtitle);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
   font-weight: 600;
+  letter-spacing: var(--ls-title);
   text-decoration: none;
 }
 .mktActions {
@@ -198,11 +204,15 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding: 0 var(--sp-3);
-  color: var(--text-2);
-  font-size: var(--fs-meta);
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-pill);
+  color: var(--text);
+  font-size: var(--fs-body);
   font-weight: 500;
   text-decoration: none;
+}
+.mktLink:hover {
+  background: var(--mkt-tile);
 }
 .mktCta {
   display: inline-flex;
@@ -225,7 +235,7 @@
 }
 @media (max-width: 760px) {
   .mktHeader {
-    padding: var(--sp-2) var(--sp-4);
+    padding: 0 var(--sp-4);
   }
 }
 

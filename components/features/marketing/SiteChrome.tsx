@@ -224,6 +224,9 @@ export function MarketingFooter({ localeLinks = false, themeSwitch = false }: Ma
           </div>
           <PopularLists />
         </nav>
+        <p className={styles.footerMark} aria-hidden="true">
+          {brand.name}
+        </p>
         <div className={styles.footerBottom}>
           {themeSwitch ? <FooterThemeSwitch /> : null}
           {localeLinks && locales.length > 1 ? (
