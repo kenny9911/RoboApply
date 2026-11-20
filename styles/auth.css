@@ -1,8 +1,9 @@
-/* A considered first impression (Paper): the brand panel is an illustration
- * tile — terracotta paper with ink type and the hand-drawn path — beside a
- * quiet form of pill controls, shared by login and signup. Tiles are
- * stickers: they keep their colour in both themes, so everything written on
- * the panel uses --tile-ink (≥ 7:1 on --tile-clay) rather than --text. */
+/* A considered first impression (Pulse): the brand panel is the cobalt plane
+ * (--brand-plane) — white type, the hand-drawn path and yellow check stickers,
+ * like the home page's statement tile — beside a quiet form of pill controls,
+ * shared by login and signup. The plane keeps its colour in both themes, so
+ * everything written on it reads --tile-ink, re-pointed here to --on-plane
+ * (white: 8.4:1 on RoboApply's cobalt, more on GoApply's jade). */
 .auth-split {
   display: grid;
   grid-template-columns: 1fr;
@@ -18,7 +19,8 @@
   justify-content: space-between;
   overflow: hidden;
   padding: 42px 52px;
-  background: var(--tile-clay);
+  --tile-ink: var(--on-plane);
+  background: var(--brand-plane);
   color: var(--tile-ink);
   border-radius: 0 var(--r-lg) var(--r-lg) 0;
 }
@@ -58,9 +60,10 @@
   color: var(--brand-mark);
   background: var(--brand-plane);
 }
+/* On the plane the logo tile turns to the highlight, cobalt glyph on it. */
 .auth-brand .auth-brand-mark {
-  color: var(--brand-mark);
-  background: var(--brand-plane);
+  color: var(--brand-plane);
+  background: var(--brand-mark);
 }
 .auth-wordmark-period {
   color: var(--text);
@@ -93,8 +96,8 @@
   display: inline-block;
   width: 10px;
   height: 10px;
-  border: 1px solid var(--tile-ink);
-  border-radius: 3px;
+  border: 0;
+  border-radius: 50%;
   background: var(--brand-mark);
   margin-right: 9px;
   vertical-align: -1px;
@@ -152,9 +155,9 @@
   height: 24px;
   flex: none;
   border-radius: 50%;
-  border: 1px solid var(--tile-ink);
+  border: 0;
   background: var(--brand-mark);
-  color: var(--tile-ink);
+  color: var(--brand-plane);
 }
 .auth-feature__dot svg {
   width: 11px;

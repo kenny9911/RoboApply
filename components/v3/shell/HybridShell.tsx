@@ -191,7 +191,11 @@ function SignupCta({ from, label }: { from?: string; label: string }) {
   const pathname = usePathname() ?? '';
   const search = useSearchParams();
   return (
-    <Link href={signupHref(from, { pathname, search: search ? search.toString() : null })} className={styles.mktCta} data-cta-from={from}>
+    <Link
+      href={signupHref(from, { pathname, search: search ? search.toString() : null })}
+      className={`${styles.mktCta} ${styles.mktHideSmall}`}
+      data-cta-from={from}
+    >
       {label}
     </Link>
   );
@@ -211,14 +215,14 @@ function MarketingChrome({ children, from, footer }: HybridShellProps) {
           <span>{brand.name}</span>
         </Link>
         <div className={styles.mktActions}>
-          <ThemeToggle />
+          <ThemeToggle className={`icon-btn ${styles.mktHideSmall}`} />
           <LanguageSwitcher />
           <Link href="/login" className={styles.mktLink}>
             {t('marketing.sign_in')}
           </Link>
           <Suspense
             fallback={
-              <Link href={signupHref(from)} className={styles.mktCta} data-cta-from={from}>
+              <Link href={signupHref(from)} className={`${styles.mktCta} ${styles.mktHideSmall}`} data-cta-from={from}>
                 {t('marketing.get_started')}
               </Link>
             }
