@@ -38,7 +38,9 @@ html[data-brand='goapply'][data-theme='dark'] {
   --action-ink: #0B2A23;
   --action-subtle: #1F2D27;
   --brand-mark: #A6F2CC;
-  --brand-plane: #10241F;
+  /* A jade field that stays visible on the dark ground (about 2.5:1 against
+   * it, like RoboApply's cobalt); white type 8.1:1, mint on it 6.2:1. */
+  --brand-plane: #145A4B;
   --grad-brand: #A6F2CC;
   --grad-brand-hover: #C4F7DD;
   --grad-soft: #13211F;

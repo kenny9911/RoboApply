@@ -50,7 +50,8 @@
  *             the white tile on it; -2/-3 are recesses and pressed fills
  *   highlight --brand-mark on which --brand-plane is the ink: the sunny yellow
  *             fill of the strongest tile, plan and example chips, text
- *             selection, progress. A fill, never a text colour on its own.
+ *             selection, the Great-fit meter on cobalt (ordinary progress
+ *             is --accent-line). A fill, never a text colour on its own.
  * Flat by rule: no gradient (the --grad-* tokens keep their names for the
  * components that paint with them, and are now single colours), no glow,
  * and no shadow on anything at rest — a tile is separated from the
@@ -74,13 +75,14 @@
   --action-subtle: #E4E9FF;
   --brand-mark: #FFD43B;
   --brand-plane: #1D32D8;
-  /* The blue of lines and fills that carry no text: progress bars, the
-   * selected row's edge, rings. */
-  --accent-line: #2B4DFF;
-  --accent-track: #DCE3FF;
-  /* The cobalt field: the paid-plan call to action and the landing's dark
-   * tiles. White type on it in both themes. */
-  --upgrade: #1D32D8;
+  /* Lines and fills that carry no text (progress bars, the selected row's
+   * edge, the profile ring) take the action colour on its subtle track, so
+   * GoApply's follow its jade. Line against track: 4.8:1 light, 5.5:1 dark. */
+  --accent-line: var(--action);
+  --accent-track: var(--action-subtle);
+  /* The paid-plan button (the shell's Upgrade): the brand plane, white type
+   * on it in both themes (8.4:1 on RoboApply's cobalt). */
+  --upgrade: var(--brand-plane);
   --upgrade-ink: #FFFFFF;
   --ok: #1F7A46;
   --ok-subtle: #E2F3E9;
@@ -159,15 +161,19 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   /* The marketing site (components/features/marketing): a white page with
-   * tinted tiles on an 8px gap, and the ink for type on the brand plane. */
+   * tinted tiles on an 8px gap, and the ink for type on the brand plane.
+   * --mkt-card is a sheet inside a tile (plan cards, the Example's lines): a
+   * step above the tile in both themes. */
   --mkt-page: var(--surface);
   --mkt-tile: var(--surface-2);
   --mkt-tile-2: var(--surface-3);
+  --mkt-card: var(--surface);
   --mkt-gap: 8px;
   --on-plane: #FFFFFF;
   --on-plane-2: rgba(255, 255, 255, 0.8);
-  /* The home page's 3D scene (HeroScene.tsx reads these at runtime): the
-   * cards it sorts, in the brand's bright hues. */
+  /* The home page's 3D scene (heroSceneRuntime.ts reads these at runtime,
+   * with --scene-ink, which .scene sets to the action colour): the cards it
+   * sorts, in the brand's bright hues. */
   --scene-1: #93A8FF;
   --scene-2: #FFD43B;
   --scene-3: #FF8A3D;
@@ -184,7 +190,7 @@
 /* ═══════════════════════════════════════════════════════════════════
  * DARK — the same roles on blue-black. Elevation is lightness alone: each
  * surface is one step lighter than the one under it. A lighter blue carries
- * text here (6.8:1 on the ground), so it is the action.
+ * text here (7.5:1 on the ground, 7.0:1 on --surface), so it is the action.
  * ═══════════════════════════════════════════════════════════════════ */
 html[data-theme='dark'] {
   --bg: #07080F;
@@ -203,10 +209,6 @@ html[data-theme='dark'] {
   --action-subtle: #1B2452;
   --brand-mark: #FFD43B;
   --brand-plane: #1D32D8;
-  --accent-line: #8098FF;
-  --accent-track: #1F2A63;
-  --upgrade: #2B4DFF;
-  --upgrade-ink: #FFFFFF;
   --ok: #8FD3AB;
   --ok-subtle: #10291C;
   --warn: #F4C152;
@@ -223,6 +225,7 @@ html[data-theme='dark'] {
   --mkt-page: var(--bg);
   --mkt-tile: var(--surface);
   --mkt-tile-2: var(--surface-2);
+  --mkt-card: var(--surface-2);
   --grad-brand: #8098FF;
   --grad-brand-hover: #A3B5FF;
   --grad-soft: #11152B;
