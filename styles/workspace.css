@@ -115,7 +115,7 @@
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
 /* Where you are: a white pill on the tinted rail, the label in ink and one
  * step heavier, the icon in the action colour. The fill and the weight carry
- * the state; the yellow is the accent on top of them. */
+ * the state; the blue icon is the accent on top of them. */
 .nav-item[aria-current="page"],
 .nav-item[aria-current="page"]:hover {
   background: var(--surface);
@@ -276,9 +276,9 @@ html[data-theme='dark'] .pipe-col .pipe-card { background: var(--surface-2); }
 .pipe-card .when { padding-top: 12px; border-top: 1px solid var(--rule); }
 .pipe-empty { padding: 28px 10px; line-height: 1.6; }
 
-/* Resume library: create cards carry sticker tiles; the recommended path gets
- * the ink border skillry.dev gives its "most popular" plan. The resume paper
- * itself remains document typography. */
+/* Resume library: create cards carry sticker tiles; the recommended path is
+ * the yellow highlight with cobalt ink and a cobalt icon tile. The resume
+ * paper itself remains document typography. */
 .rb-create { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .rb-create-card { flex-direction: column; padding: 24px; min-height: 220px; background: var(--surface); border-radius: var(--r-lg); }
 .rb-create-card:hover { box-shadow: var(--e-float); }
