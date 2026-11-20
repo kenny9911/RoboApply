@@ -399,11 +399,11 @@ export function PricingPage() {
             </p>
           ) : null}
           <div className={styles.grid3}>
-            <article className={styles.card} data-plan="free">
+            <article className={`${styles.card} ${notOpen ? styles.cardFeatured : ''}`} data-plan="free">
               <h3 className={styles.h3}>{tc(`plans.${brand.id}.free`)}</h3>
               <p className={styles.price}>{formatMoney(locale, 0, brand.currency)}</p>
               <p className={styles.body}>{feed ? t('freeNote') : t('freeNoteNoFeed')}</p>
-              <SignupLink from="pricing:free" variant="secondary">
+              <SignupLink from="pricing:free" variant={notOpen ? 'primary' : 'secondary'}>
                 {t('cta')}
               </SignupLink>
             </article>

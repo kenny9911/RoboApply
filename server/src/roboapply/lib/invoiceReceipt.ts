@@ -105,7 +105,8 @@ export async function renderAlipayReceiptPdf(input: ReceiptInput): Promise<Buffe
   const left = margin;
   const right = 539;
   const { draw } = createRunDrawer(doc, { chain: receiptFontChain(input), widthFrom: (x) => right - x });
-  const accent = '#5b5bd6';
+  // Brand-neutral Pulse ink: the receipt is a document and serves both brands.
+  const accent = '#0B0D1A';
 
   // Header
   doc.fillColor(accent);

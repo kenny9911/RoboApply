@@ -1,9 +1,11 @@
 /* /practice setup — one screen, two columns at desktop widths (≥1100px).
  *
- * Desk, after resume.io's interview prep start screen: a calm page with the
+ * Pulse, after resume.io's interview prep start screen: a calm page with the
  * setup form on the left and, on the right, a panel that says what will
- * happen. White cards with hairline borders and 12px corners; fields and
- * buttons with 4px corners; the light-blue wash marks the selected option.
+ * happen. White tiles on the cool-white ground with 16px corners (--r-md).
+ * Single-line fields, chips and buttons are pills (--r-control); multi-line
+ * fields and option cards use --r-md; the --action-subtle wash marks the
+ * selected option.
  *
  * The left column runs in the order a candidate decides: the job, the plan
  * written for it, the prep brief. The side panel (PracticeSidePanel) explains
@@ -435,7 +437,7 @@
   min-height: 200px;
   display: block;
   border: 1px solid var(--rule-strong);
-  border-radius: var(--r-control);
+  border-radius: var(--r-md);
   background: var(--surface);
   color: var(--text);
   padding: var(--sp-4);
@@ -941,7 +943,7 @@
   align-items: center;
   gap: var(--sp-3);
   border: 1px solid var(--rule);
-  border-radius: var(--r-control);
+  border-radius: var(--r-md);
   background: var(--surface);
   color: var(--text);
   padding: var(--sp-2) var(--sp-3);

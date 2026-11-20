@@ -77,7 +77,7 @@ describe('generateMetadata / generateViewport per brand', () => {
     const meta = await generateMetadata();
     expect(String(meta.metadataBase)).toBe('https://www.roboapply.io/');
     expect(meta.title).toBe('RoboApply');
-    expect(meta.icons).toEqual({ icon: '/roboapply-mark.svg', shortcut: '/roboapply-mark.svg', apple: '/roboapply-logo.png' });
+    expect(meta.icons).toEqual({ icon: '/roboapply-mark.svg', shortcut: '/roboapply-mark.svg', apple: '/roboapply-touch.png' });
     expect(meta.verification).toBeUndefined();
   });
 

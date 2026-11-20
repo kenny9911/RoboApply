@@ -101,3 +101,10 @@ export function heroCount(openRoles: { value: number } | null | undefined): numb
   const v = openRoles?.value;
   return typeof v === 'number' && Number.isFinite(v) && v >= HERO_COUNT_MIN ? v : null;
 }
+
+/** Binds each " · " to the phrase before it (a no-break space before the dot),
+ * so a wrapped line can end with a dot but never start with one. No copy
+ * changes: it works on every locale's string as written. */
+export function keepDots(text: string): string {
+  return text.replace(/ · /g, '\u00a0· ');
+}

@@ -112,7 +112,7 @@
   align-items: center;
   gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-5);
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border: 0;
   border-radius: var(--r-lg);
   background: var(--surface);
 }
@@ -121,8 +121,9 @@
 .card[data-first] {
   padding-block: var(--sp-5);
   background: var(--grad-panel);
-  box-shadow: var(--e1);
+  box-shadow: none;
 }
+.card[data-first] .tile { background: var(--surface); color: var(--text); }
 .tile {
   display: grid;
   place-items: center;
@@ -130,15 +131,17 @@
   width: 40px;
   height: 40px;
   border-radius: var(--r-sm);
-  background: var(--tile-mint);
-  color: var(--tile-ink);
+  background: var(--surface-2);
+  color: var(--text);
 }
-.tile[data-tone='sage'] { background: var(--tile-sage); }
-.tile[data-tone='camel'] { background: var(--tile-camel); }
-.tile[data-tone='sky'] { background: var(--tile-sky); }
-.tile[data-tone='lilac'] { background: var(--tile-lilac); }
-.tile[data-tone='blush'] { background: var(--tile-blush); }
-.tile[data-tone='clay'] { background: var(--tile-clay); }
+/* The stickers keep their pastel in both themes, so the icon on them is the
+ * fixed sticker ink, never --text (white in dark). */
+.tile[data-tone='sage'] { background: var(--tile-sage); color: var(--tile-ink); }
+.tile[data-tone='camel'] { background: var(--tile-camel); color: var(--tile-ink); }
+.tile[data-tone='sky'] { background: var(--tile-sky); color: var(--tile-ink); }
+.tile[data-tone='lilac'] { background: var(--tile-lilac); color: var(--tile-ink); }
+.tile[data-tone='blush'] { background: var(--tile-blush); color: var(--tile-ink); }
+.tile[data-tone='clay'] { background: var(--tile-clay); color: var(--tile-ink); }
 .fact {
   margin: 0;
   min-width: 0;
