@@ -5,15 +5,19 @@
 // The idea: a job search is a mess of postings; the agent sorts it. Cards
 // drift in loose, then fly into a well-kept board (`board`) or one tidy
 // pile beside the last call to action (`stacks`). The pointer
-// lifts the cards under it, a click shuffles and re-sorts, and scrolling
-// pulls the board apart in depth.
+// lifts the cards under it, a click on the tile's open field shuffles and
+// re-sorts, and scrolling pulls the board apart in depth.
 //
-// Colours come from the --scene-* tokens in app/globals.css. The canvas is
-// decoration: aria-hidden, pointer-events none, and still (sorted, one
-// frame) under prefers-reduced-motion.
+// Colours come from the --scene-1…5 tokens in app/globals.css and from
+// --scene-ink (set on .scene to var(--action), so the marks follow the action
+// colour). Lighting is a white-to-periwinkle hemisphere fill, one key light
+// and a room environment: no shadows, no bloom. The canvas is decoration:
+// aria-hidden, pointer-events none, and still (sorted, one frame, deaf to the
+// pointer and the scroll) under prefers-reduced-motion.
 
 import {
   Color,
+  CylinderGeometry,
   DirectionalLight,
   Group,
   HemisphereLight,
@@ -90,10 +94,12 @@ interface Card {
 
 /** Mounts the scene in `host` and returns its teardown. Throws when WebGL is unavailable. */
 export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => void {
-  const renderer = new WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance' });
+  // Decoration: never wake a discrete GPU for it.
+  const renderer = new WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'low-power' });
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = NeutralToneMapping;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 2);
+  renderer.setPixelRatio(pixelRatio());
   const canvas = renderer.domElement;
   host.appendChild(canvas);
 
@@ -103,8 +109,8 @@ export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => 
 
   const pmrem = new PMREMGenerator(renderer);
   const room = new RoomEnvironment();
-  const envMap = pmrem.fromScene(room, 0.04).texture;
-  scene.environment = envMap;
+  const envTarget = pmrem.fromScene(room, 0.04);
+  scene.environment = envTarget.texture;
   scene.environmentIntensity = 0.55;
   scene.add(new HemisphereLight(0xffffff, 0xbfc8ff, 0.9));
   const key = new DirectionalLight(0xffffff, 2.1);
@@ -123,11 +129,13 @@ export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => 
   const actionBlue = token(css, '--scene-ink', '#2b4dff');
   const dark = new Color('#0b0d1a');
 
-  // Geometry and materials (all disposed in the teardown).
-  const cardGeo = new RoundedBoxGeometry(CARD_W, CARD_H, CARD_D, 4, 0.085);
-  const dotGeo = new RoundedBoxGeometry(0.24, 0.24, 0.04, 4, 0.12);
-  const longGeo = new RoundedBoxGeometry(0.72, 0.085, 0.04, 2, 0.04);
-  const shortGeo = new RoundedBoxGeometry(0.46, 0.085, 0.04, 2, 0.04);
+  // Geometry and materials (all disposed in the teardown). RoundedBoxGeometry
+  // clamps its radius to half the depth, so the card and the bars are built
+  // deep enough for their radius and then flattened; the mark is a disc.
+  const cardGeo = new RoundedBoxGeometry(CARD_W, CARD_H, 0.17, 4, 0.085).scale(1, 1, CARD_D / 0.17);
+  const dotGeo = new CylinderGeometry(0.12, 0.12, 0.04, 32).rotateX(Math.PI / 2);
+  const longGeo = new RoundedBoxGeometry(0.72, 0.085, 0.085, 2, 0.0425).scale(1, 1, 0.04 / 0.085);
+  const shortGeo = new RoundedBoxGeometry(0.46, 0.085, 0.085, 2, 0.0425).scale(1, 1, 0.04 / 0.085);
   const cardMat = new MeshStandardMaterial({ roughness: 0.42, metalness: 0.02 });
   const detailMat = new MeshStandardMaterial({ roughness: 0.6, metalness: 0 });
 
@@ -220,6 +228,8 @@ export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => 
   if (still) for (const card of cards) card.mix = 1;
 
   function layout() {
+    const ratio = pixelRatio();
+    if (ratio !== renderer.getPixelRatio()) renderer.setPixelRatio(ratio);
     const rect = host.getBoundingClientRect();
     width = Math.max(1, rect.width);
     height = Math.max(1, rect.height);
@@ -230,20 +240,117 @@ export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => 
     viewW = viewH * camera.aspect;
     split = getComputedStyle(host).getPropertyValue('--scene-split').trim() !== '0';
     if (variant === 'board') {
-      const fit = split
-        ? Math.min((viewW * 0.45) / BOARD_W, (viewH * 0.82) / (BOARD_H * 1.25))
-        : Math.min((viewW * 0.74) / BOARD_W, (viewH * 0.8) / (BOARD_H * 1.25));
-      group.scale.setScalar(fit);
-      group.position.set(split ? viewW * 0.2 : 0, split ? -viewH * 0.02 : 0, 0);
+      if (split) {
+        fitBesideCopy();
+      } else {
+        group.scale.setScalar(Math.min((viewW * 0.64) / BOARD_W, (viewH * 0.65) / (BOARD_H * 1.25)));
+        group.position.set(0, 0, 0);
+      }
     } else {
       group.scale.setScalar(Math.min(1.3, viewH / 5.6));
       group.position.set(viewW * 0.27, 0, 0);
     }
   }
 
+  // ── Fitting the board beside the copy ───────────────────────────────
+  // The board takes the space to the right of the copy's text (measured, so a
+  // longer headline in any locale pushes it, not under it) and is scaled so
+  // its tilted, projected outline — lifted cards included — stays inside the
+  // tile with a margin.
+  const corner = new Vector3();
+  const box = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  function projectBoard(scale: number, x: number, y: number) {
+    // The camera's inverse matrix is only refreshed by a render; layout can run first.
+    camera.updateMatrixWorld();
+    group.position.set(x, y, 0);
+    group.scale.setScalar(scale);
+    group.rotation.set(base.rx, base.ry, base.rz);
+    group.updateMatrixWorld();
+    box.minX = Infinity;
+    box.minY = Infinity;
+    box.maxX = -Infinity;
+    box.maxY = -Infinity;
+    for (const cx of [-BOARD_W / 2, BOARD_W / 2]) {
+      for (const cy of [-BOARD_H / 2, BOARD_H / 2]) {
+        for (const cz of [0, 0.9]) {
+          corner.set(cx, cy, cz).applyMatrix4(group.matrixWorld).project(camera);
+          const px = ((corner.x + 1) / 2) * width;
+          const py = ((1 - corner.y) / 2) * height;
+          box.minX = Math.min(box.minX, px);
+          box.maxX = Math.max(box.maxX, px);
+          box.minY = Math.min(box.minY, py);
+          box.maxY = Math.max(box.maxY, py);
+        }
+      }
+    }
+    return { ...box };
+  }
+  /** The right edge of the copy's text (not its boxes), in host pixels. */
+  function copyRight(): number {
+    const tile = host.parentElement;
+    if (!tile) return 0;
+    const hostLeft = host.getBoundingClientRect().left;
+    const range = document.createRange();
+    let right = 0;
+    for (const child of Array.from(tile.children)) {
+      if (child === host || !(child instanceof HTMLElement) || child.offsetParent === null) continue;
+      range.selectNodeContents(child);
+      for (const rect of Array.from(range.getClientRects())) {
+        if (rect.width > 0) right = Math.max(right, rect.right - hostLeft);
+      }
+    }
+    return right;
+  }
+  function fitBesideCopy() {
+    const margin = 32;
+    const left = Math.max(width * 0.45, copyRight() + 48);
+    const right = width - margin;
+    const top = margin;
+    const bottom = height - margin;
+    if (right - left < 40 || bottom - top < 40) {
+      group.scale.setScalar(0.0001);
+      return;
+    }
+    // Perspective makes the near side grow as the board moves, so fit by a
+    // few rounds of project, rescale and recentre (it settles in three or four).
+    const perUnit = width / viewW;
+    let scale = 1;
+    let x = 0;
+    let y = 0;
+    for (let round = 0; round < 5; round += 1) {
+      const b = projectBoard(scale, x, y);
+      scale = Math.min(scale * Math.min((right - left) / (b.maxX - b.minX), (bottom - top) / (b.maxY - b.minY)), 1.2);
+      const c = projectBoard(scale, x, y);
+      x += ((left + right) / 2 - (c.minX + c.maxX) / 2) / perUnit;
+      y -= ((top + bottom) / 2 - (c.minY + c.maxY) / 2) / perUnit;
+    }
+    const last = projectBoard(scale, x, y);
+    const overflow = Math.max(last.maxX - right, left - last.minX, last.maxY - bottom, top - last.minY, 0);
+    if (overflow > 0) scale *= Math.max(0.5, 1 - overflow / Math.max(1, right - left));
+    group.scale.setScalar(scale);
+    group.position.set(x, y, 0);
+  }
+
   function readScroll() {
+    if (still || variant !== 'board') {
+      scroll = 0;
+      return;
+    }
     const rect = host.getBoundingClientRect();
-    scroll = variant === 'board' ? Math.min(1, Math.max(0, -rect.top / Math.max(1, rect.height))) : 0;
+    scroll = Math.min(1, Math.max(0, -rect.top / Math.max(1, rect.height)));
+  }
+  /** Reduced motion: the board neither follows the pointer nor the scroll. */
+  function settle() {
+    pointer.inside = false;
+    pointer.tx = 0;
+    pointer.ty = 0;
+    pointer.x = 0;
+    pointer.y = 0;
+    scroll = 0;
+    for (const card of cards) {
+      card.lift = 0;
+      card.mix = 1;
+    }
   }
 
   const m = new Matrix4();
@@ -335,21 +442,26 @@ export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => 
   // ── Wiring ──────────────────────────────────────────────────────────
   const surface = host.parentElement ?? host;
   const onMove = (event: PointerEvent) => {
-    if (event.pointerType === 'touch') return;
+    if (still || event.pointerType === 'touch') return;
     const rect = host.getBoundingClientRect();
-    pointer.tx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.ty = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
-    pointer.inside = true;
+    if (rect.width < 1 || rect.height < 1) return;
+    const nx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const ny = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+    // Over the copy (outside the scene's own box) nothing lifts.
+    pointer.inside = Math.abs(nx) <= 1 && Math.abs(ny) <= 1;
+    pointer.tx = Math.max(-1, Math.min(1, nx));
+    pointer.ty = Math.max(-1, Math.min(1, ny));
   };
   const onLeave = () => {
     pointer.inside = false;
     pointer.tx = 0;
     pointer.ty = 0;
   };
+  // A click on the tile's open field (where the cards are; the canvas itself
+  // takes no pointer) reshuffles. Clicks on the copy, on links, and the
+  // second click of a double-click do nothing, so selecting text never does.
   const onClick = (event: MouseEvent) => {
-    if (still) return;
-    if (event.target instanceof Element && event.target.closest('a, button, input, select, textarea, summary')) return;
-    for (const card of cards) card.startAt = Number.POSITIVE_INFINITY;
+    if (still || event.target !== surface || event.detail > 1) return;
     const now = clock;
     cards.forEach((card, i) => {
       card.startAt = now + 0.7 + ((i * 5) % COUNT) * 0.03;
@@ -358,19 +470,31 @@ export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => 
   };
   const onScroll = () => {
     readScroll();
-    if (still) wake();
   };
   const onMotion = (event: MediaQueryListEvent) => {
     still = event.matches;
+    if (still) settle();
     wake();
   };
   const onVisibility = () => {
     if (!document.hidden) wake();
   };
+  // Resizing clears the canvas, so draw the new size at once.
   const resizeObserver = new ResizeObserver(() => {
     layout();
+    render(0);
     wake();
   });
+  // A move to a screen with another pixel density (or a zoom) changes the ratio.
+  let dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+  const onDpr = () => {
+    dprQuery.removeEventListener('change', onDpr);
+    dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    dprQuery.addEventListener('change', onDpr);
+    layout();
+    render(0);
+    wake();
+  };
   const visibilityObserver = new IntersectionObserver((entries) => {
     visible = entries.some((entry) => entry.isIntersecting);
     if (visible) wake();
@@ -381,6 +505,7 @@ export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => 
   surface.addEventListener('click', onClick);
   window.addEventListener('scroll', onScroll, { passive: true });
   motionQuery.addEventListener('change', onMotion);
+  dprQuery.addEventListener('change', onDpr);
   document.addEventListener('visibilitychange', onVisibility);
   resizeObserver.observe(host);
   visibilityObserver.observe(host);
@@ -396,6 +521,7 @@ export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => 
     surface.removeEventListener('click', onClick);
     window.removeEventListener('scroll', onScroll);
     motionQuery.removeEventListener('change', onMotion);
+    dprQuery.removeEventListener('change', onDpr);
     document.removeEventListener('visibilitychange', onVisibility);
     resizeObserver.disconnect();
     visibilityObserver.disconnect();
@@ -403,10 +529,13 @@ export function mountHeroScene(host: HTMLElement, variant: SceneVariant): () => 
     for (const geometry of [cardGeo, dotGeo, longGeo, shortGeo]) geometry.dispose();
     cardMat.dispose();
     detailMat.dispose();
-    envMap.dispose();
+    envTarget.dispose();
     room.dispose();
     pmrem.dispose();
     renderer.dispose();
+    // dispose() frees three's objects but keeps the context; release it too,
+    // so remounts (client navigation back to the home page) never pile up.
+    renderer.forceContextLoss();
     canvas.remove();
     delete host.dataset.ready;
   };

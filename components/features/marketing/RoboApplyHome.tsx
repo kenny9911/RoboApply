@@ -2,7 +2,8 @@
 
 // RoboApply home (`/`, `/{locale}`) — TASK_PLAN.md WP-40, PRODUCT §3.2, F-MKT-01/02.
 //
-//   the board (statement tile with the 3D scene, action tile, the labelled interactive Example;
+//   the board (statement tile with the 3D scene and, on phones, its own
+//   Start free; action tile, the labelled interactive Example;
 //   gap first, ruling R2; the "{count}+ open roles" clause only when the
 //   public index holds ≥ 1,000 jobs) → labelled interactive Example → the four
 //   verbs → feature links → real counters → the job ticker slot → quick
@@ -23,7 +24,7 @@ import { useBrand } from '../../../lib/brand';
 import { HOME_FAQ_KEYS } from './catalog';
 import { useIndexStats } from './hooks';
 import { CardTilt, HeroScene, RisingWords } from './HeroScene';
-import { heroCount } from './links';
+import { heroCount, keepDots } from './links';
 import { Faq, FeatureGrid, HomeExample, IndexCounters, PricingSummary, QuickSearch } from './Sections';
 import { SignupLink } from './SignupLink';
 import { SitePage } from './SiteChrome';
@@ -66,17 +67,22 @@ export function RoboApplyHome({ ticker = null }: RoboApplyHomeProps = {}) {
       <CardTilt />
       <section className={`${styles.hero} ${styles.heroCenter}`} aria-labelledby="home-title">
         <div className={`${styles.wrap} ${styles.board}`}>
-          <div className={`${styles.tile} ${styles.tileStatement} ${styles.span12}`}>
+          <div className={`${styles.tile} ${styles.tileStatement} ${styles.tileScene} ${styles.span12}`}>
             <HeroScene variant="board" />
             <h1 className={styles.heroTitle} id="home-title">
               <RisingWords text={t('hero.headline')} />
             </h1>
             <HomeHeroSub />
+            <div className={styles.heroCtaPhone}>
+              <SignupLink from="home:hero">{tc('start')}</SignupLink>
+            </div>
           </div>
           <div className={`${styles.tile} ${styles.tileAction} ${styles.span4}`}>
-            <p className={styles.statement}>{t('hero.eyebrow')}</p>
+            <p className={styles.statement}>{keepDots(t('hero.eyebrow'))}</p>
             <div className={styles.actions}>
-              <SignupLink from="home:hero">{tc('start')}</SignupLink>
+              <SignupLink from="home:hero" className={styles.hideOnPhone}>
+                {tc('start')}
+              </SignupLink>
               <a className={styles.ctaSecondary} href="#example">
                 {t('hero.ctaSecondary')}
               </a>

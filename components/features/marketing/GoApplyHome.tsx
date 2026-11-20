@@ -51,6 +51,7 @@ import { useBrand } from '../../../lib/brand';
 import { CAMPUS_TIME_ZONE } from '../campus/format';
 import { cnHomeFaqKeys } from './catalog';
 import { useMarketingFlag, useMarketingFlagOff } from './hooks';
+import { keepDots } from './links';
 import { Faq, FeatureGrid, IndexCounters, PricingSummary, QuickSearch } from './Sections';
 import { SignupLink } from './SignupLink';
 import { SitePage } from './SiteChrome';
@@ -153,7 +154,7 @@ export function GoApplyHome({ ticker = null }: GoApplyHomeProps = {}) {
             <p className={styles.heroSub}>{ai ? t('hero.sub') : t('hero.subNoAi')}</p>
           </div>
           <div className={`${styles.tile} ${styles.tileAction} ${styles.span4}`}>
-            <p className={styles.statement}>{t('hero.eyebrow')}</p>
+            <p className={styles.statement}>{keepDots(t('hero.eyebrow'))}</p>
             <div className={styles.actions}>
               <SignupLink from="home:hero">{tc('start')}</SignupLink>
               <a className={styles.ctaSecondary} href="#free">
@@ -193,17 +194,19 @@ export function GoApplyHome({ ticker = null }: GoApplyHomeProps = {}) {
 
       {ai ? (
         <section className={styles.section} aria-labelledby="cn-practice-title" data-cn-practice="">
-          <div className={`${styles.wrap} ${styles.narrow}`}>
-            <h2 className={styles.h2} id="cn-practice-title">
-              {t('practice.title')}
-            </h2>
-            <p className={styles.body}>{t('practice.sub')}</p>
-            {voice ? (
-              <p className={styles.body} data-cn-practice-voice="">
-                {t('practice.voice')}
-              </p>
-            ) : null}
-            <div className={`${styles.actions} ${styles.spaced}`}>
+          <div className={styles.wrap}>
+            <div className={styles.sectionHead}>
+              <h2 className={styles.h2} id="cn-practice-title">
+                {t('practice.title')}
+              </h2>
+              <p className={styles.body}>{t('practice.sub')}</p>
+              {voice ? (
+                <p className={styles.body} data-cn-practice-voice="">
+                  {t('practice.voice')}
+                </p>
+              ) : null}
+            </div>
+            <div className={styles.actions}>
               <SignupLink from="home:practice" variant="secondary">
                 {t('practice.cta')}
               </SignupLink>

@@ -192,6 +192,16 @@
 .intro .ctaSecondary:hover {
   background: var(--mkt-tile-2);
 }
+/* …and on a card that is itself in that tone (the Free plan) it takes a
+ * recess, so it still reads as a button. */
+.sectionAlt .card:not(.cardFeatured) .ctaSecondary,
+.intro .card:not(.cardFeatured) .ctaSecondary {
+  background: var(--surface-3);
+}
+.sectionAlt .card:not(.cardFeatured) .ctaSecondary:hover,
+.intro .card:not(.cardFeatured) .ctaSecondary:hover {
+  background: var(--rule-strong);
+}
 
 .ctaSmall {
   min-height: var(--control-md);
@@ -277,25 +287,39 @@
   }
 }
 
-/* The statement: the page's largest type, on the brand plane, with the 3D
- * scene (HeroScene.tsx) filling the tile behind it. The copy keeps the left
- * half; the cards sort themselves into a board in the right half. */
+/* The statement: the page's largest type, on the brand plane. */
 .tileStatement {
-  position: relative;
-  overflow: hidden;
   justify-content: flex-end;
-  min-height: min(74vh, 680px);
+  min-height: min(52vh, 460px);
   padding: var(--sp-7) var(--sp-7) var(--sp-6);
   background: var(--brand-plane);
   color: var(--on-plane);
 }
-.tileStatement > :not(.scene) {
+.tileStatement .heroTitle { color: var(--on-plane); }
+.tileStatement .heroSub { color: var(--on-plane-2); }
+
+/* With the 3D scene (RoboApply, HeroScene.tsx) filling the tile behind it:
+ * the copy keeps the left half and the cards sort themselves into a board in
+ * the right half. The headline steps down a size so it sets in three lines
+ * beside the board, and the tile stays short enough for the action tile's
+ * button to reach the first screen. */
+.tileScene {
+  position: relative;
+  overflow: hidden;
+  min-height: min(62vh, 560px);
+}
+.tileScene > :not(.scene) {
   position: relative;
   z-index: 1;
   max-width: 50%;
 }
-.tileStatement .heroTitle { color: var(--on-plane); font-size: min(var(--fs-hero), 5.6vw); }
-.tileStatement .heroSub { color: var(--on-plane-2); }
+.tileScene .heroTitle { font-size: min(var(--fs-hero), 5vw, calc(var(--fs-display) * 2.25)); }
+/* On a phone the board sits under the copy, so the first screen gets its own
+ * call to action here; the action tile below then keeps only the example link. */
+.heroCtaPhone { display: none; }
+.heroCtaPhone .ctaPrimary { background: var(--brand-mark); color: var(--brand-plane); }
+.heroCtaPhone .ctaPrimary:hover { background: color-mix(in srgb, var(--brand-mark) 88%, #fff); }
+.heroCtaPhone .ctaPrimary:focus-visible { box-shadow: none; outline: 2px solid var(--brand-mark); outline-offset: 2px; }
 
 /* The 3D layer. Decoration: it never takes the pointer from the copy. */
 .scene {
@@ -316,24 +340,25 @@
 .ctaBand .wrap { position: relative; overflow: hidden; }
 .ctaBand .wrap > :not(.scene) { position: relative; z-index: 1; }
 
-/* The headline's words rise in one after another. */
+/* The headline's words rise in one after another. They stay inline text
+ * (relative offset, not inline-block), so the heading reads as one line. */
 @keyframes wordIn {
   from {
     opacity: 0;
-    transform: translateY(0.5em) rotate(4deg);
+    top: 0.45em;
   }
 }
 @media (prefers-reduced-motion: no-preference) {
   .word {
-    display: inline-block;
-    transform-origin: 0 100%;
+    position: relative;
+    top: 0;
     animation: wordIn 720ms var(--ease-out) backwards;
     animation-delay: calc(var(--i, 0) * 70ms + 160ms);
   }
-  /* Cards lean toward the pointer (CardTilt writes --tx/--ty). */
-  .card {
+  /* A card leans toward the pointer while it is over it (CardTilt sets
+   * data-tilt with --tx/--ty); at rest a card has no transform at all. */
+  .card[data-tilt] {
     transform: perspective(900px) rotateX(calc(var(--ty, 0) * -4deg)) rotateY(calc(var(--tx, 0) * 5deg));
-    transition: transform 260ms var(--ease-out);
   }
 }
 
@@ -357,9 +382,14 @@
 }
 .tileAction .ctaSecondary:hover { background: color-mix(in srgb, var(--brand-plane) 10%, transparent); }
 .tileAction .ctaPrimary:focus-visible,
-.tileAction .ctaSecondary:focus-visible { box-shadow: none; outline: 2px solid currentColor; outline-offset: 2px; }
+.tileAction .ctaSecondary:focus-visible { box-shadow: none; outline: 2px solid var(--brand-plane); outline-offset: 2px; }
 .tileAction .actions { flex-direction: column; align-items: stretch; }
 .tileAction .reassure { color: var(--brand-plane); margin: 0; font-weight: 500; }
+/* The page's selection is the yellow highlight: on a yellow field it turns
+ * cobalt. */
+.tile.tileAction ::selection,
+.card.cardFeatured ::selection,
+.ctaBand .wrap ::selection { background: var(--brand-plane); color: var(--brand-mark); }
 
 /* The line that used to sit above the headline is a statement of its own. */
 .statement {
@@ -486,6 +516,7 @@
   line-height: var(--lh-title);
   letter-spacing: var(--ls-title);
   color: inherit;
+  text-wrap: balance;
 }
 
 .body {
@@ -541,12 +572,13 @@
   min-width: 0;
   transition:
     background var(--dur-enter) var(--ease-out),
-    color var(--dur-enter) var(--ease-out);
+    color var(--dur-enter) var(--ease-out),
+    transform 260ms var(--ease-out);
 }
 .card .body { font-size: var(--fs-body); line-height: 1.55; }
 .sectionAlt .card,
 .intro .card {
-  background: var(--mkt-page);
+  background: var(--mkt-card);
 }
 /* A tile that is a link answers the pointer by changing field. */
 a.card {
@@ -568,8 +600,8 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .grid3 > :nth-last-child(2):nth-child(3n + 1) { grid-column: span 2; }
 .grid3 > a.card:last-child:nth-child(3n + 1) { min-height: 0; flex-direction: row; align-items: baseline; }
 
-/* The steps of how it works: four tiles in four fields. The order is the
- * list's own (<ol>); no numerals are printed. */
+/* The steps of how it works: four tiles in three fields (cobalt, tint, pale
+ * blue, tint). The order is the list's own (<ol>); no numerals are printed. */
 .steps > .card {
   min-height: 320px;
   padding: var(--sp-5);
@@ -581,13 +613,13 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* What the step produces, docked to the foot of its tile: one line of the
  * product's own output (the same made-up job as the Example above; the note
- * under the row says so). A sheet in the page tone, ink on it, in every
- * tile field. */
+ * under the row says so). A sheet one step above its tile, ink on it, in
+ * every tile field. */
 .fragment {
   margin: auto 0 0;
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-md);
-  background: var(--mkt-page);
+  background: var(--mkt-card);
   color: var(--text);
   font-size: var(--fs-body);
   font-weight: 500;
@@ -599,6 +631,7 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .cardFeatured,
 .sectionAlt .cardFeatured,
 .intro .cardFeatured {
+  --text-muted: var(--brand-plane);
   background: var(--brand-mark);
   color: var(--brand-plane);
 }
@@ -606,8 +639,10 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   color: var(--brand-plane);
 }
 .cardFeatured .ctaPrimary { background: var(--brand-plane); color: var(--on-plane); }
+.cardFeatured .ctaPrimary:hover { background: color-mix(in srgb, var(--brand-plane) 86%, #000); }
 .cardFeatured .ctaSecondary { background: transparent; color: var(--brand-plane); border: 2px solid currentColor; }
-.cardFeatured :is(.ctaPrimary, .ctaSecondary, .inlineLink):focus-visible { box-shadow: none; outline: 2px solid currentColor; outline-offset: 2px; }
+.cardFeatured .ctaSecondary:hover { background: color-mix(in srgb, var(--brand-plane) 10%, transparent); }
+.cardFeatured :is(.ctaPrimary, .ctaSecondary, .inlineLink):focus-visible { box-shadow: none; outline: 2px solid var(--brand-plane); outline-offset: 2px; }
 .cardFeatured .badge { background: var(--brand-plane); color: var(--on-plane); }
 
 /* A short label inside a tile (a feature's name, a weight). Sentence case,
@@ -698,7 +733,7 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   overflow-x: auto;
   border: 0;
   border-radius: var(--r-pill);
-  background: var(--mkt-page);
+  background: var(--mkt-card);
   scrollbar-width: none;
 }
 
@@ -724,6 +759,8 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tab[aria-selected='true'] {
   color: var(--brand-plane);
   background: var(--brand-mark);
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
 }
 
 .sampleBody {
@@ -756,7 +793,7 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 }
 
 .sampleLine {
-  background: var(--mkt-page);
+  background: var(--mkt-card);
   color: var(--text-2);
 }
 
@@ -797,6 +834,7 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   line-height: var(--lh-display);
   font-variant-numeric: tabular-nums;
   color: var(--text);
+  text-wrap: balance;
 }
 .counterValue:first-child {
   background: var(--brand-plane);
@@ -959,7 +997,7 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   background: transparent;
 }
 
-.table tr:last-child td {
+.table tbody tr:last-child > :is(th, td) {
   border-bottom: 0;
 }
 
@@ -1026,7 +1064,7 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   padding: var(--sp-3) var(--sp-4);
   border: 0;
   border-radius: var(--r-md);
-  background: var(--mkt-page);
+  background: var(--mkt-card);
 }
 
 /* ── Closing CTA: one row of the board ──────────────────────────────────── */
@@ -1038,6 +1076,9 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1000px) minmax(0, 1fr);
   gap: var(--mkt-gap);
   padding: var(--sp-7) 0 var(--sp-8);
+  /* The flanks bleed past the band's edges; clip them here, whatever shell
+   * hosts the band (HybridShell's .mkt does not clip like .page). */
+  overflow-x: clip;
 }
 .ctaBand::before,
 .ctaBand::after {
@@ -1122,6 +1163,9 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 }
 .footer .muted { color: var(--on-plane-2); }
 .footer footer { padding-inline: 0; }
+.footer footer > div { max-width: none; }
+.footer footer ul { margin-inline-start: calc(-1 * var(--sp-2)); }
+.footerWordmark > span:first-child { background: var(--brand-mark); color: var(--brand-plane); }
 
 .footerTagline {
   margin-top: var(--sp-3);
@@ -1258,19 +1302,28 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   }
   .tileAction .actions { flex-direction: row; }
   /* The scene moves under the copy. */
-  .tileStatement {
+  .tileScene {
     justify-content: flex-start;
     min-height: 0;
     padding-bottom: min(58vw, 440px);
   }
-  .tileStatement > :not(.scene) { max-width: none; }
-  .tileStatement .heroTitle { font-size: var(--fs-hero); }
-  .tileStatement .scene {
+  .tileScene > :not(.scene) { max-width: none; }
+  .tileScene .heroTitle { font-size: var(--fs-hero); }
+  .tileScene .scene {
     --scene-split: 0;
     inset: auto 0 0 0;
     height: min(58vw, 440px);
   }
   .ctaBand .scene { display: none; }
+  /* The closing band is one tile, on the page's margins. */
+  .ctaBand {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: var(--sp-4);
+  }
+  .ctaBand::before,
+  .ctaBand::after {
+    display: none;
+  }
   .sectionAlt[data-pricing-summary] .sectionHead,
   .sectionAlt[data-pricing-summary] .grid2,
   .faqWrap > .h2,
@@ -1280,6 +1333,15 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     grid-column: span 12;
   }
   .faqWrap > .h2 { position: static; margin-bottom: var(--sp-4); }
+}
+
+/* Tablet: feature tiles two to a row inside a slimmer tile. */
+@media (min-width: 761px) and (max-width: 1024px) {
+  .sectionAlt > .wrap { padding: var(--sp-6); }
+  .sectionAlt .grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sectionAlt .grid3 > :is(:last-child, :nth-last-child(2)):nth-child(3n + 1) { grid-column: auto; }
+  .sectionAlt .grid3 > a.card:last-child:nth-child(3n + 1) { min-height: 148px; flex-direction: column; align-items: stretch; }
+  .sectionAlt .grid3 > a.card:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 0; flex-direction: row; align-items: baseline; }
 }
 
 @media (max-width: 900px) {
@@ -1304,9 +1366,29 @@ a.card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .tile { padding: var(--sp-5); }
   .tileExample { padding: 0; }
   .tileStatement {
-    padding: var(--sp-7) var(--sp-5) min(64vw, 400px);
+    min-height: 0;
+    padding: var(--sp-7) var(--sp-5) var(--sp-5);
   }
+  .tileScene {
+    padding: var(--sp-6) var(--sp-5) min(60vw, 240px);
+  }
+  .tileScene .scene { height: min(60vw, 240px); }
+  .heroCtaPhone { display: flex; margin-top: var(--sp-5); }
+  .tileAction .hideOnPhone { display: none; }
   .tileAction .actions { flex-direction: column; }
+  /* The Example's switch: two by two, thumb-sized. */
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: auto;
+    max-width: none;
+    border-radius: var(--r-lg);
+    overflow: visible;
+  }
+  .tab {
+    min-height: 44px;
+    padding: 0 var(--sp-3);
+  }
   .steps > .card { min-height: 0; }
   .section,
   .sectionAlt {
