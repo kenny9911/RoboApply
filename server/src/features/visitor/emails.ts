@@ -17,7 +17,7 @@
 // Honesty: counts are real counts of matching jobs; pay only as the posting
 // lists it; no fit (there is no profile); never a zero-job email.
 
-import { button, escapeHtml, heading, paragraph, safeUrl } from '../../platform/email/templates/_shell.js';
+import { BODY_ACCENT, button, escapeHtml, heading, paragraph, safeUrl } from '../../platform/email/templates/_shell.js';
 import { defineEmailTemplate, getEmailTemplate, type EmailTemplate } from '../../platform/email/templates/registry.js';
 import { formatMessage, substituteBrand, type EmailTranslator, type MessageParams } from '../../platform/email/i18n.js';
 
@@ -169,7 +169,7 @@ export const alertDigestTemplate = register<AlertDigestParams>({
       .map((j) => {
         const place = j.remote ? v('remote') : (j.place ?? v('placeNotListed'));
         const facts = [j.company, place, formatDigestPay(j.pay, t) ?? v('payNotListed')].map(escapeHtml).join(' · ');
-        return `<li style="margin:0 0 14px;"><a href="${escapeHtml(safeUrl(j.href))}" style="font-weight:600;color:#4f3dca;text-decoration:none;">${escapeHtml(j.title)}</a><br/><span style="font-size:13px;color:#656274;">${facts}</span></li>`;
+        return `<li style="margin:0 0 14px;"><a href="${escapeHtml(safeUrl(j.href))}" style="font-weight:600;color:${BODY_ACCENT};text-decoration:none;">${escapeHtml(j.title)}</a><br/><span style="font-size:13px;color:#596079;">${facts}</span></li>`;
       })
       .join('');
     const textJobs = params.jobs.map((j) => `- ${j.title} · ${j.company} · ${j.remote ? v('remote') : (j.place ?? v('placeNotListed'))} · ${formatDigestPay(j.pay, t) ?? v('payNotListed')}\n  ${j.href}`).join('\n');
