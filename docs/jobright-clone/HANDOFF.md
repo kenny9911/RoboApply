@@ -1,5 +1,7 @@
 # Handoff: finishing the Jobright clone (branch `feat/jobright-clone`)
 
+> **Update 2026-11-03:** this work is merged to `main` (PR #4, 2026-10-12) and live on www.roboapply.io; §2's "nothing from this work is on `main`" no longer holds. The current picture, including the owner items of §6 that are still open, is in [`docs/handbook/`](../handbook/README.md) (chapter 10).
+
 Written 2026-10-12 for whoever continues this work (a person, Codex, or another agent session) with no memory of the earlier sessions. Keep the "State" section current: update it when a step below is finished.
 
 ## 1. What this branch is
