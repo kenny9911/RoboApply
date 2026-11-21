@@ -15,7 +15,9 @@
 //     (which carries the agent desk) is the first entry and the home on both
 //     brands; "Ready to apply" is not an
 //     entry of its own — /ready lights Applications; Profile sits in the lower
-//     group.
+//     group;
+//   • Pay check (/pay; 薪资参考 on GoApply) heads the lower group on both
+//     brands and sits in the More sheet, with the job feed (`jobs.feed`) only.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
@@ -107,11 +109,11 @@ describe('registry (pure)', () => {
 
   it('RoboApply full IA: Dashboard · Jobs · Applications · Resume · Interview prep, then the lower group', () => {
     vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id'); // the extension is published
-    const nav = buildNav(ctx({ showAll: true, isAdmin: true, coachRoster: true, flags: flagsWith({ agent: true, coaching: true, invites: true, extension: true }) }));
+    const nav = buildNav(ctx({ showAll: true, isAdmin: true, coachRoster: true, flags: flagsWith({ 'jobs.feed': true, agent: true, coaching: true, invites: true, extension: true }) }));
     expect(nav.top.map((e) => e.href)).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice']);
-    expect(nav.lower.map((e) => e.href)).toEqual(['/coaching', '/invite', '/extension', '/profile', '/settings', '/admin']);
+    expect(nav.lower.map((e) => e.href)).toEqual(['/pay', '/coaching', '/invite', '/extension', '/profile', '/settings', '/admin']);
     expect(nav.mobile.map((e) => e.href)).toEqual(['/dashboard', '/jobs', '/applications', '/resume']);
-    expect(nav.more.map((e) => e.href)).toEqual(['/practice', '/coaching', '/invite', '/profile', '/settings']);
+    expect(nav.more.map((e) => e.href)).toEqual(['/practice', '/pay', '/coaching', '/invite', '/profile', '/settings']);
     // Five top destinations, and the bottom bar never exceeds four plus More.
     expect(nav.top).toHaveLength(5);
     expect(nav.mobile.length).toBeLessThanOrEqual(4);
@@ -141,7 +143,7 @@ describe('registry (pure)', () => {
     }
   });
 
-  it('GoApply full IA: 首页 · 职位 · 校招日历 · 投递记录 · 简历 · 面试练习, then the lower group', () => {
+  it('GoApply full IA: 首页 · 职位 · 校招日历 · 投递记录 · 简历 · 面试练习, then the lower group (薪资参考 first)', () => {
     const nav = buildNav(
       ctx({
         brandId: 'goapply',
@@ -153,19 +155,35 @@ describe('registry (pure)', () => {
     // (INT-01 adds 'goapply' to INVITE_REWARD_BRANDS); the entry follows it.
     const cnInvite = invitesLiveFor('goapply') ? ['/invite'] : [];
     expect(nav.top.map((e) => e.href)).toEqual(['/dashboard', '/jobs', '/campus', '/applications', '/resume', '/practice']);
-    expect(nav.lower.map((e) => e.href)).toEqual(['/referrals', ...cnInvite, '/profile', '/settings']);
+    expect(nav.lower.map((e) => e.href)).toEqual(['/pay', '/referrals', ...cnInvite, '/profile', '/settings']);
     // 首页 · 职位 · 校招 · 投递 (+ 我的)
     expect(nav.mobile.map((e) => e.href)).toEqual(['/dashboard', '/jobs', '/campus', '/applications']);
-    // 简历, 面试练习, 资料, 设置 live under 我的.
-    expect(nav.more.map((e) => e.href)).toEqual(['/resume', '/practice', '/referrals', ...cnInvite, '/profile', '/settings']);
+    // 简历, 面试练习, 薪资参考, 资料, 设置 live under 我的.
+    expect(nav.more.map((e) => e.href)).toEqual(['/resume', '/practice', '/pay', '/referrals', ...cnInvite, '/profile', '/settings']);
   });
 
   it('the nav differs per brand', () => {
     const ra = buildNav(ctx({ flags: flagsWith({ 'jobs.feed': true }) })).all.map((e) => e.id);
     const ga = buildNav(ctx({ brandId: 'goapply', flags: flagsWith({ 'jobs.feed': true }) })).all.map((e) => e.id);
-    expect(ra).toEqual(['dashboard', 'jobs', 'applications', 'resume', 'practice', 'profile', 'settings']);
-    expect(ga).toEqual(['cn.dashboard', 'cn.jobs', 'cn.applications', 'cn.resume', 'cn.practice', 'cn.profile', 'cn.settings']);
+    expect(ra).toEqual(['dashboard', 'jobs', 'applications', 'resume', 'practice', 'pay', 'profile', 'settings']);
+    expect(ga).toEqual(['cn.dashboard', 'cn.jobs', 'cn.applications', 'cn.resume', 'cn.practice', 'cn.pay', 'cn.profile', 'cn.settings']);
     expect(ga.some((id) => ra.includes(id))).toBe(false);
+  });
+
+  it('Pay check (薪资参考 on GoApply) heads the lower group of both brands and the More sheet, with the job feed only', () => {
+    for (const [brandId, id] of [['roboapply', 'pay'], ['goapply', 'cn.pay']] as const) {
+      expect(NAV_ENTRIES.find((e) => e.id === id)).toMatchObject({ href: '/pay', labelKey: 'pay', group: 'lower', flag: 'jobs.feed', badge: null, mobile: 'more', ready: true, brands: [brandId] });
+      const on = buildNav(ctx({ brandId, flags: flagsWith({ 'jobs.feed': true }) }));
+      expect(on.lower[0]?.id, brandId).toBe(id);
+      expect(on.more.map((e) => e.id), brandId).toContain(id);
+      expect(on.mobile.map((e) => e.id), brandId).not.toContain(id);
+      // The feed off (GoApply with CN_RECRUITMENT_INFO_MODE=off) or not known yet: no entry (R-04).
+      for (const flags of [flagsWith(), null]) expect(buildNav(ctx({ brandId, flags })).all.map((e) => e.id), brandId).not.toContain(id);
+      // Lit on the page and nowhere else.
+      const entry = NAV_ENTRIES.find((e) => e.id === id)!;
+      expect(['/pay', '/pay?title=x'].map((p) => entry.match(p.split('?')[0]!))).toEqual([true, true]);
+      expect(['/payments', '/jobs', '/settings/billing'].some((p) => entry.match(p))).toBe(false);
+    }
   });
 
   it('GoApply 职位 carries no flag, as RoboApply Jobs (D5); a flagged-off entry is absent (校招日历 without the calendar)', () => {
@@ -235,6 +253,9 @@ describe('registry (pure)', () => {
     // Parity (D5): the same two entries on GoApply, under the same gates.
     { id: 'cn.coaching', brand: 'goapply', href: '/coaching', flag: 'coaching', needs: { coachRoster: true } },
     { id: 'cn.extension', brand: 'goapply', href: '/extension', flag: 'extension', env: ['NEXT_PUBLIC_CN_EXT_ID', 'cn-ext-store-id'] },
+    // The pay check reads the job posts: it follows the job feed on both brands.
+    { id: 'pay', brand: 'roboapply', href: '/pay', flag: 'jobs.feed' },
+    { id: 'cn.pay', brand: 'goapply', href: '/pay', flag: 'jobs.feed' },
   ];
 
   it('every destination is ready (INT-12 flipped the last eight) and the Ask surface is on', () => {
@@ -303,6 +324,8 @@ describe('registry (pure)', () => {
     expect(crumbKeyFor('/campus/acme', 'goapply')).toBe('campus');
     expect(crumbKeyFor('/assistant', 'roboapply')).toBe('assistant');
     expect(crumbKeyFor('/dashboard', 'roboapply')).toBe('dashboard');
+    expect(crumbKeyFor('/pay', 'roboapply')).toBe('pay');
+    expect(crumbKeyFor('/pay', 'goapply')).toBe('pay');
     // /ready is a view of Applications.
     expect(crumbKeyFor('/ready/setup', 'roboapply')).toBe('applications');
     expect(crumbKeyFor('/ready', 'goapply')).toBe('cn_applications');
@@ -336,19 +359,22 @@ describe('registry (pure)', () => {
 describe('Sidebar per brand', () => {
   it('RoboApply and GoApply render different rails', () => {
     const { unmount } = renderWithBrand(<Sidebar />, { brand: 'roboapply', flags: { 'jobs.feed': true } });
-    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/pay', '/profile', '/settings']);
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Interview prep' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Pay check' })).toHaveAttribute('href', '/pay');
     unmount();
 
     renderWithBrand(<Sidebar />, { brand: 'goapply', flags: { 'jobs.feed': true } });
-    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/pay', '/profile', '/settings']);
     // GoApply's own label (面试练习 in zh; English until INT translates).
     expect(screen.getByRole('link', { name: 'Interview practice' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Interview prep' })).not.toBeInTheDocument();
+    // 薪资参考 in zh.
+    expect(screen.getByRole('link', { name: 'Pay check' })).toHaveAttribute('href', '/pay');
   });
 
-  it('GoApply always shows 职位, with the job feed capability off too', () => {
+  it('GoApply always shows 职位, with the job feed capability off too (and no pay check then)', () => {
     renderWithBrand(<Sidebar />, { brand: 'goapply', flags: {} });
     expect(railHrefs()).toEqual(['/dashboard', '/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
   });

@@ -25,3 +25,4 @@ export {
 } from './useCalibration';
 export { useExplore, useNlQuery, nlLines, rankListBy, clearListRelevance, relevanceFor, sortUsesRelevance, useListRelevance, type ListRelevance } from './useExplore';
 export { opsToPatch, applyPatchPreview, relaxPatch, type FilterOp } from './filterOps';
+export { usePayCheck, payCheckQuery, type PayCheckAsk } from './usePayCheck';

@@ -11,6 +11,7 @@ import {
   changesPreferencesProjection,
   useActivateSearchProfile,
   useDeleteSearchProfile,
+  useSetTargetCompany,
   useUpdateSearchProfile,
 } from './useSearchProfiles';
 import { LEGACY_PREFERENCES_KEY, searchKeys } from './keys';
@@ -48,6 +49,26 @@ describe('changesPreferencesProjection', () => {
     expect(changesPreferencesProjection({ kind: 'update', profile: main, body: { baseVersion: 3, filtersPatch: { titles: ['A'] } } })).toBe(true);
     expect(changesPreferencesProjection({ kind: 'update', profile: main, body: { baseVersion: 3, filters: {} } })).toBe(true);
     expect(changesPreferencesProjection({ kind: 'update', profile: other, body: { baseVersion: 1, filters: {} } })).toBe(false);
+    // "Companies you want to work at" are the projection's `targetCompanies`.
+    expect(changesPreferencesProjection({ kind: 'targets', profile: main })).toBe(true);
+    expect(changesPreferencesProjection({ kind: 'targets', profile: other })).toBe(false);
+  });
+});
+
+// docs/agent-driven/REDESIGN.md §8 scenario 4: the job page's control.
+describe('useSetTargetCompany', () => {
+  it('sends one company and an answer, puts the search it answers into the list, and asks for the picks and the preferences afresh', async () => {
+    const after = { ...main, version: 4, filters: { preferredCompanies: ['Stripe'] } };
+    const net = installFetch({ [`POST ${P}/target-companies`]: () => ok({ profile: after, on: true }) });
+    const h = harness();
+    h.client.setQueryData(agentKeys.suggestions(3), { items: [] });
+    const { result } = renderHook(() => useSetTargetCompany(), { wrapper: h.wrapper });
+    const res = await act(() => result.current.mutateAsync({ company: 'Stripe', on: true }));
+    expect(res).toEqual({ profile: after, on: true });
+    expect(net.to('POST', `${P}/target-companies`).map((c) => c.body)).toEqual([{ company: 'Stripe', on: true }]);
+    expect(h.client.getQueryData<{ profiles: Array<{ id: string; version: number }> }>(searchKeys.profiles())!.profiles.find((p) => p.id === 'sp_main')).toMatchObject({ version: 4, filters: { preferredCompanies: ['Stripe'] } });
+    expect(h.legacyInvalidated()).toBe(true);
+    expect(h.client.getQueryData(agentKeys.suggestions(3))).toBeUndefined();
   });
 });
 

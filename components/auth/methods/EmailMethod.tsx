@@ -34,6 +34,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import { track } from '../../../lib/analytics';
 import { login, signup } from '../../../lib/api/auth';
 import { RoboApiError } from '../../../lib/api/client';
 import { useAuth } from '../../../lib/auth/AuthProvider';
@@ -92,6 +93,7 @@ function LoginForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucces
     setError(null);
     setOtherBrandUrl(undefined);
     setSubmitting(true);
+    track('signup_started', { method: 'email', mode: 'login' });
     try {
       await login({ email, password });
       const me = await refresh();
@@ -209,6 +211,8 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
       return;
     }
     setSubmitting(true);
+    // Visitor conversion: a valid form was sent (the account itself is read on the server).
+    track('signup_started', { method: 'email', mode: 'signup' });
     try {
       const invite = cnInputs.invite.trim();
       const res = await signup({

@@ -3,7 +3,8 @@
 // components/v3/admin/AdminNav.tsx — navigation to every admin area (WP-74).
 //
 // `ADMIN_AREAS` is the one list of admin sub-routes, built by their owning
-// WPs: System and Reports to review (WP-74), Credits (WP-21b), Announcements
+// WPs: Visitors and sign-ups (visitor conversion; the growth area's visitor
+// records), System and Reports to review (WP-74), Credits (WP-21b), Announcements
 // (WP-61, the "What's new" admin entry), Practice questions (WP-59), Coaches
 // (WP-72), job sources and company job boards (WP-42; both brands since the
 // parity wave: each brand's admin sees its own sources), held invite rewards
@@ -33,6 +34,7 @@ export interface AdminArea {
 
 export const ADMIN_AREAS: readonly AdminArea[] = [
   { id: 'overview', href: '/admin', owner: 'WP-74' },
+  { id: 'visitors', href: '/admin/visitors', owner: 'GROW' },
   { id: 'system', href: '/admin/system', owner: 'WP-74' },
   { id: 'reports', href: '/admin/reports', owner: 'WP-74' },
   { id: 'inviteRewards', href: '/admin/reports/invites', owner: 'WP-60' },

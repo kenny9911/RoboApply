@@ -31,6 +31,8 @@ import {
   ResolveReportBodySchema,
   SafetyQuerySchema,
   SystemQuerySchema,
+  VisitorListQuerySchema,
+  VisitorsQuerySchema,
   WorkItemParamsSchema,
   ViewAsStartBodySchema,
   ADMIN_AUDIT_EVENTS,
@@ -47,6 +49,7 @@ import type { ReportsStore } from './reports.js';
 import type { SafetyStore } from './safety.js';
 import type { SystemStore } from './system.js';
 import type { ViewAsStore } from './viewAs.js';
+import type { VisitorReportStore } from './visitors.js';
 
 // The panels' modules (and the areas they read: alerts, copilot, cn/jobs,
 // jobs/enrich, content safety) load on the first admin request, not when
@@ -59,6 +62,7 @@ const lazy = {
   safety: () => import('./safety.js'),
   system: () => import('./system.js'),
   viewAs: () => import('./viewAs.js'),
+  visitors: () => import('./visitors.js'),
 };
 
 /** Test seams: every store defaults to its Prisma implementation. */
@@ -73,6 +77,7 @@ export interface AdminConsoleDeps extends FeatureRouterDeps {
   overrides?: OverridesService;
   referrals?: ReferralModeration;
   viewAs?: ViewAsStore;
+  visitors?: VisitorReportStore;
   now?: () => Date;
 }
 
@@ -147,6 +152,24 @@ export function createAdminConsoleRouter(deps: AdminConsoleDeps = {}): Router {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="costs-${data.from}-to-${data.to}.csv"`);
       res.send(m.costsCsv(data));
+    }),
+  );
+
+  // ── Visitors and sign-ups (RAVisitor) ───────────────────────────────────
+  router.get(
+    '/visitors',
+    ...admin,
+    route(async (req) => {
+      const m = await lazy.visitors();
+      return m.getVisitorsReport(deps.visitors ?? m.createPrismaVisitorReportStore(), parseQuery(req, VisitorsQuerySchema), now());
+    }),
+  );
+  router.get(
+    '/visitors/list',
+    ...admin,
+    route(async (req) => {
+      const m = await lazy.visitors();
+      return m.listVisitors(deps.visitors ?? m.createPrismaVisitorReportStore(), parseQuery(req, VisitorListQuerySchema), now());
     }),
   );
 

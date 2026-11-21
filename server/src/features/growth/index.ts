@@ -59,6 +59,22 @@ export {
 export type { AnalyticsIdentity } from './attribution.js';
 export { analyticsLinkAllowed, isAnalyticsConsentRequired, isProductEventName, redactTokenPath, sanitizeEventPath, sanitizeEventProps } from './events.js';
 export { CHECKLIST_REWARD_KEY, createGrowthService } from './service.js';
+// Visitor conversion: one RAVisitor row per linked visitor, written by ingestEvents (visitors.ts).
+export {
+  SIGNUP_GRACE_MS,
+  SIGNUP_METHODS,
+  VISITOR_CHANNELS,
+  VISITOR_DEVICES,
+  accountOutcome,
+  classifyChannel,
+  createVisitorRecorder,
+  deviceFromUserAgent,
+  isAuthEntryPath,
+  isBotUserAgent,
+  normalizeHost,
+  summarizeVisit,
+} from './visitors.js';
+export type { RecordVisitInput, SignupMethod, VisitEvent, VisitSummary, VisitorChannel, VisitorDb, VisitorDevice, VisitorRecorder } from './visitors.js';
 export type { EventsBatchInput, GrowthService, GrowthServiceDeps, IngestContext, RecordAttributionOptions } from './service.js';
 export type { ChecklistStore } from './checklistStore.js';
 

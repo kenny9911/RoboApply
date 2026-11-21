@@ -326,6 +326,72 @@ export interface PrepareProposal {
   notPreparable?: string[];
   /** On confirm: items now `preparing`. */
   started?: string[];
+  /**
+   * On confirm: the bucket whose credit ran out part-way (another request used
+   * the last one meanwhile). The items in `started` were started before it; no
+   * later item was. Absent when nothing ran out.
+   */
+  ranOut?: PrepareCreditLine['bucket'];
+}
+
+// ── Prepare my weekly list automatically (docs/agent-driven/REDESIGN.md §9) ──
+//
+// The user's own opt-in, off by default, is the confirmation: with it on,
+// each job a weekly list build newly picks (the cron's, one built on demand,
+// setup's first list) is prepared through `prepare` (the same path and
+// `ready_kits` credit gate as "Prepare application"), in pick order, while
+// every credit it needs fits what is left, one reservation per job keyed
+// `autoprep:<itemId>:<attempt>`. Nothing is submitted (D1). Stored without a
+// schema change in the user's UI state (`RAUserUiState.state.values`, keys
+// `agent.autoPrepare*`; see autoPrepare.ts).
+
+/** PUT /agent/auto-prepare. Turning it on is the user's confirmation; the web states the cost first. */
+export const PutAutoPrepareBodySchema = z.object({ on: z.boolean() }).strict();
+
+/** Why an automatic run left new jobs in "To prepare": the bucket that ran out, or `error` (anything else). */
+export const AUTO_PREPARE_STOPS = ['ready_kits', 'tailor', 'cover_letter', 'error'] as const;
+export type AutoPrepareStop = (typeof AUTO_PREPARE_STOPS)[number];
+
+/** What one automatic run did, as the list build that ran it answers (POST /agent/list/generate, setup's first list). */
+export interface AutoPrepareOutcome {
+  /** Items the run moved to `preparing`, in pick order; each used one application from the weekly allowance. */
+  started: string[];
+  /** New jobs of the list the run left in "To prepare". */
+  left: number;
+  /** Why jobs were left; null when every new job was started. */
+  stoppedBy: AutoPrepareStop | null;
+}
+
+/** The latest automatic run, as GET /agent/auto-prepare reports it (real counts of that run). */
+export interface AutoPrepareRunView {
+  /** ISO time of the run. */
+  at: string;
+  /** The week of the list it prepared, e.g. '2026-W46'. */
+  weekKey: string;
+  /** Applications it started; each used one from the weekly allowance. */
+  started: number;
+  /** New jobs it left in "To prepare". */
+  left: number;
+  stoppedBy: AutoPrepareStop | null;
+  /** The run prepared this week's list (the user's own week, now). */
+  thisWeek: boolean;
+}
+
+/** GET / PUT /agent/auto-prepare. */
+export interface AutoPrepareView {
+  /** The opt-in; false until the user turns it on. */
+  on: boolean;
+  /** ISO time it was turned on; null while it is off. */
+  since: string | null;
+  /** The latest automatic run, or null when none ran. Kept when the option is turned off (nothing prepared is undone). */
+  lastRun: AutoPrepareRunView | null;
+  /**
+   * AI for this account now (consent and the brand's model), as a tapped
+   * Prepare reads it: false = applications use the resume as it is, with no
+   * tailoring or cover letter credit. Null when it could not be read (the
+   * statement then names the credits the settings would use).
+   */
+  aiAvailable: boolean | null;
 }
 
 // ── The Assistant's reads (docs/agent-driven/REDESIGN.md §1, §9) ──────────
@@ -410,6 +476,8 @@ export const KitEventDetailSchema = z
     applyMark: z.object({ entryId: z.string(), changed: z.boolean(), eventId: z.string().nullable() }).optional(),
     alreadyApplied: z.boolean().optional(),
     error: z.string().optional(),
+    /** The move into `preparing` came from "Prepare my weekly list automatically" (the user's opt-in), not a tap. */
+    auto: z.boolean().optional(),
   })
   .passthrough();
 export type KitEventDetail = z.infer<typeof KitEventDetailSchema>;
@@ -445,6 +513,11 @@ export interface GenerateListResponse {
   filtersDiffer: boolean;
   /** Why nothing (or less than the target) was added. */
   reason: 'no_feed' | 'no_matches' | 'queue_full' | 'target_reached' | null;
+  /**
+   * "Prepare my weekly list automatically" ran on the jobs this build added
+   * (the option is on and jobs were added). Absent otherwise.
+   */
+  autoPrepared?: AutoPrepareOutcome;
 }
 
 /** POST /agent/search/save-to-main — "Use this for your main search too?" → yes. */

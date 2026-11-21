@@ -12,6 +12,8 @@
 import { Prisma } from '../../generated/prisma/client.js';
 import type prismaClient from '../../lib/prisma.js';
 import { FILTER_FIELDS, type FilterSet } from '../search/index.js';
+import { PAY_CHECK_ROW_CAP, PAY_CHECK_WINDOW_DAYS } from './contract.js';
+import { payCheckSql, resolvePlace } from './payCheck.js';
 import { countSql, retrievalSql } from './sql.js';
 
 /** Index names (Prisma's default `<Model>_<fields>_idx|key|pkey`) the feed queries rely on, by what uses them. */
@@ -30,7 +32,7 @@ export const PLANNED_FEED_INDEXES: Readonly<Record<string, string>> = {
   RAFeedRating_userId_dayKey_key: 'one rating a day',
   RAJobMatchScore_userId_jobId_resumeVariantId_key: 'cached AI scores join',
   // Added by SCHEMA-3 (handoff SR-32-1…3).
-  RAJob_market_isCanonical_archivedAt_firstSeenAt_idx: 'SR-32-1: new-count (firstSeenAt > last visit)',
+  RAJob_market_isCanonical_archivedAt_firstSeenAt_idx: 'SR-32-1: new-count (firstSeenAt > last visit); the pay check window and order (payCheck.ts)',
   RAJob_employerTags_idx: 'SR-32-2: GoApply employer-tag / 户口 filters (GIN)',
   RAJob_geoLat_geoLng_idx: 'SR-32-3: radius bounding box',
 };
@@ -66,7 +68,9 @@ export function indexNamesInPlan(plan: unknown): string[] {
  * Sample statements the proof explains: a typical intl saved search
  * (retrieval, keyset refill, count), and the statements whose indexes are
  * still schema requests (new-count, GoApply employer tags, radius search),
- * so the proof reports what they use today and after SCHEMA-3.
+ * so the proof reports what they use today and after SCHEMA-3. `payCheck` is
+ * the pay check's one read (a role title in a city, bounded by its window
+ * and its row cap).
  */
 export function proofStatements(now: Date): Record<string, Prisma.Sql> {
   const day = 86_400_000;
@@ -80,6 +84,14 @@ export function proofStatements(now: Date): Record<string, Prisma.Sql> {
     newCount: countSql({ scope: cnScope, filters: {}, fields: FILTER_FIELDS, cap: 5000, firstSeenAfter: new Date(now.getTime() - day) }),
     cnEmployerTags: countSql({ scope: cnScope, filters: { employerTags: ['soe'], hukouTag: true }, fields: FILTER_FIELDS, cap: 5000 }),
     geo: countSql({ scope, filters: { locations: [{ label: 'Austin, TX', city: 'Austin', country: 'US', lat: 30.27, lng: -97.74, radiusKm: 40 }] }, fields: FILTER_FIELDS, cap: 5000 }),
+    payCheck: payCheckSql({
+      market: 'intl',
+      title: 'Data Analyst',
+      place: resolvePlace('Austin, TX')?.sql ?? null,
+      since: new Date(now.getTime() - PAY_CHECK_WINDOW_DAYS * day),
+      now,
+      limit: PAY_CHECK_ROW_CAP,
+    }),
   };
 }
 

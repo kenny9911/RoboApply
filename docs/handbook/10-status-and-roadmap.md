@@ -1,6 +1,6 @@
 # 10 · Status and roadmap
 
-As of 2026-11-03 (main @ b89d5256); updated 2026-11-15 for PR #17 and the open branches (main @ 368bf7c7).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-21 for PRs #17, #18 and #15 and the open branches (main @ 5a9ee9dd).
 
 Where the project stands, what blocks a full launch, and what to work on next. "Verified" means checked against the code or git on 2026-11-03; "doc only" means taken from a plan or carry-over list and not re-checked; "last known (date)" means from the owner's earlier session notes.
 
@@ -9,7 +9,7 @@ Where the project stands, what blocks a full launch, and what to work on next. "
 - RoboApply (international, Taiwan included) is live at www.roboapply.io from `main`. `origin/main` is at `368bf7c7` (PR #17, 2026-11-13); Vercel auto-deploys `main`, and the owner's notes say it was deployed 2026-11-13 (not checked against Vercel here).
 - The jobright-style product (feed, job detail, fit scoring, tailoring, Assistant, tracker, practice, billing UI, admin console) is merged and deployed, but several capabilities are **dark in production for lack of configuration, not code**: crons never run (`CRON_SECRET` unset), Stripe cannot charge, web push is off, original resume files are not stored, mail goes out from a `robohire.io` sender, and voice practice depends on a worker with no production host.
 - GoApply (mainland) shares the codebase and has full feature parity but is **closed** in production (`ALLOWED_BRANDS=roboapply`) and has no mainland deployment; its launch waits on legal filings.
-- Two feature branches are open and unmerged on 2026-11-15, `feat/agent-followups` and `feat/visitor-conversion` (section 3); every other branch is merged into `main` (checked with `git branch -a --no-merged origin/main`).
+- Three branches are open and unmerged on 2026-11-21: `feat/brand-pulse`, `fix/next-16.4.5-security` and `perf/page-weight-dead-code` (section 3); every other branch is merged into `main` (checked with `git branch -a --no-merged origin/main`).
 
 ## 2. What is shipped on main
 
@@ -31,6 +31,7 @@ Where the project stands, what blocks a full launch, and what to work on next. "
 | 2026-10-21 | Credits enforced on legacy mock interviews | `7223616a` |
 | 2026-10-31 | Admin read-only "view as"; add-resume nudge on `/jobs`; `OPENROUTER_BASE_URL`; npm audit fixes (body-parser, multer, zod, undici, fast-uri); Next 16.4.1 security; AI-first resume hub; **Paper design system** (replaces Clarity) | merges `c3f5d2aa`, `8dbb2a24`, `0666dde7`, `e9d5449d`, `ebfc5375`, `2fa9a39b`, `b89d5256` |
 | 2026-11-13 | **PR #17: resume.io clone with the agent-driven redesign** (also carries PRs #13, #14, #16): Desk design system, `/dashboard` home with the agent desk, Ready to apply folded into Applications (Getting ready · Sent), two-screen resume-first onboarding, one-tap Prepare application, Assistant tools that add to the list and prepare, resume editor tabs, Paper job detail and fit-filter follow-ups | merge `368bf7c7` |
+| 2026-11-18 | **PR #18**: opt-in weekly preparation of the list, first-class target companies in the job search, a `/pay` pay check built from what postings state. **PR #15**: a visit record and the `/admin/visitors` report of visitors and sign-ups, privacy-notice updates (its docs say schema SCHEMA-9 was applied to the production database) | merges `7d882cf1`, `5a9ee9dd` |
 
 PR numbers after #5 are not in the commit messages: the branches were merged locally with plain `git merge` and pushed, and GitHub then marked the PRs merged (all on 2026-10-31): #6 prep brief must-haves as a list, #7 `google/gemini-3.8-flash` with the Gemini thinking reserve (opened 2026-10-13), #8 admin view-as, #9 AI-first resume hub, #10 Paper design system, #11 Next 16.4.1 security. Checked with `gh pr list --state all` on 2026-11-03.
 
@@ -49,10 +50,10 @@ The product never submits an application for the user (D1); auto-apply was remov
 
 | Item | State |
 |---|---|
-| `feat/agent-followups` (4 commits ahead, 2026-11-13, not merged) | Opt-in automatic preparation of the weekly list, first-class target companies in the job search, a pay check built from what postings state. The two "not built" rows of `docs/agent-driven/REDESIGN.md` §9. |
-| `feat/visitor-conversion` (7 commits ahead, 2026-11-13, not merged) | A visit record and an `/admin/visitors` report of visitors and sign-ups, privacy-notice updates; its docs say schema SCHEMA-9 was applied to the production database. |
-| Next.js security release of 2026-11-03 | Next announced a release with seven medium advisories for today (last known 2026-10-28). `main` pins `next` 16.4.1. Check the vercel/next.js repository advisory feed, not `npm audit`, which lagged about a week in Sept and Oct. |
+| Next.js security release of 2026-11-03 | Seven moderate advisories. The fix, `next` 16.4.5, is on `fix/next-16.4.5-security` (PR #21, opened 2026-11-20, not merged); `main` still pins 16.4.1. Check the vercel/next.js repository advisory feed, not `npm audit`, which has lagged about a week. |
 | Leftover worktrees | Eight under `.claude/worktrees/`, all clean and merged. Remove only after checking each is clean and its commits are on `main` (an earlier blanket cleanup deleted uncommitted work). |
+| `feat/brand-pulse` (11 commits ahead, 2026-11-20, not merged) | **Pulse**, RoboApply's own brand replacing Desk: blue-black ink, electric blue, a cobalt field and a yellow highlight, flat tiles, Space Grotesk over DM Sans, a three.js scene on the home page. Keeps Desk's layout and token names. When it merges, chapters 01, 03 and 08 and the handbook index must say Pulse instead of Desk. |
+| `perf/page-weight-dead-code` (6 commits ahead, 2026-11-18, not merged) | Page-weight and dead-code clean-up (unused re-exports). |
 | Stale session notes | Notes for the Paper redesign, resume hub and Next 16.4.1 called them unmerged; all three merged on 2026-10-31, and the resume.io clone on 2026-11-13. |
 
 ## 4. Owner and ops items still open

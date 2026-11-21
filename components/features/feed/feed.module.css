@@ -361,6 +361,25 @@
   box-shadow: var(--focus-ring);
   border-radius: var(--r-sm);
 }
+/* "On your list of companies": one quiet line under the job's name (the search's companies you want to work at). */
+.targetNote {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  font-weight: 500;
+  color: var(--action);
+}
+.targetNote::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
 .facts {
   display: flex;
   flex-wrap: wrap;

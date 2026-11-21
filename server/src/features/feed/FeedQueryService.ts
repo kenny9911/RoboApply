@@ -137,6 +137,7 @@ import { hideProposal, planToFilters, relaxations, toDiff, type PlannerPlan } fr
 import { denseLegSql, lexicalLegSql, profileQueryText, recencyLegSql } from './hybridSql.js';
 import { needsSponsorshipFor, publicItem, toFeedItem } from './items.js';
 import {
+  atTargetCompany,
   collapseSameRole,
   companyKeyOf,
   fitBadge,
@@ -151,6 +152,7 @@ import {
   scatterByCompany,
   sortCandidates,
   sponsorshipFirst,
+  targetKeysOf,
   type Candidate,
   type RankContext,
   type SameRoleGroup,
@@ -172,7 +174,7 @@ import {
 } from './sql.js';
 import { heldBankBoards } from './sourceLine.js';
 import { requiredSkills, toMatchRecord, type FeedCtx, type FeedJobRow } from './types.js';
-import { normalizeCompanyName, normalizeSkills } from '../jobs/normalize/index.js';
+import { normalizeSkills } from '../jobs/normalize/index.js';
 
 const DAY_MS = 86_400_000;
 const L = FEED_LIMITS;
@@ -310,6 +312,15 @@ export interface FeedPreviewInput {
   relevance?: string;
   /** As `FeedQueryInput.locale`. */
   locale?: string;
+  /**
+   * The agent's picks (suggestions and the weekly list): under `best_fit`, a
+   * job at a company on the search's "Companies you want to work at" is
+   * ordered as if its fit were TARGET_COMPANY_POINTS higher (ranking.ts
+   * `sortCandidates`; a bounded boost, never a filter, and the score on the
+   * card is unchanged). Other sorts ignore it: Recommended adds the points to
+   * every list's rank itself.
+   */
+  favorTargetCompanies?: boolean;
 }
 
 /** `relevance` as the service keeps it: trimmed, empty → null. Longer than the contract allows is refused, never cut. */
@@ -889,7 +900,8 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     return {
       now: ctx.now,
       affinity: decayed(aff ?? EMPTY_AFFINITY, ctx.now),
-      preferredCompanyKeys: new Set((filters.preferredCompanies ?? []).map((c) => normalizeCompanyName(c)).filter(Boolean)),
+      // "Companies you want to work at": TARGET_COMPANY_POINTS in Recommended, and the picks' order (ranking.ts).
+      preferredCompanyKeys: targetKeysOf(filters),
       goal: { goal, filters },
       skillsBoost,
     };
@@ -931,6 +943,8 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     seenSkipped?: Map<string, number> | null;
     /** Same-role groups that already have a card the session has not sent yet (a refill folds into them). */
     taken?: Map<string, TakenGroup>;
+    /** The agent's picks (`FeedPreviewInput.favorTargetCompanies`): Best fit counts a listed company's fit 5 points higher. */
+    favorTargets?: boolean;
   }
 
   /** A same-role group with a card (ranking.ts `SameRoleGroup`), and whether that card's posting mentions sponsorship. */
@@ -970,7 +984,12 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     }
     const market = rowsMarket(rows);
     if (opts.fused) kept.sort((a, b) => (a.retrievalRank ?? Number.POSITIVE_INFINITY) - (b.retrievalRank ?? Number.POSITIVE_INFINITY));
-    else sortCandidates(kept, sort, { currency: filters.salaryMin?.currency ?? (market === 'cn' ? 'CNY' : null), today: cnDate(rc.now) });
+    else
+      sortCandidates(kept, sort, {
+        currency: filters.salaryMin?.currency ?? (market === 'cn' ? 'CNY' : null),
+        today: cnDate(rc.now),
+        ...(opts.favorTargets ? { targetKeys: rc.preferredCompanyKeys } : {}),
+      });
     const sponsorshipLeads = sponsorshipLeadsFor(market, filters);
     const { first, rest } = sponsorshipFirst(kept, sponsorshipLeads);
     const taken = opts.taken ?? new Map<string, TakenGroup>();
@@ -1129,6 +1148,13 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     newSince: Date | null = null,
     /** The /jobs list's pages: each card carries its place on the reader's list (`applicationsOf`). */
     withApplications = false,
+    /**
+     * The search's "Companies you want to work at" (`targetKeysOf`): a card at
+     * one of them carries `atTargetCompany: true` ("On your list of
+     * companies"). A plain fact about the reader's own list, so it is read from
+     * the filters, also on a list that is not personalised.
+     */
+    targetKeys: ReadonlySet<string> = new Set(),
   ): Promise<FeedItem[]> {
     const ids = cands.map((c) => c.row.id);
     const [tracker, meta, sourced, applications] = await Promise.all([
@@ -1152,6 +1178,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       // The same role in other places, folded into this card (set here: items.ts builds the card itself).
       const alsoIn = alsoInOf(also.get(c.row.id) ?? []);
       if (alsoIn) item.alsoIn = alsoIn;
+      if (atTargetCompany(c.row, targetKeys)) item.atTargetCompany = true;
       if (applications) {
         // No entry: not on the list. An entry of null (a state this contract does not name): left off.
         const place = applications.get(c.row.id);
@@ -1356,7 +1383,10 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const exhausted = state.sort === 'deadline' || !olderRemain(s, floor);
     const nextOffset = offset + L.pageSize;
     const more = nextOffset < s.jobIds.length || !exhausted;
-    const [cards, header] = await Promise.all([items(state.ctx, cands, state.user, offset, state.personalized, also, state.fused, state.newSince, true), sourcesFor(state, s.createdAt)]);
+    const [cards, header] = await Promise.all([
+      items(state.ctx, cands, state.user, offset, state.personalized, also, state.fused, state.newSince, true, targetKeysOf(state.filters)),
+      sourcesFor(state, s.createdAt),
+    ]);
     const sources = header?.sources;
     // Thin means the WHOLE list is short, not the part read so far: `jobIds` holds the windows fetched up to
     // now (the first one reaches back 14 or 45 days, the list 120). So it is said only when that is known:
@@ -1721,7 +1751,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
    * preview, the fit-score precompute): the same first window as the list's
    * own, so with hybrid retrieval its candidates are the fused union.
    */
-  async function topRanked(ctx: FeedCtx, filters: FilterSet, sort: FeedSort, limit: number, relevance: string | null = null, locale?: string) {
+  async function topRanked(ctx: FeedCtx, filters: FilterSet, sort: FeedSort, limit: number, relevance: string | null = null, locale?: string, favorTargets = false) {
     const personalized = await isPersonalized(ctx.userId, ctx.market);
     const { sort: eff, hybrid, fused } = listPlan(sort, personalized, filters, relevance, false);
     const context = contextOnce(ctx);
@@ -1736,7 +1766,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     }
     const [scored, seenSkipped] = await Promise.all([score(ctx, w.rows, personalized, context, locale), seenSkippedOf(ctx, w.rows, eff, personalized)]);
     const rc = await rankContext(ctx, filters, personalized);
-    const ranked = rankRows(w.rows, scored, eff, rc, filters, personalized, { retrievalRank: w.retrievalRank, fused, seenSkipped });
+    const ranked = rankRows(w.rows, scored, eff, rc, filters, personalized, { retrievalRank: w.retrievalRank, fused, seenSkipped, favorTargets });
     const cands: CardCandidate[] = ranked.kept.slice(0, limit).map((c) => {
       const entry = scored.byId.get(c.row.id);
       return { row: c.row, badge: c.badge, dimensions: entry?.dimensions ?? null, skills: entry?.skills ?? null };
@@ -1790,8 +1820,16 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const profile = await loadProfile(ctx.userId);
     const filters = effectiveFilters(ctx.market, profile.filters, { overrides: input.filters as Record<string, unknown> | undefined, q: input.q });
     const sort = input.sort === 'deadline' && ctx.market !== 'cn' ? 'recommended' : (input.sort ?? 'recommended');
-    const { cands, user, personalized, also, fused, relevanceApplied } = await topRanked(ctx, filters, sort, Math.max(1, Math.min(50, input.limit)), relevance, input.locale);
-    return { items: await items(ctx, cands, user, null, personalized, also, fused), relevanceApplied };
+    const { cands, user, personalized, also, fused, relevanceApplied } = await topRanked(
+      ctx,
+      filters,
+      sort,
+      Math.max(1, Math.min(50, input.limit)),
+      relevance,
+      input.locale,
+      input.favorTargetCompanies === true,
+    );
+    return { items: await items(ctx, cands, user, null, personalized, also, fused, null, false, targetKeysOf(filters)), relevanceApplied };
   }
 
   async function preview(ctx: FeedCtx, input: FeedPreviewInput): Promise<FeedItem[]> {

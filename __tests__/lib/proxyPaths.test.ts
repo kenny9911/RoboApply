@@ -83,13 +83,19 @@ describe('proxyPaths.isProtectedPath', () => {
     expect(isProtectedPath('/ready/setup')).toBe(true);
   });
 
+  it('protects the pay check (/pay), by path segment', () => {
+    expect(isProtectedPath('/pay')).toBe(true);
+    expect(isProtectedPath('/pay?title=Data%20Analyst'.split('?')[0]!)).toBe(true);
+    expect(isProtectedPath('/payments')).toBe(false);
+  });
+
   it('leaves the public pages signed-in users also use (HybridShell) open', () => {
     for (const p of ['/campus', '/job/cm1-staff-engineer', '/browse/engineering', '/extension', '/pricing', '/tools/resume-check', '/r/ABC123', '/unsubscribe/t0k']) {
       expect(isProtectedPath(p), p).toBe(false);
     }
   });
 
-  it('lists exactly the sixteen protected prefixes', () => {
+  it('lists exactly the seventeen protected prefixes', () => {
     expect([...PROTECTED_PREFIXES]).toEqual([
       '/dashboard',
       '/jobs',
@@ -107,6 +113,7 @@ describe('proxyPaths.isProtectedPath', () => {
       '/invite',
       '/coaching',
       '/referrals',
+      '/pay',
     ]);
   });
 

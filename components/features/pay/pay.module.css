@@ -1,0 +1,320 @@
+/* components/features/pay — the pay check (/pay). Desk tokens only: white
+   cards at rest on --e1, 12 px corners, 4 px controls, one blue action. The
+   range bar is decorative blue (--accent-track band, --accent-line median):
+   it carries no text, the figures are written out beside it. Touch targets
+   are at least 44 px; the form stacks below 640 px. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  width: 100%;
+  max-width: 880px;
+  min-width: 0;
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.text {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  line-height: var(--lh-body);
+  max-width: 68ch;
+}
+
+.link {
+  color: var(--action);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+/* ── The ask ─────────────────────────────────────────────────────────── */
+
+.ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--e1);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--sp-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.input {
+  min-height: var(--control-lg);
+  width: 100%;
+  min-width: 0;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--action);
+  box-shadow: var(--shadow-focus);
+}
+
+.input:disabled {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.formRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  font-size: var(--fs-body);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--action);
+}
+
+/* ── The answer ──────────────────────────────────────────────────────── */
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.errorBox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.resultHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: var(--lh-title);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.counts {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text);
+  line-height: var(--lh-body);
+}
+
+.honesty {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--grad-soft);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+}
+
+.ranges {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.range,
+.notEnough {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--e1);
+  min-width: 0;
+}
+
+.rangeHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+}
+
+.rangeTitle {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The bar: a track, the 25th–75th band, the median's mark. Positions come
+   from the inline custom properties (format.ts rangeBar). */
+.bar {
+  position: relative;
+  height: 14px;
+  margin: var(--sp-2) 0;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--band-start, 25%);
+  width: max(4px, calc(var(--band-end, 75%) - var(--band-start, 25%)));
+  box-sizing: border-box;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  background: var(--accent-track);
+}
+
+.medianMark {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  left: var(--median-at, 50%);
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--action);
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+}
+
+.figures dt {
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.figures dd {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.figureMedian {
+  text-align: center;
+}
+
+.figureEnd {
+  text-align: right;
+}
+
+.source {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.few {
+  margin: 0;
+  padding-left: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+
+@media (max-width: 640px) {
+  .ask,
+  .range,
+  .notEnough {
+    padding: var(--sp-4);
+  }
+
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .formRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .formRow :global(.btn) {
+    width: 100%;
+  }
+
+  .figures dd {
+    font-size: var(--fs-body);
+  }
+}

@@ -269,6 +269,15 @@ export interface JobDetailResponse {
   people: JobPeople;
   /** `marketHooks.cardMeta` output for `MarketJobMeta` (CN/TW). */
   marketMeta: Record<string, Record<string, unknown>>;
+  /**
+   * Whether the job's company is on the reader's "Companies you want to work
+   * at" (the active saved search's `preferredCompanies`, compared as the feed
+   * card compares it: search/targetCompanies.ts). The page offers to add the
+   * company or to take it off (POST /search-profiles/target-companies). Left
+   * off when the search could not be read, or the reader has none yet: the
+   * page then offers nothing (D3).
+   */
+  atTargetCompany?: boolean;
 }
 
 /** POST /jobs/:id/score (MATCH's handler; platform-paid; 80/day/user, beyond it the pre-score). */

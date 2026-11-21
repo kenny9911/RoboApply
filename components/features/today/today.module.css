@@ -320,6 +320,25 @@
   justify-content: space-between;
   gap: var(--sp-3);
 }
+/* "On your list of companies": the Jobs card's own note, one quiet line above the job's name. */
+.pickTarget {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--action);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  font-weight: 500;
+}
+.pickTarget::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
 .identity {
   margin: 0;
   min-width: 0;

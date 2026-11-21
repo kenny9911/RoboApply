@@ -20,6 +20,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
+import { track } from '../../../lib/analytics';
 import { startWechatSignIn } from '../../../lib/api/authCn';
 import { useCapabilities } from '../../../lib/flags';
 import type { AuthMethodProps } from '../../auth/methods/registry';
@@ -78,6 +79,7 @@ export function WechatMethod({ mode, next, follows }: AuthMethodProps) {
     if (disabled) return;
     setBusy(true);
     setError(null);
+    track('signup_started', { method: 'wechat', mode });
     try {
       const safe = safeNextPath(next);
       const invite = inputs.invite.trim();

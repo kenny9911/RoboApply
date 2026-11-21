@@ -32,6 +32,12 @@
 // without a score never counts as "Good fit". AI steps run only when
 // `aiAllowed(user)` and the brand's text model allow them; otherwise a kit is
 // the user's own resume and their saved answers, with no model call.
+// "Prepare my weekly list automatically" (REDESIGN §9; autoPrepare.ts): off
+// by default; with the user's opt-in on, a list build prepares the jobs it
+// newly picked through `prepare` itself (the Prepare button's path and credit
+// gate), in pick order, within what is left of every credit (applications:
+// the weekly allowance only, never bonus ones), and records the run. It never
+// submits (D1) and never touches a job past "To prepare".
 
 import { CreditsExhaustedError } from '../../platform/credits/index.js';
 import { HttpError } from '../../platform/http.js';
@@ -54,6 +60,9 @@ import {
   type AgentSettingsResponse,
   type AgentSetupResponse,
   type AnswerBankItemView,
+  type AutoPrepareOutcome,
+  type AutoPrepareStop,
+  type AutoPrepareView,
   type CalibrationEntry,
   type GenerateListResponse,
   type JobPlacesResponse,
@@ -77,6 +86,14 @@ import {
 } from './contract.js';
 import { defaultAgentDeps, type AgentDeps, type PreparePayload, type RecordFilesPayload } from './deps.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import {
+  AUTO_PREPARE_IDEMPOTENCY_KEY,
+  autoPrepareRunValues,
+  autoPrepareSwitchValues,
+  autoPrepareView,
+  planAutoPrepare,
+  readAutoPrepare,
+} from './autoPrepare.js';
 import { storedListFilters } from './weekly.js';
 import { customQuestionKey, isValidQuestionKey, questionDefFor, questionKeysFor } from './questionKeys.js';
 import {
@@ -140,6 +157,16 @@ const ANSWER_SELECT = { id: true, questionKey: true, questionText: true, answer:
 const EXPIRABLE: readonly QueueState[] = ['picked', 'ready_for_review', 'approved', 'failed'];
 const LIST_LIMIT = 200;
 const PREVIEW_LIMIT = 50;
+/**
+ * The order the suggestions and the weekly list read the search in: best fit
+ * first, and a job at a company on the search's "Companies you want to work
+ * at" (target companies) ordered as if its fit were 5 points higher
+ * (feed ranking.ts `sortCandidates`; search/targetCompanies.ts). A bounded
+ * boost, never a filter: the minimum tier, the "Not right" ratings and the
+ * list's own checks apply to such a job as to any other, and its card shows
+ * its own score with the gap first.
+ */
+export const PICKS_ORDER = { sort: 'best_fit', favorTargetCompanies: true } as const;
 /** Posting checks (`deps.checkJobLive`) that run at once when jobs enter the list. */
 const LIVE_CHECKS_AT_ONCE = 5;
 /** How long a list waits for those checks in all; a job not checked by then enters as it did before the check existed. */
@@ -217,6 +244,25 @@ type CreditUsage = Awaited<ReturnType<AgentDeps['creditUsage']>>;
 function creditLine(usage: CreditUsage | null, bucket: PrepareCreditLine['bucket'], cost: number): PrepareCreditLine {
   const u = usage?.lines[bucket];
   return u ? { bucket, cost, remaining: u.remaining, window: u.window, resetsAt: u.resetsAt.toISOString() } : { bucket, cost };
+}
+
+/**
+ * What preparing one kit uses besides its application (one `ready_kits`
+ * credit, always): a tailoring credit when AI is available and the settings
+ * tailor each kit, and a cover letter credit when the kit has no letter yet and
+ * the post asks for one (or always, by the settings). The one rule behind the
+ * cost sheet (`costOf`), the Assistant's quote and an automatic run's plan. Pure.
+ */
+export function kitCost(settings: Pick<AgentSettings, 'tailorEach' | 'coverLetterMode'>, ai: boolean, target: { coverLetterId: string | null; job: Pick<JobRow, 'descriptionPlain' | 'qualifications'> }): { tailor: number; letter: number } {
+  return {
+    tailor: ai && settings.tailorEach ? 1 : 0,
+    letter: ai && !target.coverLetterId && letterNeeded(settings.coverLetterMode, postAsksForCoverLetter(target.job.descriptionPlain, target.job.qualifications)) ? 1 : 0,
+  };
+}
+
+/** A credit bucket an error names, when it is one a kit uses. */
+function kitBucket(value: unknown): PrepareCreditLine['bucket'] | null {
+  return value === 'ready_kits' || value === 'tailor' || value === 'cover_letter' ? value : null;
 }
 
 /** What "Not right" ratings rule out or push back (keys from `nameKey`). */
@@ -580,6 +626,8 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
    * the Dashboard's picks). Each carries `application: null`, the feed card's
    * list state: a job with any item on the list, whatever its state, is never
    * suggested (`excludedJobIds`), so that is known without another read.
+   * Picks favour the search's "Companies you want to work at": a job at one
+   * of them is ordered as if its fit were 5 points higher (PICKS_ORDER).
    */
   async function suggestions(userId: string, input: { limit?: number; exclude?: string }) {
     const db = await deps.getDb();
@@ -589,7 +637,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     const row = await settingsRow(db, userId);
     const ex = await excludedJobIds(db, userId, row);
     const dislikes = await dislikesOf(db, row);
-    const preview = await deps.feedPreview(userId, { sort: 'best_fit', limit: PREVIEW_LIMIT });
+    const preview = await deps.feedPreview(userId, { ...PICKS_ORDER, limit: PREVIEW_LIMIT });
     const items = applyDislikes(
       preview
         .filter((j) => !skip.has(j.jobId) && !ex.queued.has(j.jobId) && !ex.rated.has(j.jobId))
@@ -696,7 +744,8 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
 
     const ex = await excludedJobIds(db, userId, row);
     const dislikes = await dislikesOf(db, row);
-    const preview = await deps.feedPreview(userId, { filters: overrides as never, sort: 'best_fit', limit: PREVIEW_LIMIT });
+    // The companies the list favours are those of the filters it is built with (the overrides' own, when they set some).
+    const preview = await deps.feedPreview(userId, { filters: overrides as never, ...PICKS_ORDER, limit: PREVIEW_LIMIT });
     const candidates = applyDislikes(
       preview
         .filter((j) => j.fit && meetsMinTier(j.fit.tier, settings.minTier))
@@ -716,13 +765,24 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     if (created.length && options.source !== 'cron') {
       await recordKitNote(db, created[0]!, 'system', { notice: 'ready_list_ready', sent: false, weekKey });
     }
+    // "Prepare my weekly list automatically": only when the user turned it on (null otherwise).
+    const autoPrepared = await autoPrepareNew(db, userId, created, settings, weekKey);
+    const rows = autoPrepared?.started.length ? await reread(db, userId, created) : created;
     return {
       weekKey,
       added: created.length,
-      items: await views(db, userId, created),
+      items: await views(db, userId, rows),
       filtersDiffer,
       reason: created.length ? null : 'no_matches',
+      ...(autoPrepared ? { autoPrepared } : {}),
     };
+  }
+
+  /** The rows again, as they are now, in the same order (rows gone meanwhile are left out). */
+  async function reread(db: AgentDb, userId: string, rows: QueueRow[]): Promise<QueueRow[]> {
+    const now = (await db.rAAgentQueueItem.findMany({ where: { userId, id: { in: rows.map((r) => r.id) } }, select: QUEUE_SELECT })) as QueueRow[];
+    const byId = new Map(now.map((r) => [r.id, r]));
+    return rows.map((r) => byId.get(r.id)).filter((r): r is QueueRow => Boolean(r));
   }
 
   /**
@@ -951,10 +1011,13 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     ai: boolean,
     targets: ReadonlyArray<{ coverLetterId: string | null; job: JobRow }>,
   ): Promise<{ credits: PrepareCreditLine[]; short: PrepareCreditLine | null; usage: CreditUsage }> {
-    const tailorCost = ai && settings.tailorEach ? targets.length : 0;
-    const letterCost = ai
-      ? targets.filter((t) => !t.coverLetterId && letterNeeded(settings.coverLetterMode, postAsksForCoverLetter(t.job.descriptionPlain, t.job.qualifications))).length
-      : 0;
+    let tailorCost = 0;
+    let letterCost = 0;
+    for (const t of targets) {
+      const c = kitCost(settings, ai, t);
+      tailorCost += c.tailor;
+      letterCost += c.letter;
+    }
     const usage = await deps.creditUsage(userId);
     const line = (bucket: PrepareCreditLine['bucket'], cost: number): PrepareCreditLine => creditLine(usage, bucket, cost);
     const credits: PrepareCreditLine[] = [line('ready_kits', targets.length)];
@@ -1028,12 +1091,14 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
   /**
    * The credit proposal for these kits (`confirm` false), or the start of
    * their preparation (`confirm` true). `idempotencyKey` (the Assistant:
-   * `copilot:<proposalId>`) names the `ready_kits` reservation of each kit
-   * after the caller's own key instead of the list's, so the action the user
-   * confirmed reserves its kit once however often it is sent; the attempt
-   * number keeps a later preparation of the same kit (after a failure) its own.
+   * `copilot:<proposalId>`; an automatic run: `autoprep`) names the
+   * `ready_kits` reservation of each kit after the caller's own key instead of
+   * the list's, so the action the user confirmed reserves its kit once however
+   * often it is sent; the attempt number keeps a later preparation of the same
+   * kit (after a failure) its own. `auto`: the start comes from "Prepare my
+   * weekly list automatically" (the move is the system's, marked `auto`).
    */
-  async function prepare(userId: string, ids: string[], confirm: boolean, options: { idempotencyKey?: string } = {}): Promise<PrepareProposal> {
+  async function prepare(userId: string, ids: string[], confirm: boolean, options: { idempotencyKey?: string; auto?: boolean } = {}): Promise<PrepareProposal> {
     const db = await deps.getDb();
     const items = (await db.rAAgentQueueItem.findMany({ where: { userId, id: { in: [...new Set(ids)] } }, select: QUEUE_SELECT })) as QueueRow[];
     if (!items.length) throw new HttpError('not_found', 'This job is not in your Ready to apply list.', { reason: AGENT_ERROR_CODES.notFound });
@@ -1073,19 +1138,29 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     if (ai && (tailorCost || letterCost)) await deps.assertPhoneBound(userId);
 
     const started: string[] = [];
+    let ranOut: PrepareCreditLine['bucket'] | null = null;
     for (const item of targets) {
       const attempt = (await db.rAAgentKitEvent.count({ where: { queueItemId: item.id, toState: 'preparing' } })) + 1;
       let reservation: { id: string; replayed: boolean } | null = null;
       const reservationKey = options.idempotencyKey ? `${options.idempotencyKey}:${item.id}:${attempt}` : `ready_kit:${item.id}:${attempt}`;
       try {
-        reservation = await deps.reserveKit(userId, reservationKey, item.id);
+        // An automatic run stays within the weekly allowance: it never pays with bonus applications.
+        reservation = await deps.reserveKit(userId, reservationKey, item.id, options.auto ? { useGrants: false } : undefined);
       } catch (err) {
-        if (started.length) break; // a race used the last kit credit: keep what started
+        if (started.length) {
+          // A race used the last kit credit: keep what started, and say which bucket ran out.
+          if (err instanceof CreditsExhaustedError) ranOut = kitBucket(err.bucket);
+          break;
+        }
         throw err;
       }
       let preparing: QueueRow;
       try {
-        preparing = await transitionItem(db, item, 'preparing', { actor: 'user', detail: { attempt, creditLedgerId: reservation.id }, data: { lastError: null } });
+        preparing = await transitionItem(db, item, 'preparing', {
+          actor: options.auto ? 'system' : 'user',
+          detail: { attempt, creditLedgerId: reservation.id, ...(options.auto ? { auto: true } : {}) },
+          data: { lastError: null },
+        });
       } catch (err) {
         // A twin request (double click, second tab) computed the same attempt, so it holds this
         // same reservation (the second reserve is a replay) and may have moved the kit first.
@@ -1119,7 +1194,99 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
       started.push(item.id);
     }
     if (started.length) deps.kickPrepare();
-    return { ...proposal, confirmed: true, started };
+    return { ...proposal, confirmed: true, started, ...(ranOut ? { ranOut } : {}) };
+  }
+
+  // ── Prepare my weekly list automatically (REDESIGN §9; autoPrepare.ts) ──
+
+  async function autoPrepareFor(db: AgentDb, userId: string, values: Record<string, unknown>): Promise<AutoPrepareView> {
+    const [timeZone, ai] = await Promise.all([timeZoneOf(db, userId), deps.aiAvailable(userId).catch(() => null)]);
+    return autoPrepareView(readAutoPrepare(values), weekKeyFor(deps.now(), timeZone), ai);
+  }
+
+  /** GET /agent/auto-prepare: the opt-in and the latest run. */
+  async function getAutoPrepare(userId: string): Promise<AutoPrepareView> {
+    const db = await deps.getDb();
+    return autoPrepareFor(db, userId, await deps.uiValues(userId));
+  }
+
+  /**
+   * PUT /agent/auto-prepare: the user's own switch. On is their confirmation
+   * (the web states the cost before it sends it); off stops every later run
+   * and undoes nothing already prepared. The latest run is kept either way.
+   * Switching to what is already stored writes nothing (`since` stays).
+   */
+  async function setAutoPrepare(userId: string, input: { on: boolean }): Promise<AutoPrepareView> {
+    const db = await deps.getDb();
+    const values = await deps.uiValues(userId);
+    if (readAutoPrepare(values).on === input.on) return autoPrepareFor(db, userId, values);
+    return autoPrepareFor(db, userId, await deps.saveUiValues(userId, autoPrepareSwitchValues(input.on, deps.now())));
+  }
+
+  /**
+   * An automatic run over the jobs a list build just added (`rows`, pick
+   * order). Nothing happens unless the user's option is on (a store that
+   * cannot be read counts as off) and this area's capability is on for them.
+   * The jobs still `picked` that fit what is left of every credit they need
+   * (`planAutoPrepare`, `kitCost`: AI availability and "Tailor my resume for
+   * each job" as for a tap) go through `prepare` with the run's key; the first
+   * that does not fit stops the run and the rest stay in "To prepare". The run
+   * is recorded for the Getting ready page and the Dashboard. Never throws: the
+   * list is built either way.
+   */
+  async function autoPrepareNew(db: AgentDb, userId: string, rows: QueueRow[], settings: AgentSettings, weekKey: string): Promise<AutoPrepareOutcome | null> {
+    if (!rows.length) return null;
+    let on = false;
+    try {
+      on = readAutoPrepare(await deps.uiValues(userId)).on;
+    } catch (err) {
+      logger.warn('AGENT', 'automatic preparing not read; nothing is prepared automatically', { userId, error: err instanceof Error ? err.message : String(err) });
+    }
+    if (!on || !(await deps.flag('agent', userId).catch(() => false))) return null;
+
+    // Only jobs still waiting to be prepared: a job past "To prepare" is never touched.
+    const fresh = rows.filter((r) => r.state === 'picked');
+    let started: string[] = [];
+    let stoppedBy: AutoPrepareStop | null = null;
+    try {
+      const [ai, jobs, usage] = await Promise.all([
+        deps.aiAvailable(userId),
+        visibleJobs(
+          db,
+          userId,
+          fresh.map((r) => r.jobId),
+        ),
+        deps.creditUsage(userId),
+      ]);
+      const candidates = fresh.filter((r) => jobs.has(r.jobId)).map((r) => ({ id: r.id, ...kitCost(settings, ai, { coverLetterId: r.coverLetterId, job: jobs.get(r.jobId)! }) }));
+      // Applications: the weekly allowance only (never bonus ones; the gate refuses them too). Tailoring and
+      // letters: what a tapped Prepare may use.
+      const remaining: Partial<Record<PrepareCreditLine['bucket'], number>> = {};
+      for (const bucket of ['ready_kits', 'tailor', 'cover_letter'] as const) {
+        const line = usage.lines[bucket];
+        if (line) remaining[bucket] = bucket === 'ready_kits' ? (line.windowRemaining ?? line.remaining) : line.remaining;
+      }
+      const plan = planAutoPrepare(candidates, remaining);
+      stoppedBy = plan.stoppedBy;
+      if (plan.ids.length) {
+        const result = await prepare(userId, plan.ids, true, { idempotencyKey: AUTO_PREPARE_IDEMPOTENCY_KEY, auto: true });
+        started = result.started ?? [];
+        if (result.ranOut) stoppedBy = result.ranOut;
+      }
+    } catch (err) {
+      // `prepare` throws only before its first reservation (every bucket is checked first), or for a single job
+      // whose reservation it gave back: nothing was started and nothing stays reserved.
+      stoppedBy = err instanceof CreditsExhaustedError ? (kitBucket(err.bucket) ?? 'error') : 'error';
+      if (!(err instanceof CreditsExhaustedError)) {
+        logger.warn('AGENT', 'automatic preparing stopped', { userId, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    const left = rows.length - started.length;
+    const outcome: AutoPrepareOutcome = { started, left, stoppedBy: left > 0 ? (stoppedBy ?? 'error') : null };
+    await deps.saveUiValues(userId, autoPrepareRunValues({ at: deps.now(), weekKey, started: started.length, left, stoppedBy: outcome.stoppedBy })).catch((err) => {
+      logger.warn('AGENT', 'automatic run not recorded', { userId, error: err instanceof Error ? err.message : String(err) });
+    });
+    return outcome;
   }
 
   /**
@@ -1767,6 +1934,8 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     history,
     detail,
     prepare,
+    getAutoPrepare,
+    setAutoPrepare,
     runPrepare,
     sweepStalePreparing,
     confirmPart,

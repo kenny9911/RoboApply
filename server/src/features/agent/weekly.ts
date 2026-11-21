@@ -19,6 +19,10 @@
 // The "your list is ready" notice is sent by the hourly `reminders` producer
 // (reminders.ts), which also respects quiet hours.
 //
+// "Prepare my weekly list automatically" (REDESIGN §9) runs inside
+// `generateList`, for the users who turned it on: the result counts the
+// applications it started (`autoPrepared`).
+//
 // Which search the list draws from (SCHEMA-4, SR-52-1): the user's active
 // search, or the saved search `RAAgentSettings.searchProfileId` names, with
 // the filter changes made inside Ready to apply (`filterOverrides`) on top.
@@ -131,6 +135,7 @@ export async function runReadyWeeklyTask(ctx: CronContext, deps: WeeklyDeps = {}
   let scanned = 0;
   let processed = 0;
   let added = 0;
+  let autoPrepared = 0;
   let alreadyBuilt = 0;
   let disabled = 0;
   let failed = 0;
@@ -167,6 +172,7 @@ export async function runReadyWeeklyTask(ctx: CronContext, deps: WeeklyDeps = {}
           const r = await generate(c.userId, { source: 'cron' });
           processed += 1;
           added += r.added;
+          autoPrepared += r.autoPrepared?.started.length ?? 0;
         } catch (err) {
           failed += 1;
           logger.warn('AGENT', 'weekly list failed for a user', { userId: c.userId, error: err instanceof Error ? err.message : String(err) });
@@ -177,5 +183,5 @@ export async function runReadyWeeklyTask(ctx: CronContext, deps: WeeklyDeps = {}
     cursor = page.last;
   }
   if (!processed && !failed) return { skipped: 'no_work', processed: 0, scanned, alreadyBuilt, disabled, swept };
-  return { processed, added, alreadyBuilt, disabled, failed, scanned, pages, swept };
+  return { processed, added, autoPrepared, alreadyBuilt, disabled, failed, scanned, pages, swept };
 }

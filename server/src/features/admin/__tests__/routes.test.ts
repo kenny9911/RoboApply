@@ -25,6 +25,8 @@ import { registerSourceAdapter, type JobSourceAdapter } from '../../jobs/ingest/
 import { getCurrentBrandId } from '../../../platform/brand/index.js';
 import { PROVIDER_STATES, type ProviderUsageRow } from '../contract.js';
 import { fakeSystemData, fakeSystemStore, type FakeSystemData } from './fakes.js';
+import type { VisitorListRow, VisitorReportStore, VisitorScope } from '../visitors.js';
+import type { VisitorListResponse, VisitorsReportResponse } from '../contract.js';
 
 const ENV = { NODE_ENV: 'test', ALLOWED_BRANDS: 'roboapply,goapply' };
 
@@ -90,6 +92,29 @@ const reports: ReportsStore = {
   },
 };
 
+/** What the visitor report was asked for (the last call of each kind). */
+const visitorCalls: { scope: VisitorScope | null; filter: unknown; page: unknown } = { scope: null, filter: null, page: null };
+const visitorRow: VisitorListRow = {
+  id: 'v1', brand: 'roboapply', firstSeenAt: new Date('2026-10-09T08:00:00Z'), lastSeenAt: new Date('2026-10-09T09:00:00Z'),
+  channel: 'search', landingPath: '/', referrerHost: 'google.com', utmSource: null, utmCampaign: null, country: 'US', device: 'desktop', locale: 'en',
+  pageViews: 4, visits: 1, signupViewedAt: new Date('2026-10-09T08:10:00Z'), signupFrom: 'home', signupStartedAt: new Date('2026-10-09T08:11:00Z'),
+  signupMethod: 'google', signedUpAt: new Date('2026-10-09T08:12:00Z'), knownUser: false, user: { id: 'u9', email: 'ada@example.com', name: 'Ada' }, onboarded: true,
+};
+const visitors: VisitorReportStore = {
+  totals: async (scope) => {
+    visitorCalls.scope = scope;
+    return { visitors: 40, signupViewed: 12, signupStarted: 8, signedUp: 5, onboarded: 3, knownUsers: 6, pageViews: 130, medianSecondsToSignup: 540.4 };
+  },
+  daily: async () => [{ day: '2026-10-09', visitors: 40, signupViewed: 12, signupStarted: 8, signedUp: 5, onboarded: 3 }],
+  breakdown: async (_scope, dimension) => (dimension === 'channel' ? [{ key: 'search', visitors: 30, signedUp: 4 }, { key: 'direct', visitors: 10, signedUp: 1 }] : []),
+  untrackedVisits: async () => 7,
+  newAccounts: async () => 9,
+  list: async (scope, filter, page) => {
+    Object.assign(visitorCalls, { scope, filter, page });
+    return [visitorRow];
+  },
+};
+
 const queue: QueueStore = {
   list: async () => [],
   find: async (id) => (id === 'w_dead' ? { id, status: 'dead', kind: 'job.enrich', brand: 'roboapply', userId: null } : id === 'w_done' ? { id, status: 'done', kind: 'job.enrich', brand: null, userId: null } : null),
@@ -118,6 +143,7 @@ beforeAll(async () => {
           env: ENV,
           now: () => new Date('2026-10-10T12:00:00Z'),
           system: fakeSystemStore(() => systemData),
+          visitors,
           queue,
           reports,
           audit,
@@ -155,6 +181,8 @@ const ROUTES: Array<[string, string, unknown?]> = [
   ['GET', '/admin/system/audit'],
   ['GET', '/admin/costs'],
   ['GET', '/admin/costs.csv'],
+  ['GET', '/admin/visitors'],
+  ['GET', '/admin/visitors/list'],
   ['GET', '/admin/safety'],
   ['GET', '/admin/reports'],
   ['POST', '/admin/reports/job1/resolve', { decision: 'close' }],
@@ -301,6 +329,37 @@ describe('as an admin', () => {
     expect(res.headers.get('content-disposition')).toContain('costs-2026-10-01-to-2026-10-09.csv');
     expect(res.text.replace(/^﻿/, '').split('\n')[0]).toBe('day,sku,brand,platform,costUsd,units,rows,unpricedRows');
     expect(res.text).toContain('2026-10-09,ra_copilot_turn,roboapply,false,1.25,0,3,0');
+  });
+
+  it('GET /visitors answers the cohort of the range: the steps toward an account, by day, with what it leaves out said apart', async () => {
+    const res = await harness.request<{ data: VisitorsReportResponse }>('GET', '/admin/visitors?from=2026-10-08&to=2026-10-09&tz=Asia%2FShanghai&brand=roboapply');
+    expect(res.status).toBe(200);
+    const d = res.body.data;
+    expect(d.ready).toBe(true);
+    expect(d.funnel).toEqual({ visitors: 40, signupViewed: 12, signupStarted: 8, signedUp: 5, onboarded: 3 });
+    expect(d).toMatchObject({ knownUsers: 6, pageViews: 130, medianSecondsToSignup: 540, untrackedVisits: 7, newAccounts: 9, tz: 'Asia/Shanghai' });
+    // Both days of the range in the viewer's zone; the day without visitors is a zero row.
+    expect(d.daily.map((r) => [r.day, r.visitors])).toEqual([['2026-10-08', 0], ['2026-10-09', 40]]);
+    expect(d.channels).toEqual([{ key: 'search', visitors: 30, signedUp: 4 }, { key: 'direct', visitors: 10, signedUp: 1 }]);
+    // Days are read in the viewer's zone: 2026-10-08 00:00 in Shanghai is 16:00 UTC the day before.
+    expect(visitorCalls.scope).toMatchObject({ from: new Date('2026-10-07T16:00:00Z'), to: new Date('2026-10-09T16:00:00Z'), tz: 'Asia/Shanghai', brand: 'roboapply' });
+  });
+
+  it('GET /visitors/list answers the visitors with the stage each reached and the linked account', async () => {
+    const res = await harness.request<{ data: VisitorListResponse }>('GET', '/admin/visitors/list?status=onboarded&channel=search&cursor=o:25');
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toHaveLength(1);
+    expect(res.body.data.items[0]).toMatchObject({ id: 'v1', status: 'onboarded', channel: 'search', source: 'google.com', signupMethod: 'google', user: { id: 'u9', email: 'ada@example.com', name: 'Ada' } });
+    expect(res.body.data.cursor).toBeNull();
+    expect(visitorCalls.filter).toEqual({ status: 'onboarded', channel: 'search' });
+    expect(visitorCalls.page).toEqual({ skip: 25, take: 26 });
+  });
+
+  it('GET /visitors rejects a bad range, an unknown stage and a range over the cap', async () => {
+    expect((await harness.request('GET', '/admin/visitors?from=2026-10-09&to=2026-10-01')).status).toBe(422);
+    expect((await harness.request('GET', '/admin/visitors?from=2025-01-01&to=2026-10-09')).status).toBe(422);
+    expect((await harness.request('GET', '/admin/visitors/list?status=everyone')).status).toBe(422);
+    expect((await harness.request('GET', '/admin/visitors?brand=elsewhere')).status).toBe(422);
   });
 
   it('GET /costs rejects a range over the cap', async () => {

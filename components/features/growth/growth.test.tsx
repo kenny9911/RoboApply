@@ -13,6 +13,11 @@ vi.mock('../../../lib/api/growth', () => ({
   dismissChecklist: vi.fn(),
 }));
 
+// The pathname the banner sees. Null (as outside a router) unless a test sets
+// one: no `page_viewed` is recorded then, which the other tests rely on.
+const nav = vi.hoisted(() => ({ pathname: null as string | null }));
+vi.mock('next/navigation', async (orig) => ({ ...(await orig<typeof import('next/navigation')>()), usePathname: () => nav.pathname }));
+
 import * as api from '../../../lib/api/growth';
 import { RoboApiError } from '../../../lib/api/client';
 import {
@@ -71,6 +76,7 @@ function clearCookies() {
 let fetchSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+  nav.pathname = null;
   __resetAnalyticsForTests();
   clearCookies();
   window.localStorage.clear();
@@ -235,6 +241,76 @@ describe('analytics client', () => {
   it('track never throws', () => {
     expect(() => track('page_viewed', { locale: 'en' }, { path: '/x'.repeat(400) })).not.toThrow();
   });
+
+  // Visitor conversion: one visitor row per browser needs one id per browser.
+  it('a browser that refuses the cookie keeps one anonymous id for the page load (not a new one per send)', async () => {
+    const refuse = vi.spyOn(document, 'cookie', 'set').mockImplementation(() => undefined);
+    try {
+      configureAnalytics({ consentRequired: false });
+      const first = getAnonId();
+      expect(first).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
+      expect(cookie(ANON_ID_COOKIE)).toBeNull();
+      expect(getAnonId()).toBe(first);
+      track('page_viewed', {}, { path: '/' });
+      await flush();
+      track('job_opened', { jobId: 'j1' }, { path: '/jobs' });
+      await flush();
+      expect(sendEvents.mock.calls.map((c) => c[0].anonId)).toEqual([first, first]);
+    } finally {
+      refuse.mockRestore();
+    }
+  });
+
+  // Visitor conversion: without this, a visitor who answers the banner after the
+  // first pages went out would get a record with no source.
+  it('"Allow" after pages were sent without an id says once how the visit began; views still waiting need nothing', async () => {
+    configureAnalytics({ consentRequired: true });
+    track('page_viewed', { referrerHost: 'chatgpt.com', locale: 'de', utmSource: 'spring', from: 'ad' }, { path: '/' });
+    track('page_viewed', {}, { path: '/pricing' });
+    await flush();
+    expect(sendEvents.mock.calls[0]![0].anonId).toBeUndefined();
+    const arrivedAt = sendEvents.mock.calls[0]![0].events[0]!.at;
+
+    track('page_viewed', {}, { path: '/signup' }); // still in the buffer when the answer comes
+    setAnalyticsConsent('granted');
+    await flush();
+    const linked = sendEvents.mock.calls[1]![0];
+    expect(linked.anonId).toBe(cookie(ANON_ID_COOKIE));
+    expect(linked.events.map((e) => e.name)).toEqual(['page_viewed', 'visit_entry']);
+    expect(linked.events[1]).toEqual({ name: 'visit_entry', path: '/', at: arrivedAt, props: { pages: 2, referrerHost: 'chatgpt.com', locale: 'de', utmSource: 'spring' } });
+
+    // Said once: answering again adds nothing.
+    setAnalyticsConsent('granted');
+    await flush();
+    expect(sendEvents).toHaveBeenCalledTimes(2);
+  });
+
+  it('"Allow" before anything was sent adds no entry event (the first view goes out with the id)', async () => {
+    configureAnalytics({ consentRequired: true });
+    track('page_viewed', { referrerHost: 'chatgpt.com' }, { path: '/' });
+    setAnalyticsConsent('granted');
+    await flush();
+    expect(sendEvents).toHaveBeenCalledTimes(1);
+    expect(sendEvents.mock.calls[0]![0].events.map((e) => e.name)).toEqual(['page_viewed']);
+    expect(sendEvents.mock.calls[0]![0].anonId).toBe(cookie(ANON_ID_COOKIE));
+  });
+
+  it('a visitor who declines never sends the entry', async () => {
+    configureAnalytics({ consentRequired: true });
+    track('page_viewed', { referrerHost: 'chatgpt.com' }, { path: '/' });
+    await flush();
+    setAnalyticsConsent('denied');
+    await flush();
+    expect(sendEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it('the sign-up start is a registry event with the method and the mode', async () => {
+    expect(PRODUCT_EVENT_NAMES).toContain('signup_started');
+    configureAnalytics({ consentRequired: false });
+    track('signup_started', { method: 'google', mode: 'signup' }, { path: '/signup' });
+    await flush();
+    expect(sendEvents.mock.calls[0]![0].events[0]).toMatchObject({ name: 'signup_started', path: '/signup', props: { method: 'google', mode: 'signup' } });
+  });
 });
 
 // ── AnalyticsConsent ─────────────────────────────────────────────────────
@@ -313,6 +389,31 @@ describe('AnalyticsConsent', () => {
     await new Promise((r) => setTimeout(r, 300));
     expect(screen.queryByRole('region')).toBeNull();
     expect(cookie(ANON_ID_COOKIE)).not.toBeNull();
+  });
+
+  // Visitor conversion: the visitor record's source comes from the first page view.
+  it('page views carry the campaign labels and `from` of the link that opened the page, and nothing else from the query', async () => {
+    const before = window.location.href;
+    window.history.replaceState({}, '', '/pricing?utm_source=li&utm_medium=paid_social&utm_campaign=q4&from=ad&email=a%40b.co&token=secret');
+    nav.pathname = '/pricing';
+    try {
+      renderWithBrand(<AnalyticsConsent country="US" />);
+      await flush();
+      const event = sendEvents.mock.calls[0]![0].events[0]!;
+      expect(event).toMatchObject({ name: 'page_viewed', path: '/pricing' });
+      expect(event.props).toMatchObject({ utmSource: 'li', utmMedium: 'paid_social', utmCampaign: 'q4', from: 'ad' });
+      expect(JSON.stringify(event)).not.toMatch(/secret|a@b\.co|a%40b/);
+    } finally {
+      window.history.replaceState({}, '', before);
+    }
+  });
+
+  it('a page opened without them sends no campaign props', async () => {
+    nav.pathname = '/';
+    renderWithBrand(<AnalyticsConsent country="US" />);
+    await flush();
+    const props = sendEvents.mock.calls[0]![0].events[0]!.props ?? {};
+    for (const key of ['utmSource', 'utmMedium', 'utmCampaign', 'from']) expect(props).not.toHaveProperty(key);
   });
 
   it('GoApply never shows the banner', async () => {

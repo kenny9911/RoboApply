@@ -19,6 +19,8 @@
 //   POST /nl-query              AI: aiAllowed (503 ai_unavailable), GoApply phone binding
 //   GET  /new-count?since&markVisited
 //   GET  /skills-check
+//   GET  /pay-check?title&location  what live posts of the last 90 days state about pay for a title
+//                               (payCheck.ts; read-only, no credits) · 30/min and 300/day
 
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
@@ -36,13 +38,17 @@ import {
   JobParamsSchema,
   NewCountQuerySchema,
   NlQueryBodySchema,
+  PayCheckQuerySchema,
   ReportJobBodySchema,
 } from './contract.js';
 import type { FeedQueryService } from './FeedQueryService.js';
+import type { PayCheck } from './payCheck.js';
 import type { FeedCtx } from './types.js';
 
 export interface FeedRouterDeps extends FeatureRouterDeps {
   service?: FeedQueryService;
+  /** The pay check reader (default: the process-wide one, loaded on first use). */
+  payCheck?: PayCheck;
   /** Rate-limit middleware factory (tests pass a pass-through). */
   limiter?: (name: string, windows: RateWindow[]) => RequestHandler;
   /** GoApply AI gate: 403 phone_binding_required for WeChat accounts without a phone. */
@@ -63,6 +69,12 @@ let lazyService: FeedQueryService | null = null;
 async function defaultService(): Promise<FeedQueryService> {
   if (!lazyService) lazyService = (await import('./defaultService.js')).defaultFeedQueryService;
   return lazyService;
+}
+
+let lazyPayCheck: PayCheck | null = null;
+async function defaultPayCheck(): Promise<PayCheck> {
+  if (!lazyPayCheck) lazyPayCheck = (await import('./payCheck.js')).payCheck;
+  return lazyPayCheck;
 }
 
 function noContent(res: Response): void {
@@ -216,6 +228,24 @@ export function createFeedRouter(deps: FeedRouterDeps = {}): Router {
     route(async (req) => {
       const { ctx, service } = await ctxOf(req);
       return service.skillsCheck(ctx);
+    }),
+  );
+
+  // Read-only: the stated pay of the live public posts in the brand's market (no credits, no model, no estimate).
+  router.get(
+    '/pay-check',
+    ...auth,
+    feed,
+    limiter('feedPayCheck', [
+      { limit: 30, windowSec: MINUTE },
+      { limit: 300, windowSec: DAY },
+    ]),
+    route(async (req) => {
+      requireUserId(req);
+      const q = parseQuery(req, PayCheckQuerySchema);
+      const market = getCurrentBrandOrDefault().market;
+      const reader = deps.payCheck ?? (await defaultPayCheck());
+      return reader.check({ title: q.title, location: q.location ?? null, market, locale: localeOf(req, market) });
     }),
   );
 

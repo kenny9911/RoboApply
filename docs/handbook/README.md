@@ -1,6 +1,6 @@
 # RoboApply engineering handbook
 
-As of 2026-11-03 (main @ b89d5256); chapters 01, 03, 08, 10 and this index updated 2026-11-15 for PR #17 (main @ 368bf7c7).
+As of 2026-11-03 (main @ b89d5256); chapters 01, 03, 08 and this index updated 2026-11-15 for PR #17; chapter 10 updated 2026-11-21 (main @ 5a9ee9dd).
 
 Start here if you are new to the project. The handbook is the current picture of the product, the code and how we work; the older documents in `docs/` are the specifications and records behind it, and the map at the end says which of them still bind.
 

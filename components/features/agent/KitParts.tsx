@@ -711,6 +711,8 @@ export function eventLine(e: KitEventView, t: Translate): string {
   if (part && d.decision === 'revise') return t(`review.history.revised.${part}`);
   if (typeof d.notice === 'string') return t('review.history.notice');
   if (d.via === 'undo') return t('review.history.undone');
+  // Started by "Prepare my weekly list automatically" (the user's own setting), not by a tap.
+  if (e.toState === 'preparing' && d.auto === true) return t('review.history.autoStarted');
   if (e.toState === 'ready_for_review') {
     const resume = typeof d.tailorSessionId === 'string' && d.tailorSessionId.length > 0;
     const letter = typeof d.coverLetterId === 'string' && d.coverLetterId.length > 0;

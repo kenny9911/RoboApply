@@ -9,6 +9,8 @@
 //   "This is not your chance of getting hired." (under every score)
 //   one past-tense line about the work done (C38)
 //   logo · company · title (link) · location · work model · type · level · pay
+//   "On your list of companies" (only when the server sent `atTargetCompany`:
+//   the company is on the search's "Companies you want to work at")
 //   posted (or first seen) · last checked · source line · New · ≤3 badges · market slot
 //   Save for later · Apply on company site · Tailor resume · Ask about this job · …
 //
@@ -455,6 +457,13 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
           </h3>
         </div>
       </div>
+
+      {/* The reader's own list of companies they want to work at; the server says so (D3), the card never guesses. */}
+      {item.atTargetCompany === true ? (
+        <p className={styles.targetNote} data-testid="job-card-target">
+          {t('targetCompany')}
+        </p>
+      ) : null}
 
       <ul className={styles.facts}>
         {facts.map((f) => (

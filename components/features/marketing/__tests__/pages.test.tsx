@@ -517,14 +517,20 @@ describe('/help/ranking', () => {
     expect(within(rule('seen_skipped')).getByRole('heading', { name: 'Jobs you keep passing over' })).toBeInTheDocument();
     expect(within(rule('seen_skipped')).getByText('Up to 10 points lower')).toBeInTheDocument();
     expect(rule('seen_skipped')).toHaveTextContent('5 points after three visits, 7.5 after four, and 10 from five on.');
+    // REDESIGN §8 scenario 4: the companies a search wants to work at, a bounded boost and never a filter.
+    expect(within(rule('target_companies')).getByRole('heading', { name: 'Companies you want to work at' })).toBeInTheDocument();
+    expect(within(rule('target_companies')).getByText('Up to 5 points')).toBeInTheDocument();
+    expect(rule('target_companies')).toHaveTextContent('a job at one of them gets 5 more points in Recommended, and your best picks count its fit as 5 points higher. It is never a filter: jobs at other companies still show.');
+    // The factor of your own actions no longer counts them (they have their own rule).
+    expect(container.querySelector('[data-factor="affinity"]')).not.toHaveTextContent(/compan/i);
     const goal = (key: string) => container.querySelector(`[data-goal="${key}"]`) as HTMLElement;
     for (const [key, points] of [['more_senior', 6], ['management', 6], ['higher_pay', 6], ['flexibility', 4]] as const) {
       expect(within(goal(key)).getByText(`+${points} points`)).toBeInTheDocument();
     }
     expect(container.querySelectorAll('[data-goal]')).toHaveLength(4);
     expect(screen.getByText('Other goals do not change the order.')).toBeInTheDocument();
-    // The heading and the note match what is on the page: four rules, and goals.
-    expect(container.querySelectorAll('[data-rule]')).toHaveLength(4);
+    // The heading and the note match what is on the page: five rules, and goals.
+    expect(container.querySelectorAll('[data-rule]')).toHaveLength(5);
     expect(screen.getByRole('heading', { name: 'More rules' })).toBeInTheDocument();
     expect(screen.getByText(/The rules and goals below add points to that score, take points away, or move jobs within the list\./)).toBeInTheDocument();
     // The exploration slot is not built and is not on the page.
@@ -549,12 +555,12 @@ describe('/help/ranking', () => {
   it('GoApply: no sponsorship rule and no career-goal block (neither is asked there); the other rules stay (D5)', () => {
     const { container } = renderMarketing(<RankingPage />, { brand: 'goapply' });
     expect(container.querySelector('[data-rule="sponsorship_first"]')).toBeNull();
-    for (const key of ['skills_boost', 'wrong_title', 'seen_skipped']) expect(container.querySelector(`[data-rule="${key}"]`), key).not.toBeNull();
+    for (const key of ['skills_boost', 'target_companies', 'wrong_title', 'seen_skipped']) expect(container.querySelector(`[data-rule="${key}"]`), key).not.toBeNull();
     expect(container.querySelector('[data-ranking-same-role]')).not.toBeNull();
     expect(container.querySelectorAll('[data-goal]')).toHaveLength(0);
     expect(screen.queryByText(/career goal/)).toBeNull();
-    // Three rules on the page: the heading is plural, and the note mentions no goals.
-    expect(container.querySelectorAll('[data-rule]')).toHaveLength(3);
+    // Four rules on the page: the heading is plural, and the note mentions no goals.
+    expect(container.querySelectorAll('[data-rule]')).toHaveLength(4);
     expect(screen.getByRole('heading', { name: 'More rules' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'One more rule' })).toBeNull();
     expect(screen.getByText('Each job gets a ranking score out of 100 from the four factors. The rules below add points to that score or take points away.')).toBeInTheDocument();

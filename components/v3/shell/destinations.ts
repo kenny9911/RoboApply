@@ -50,6 +50,12 @@
 // prep, Profile, Settings, Admin) carry no flag on either brand, so the rail
 // never flickers for them.
 //
+// Pay check (/pay; 薪资参考 on GoApply) heads the lower group on both brands.
+// It reads the job posts (what they state about pay for a title), so it
+// carries `jobs.feed`: where the feed is off (GoApply with
+// CN_RECRUITMENT_INFO_MODE=off) it has no entry (R-04), like the job page's
+// "See what postings pay for this title" link.
+//
 // AGENT-DRIVEN IA (docs/agent-driven/REDESIGN.md §3) in the resume.io layout
 // (docs/resume-io/TEARDOWN.md). Dashboard is the first entry on both brands,
 // so it is the signed-in home (`homeHref`); it carries the agent desk that the
@@ -79,6 +85,7 @@ import {
   IconFile,
   IconGift,
   IconHome,
+  IconPayRange,
   IconPerson,
   IconPuzzle,
   IconSearch,
@@ -140,7 +147,8 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { id: 'applications', href: '/applications', labelKey: 'applications', icon: IconStack, group: 'top', brands: RA, flag: null, badge: 'applications', mobile: 3, ready: true, match: matchApplications },
   { id: 'resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: RA, flag: null, badge: null, mobile: 4, ready: true, match: under('/resume') },
   { id: 'practice', href: '/practice', labelKey: 'practice', icon: IconSparkle, group: 'top', brands: RA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/practice') },
-  // ── RoboApply · lower ─────────────────────────────────────────────────
+  // ── RoboApply · lower (Pay check · Coaching · Invite friends · Get the extension · Profile · Settings · Admin) ──
+  { id: 'pay', href: '/pay', labelKey: 'pay', icon: IconPayRange, group: 'lower', brands: RA, flag: 'jobs.feed', badge: null, mobile: 'more', ready: true, match: under('/pay') },
   { id: 'coaching', href: '/coaching', labelKey: 'coaching', icon: IconTarget, group: 'lower', brands: RA, flag: 'coaching', badge: null, mobile: 'more', ready: true, gate: 'coachRoster', match: under('/coaching') },
   { id: 'invite', href: '/invite', labelKey: 'invite', icon: IconGift, group: 'lower', brands: RA, flag: 'invites', badge: null, mobile: 'more', ready: true, gate: 'invitesLive', match: under('/invite') },
   { id: 'extension', href: '/extension', labelKey: 'extension', icon: IconPuzzle, group: 'lower', brands: RA, flag: 'extension', badge: null, mobile: null, ready: true, gate: 'extensionPublished', match: under('/extension') },
@@ -155,7 +163,8 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { id: 'cn.applications', href: '/applications', labelKey: 'cn_applications', mobileLabelKey: 'cn_applications_short', icon: IconStack, group: 'top', brands: GA, flag: null, badge: 'applications', mobile: 4, ready: true, match: matchApplications },
   { id: 'cn.resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: GA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/resume') },
   { id: 'cn.practice', href: '/practice', labelKey: 'cn_practice', mobileLabelKey: 'cn_practice_short', icon: IconSparkle, group: 'top', brands: GA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/practice') },
-  // ── GoApply · lower (求职辅导 · 内推 · 邀请好友 · 浏览器插件 · 我的资料 · 设置 · 会员 badge) ──
+  // ── GoApply · lower (薪资参考 · 求职辅导 · 内推 · 邀请好友 · 浏览器插件 · 我的资料 · 设置 · 会员 badge) ──
+  { id: 'cn.pay', href: '/pay', labelKey: 'pay', icon: IconPayRange, group: 'lower', brands: GA, flag: 'jobs.feed', badge: null, mobile: 'more', ready: true, match: under('/pay') },
   { id: 'cn.coaching', href: '/coaching', labelKey: 'coaching', icon: IconTarget, group: 'lower', brands: GA, flag: 'coaching', badge: null, mobile: 'more', ready: true, gate: 'coachRoster', match: under('/coaching') },
   { id: 'cn.referrals', href: '/referrals', labelKey: 'cn_referrals', icon: IconUsers, group: 'lower', brands: GA, flag: 'cn.referralCodes', badge: null, mobile: 'more', ready: true, match: under('/referrals') },
   { id: 'cn.invite', href: '/invite', labelKey: 'invite', icon: IconGift, group: 'lower', brands: GA, flag: 'invites', badge: null, mobile: 'more', ready: true, gate: 'invitesLive', match: under('/invite') },

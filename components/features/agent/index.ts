@@ -8,6 +8,8 @@
 //   AnswersEditor    the answer bank editor (also reachable from the profile via /ready/setup#answers)
 //   ReadySearchCard  the search the weekly list comes from (F-FILT-07 question)
 //   PrepareApplicationButton  one tap from a job to a kit being prepared (Today, job cards)
+//   AutoPrepareSetting / AutoPrepareState  "Prepare my weekly list automatically": the opt-in
+//                    (cost stated first) and what it did (Getting ready, the Dashboard's lane)
 
 export { ReadyPage, ReadyUnavailable } from './ReadyPage';
 export { ReadyIntro, type ReadyIntroProps } from './ReadyIntro';
@@ -15,6 +17,8 @@ export { SetupWizard, initialStep, wizardSteps, type WizardStep } from './SetupW
 export { KitReview, type KitReviewProps } from './KitReview';
 export { KitRow, type KitRowProps } from './KitRow';
 export { KitAllowance } from './KitAllowance';
+export { AutoPrepareSetting, autoPrepareCostLines, autoPrepareLeft } from './AutoPrepareSetting';
+export { AutoPrepareState, type AutoPrepareStateProps } from './AutoPrepareState';
 export { PrepareSheet, CostLine, noTailorKey, type PrepareSheetProps } from './PrepareSheet';
 export { PrepareApplicationButton, placeOf, type PrepareApplicationButtonProps, type PreparedPlace } from './PrepareApplicationButton';
 export { ReadySearchCard, type ReadySearchCardProps } from './ReadySearchCard';

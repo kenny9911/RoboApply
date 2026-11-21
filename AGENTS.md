@@ -125,9 +125,12 @@ The resume.io clone and the agent-driven redesign are merged (PR #17,
 2026-11-13). The design system is now Desk (`docs/design-system.md`; teardown in
 `docs/resume-io/TEARDOWN.md`), the signed-in home is `/dashboard` (`/today` and
 `/home` redirect to it), and "Ready to apply" is the Getting ready view of
-Applications (`docs/agent-driven/REDESIGN.md`, §11 for how the two meet). The
-product still never submits an application (R1/D1). Preview the UI without a
-backend: `node scripts/design-preview.mjs` (port 3612).
+Applications (`docs/agent-driven/REDESIGN.md`, §11 for how the two meet). PR #18
+(2026-11-18) added the opt-in weekly auto-prepare, first-class target companies
+and the `/pay` pay check; PR #15 added the visit record and the
+`/admin/visitors` report. The product still never submits an application
+(R1/D1). Preview the UI without a backend: `node scripts/design-preview.mjs`
+(port 3612).
 
 ## Verification
 

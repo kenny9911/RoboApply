@@ -26,8 +26,20 @@ interface EventDefinition {
 }
 
 export const PRODUCT_EVENTS = {
-  // Navigation
-  page_viewed: { props: ['referrerHost', 'locale'] },
+  // Navigation. The entry parameters of the URL (`utm_*`, `from`) ride along
+  // when the page was opened with them: they feed the visitor record
+  // (visitors.ts) and are campaign labels, never anything a person typed.
+  page_viewed: { props: ['referrerHost', 'locale', 'utmSource', 'utmMedium', 'utmCampaign', 'from'] },
+  // Sent once when a visitor answers "Allow" on the consent banner after pages
+  // of this visit were already counted without an id: how this visit began
+  // (its first page is the event's path) and how many pages those were, so
+  // the visitor record starts with its real source. Only this page load's own
+  // entry; nothing from earlier visits.
+  visit_entry: { props: ['referrerHost', 'locale', 'utmSource', 'utmMedium', 'utmCampaign', 'pages'] },
+  // Sign-up and sign-in (visitor conversion): the form was submitted or a
+  // provider was chosen. The account itself is never an event the client
+  // sends; the server reads it from the account's creation time.
+  signup_started: { props: ['method', 'mode'] },
   // Onboarding (PRODUCT_PLAN.md §4.1)
   onboarding_step_viewed: { props: ['stage', 'branch'] },
   onboarding_step_completed: { props: ['stage', 'durationMs', 'skipped', 'branch'] },

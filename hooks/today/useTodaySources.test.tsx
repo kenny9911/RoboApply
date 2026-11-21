@@ -17,6 +17,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const h = vi.hoisted(() => ({
   caps: vi.fn(),
   queue: vi.fn(),
+  autoPrepare: vi.fn(),
   suggestions: vi.fn(),
   feed: vi.fn(),
   skills: vi.fn(),
@@ -29,7 +30,11 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('../../lib/flags', () => ({ useCapabilities: () => h.caps() }));
-vi.mock('../agent', () => ({ useReadyQueue: (o: unknown) => h.queue(o), useSuggestions: (o: unknown) => h.suggestions(o) }));
+vi.mock('../agent', () => ({
+  useReadyQueue: (o: unknown) => h.queue(o),
+  useSuggestions: (o: unknown) => h.suggestions(o),
+  useAutoPrepare: (o: unknown) => h.autoPrepare(o),
+}));
 vi.mock('../feed/useFeed', () => ({ useFeed: (p: unknown) => h.feed(p) }));
 vi.mock('../feed/useCalibration', () => ({ useSkillsCheckData: (enabled: boolean) => h.skills(enabled) }));
 vi.mock('../onboarding/useOnboarding', () => ({ useOnboardingState: (o: unknown) => h.onboarding(o) }));
@@ -53,6 +58,7 @@ const flags = (on: Record<string, boolean>) => ({ status: 'ready', brand: null, 
 const feedState = (over: Record<string, unknown> = {}) => ({ items: [], isPending: true, isError: false, error: null, refetch: vi.fn(), ...over });
 const feedItem = (jobId: string) => ({ jobId, title: jobId });
 const PROFILE = { id: 'sp1', version: 4, filters: { fitTier: 'good' } };
+const AUTO_OFF = { on: false, since: null, lastRun: null, aiAvailable: true };
 
 let client: QueryClient;
 function wrapper({ children }: { children: ReactNode }) {
@@ -65,6 +71,7 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   h.caps.mockReturnValue(flags({ agent: true, copilot: true, 'jobs.feed': true }));
   h.queue.mockReturnValue(answered({ items: [] }));
+  h.autoPrepare.mockReturnValue(answered(AUTO_OFF));
   h.suggestions.mockReturnValue(answered({ items: [] }));
   h.feed.mockReturnValue(feedState());
   h.skills.mockReturnValue(answered({ skills: [] }));
@@ -87,6 +94,9 @@ describe('useTodaySources: what is asked, by capability', () => {
     expect(result.current.picksFrom).toBe('suggestions');
     expect(valueOf(result.current.picks)?.map((p) => p.jobId)).toEqual(['a', 'b', 'c']);
     expect(result.current.queue).toEqual({ status: 'ready', data: [] });
+    // "Prepare my weekly list automatically" is read with the list (the Applications lane says what it did).
+    expect(h.autoPrepare).toHaveBeenLastCalledWith({ enabled: true });
+    expect(result.current.autoPrepare).toEqual({ status: 'ready', data: AUTO_OFF });
     await waitFor(() => expect(result.current.newJobs).toEqual({ status: 'ready', data: { count: 7, since: '2026-11-09T08:00:00.000Z', capped: false } }));
     // Reading the count is not a visit to Jobs.
     expect(h.getNewCount).toHaveBeenCalledWith(undefined, expect.anything());
@@ -98,8 +108,10 @@ describe('useTodaySources: what is asked, by capability', () => {
     const { result } = sources();
     expect(h.queue).toHaveBeenLastCalledWith({ enabled: false });
     expect(h.suggestions).toHaveBeenLastCalledWith({ enabled: false, limit: 3 });
+    expect(h.autoPrepare).toHaveBeenLastCalledWith({ enabled: false });
     await waitFor(() => expect(h.feed).toHaveBeenLastCalledWith({ searchProfileId: 'sp1', version: 4, sort: 'recommended', fitTier: 'good', visit: false, enabled: true }));
     expect(result.current.queue).toEqual({ status: 'off' });
+    expect(result.current.autoPrepare).toEqual({ status: 'off' });
     expect(result.current.picksFrom).toBe('feed');
     expect(valueOf(result.current.picks)?.map((p) => p.jobId)).toEqual(['a', 'b', 'c']);
     expect(result.current.flags).toMatchObject({ agent: false, copilot: false });
@@ -143,6 +155,8 @@ describe('useTodaySources: what is asked, by capability', () => {
     expect(h.getNewCount).not.toHaveBeenCalled();
     expect(result.current.flags).toEqual({ ready: false, agent: false, copilot: false, feed: false });
     expect(result.current.queue).toEqual({ status: 'loading' });
+    expect(result.current.autoPrepare).toEqual({ status: 'loading' });
+    expect(h.autoPrepare).toHaveBeenLastCalledWith({ enabled: false });
     expect(result.current.picks).toEqual({ status: 'loading' });
     expect(result.current.newJobs).toEqual({ status: 'loading' });
     expect(result.current.picksFrom).toBeNull();
@@ -251,10 +265,12 @@ describe('useTodaySources: each read on its own', () => {
     h.profile.mockReturnValue(answered({ completeness: 80 }));
     h.onboarding.mockReturnValue(answered({ completed: true }));
     h.queue.mockReturnValue(answered({}));
+    h.autoPrepare.mockReturnValue(answered({ lastRun: null }));
     const { result } = sources();
     expect(result.current.profileMissing.status).toBe('error');
     expect(result.current.setupStepsLeft.status).toBe('error');
     expect(result.current.queue.status).toBe('error');
+    expect(result.current.autoPrepare.status).toBe('error');
   });
 
   it('the new-jobs count failing is an error; the lane shows "—" for it', async () => {

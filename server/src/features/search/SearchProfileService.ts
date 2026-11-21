@@ -14,6 +14,12 @@
 //     (Free 1, Pro 10); profiles imported from legacy saved searches are kept
 //     even above the cap;
 //   - `alertInstantMax` may not exceed the `instant_alerts` entitlement.
+//
+// "Companies you want to work at" (`setTargetCompany`, targetCompanies.ts):
+// one company on or off the ACTIVE search's `preferredCompanies` list, the
+// job page's control. It goes through `update` (the same version guard and the
+// same strict parse); on a concurrent write it reads the search again and
+// applies the one change once more.
 
 import type { ExtendedPrismaClient, ExtendedTransactionClient } from '../../lib/prisma.js';
 import { BRANDS, type Market } from '../../platform/brand/registry.js';
@@ -29,14 +35,18 @@ import { logger } from '../../services/LoggerService.js';
 import { HttpError } from '../../platform/http.js';
 import {
   ALERT_INSTANT_OPTIONS,
+  COMPANY_LIST_MAX,
   FILTER_SET_SCHEMA_VERSION,
   type FilterSet,
   type FilterSetPatch,
   type SearchProfileListWire,
   type SearchProfileWire,
+  type SetTargetCompanyBody,
+  type SetTargetCompanyResponse,
 } from './contract.js';
 import { coerceFilterSet, mergeFilterSet, parseFilterSet, parseFilterSetPatch, type FilterIssue } from './filterSet.js';
 import { buildLegacyProfiles } from './legacyMigration.js';
+import { withTargetCompany } from './targetCompanies.js';
 
 // ── Errors ─────────────────────────────────────────────────────────────────
 
@@ -362,6 +372,20 @@ export function createSearchProfileService(deps: SearchProfileServiceDeps = {}) 
     return toWire(row, market);
   }
 
+  /**
+   * The filters of the profile the feed uses now (active, else default, else
+   * the oldest), read for `market` in ONE query and with no migration: null
+   * when the user has no saved search yet. For a reader on a hot path that
+   * only looks (the job page's "On your list of companies"); a writer uses
+   * `getActive`.
+   */
+  async function activeFilters(userId: string, market: Market): Promise<FilterSet | null> {
+    const rows = await rowsFor(await getDb(), userId);
+    if (!rows.length) return null;
+    const row = rows.find((r) => r.isActive) ?? rows.find((r) => r.isDefault) ?? sortProfiles(rows)[0];
+    return coerceFilterSet(row.filters, { market }).value;
+  }
+
   async function create(userId: string, input: CreateProfileInput): Promise<SearchProfileWire> {
     const { ent, market, currency } = await context(userId);
     const filters = validateFilters(input.filters, market);
@@ -439,6 +463,33 @@ export function createSearchProfileService(deps: SearchProfileServiceDeps = {}) 
     return update(userId, id, { version, filtersPatch: patch });
   }
 
+  /**
+   * Put `company` on the active search's "Companies you want to work at"
+   * list, or take it off (contract `SetTargetCompanyBodySchema`;
+   * targetCompanies.ts compares names). The change is applied to the search
+   * as it is now: when another write lands first (409), the search is read
+   * again and the one change applied once more (three tries in all). A list
+   * that already says so is not written. Adding to a full list refuses with
+   * InvalidFiltersError (422 invalid_filters), as the drawer's save would.
+   */
+  async function setTargetCompany(userId: string, input: SetTargetCompanyBody): Promise<SetTargetCompanyResponse> {
+    for (let attempt = 0; ; attempt++) {
+      const active = await getActive(userId);
+      const next = withTargetCompany(active.filters.preferredCompanies, input.company, input.on);
+      if (!next.changed) return { profile: active, on: input.on };
+      if (next.list.length > COMPANY_LIST_MAX) {
+        throw new InvalidFiltersError([{ path: 'preferredCompanies', message: `at most ${COMPANY_LIST_MAX} companies` }]);
+      }
+      try {
+        const profile = await update(userId, active.id, { version: active.version, filtersPatch: { preferredCompanies: next.list.length ? next.list : null } });
+        return { profile, on: input.on };
+      } catch (err) {
+        if (err instanceof VersionConflictError && attempt < 2) continue;
+        throw err;
+      }
+    }
+  }
+
   async function setDefault(userId: string, id: string): Promise<SearchProfileWire> {
     const { market } = await context(userId);
     const db = await getDb();
@@ -491,7 +542,7 @@ export function createSearchProfileService(deps: SearchProfileServiceDeps = {}) 
     });
   }
 
-  return { list, get, getActive, findById, create, update, patchFilters, setDefault, activate, remove };
+  return { list, get, getActive, activeFilters, findById, create, update, patchFilters, setTargetCompany, setDefault, activate, remove };
 }
 
 export type SearchProfileService = ReturnType<typeof createSearchProfileService>;

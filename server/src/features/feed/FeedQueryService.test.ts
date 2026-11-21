@@ -2822,3 +2822,73 @@ describe("the reader's list on the cards (docs/agent-driven/REDESIGN.md §9)", (
     expect(repo.applicationReads).toEqual([]);
   });
 });
+
+// docs/agent-driven/REDESIGN.md §8 scenario 4: "Companies you want to work at" (the search's preferredCompanies)
+// favour the agent's picks and the Recommended order by a bounded amount, and the cards say so; nothing is filtered.
+describe('companies you want to work at (target companies)', () => {
+  /** Three twins (same posting facts and date) at Acme, Globex and Hooli; their AI scores put them at 81.5, 83.5 and 91.5 on the ranking scale. */
+  function twins() {
+    seed(3);
+    const at = new Date(NOW.getTime() - 3_600_000);
+    const companies = ['Acme', 'Globex', 'Hooli'];
+    repo.rows.forEach((r, i) => Object.assign(r, { postedAt: at, firstSeenAt: at, companyName: companies[i], companyNameNormalized: companies[i]!.toLowerCase() }));
+    repo.ai.set('j000', { score: 80, tier: 'great' });
+    repo.ai.set('j001', { score: 84, tier: 'great' });
+    repo.ai.set('j002', { score: 100, tier: 'great' });
+  }
+
+  it('the picks (Best fit with favorTargetCompanies): the listed job reads 5 points higher, and only its card says so', async () => {
+    twins();
+    profileFilters = { taxonomyIds: ['backend_engineer'], preferredCompanies: ['Acme Inc.'] };
+    const picks = await service().preview(ctx(), { sort: 'best_fit', limit: 3, favorTargetCompanies: true });
+    // 81.5 + 5 passes Globex's 83.5; Hooli's 91.5 stays ahead.
+    expect(picks.map((i) => i.jobId)).toEqual(['j002', 'j000', 'j001']);
+    expect(picks.map((i) => i.atTargetCompany === true)).toEqual([false, true, false]);
+    expect(picks.filter((i) => i.jobId !== 'j000').every((i) => !('atTargetCompany' in i))).toBe(true);
+    // The card keeps the job's own score: the points order the picks and are never shown.
+    expect(picks.find((i) => i.jobId === 'j000')!.fit).toMatchObject({ kind: 'ai', score: 80 });
+    // The Best fit order other readers ask for (no option): the fit alone; the card still names the list.
+    const bestFit = await service().preview(ctx(), { sort: 'best_fit', limit: 3 });
+    expect(bestFit.map((i) => i.jobId)).toEqual(['j002', 'j001', 'j000']);
+    expect(bestFit.find((i) => i.jobId === 'j000')!.atTargetCompany).toBe(true);
+    // A search without the list: the option changes nothing and no card carries the note.
+    profileFilters = { taxonomyIds: ['backend_engineer'] };
+    const plain = await service().preview(ctx(), { sort: 'best_fit', limit: 3, favorTargetCompanies: true });
+    expect(plain.map((i) => i.jobId)).toEqual(['j002', 'j001', 'j000']);
+    expect(plain.some((i) => 'atTargetCompany' in i)).toBe(false);
+  });
+
+  it('the list the picks read is the one of the filters they are read with (a list built with other filters)', async () => {
+    twins();
+    profileFilters = { taxonomyIds: ['backend_engineer'] };
+    const picks = await service().preview(ctx(), { sort: 'best_fit', limit: 3, favorTargetCompanies: true, filters: { preferredCompanies: ['Globex'] } });
+    expect(picks.map((i) => i.jobId)).toEqual(['j002', 'j001', 'j000']);
+    expect(picks.filter((i) => i.atTargetCompany).map((i) => i.jobId)).toEqual(['j001']);
+  });
+
+  it('Recommended on /jobs: exactly 5 more rank points for the listed job, the note on its card, and the same jobs listed', async () => {
+    twins();
+    profileFilters = { taxonomyIds: ['backend_engineer'], preferredCompanies: ['Acme'] };
+    const res = await service().query(ctx(), { sort: 'recommended' });
+    expect(res.items.map((i) => i.jobId)).toEqual(['j002', 'j000', 'j001']);
+    expect(res.items.filter((i) => i.atTargetCompany).map((i) => i.jobId)).toEqual(['j000']);
+    const ranks = Object.fromEntries((repo.sessions.get(res.sessionId)!.ranks as Array<{ jobId: string; rank: number }>).map((r) => [r.jobId, r.rank]));
+    const rc = { now: NOW, affinity: EMPTY_AFFINITY, preferredCompanyKeys: new Set<string>(), goal: { goal: null, filters: {} } };
+    expect(ranks.j000! - recommendedRank(repo.rows[0]!, 81.5, rc)).toBeCloseTo(5, 6);
+    expect(ranks.j001).toBe(recommendedRank(repo.rows[1]!, 83.5, rc));
+
+    profileFilters = { taxonomyIds: ['backend_engineer'] };
+    const plain = await service().query(ctx(), { sort: 'recommended' });
+    expect(plain.items.map((i) => i.jobId)).toEqual(['j002', 'j001', 'j000']);
+    expect(plain.items.some((i) => 'atTargetCompany' in i)).toBe(false);
+  });
+
+  it('a list that is not personalised is by date: no points, but the card still names the reader’s own list', async () => {
+    twins();
+    personalized = false;
+    profileFilters = { taxonomyIds: ['backend_engineer'], preferredCompanies: ['Acme'] };
+    const res = await service().query(ctx(), { sort: 'recommended' });
+    expect(res.order).toBe('recency');
+    expect(res.items.filter((i) => i.atTargetCompany).map((i) => i.jobId)).toEqual(['j000']);
+  });
+});

@@ -78,6 +78,8 @@ const ROUTES: Array<[string, string]> = [
   ['POST', '/list/generate'],
   ['POST', '/search/save-to-main'],
   ['GET', '/badge'],
+  ['GET', '/auto-prepare'],
+  ['PUT', '/auto-prepare'],
   ['GET', '/queue'],
   ['POST', '/queue'],
   ['POST', '/queue/prepare'],
@@ -225,6 +227,44 @@ describe('agent router: endpoints', () => {
     const sug = await h.request<Env<{ items: unknown[] }>>('GET', `${BASE}/suggestions?limit=3`, { host: RA });
     expect(sug.body.data.items).toEqual([]); // both already in the list
     expect((await h.request('GET', `${BASE}/suggestions?limit=99`, { host: RA })).status).toBe(422);
+  });
+
+  it('"Prepare my weekly list automatically": off by default, switched by the user, a bad body is 422, a list on demand reports its run', async () => {
+    // The user's UI values live across requests (the service is built per request here).
+    const ui: Record<string, unknown> = {};
+    state.overrides = {
+      feedPreview: async () => [feedItem('j1', 'great'), feedItem('j2', 'good')],
+      uiValues: async () => ({ ...ui }),
+      saveUiValues: async (_u, values) => {
+        for (const [k, v] of Object.entries(values)) {
+          if (v === null) delete ui[k];
+          else ui[k] = v;
+        }
+        return { ...ui };
+      },
+    };
+    type V = { on: boolean; since: string | null; lastRun: { started: number; left: number; stoppedBy: string | null; thisWeek: boolean } | null };
+    const get = await h.request<Env<V>>('GET', `${BASE}/auto-prepare`, { host: RA });
+    expect(get.status).toBe(200);
+    expect(get.body.data).toEqual({ on: false, since: null, lastRun: null, aiAvailable: true });
+    expect((await h.request('PUT', `${BASE}/auto-prepare`, { host: RA, body: {} })).status).toBe(422);
+    expect((await h.request('PUT', `${BASE}/auto-prepare`, { host: RA, body: { on: 'yes' } })).status).toBe(422);
+    expect(ui).toEqual({});
+    const on = await h.request<Env<V>>('PUT', `${BASE}/auto-prepare`, { host: RA, body: { on: true } });
+    expect(on.status).toBe(200);
+    expect(on.body.data).toMatchObject({ on: true, since: expect.any(String), lastRun: null });
+    const gen = await h.request<Env<{ added: number; autoPrepared: { started: string[]; left: number; stoppedBy: string | null }; items: Array<{ state: string }> }>>(
+      'POST',
+      `${BASE}/list/generate`,
+      { host: RA, body: {} },
+    );
+    expect(gen.body.data).toMatchObject({ added: 2, autoPrepared: { left: 0, stoppedBy: null } });
+    expect(gen.body.data.autoPrepared.started).toHaveLength(2);
+    expect(gen.body.data.items.map((i) => i.state)).toEqual(['preparing', 'preparing']);
+    expect((await h.request<Env<V>>('GET', `${BASE}/auto-prepare`, { host: RA })).body.data.lastRun).toMatchObject({ started: 2, left: 0, stoppedBy: null, thisWeek: true });
+    // Off: later lists are not prepared; the run that happened is still reported.
+    const off = await h.request<Env<V>>('PUT', `${BASE}/auto-prepare`, { host: RA, body: { on: false } });
+    expect(off.body.data).toMatchObject({ on: false, since: null, lastRun: { started: 2 } });
   });
 
   it('answer bank: questions, put, delete; unknown keys are 422', async () => {

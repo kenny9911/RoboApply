@@ -24,6 +24,7 @@ import {
   PrepareBatchBodySchema,
   PrepareBodySchema,
   PutAgentSettingsBodySchema,
+  PutAutoPrepareBodySchema,
   PutAnswersBodySchema,
   QueueItemParamsSchema,
   QueueListQuerySchema,
@@ -90,6 +91,10 @@ export function createAgentRouter(deps: FeatureRouterDeps = {}, options: AgentRo
   );
   router.post('/search/save-to-main', ...auth, on, agentRoute(async (req) => svc().saveToMain(requireUserId(req), parseBody(req, SaveToMainBodySchema))));
   router.get('/badge', ...auth, on, agentRoute(async (req) => svc().badge(requireUserId(req))));
+
+  // "Prepare my weekly list automatically" (REDESIGN §9): the user's opt-in, off by default, and the latest run.
+  router.get('/auto-prepare', ...auth, on, agentRoute(async (req) => svc().getAutoPrepare(requireUserId(req))));
+  router.put('/auto-prepare', ...auth, on, agentRoute(async (req) => svc().setAutoPrepare(requireUserId(req), parseBody(req, PutAutoPrepareBodySchema))));
 
   // Queue (F-AGENT-04/05/08/10/11)
   router.get('/queue', ...auth, on, agentRoute(async (req) => svc().listQueue(requireUserId(req), parseQuery(req, QueueListQuerySchema))));

@@ -55,6 +55,10 @@
 // `application` (split view only): the job's place on the person's list as
 // the list's card knows it (`FeedItem.application`), so "Prepare application"
 // says "Being prepared" or "Check and open" up front, like the card beside it.
+//
+// Under the company and title, TargetCompanyToggle adds the company to the
+// search's "Companies you want to work at" or takes it off (the server's
+// `atTargetCompany`; nothing shows when it sent none).
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -83,8 +87,10 @@ import { ApplyInterceptSheet } from './ApplyInterceptSheet';
 import { GetReadyChecklist } from './GetReadyChecklist';
 import { JobHeader, JobHeaderActions } from './JobHeader';
 import { JobOverview } from './JobOverview';
+import { PayCheckLink } from './PayCheckLink';
 import { PeopleTab } from './PeopleTab';
 import { SimilarJobs, jobDetailHref } from './SimilarJobs';
+import { TargetCompanyToggle } from './TargetCompanyToggle';
 import { payLine, shareDescription, validDate } from './format';
 import styles from './job.module.css';
 
@@ -394,7 +400,14 @@ function Loaded({
           path={jobDetailHref(job.id)}
         />
       ) : null}
-      <JobHeader detail={detail} mode={mode} onClose={onClose} actions={headerActions} />
+      <JobHeader
+        detail={detail}
+        mode={mode}
+        onClose={onClose}
+        actions={headerActions}
+        // "Companies you want to work at": add this company to the search's list, or take it off (REDESIGN §8 scenario 4).
+        companyLine={<TargetCompanyToggle jobId={job.id} company={company.name || job.companyName} on={detail.atTargetCompany} />}
+      />
 
       {!open ? (
         <section className={styles.notice} role="status" data-testid="job-closed">
@@ -418,6 +431,8 @@ function Loaded({
       <div className={styles.layout}>
         <div className={styles.main}>
           {metaAboveTabs ? <MarketJobMeta jobId={job.id} meta={withListing(withOwnImport(detail.marketMeta, ownImport), listing)} variant="detail" /> : null}
+          {/* The market block prints the pay here in place of the header: the pay check link goes under it. */}
+          {metaAboveTabs ? <PayCheckLink job={job} variant="line" /> : null}
           <Tabs ariaLabel={t('tabs.label')} idBase={idBase} tabs={tabs} value={tab} onChange={setTab} />
           <div {...tabPanelProps(idBase, 'overview')} hidden={tab !== 'overview'}>
             {tab === 'overview' ? <JobOverview detail={detail} marketMeta={!metaAboveTabs} /> : null}

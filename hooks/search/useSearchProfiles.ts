@@ -8,6 +8,8 @@
 //   useUpdateSearchProfile()     PATCH with baseVersion (filters | filtersPatch | name | alerts | makeDefault)
 //   useDeleteSearchProfile()     DELETE
 //   useActivateSearchProfile()   POST /:id/activate
+//   useSetTargetCompany()        POST /target-companies (one company on or off
+//                                the active search's "Companies you want to work at")
 //
 // Every write reseeds the list. The legacy preferences query (GET
 // /v2/preferences projects the ACTIVE profile's filters) is invalidated only
@@ -26,7 +28,9 @@ import {
   createSearchProfile,
   deleteSearchProfile,
   listSearchProfiles,
+  setTargetCompany,
   updateSearchProfile,
+  type SetTargetCompanyBody,
   type UpdateSearchProfileBody,
 } from '../../lib/api/search';
 import { apiErrorCode, apiErrorDetails } from '../../lib/api/contracts/wire';
@@ -108,7 +112,9 @@ export type SearchProfileWrite =
   | { kind: 'create'; profile: SearchProfile }
   | { kind: 'update'; profile: SearchProfile; body: UpdateSearchProfileBody }
   | { kind: 'delete'; wasActive: boolean }
-  | { kind: 'activate' };
+  | { kind: 'activate' }
+  /** "Companies you want to work at" changed on the active search (`useSetTargetCompany`). */
+  | { kind: 'targets'; profile: SearchProfile };
 
 /**
  * Whether a write can change what GET /v2/preferences returns (the active
@@ -124,6 +130,9 @@ export function changesPreferencesProjection(write: SearchProfileWrite): boolean
       return write.wasActive;
     case 'update':
       return write.profile.isActive && (write.body.filters !== undefined || write.body.filtersPatch !== undefined);
+    case 'targets':
+      // The projection's `targetCompanies` is this list.
+      return write.profile.isActive;
   }
 }
 
@@ -177,6 +186,24 @@ export function useDeleteSearchProfile() {
       const wasActive = before ? before.profiles.some((p) => p.id === id && p.isActive) : true;
       qc.setQueryData<SearchProfileList>(searchKeys.profiles(), (prev) => (prev ? { ...prev, profiles: prev.profiles.filter((p) => p.id !== id) } : prev));
       afterWrite(qc, { kind: 'delete', wasActive });
+    },
+  });
+}
+
+/**
+ * Put a company on the active search's "Companies you want to work at", or
+ * take it off (the job page). The server compares names as the Jobs cards do
+ * and answers the search after the change; it goes into the list like any
+ * other write, so the Jobs list (whose key carries the version) and the
+ * Dashboard's picks are read again. `on` in the answer is the new state.
+ */
+export function useSetTargetCompany() {
+  const qc = useQueryClient();
+  return useMutation<S.SetTargetCompanyResponse, Error, SetTargetCompanyBody>({
+    mutationFn: (body) => setTargetCompany(body),
+    onSuccess: (res) => {
+      upsertProfile(qc, res.profile);
+      afterWrite(qc, { kind: 'targets', profile: res.profile });
     },
   });
 }

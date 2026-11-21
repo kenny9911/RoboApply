@@ -12,4 +12,6 @@ export const agentKeys = {
   suggestions: (limit?: number) => (limit === undefined ? (['agent', 'suggestions'] as const) : (['agent', 'suggestions', limit] as const)),
   answers: () => ['agent', 'answers'] as const,
   questions: () => ['agent', 'questions'] as const,
+  /** "Prepare my weekly list automatically": the opt-in and its latest run. */
+  autoPrepare: () => ['agent', 'autoPrepare'] as const,
 };

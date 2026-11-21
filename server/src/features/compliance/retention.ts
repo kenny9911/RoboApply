@@ -49,6 +49,7 @@ export type RetentionDb = Pick<
   | 'rAJobInteraction'
   | 'rAFeedSession'
   | 'rAProductEvent'
+  | 'rAVisitor'
   | 'rAApplicationArtifact'
   | 'rAAuthToken'
   | 'rAPhoneOtp'
@@ -299,15 +300,23 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
   },
   {
     id: 'product_events',
-    covers: 'RAProductEvent',
+    // RAVisitor: the visit record built from those events (growth/visitors.ts), counted from the last visit.
+    covers: 'RAProductEvent, RAVisitor',
     keep: keep(13, 'months'),
     enforcedBy: 'compliance-daily',
     run: async (ctx) => {
-      const where = { brand: ctx.brand, createdAt: { lt: retentionCutoff(keep(13, 'months'), ctx.now) } };
-      const deleted = await deleteInBatches(
+      const cutoff = retentionCutoff(keep(13, 'months'), ctx.now);
+      const where = { brand: ctx.brand, createdAt: { lt: cutoff } };
+      let deleted = await deleteInBatches(
         ctx,
         (take) => ctx.db.rAProductEvent.findMany({ where, select: { id: true }, take }),
         (ids) => ctx.db.rAProductEvent.deleteMany({ where: { id: { in: ids } } }),
+      );
+      const stale = { brand: ctx.brand, lastSeenAt: { lt: cutoff } };
+      deleted += await deleteInBatches(
+        ctx,
+        (take) => ctx.db.rAVisitor.findMany({ where: stale, select: { id: true }, take }),
+        (ids) => ctx.db.rAVisitor.deleteMany({ where: { id: { in: ids } } }),
       );
       return { deleted };
     },
@@ -520,7 +529,7 @@ export function retentionScheduleMarkdown(locale: 'en' | 'zh', env: EnvSource = 
     assistant_messages: 'Assistant conversations',
     job_interactions: 'Job views, saves and other interactions',
     feed_impressions: 'Job lists shown to you',
-    product_events: 'Product usage events',
+    product_events: 'Product usage events and visit records',
     closed_accounts: 'Account data after you delete your account',
     soft_deleted_rows: 'Resumes, cover letters, tracked jobs and Assistant memories you delete',
     application_artifacts: 'Copies of files used for applications',
@@ -542,7 +551,7 @@ export function retentionScheduleMarkdown(locale: 'en' | 'zh', env: EnvSource = 
     assistant_messages: '求职助手对话',
     job_interactions: '职位浏览、收藏等操作记录',
     feed_impressions: '向你展示的职位列表',
-    product_events: '产品使用事件',
+    product_events: '产品使用事件和访问记录',
     closed_accounts: '注销账户后的账户数据',
     soft_deleted_rows: '你删除的简历、求职信、跟踪的职位和求职助手记忆',
     application_artifacts: '投递所用文件的副本',
