@@ -1,6 +1,6 @@
 # 10 · Status and roadmap
 
-As of 2026-11-03 (main @ b89d5256); updated 2026-11-21 for PRs #17, #18 and #15, and 2026-11-22 for Pulse, PRs #21 and #22 and the open branches (main @ 62eb63a1).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-21 for PRs #17, #18 and #15, and 2026-11-22 for Pulse, PRs #21 and #22 and the open branches (main @ 62eb63a1); 2026-11-23 for PR #23 (gateway fallbacks and effort).
 
 Where the project stands, what blocks a full launch, and what to work on next. "Verified" means checked against the code or git on 2026-11-03; "doc only" means taken from a plan or carry-over list and not re-checked; "last known (date)" means from the owner's earlier session notes.
 
@@ -33,6 +33,7 @@ Where the project stands, what blocks a full launch, and what to work on next. "
 | 2026-11-13 | **PR #17: resume.io clone with the agent-driven redesign** (also carries PRs #13, #14, #16): Desk design system, `/dashboard` home with the agent desk, Ready to apply folded into Applications (Getting ready · Sent), two-screen resume-first onboarding, one-tap Prepare application, Assistant tools that add to the list and prepare, resume editor tabs, Paper job detail and fit-filter follow-ups | merge `368bf7c7` |
 | 2026-11-18 | **PR #18**: opt-in weekly preparation of the list, first-class target companies in the job search, a `/pay` pay check built from what postings state. **PR #15**: a visit record and the `/admin/visitors` report of visitors and sign-ups, privacy-notice updates (its docs say schema SCHEMA-9 was applied to the production database) | merges `7d882cf1`, `5a9ee9dd` |
 | 2026-11-22 | **PR #20: Pulse**, RoboApply's own design system, replaces Desk (`feat/brand-pulse`). **PR #21**: `next` 16.4.5 for the 2026-11-03 security release (seven moderate advisories). **PR #22**: the LLM gateway, `/admin/llm` (named provider entries and a model per functionality area; see [06](06-ai-and-llm-stack.md)) | merges `f92c735e`, `35e39bb6`, `1780ea4c`, `62eb63a1` |
+| 2026-11-23 | **PR #23**: LLM gateway areas get up to three fallback models and a reasoning effort (Medium unless set); an unassigned area runs on the Default area; models resolve from the gateway first, then env, with no model chosen in code (the hard-coded auto-fallback list became `LLM_AUTO_FALLBACK_MODELS`) | `feat/llm-gateway-fallbacks` |
 
 PR numbers after #5 are not in the commit messages: the branches were merged locally with plain `git merge` and pushed, and GitHub then marked the PRs merged (all on 2026-10-31): #6 prep brief must-haves as a list, #7 `google/gemini-3.8-flash` with the Gemini thinking reserve (opened 2026-10-13), #8 admin view-as, #9 AI-first resume hub, #10 Paper design system, #11 Next 16.4.1 security. Checked with `gh pr list --state all` on 2026-11-03.
 
