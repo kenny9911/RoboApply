@@ -63,6 +63,8 @@ The app runs the **Desk** design system after resume.io (`docs/design-system.md`
 
 The Jobright clone (dual brand: RoboApply and GoApply) is merged; its record and the rules that are easy to break (Alipay tests are frozen, schema changes are additive only, the local Stripe key is live) are in `docs/jobright-clone/HANDOFF.md`.
 
+The LLM gateway (`/admin/llm`, 2026-11-22) lets admins save named AI provider entries (type, API base URL, encrypted key, fetched model list) and assign a provider and model to each functionality area (Default, Match resume, Parse resume, Visual, Evaluation, Insights, Writing, Assistant, Job details). An unassigned area resolves exactly as before. Read `docs/llm-gateway.md` before changing `server/src/lib/llm/`, `server/src/services/llm/providerPrefixes.ts` or the provider-type checks in `LLMService`.
+
 ## Verification
 
 - Run the smallest relevant test first, then the full affected suite.

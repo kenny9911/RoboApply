@@ -99,7 +99,7 @@ import {
   writeMockInterviewLedger,
   type LiveModelUsageItem,
 } from '../billing/sessionCost.js';
-import { getTaskModel } from '../../lib/llm/llmTaskSettings.js';
+import { getEvaluationModel } from '../../lib/llm/llmTaskSettings.js';
 import { gateMockInterview } from '../../lib/mockCreditService.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import type {
@@ -1663,7 +1663,7 @@ export class InterviewSessionService {
       // recommendations all run under reqId). Best-effort.
       await recordEvaluationCost(
         sessionId,
-        tokenCostFromSnapshot(logger.getRequestSnapshot(reqId), getTaskModel('interview')),
+        tokenCostFromSnapshot(logger.getRequestSnapshot(reqId), getEvaluationModel()),
       );
 
       // Refresh the R2 report sidecar with the rich version (best-effort).

@@ -10,7 +10,7 @@
 // score, so a usable report is always produced.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
-import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
+import { getEvaluationModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
 import type { TranscriptTurn } from '../types.js';
 import type { InterviewScore } from './interviewScorer.js';
 import {
@@ -199,7 +199,7 @@ Rules:
       langSource,
       options.requestId,
       options.locale,
-      getTaskModel('interview'),
+      getEvaluationModel(),
       options.signal,
     );
   }

@@ -4008,6 +4008,10 @@
         "visitors": {
           "title": "訪問者と登録",
           "sub": "誰が訪れ、どこから来て、何人がアカウントを作成したか。"
+        },
+        "llm": {
+          "title": "LLMゲートウェイ",
+          "sub": "AIプロバイダー、そのモデル、作業ごとに使うモデル。"
         }
       },
       "overrides": {
@@ -4659,6 +4663,215 @@
             "pages": "ページ数",
             "account": "アカウント"
           }
+        }
+      },
+      "llm": {
+        "eyebrow": "管理",
+        "title": "LLMゲートウェイ",
+        "sub": "AIプロバイダーを一度保存し、作業ごとにプロバイダーとモデルを選びます。変更は約30秒以内に新しいリクエストへ反映されます。",
+        "loading": "読み込み中…",
+        "refresh": "更新",
+        "refreshing": "更新中…",
+        "cancel": "キャンセル",
+        "environment": {
+          "production": "本番環境の設定",
+          "development": "開発環境の設定"
+        },
+        "dbDisabled": "このサーバーでは保存済みの設定がオフになっています（LLM_SETTINGS_DB_DISABLED）。編集はできますが、オフを解除するまで、すべてのリクエストは環境変数を使います。",
+        "encryptionMissing": "このサーバーにはFIELD_ENCRYPTION_KEYがないため、APIキーを保存できません。プロバイダーを追加する前に設定してください。",
+        "types": {
+          "newapi": "OpenAI 互換"
+        },
+        "providers": {
+          "title": "プロバイダー",
+          "sub": "プロバイダーは、1つのエンドポイントと1つのAPIキーです。2つのアカウントや2つのゲートウェイを使うには、同じサービスを2回追加します。",
+          "add": "プロバイダーを追加",
+          "empty": "プロバイダーはまだありません。追加してから、下の領域に割り当ててください。",
+          "full": "プロバイダーの上限{max}件に達しています。追加するには、どれかを削除してください。",
+          "noUrl": "URLなし",
+          "off": "オフ",
+          "ready": "利用可能",
+          "keyUnreadable": "キーを読み取れません",
+          "keyUnreadableHelp": "保存済みのキーは別のFIELD_ENCRYPTION_KEYで暗号化されているため、ここでは読み取れません。キーを入力し直すまで、このプロバイダーを割り当てた領域は、継承したモデルを使います。",
+          "key": "APIキー",
+          "noKey": "なし",
+          "models": "モデル",
+          "modelCount": "{count, plural, one {{n}件のモデル} other {{n}件のモデル}}",
+          "modelsNever": "未取得",
+          "fetchedAt": "一覧の取得日時",
+          "edit": "編集",
+          "fetchModels": "モデルを取得",
+          "refreshModels": "モデルを更新",
+          "fetching": "取得中…",
+          "showModels": "モデルを表示",
+          "hideModels": "モデルを非表示",
+          "turnOff": "オフにする",
+          "turnOn": "オンにする",
+          "remove": "削除",
+          "removeConfirm": "{name}を削除"
+        },
+        "form": {
+          "addTitle": "プロバイダーを追加",
+          "editTitle": "プロバイダーを編集",
+          "name": "名前",
+          "nameHint": "領域の一覧に表示されます。例：「OpenRouter（メイン）」。",
+          "type": "種類",
+          "typeHint": "エンドポイントが使うAPIです。ゲートウェイやプロキシにはOpenAI 互換を選びます。",
+          "typeHintNoTools": "この種類では、ここでツール呼び出しをストリーミングできないため、アシスタント領域には使えません。",
+          "baseUrl": "APIベースURL",
+          "baseUrlRequired": "必須です。バージョンのパスを含め、/chat/completionsのようなエンドポイントは含めないでください。例：https://gateway.example.com/v1",
+          "baseUrlOptional": "空欄の場合は{url}を使います。",
+          "apiKey": "APIキー",
+          "apiKeyHint": "暗号化して保存します。保存後は二度と表示されません。",
+          "apiKeyKeep": "空欄のままにすると、保存済みのキーを保持します。URLを別のホストに変更した場合は、キーの再入力が必要です。",
+          "notes": "メモ（任意）",
+          "enabled": "このプロバイダーを使う",
+          "save": "プロバイダーを保存",
+          "saving": "保存中…",
+          "test": "保存せずにテスト",
+          "testing": "テスト中…",
+          "saveHint": "保存時に、このキーでプロバイダーのモデル一覧も取得します。"
+        },
+        "modelList": {
+          "ok": "{count, plural, one {プロバイダーのモデルは{n}件です。} other {プロバイダーのモデルは{n}件です。}}",
+          "okTruncated": "プロバイダーのモデルが{n}件を超えているため、最初の{n}件のみ保持します。ほかのモデルIDは手入力してください。",
+          "invalid_base_url": "このベースURLは使えません。アドレスを確認してください。プライベートホストを指定できるのは、セルフホスト型のみです。",
+          "key_required": "プロバイダーにモデルを問い合わせるには、APIキーを入力してください。",
+          "auth_rejected": "プロバイダーがAPIキーを拒否しました。",
+          "not_supported": "このエンドポイントにはモデル一覧がありません。ベースURLを確認するか、モデルIDを手入力してください。",
+          "rate_limited": "プロバイダーがリクエストを制限しています。1分後にもう一度試してください。",
+          "timeout": "プロバイダーが8秒以内に応答しませんでした。",
+          "unreachable": "プロバイダーに接続できませんでした。ベースURLを確認してください。",
+          "invalid_response": "プロバイダーは応答しましたが、モデル一覧ではありませんでした。",
+          "response_too_large": "プロバイダーのモデル一覧が大きすぎて読み取れません。",
+          "provider_error": "プロバイダーがエラーを返しました。"
+        },
+        "areas": {
+          "title": "機能領域",
+          "sub": "領域にプロバイダーとモデルを割り当てます。割り当てない場合は継承します。触れていない領域は、今までどおり動作します。",
+          "brand": "サイト",
+          "goapplyNote": "{site}は、自分で割り当てていない領域に{shared}の割り当てを使います。",
+          "noProviders": "領域を割り当てるには、上でプロバイダーを追加してください。",
+          "assigned": "割り当て済み",
+          "notInEffect": "未反映",
+          "inherits": "継承",
+          "provider": "プロバイダー",
+          "inheritOption": "未割り当て（継承）",
+          "providerOff": "{name}（オフ）",
+          "model": "モデル",
+          "save": "保存",
+          "clear": "割り当てを解除",
+          "modelHint": "プロバイダーの一覧からモデルを選ぶか、一覧にないモデルIDを入力してください。",
+          "noModelList": "このプロバイダーにはまだモデル一覧がありません。上でモデルを取得するか、モデルIDを入力してください。",
+          "needsTools": "この領域はツールを呼び出すため、ツール呼び出しに対応したモデルが必要です。",
+          "needsImages": "この領域は画像を読み取るため、画像入力に対応したモデルが必要です。",
+          "toolsBlocked": "このプロバイダーの種類では、ここでツール呼び出しをストリーミングできません。この領域にはOpenAI 互換のプロバイダーを選んでください。",
+          "modelNotListed": "このモデルは、取得したプロバイダーの一覧にありません。入力したとおりに使います。",
+          "now": "現在リクエストが使うもの",
+          "colSetting": "用途",
+          "colModel": "モデル",
+          "colSource": "設定元"
+        },
+        "routeStatus": {
+          "provider_missing": "割り当てたプロバイダーが削除されたため、この領域は継承したモデルを使います。",
+          "provider_disabled": "割り当てたプロバイダーがオフのため、この領域は継承したモデルを使います。",
+          "provider_key_missing": "割り当てたプロバイダーにAPIキーがないため、この領域は継承したモデルを使います。",
+          "provider_key_unreadable": "割り当てたプロバイダーのキーをこのサーバーで読み取れないため、この領域は継承したモデルを使います。"
+        },
+        "area": {
+          "default": {
+            "title": "デフォルト",
+            "sub": "専用のモデルがない、すべての作業。"
+          },
+          "matchResume": {
+            "title": "履歴書のマッチング",
+            "sub": "履歴書が求人にどれだけ合うかのスコアリング。"
+          },
+          "parseResume": {
+            "title": "履歴書の解析",
+            "sub": "履歴書のテキストを構造化された情報として読み取る処理。"
+          },
+          "visual": {
+            "title": "ビジュアル",
+            "sub": "画像やスキャンしたページの読み取り（OCR）。"
+          },
+          "evaluation": {
+            "title": "評価",
+            "sub": "終了した面接練習のスコアリングとレポート作成。"
+          },
+          "insights": {
+            "title": "インサイト",
+            "sub": "毎週のキャリアサマリーと検索のサマリー。"
+          },
+          "writing": {
+            "title": "文章作成",
+            "sub": "カバーレター、アウトリーチのメッセージ、履歴書の書き直し。"
+          },
+          "assistant": {
+            "title": "アシスタント",
+            "sub": "チャットのアシスタント、オンボーディング、ユーザーの依頼内容の把握。"
+          },
+          "jobs": {
+            "title": "求人の詳細",
+            "sub": "求人への詳細情報とタグの付与。"
+          }
+        },
+        "setting": {
+          "defaultModel": "デフォルトのモデル",
+          "matching": "適合スコア",
+          "matchResume": "マッチングレポート",
+          "matchScreen": "マッチングの簡易判定",
+          "prematchFilter": "マッチング前のフィルター",
+          "extract": "履歴書のテキスト",
+          "resumeTag": "履歴書のタグ",
+          "vision": "画像とスキャン",
+          "evaluation": "面接レポート",
+          "insights": "インサイト",
+          "writing": "長文の作成",
+          "rewrite": "履歴書の書き直し",
+          "copilot": "アシスタントのチャット",
+          "onboarding": "オンボーディング",
+          "intentParser": "検索意図",
+          "enrich": "求人の情報補完",
+          "jobTag": "求人のタグ",
+          "quickJob": "求人の簡易読み取り"
+        },
+        "source": {
+          "assigned": "この領域の割り当て",
+          "override": "保存済みの個別設定による上書き",
+          "shared": "{shared}の設定",
+          "env": "環境変数{name}",
+          "noneDefault": "何も設定されていません",
+          "noDefault": "未設定",
+          "fallback": {
+            "default": "何も設定されていません",
+            "matchResume": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "parseResume": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "visual": "専用のモデルはなく、履歴書の解析のモデルを使います",
+            "evaluation": "専用のモデルはなく、面接のモデルを使います",
+            "insights": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "writing": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "assistant": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "jobs": "専用のモデルはなく、デフォルトのモデル（{model}）を使います"
+          }
+        },
+        "errors": {
+          "generic": "うまくいきませんでした。もう一度試してください。",
+          "invalid_name": "名前は60文字以内で入力してください。",
+          "duplicate_name": "この名前のプロバイダーがすでにあります。",
+          "invalid_type": "プロバイダーの種類を選んでください。",
+          "invalid_base_url": "このベースURLは使えません。/chat/completionsのようなエンドポイントを含めずに、APIベースURLを入力してください。プライベートホストを指定できるのは、セルフホスト型のみです。",
+          "key_required": "APIキーを入力してください。",
+          "key_required_for_new_url": "エンドポイントが変更されました。保存済みのキーが別のホストに送られないよう、APIキーを再入力してください。",
+          "too_many_providers": "プロバイダーの保存数が上限に達しています。先にどれかを削除してください。",
+          "not_found": "このプロバイダーはすでに存在しません。ページを更新してください。",
+          "invalid_notes": "メモは2,000文字以内で入力してください。",
+          "encryption_unavailable": "このサーバーにはAPIキーを保存できません。FIELD_ENCRYPTION_KEYが設定されていません。",
+          "invalid_area": "この領域は不明です。ページを更新してください。",
+          "invalid_route": "プロバイダーとモデルを選んでください。",
+          "unknown_provider": "このプロバイダーはすでに存在しません。ページを更新してください。",
+          "tools_unsupported": "このプロバイダーの種類は、この領域に必要なツール呼び出しのストリーミングに対応していません。",
+          "provider_in_use": "このプロバイダーは、まだ領域に割り当てられています。先にその領域の割り当てを変更または解除してください。"
         }
       }
     }
