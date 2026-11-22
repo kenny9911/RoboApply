@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, other {# 筆未開啟}}",
       "ready_open": "查看已準備好的應徵",
       "upgrade": "升級"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -5896,6 +5897,348 @@
     },
     "jobList": {
       "title": "這個回答提到的職缺"
+    }
+  },
+  "alice": {
+    "tag": "AI 代理",
+    "restart": "重新開始",
+    "restartConfirm": "要開始新的對話嗎？你儲存的求職方向會保留。",
+    "cancel": "取消",
+    "status": {
+      "working": "Alice 正在處理",
+      "intake": "正在了解你想找的工作 · {done}/{total} 個主題",
+      "choosing": "兩個求職方向已寫好，可以比較了",
+      "refining": "你的求職方向第 {version} 版",
+      "saved": "職缺搜尋會依照你的求職方向進行",
+      "savedNeeds": "{count, plural, one {有 # 件事需要你處理} other {有 # 件事需要你處理}}"
+    },
+    "tabs": {
+      "aria": "Alice 的分頁",
+      "chat": "對話",
+      "profile": "求職方向",
+      "jobs": "職缺",
+      "applications": "應徵紀錄"
+    },
+    "greeting": {
+      "hello": "嗨，我是 Alice，一個協助你找工作、管理應徵的 AI 代理。",
+      "plan": "我會先問問你對下一份工作有什麼期待，再寫出兩個求職方向讓你比較。選出比較接近的那個，告訴我要改什麼，我會持續修改，直到符合你的想法。",
+      "d1": "每一份應徵都由你自己送出。我會找出適合的職缺、追蹤你的應徵進度，並提醒你下一步要做什麼。",
+      "withResume": "我可以從你的履歷「{name}」著手。",
+      "withoutResume": "如果你有履歷，可以新增進來，我會從履歷著手。"
+    },
+    "resume": {
+      "use": "使用「{name}」",
+      "other": "選擇其他履歷",
+      "pickLabel": "你的履歷",
+      "upload": "上傳履歷",
+      "skip": "不使用履歷，直接繼續",
+      "hint": "PDF、Word 或純文字檔，最大 15 MB。",
+      "hintNoPdf": "Word 或純文字檔，最大 15 MB。",
+      "uploading": "正在讀取 {name}…",
+      "errors": {
+        "unreadable": "這個檔案裡沒有可以讀取的文字。請換一個檔案試試。",
+        "tooLarge": "這個檔案超過 15 MB。",
+        "wrongType": "請使用 PDF、Word 或純文字檔。",
+        "dailyLimit": "你今天新增的履歷已達上限。請明天再試，或不使用履歷直接繼續。",
+        "failed": "沒有成功。請重試。",
+        "pdfNeedsConsent": "少了你關閉的那個讀取選項，就無法讀取 PDF 檔案。請改為上傳 Word 或純文字檔。",
+        "consentUnknown": "我們無法確認你的檔案會以什麼方式讀取。請稍後再試。",
+        "consentUnanswered": "請先回答下方關於檔案讀取方式的問題，再上傳檔案。"
+      }
+    },
+    "action": {
+      "resume": "使用我的履歷「{label}」",
+      "skip_resume": "不使用履歷，直接繼續",
+      "draft_now": "讓我看看兩個求職方向",
+      "choose": "這個比較接近：{label}",
+      "regenerate": "兩個都不適合",
+      "restore": "恢復第 {version} 版",
+      "save": "儲存「{label}」",
+      "find_jobs": "依這個求職方向找職缺",
+      "report": "我的應徵進度如何？",
+      "edit_profile": "修改「{label}」"
+    },
+    "blocks": {
+      "resumeRead": "我讀完了「{name}」。",
+      "resumeRoles": "履歷顯示你有 {roles} 的經驗。",
+      "resumeRolesYears": "履歷顯示你有 {roles} 的經驗，累計約 {years} 年。",
+      "learned": "記下了：{topics}。",
+      "profiles": "兩個求職方向寫好了：{a} 和 {b}。",
+      "compare": "比較一下",
+      "revisionFirst": "這是第 1 版。告訴我要改什麼，或是覺得沒問題就儲存。",
+      "revision": "第 {version} 版好了。我修改了：{fields}。",
+      "seeVersion": "查看這一版",
+      "restored": "第 {version} 版已恢復，成為最新版本。",
+      "saved": "已儲存「{name}」。",
+      "saved_created": "現在它是你已儲存的搜尋「{search}」，你的職缺搜尋會使用它。",
+      "saved_updated": "我已更新你已儲存的搜尋「{search}」，讓它和這個求職方向一致。",
+      "saved_replaced": "你已儲存的搜尋「{search}」現在改用它。原本的篩選條件都有保留，你可以在「求職方向」撤銷這項變更。",
+      "saved_kept": "你已儲存的搜尋都沒有變更。",
+      "matches": "{count, plural, =0 {目前沒有符合這個求職方向的招募中職缺。你可以請我放寬條件：多加幾個地點、換個層級，或多加幾個職稱。} one {有 # 個招募中的職缺符合這個求職方向。} other {有 # 個招募中的職缺符合這個求職方向。}}",
+      "seeJobs": "查看職缺",
+      "reportFacts": "進行中 {active} · 等待回覆 {waiting} · 通話或面試中 {interviewing} · 錄取 {offers}",
+      "seeApplications": "查看你的應徵紀錄",
+      "reminder": "我會在 {date} 提醒你追蹤 {what}。",
+      "reminderCleared": "我已移除 {what} 的提醒。",
+      "thisApplication": "這筆應徵",
+      "saved_updated_main": "我已依照它更新了你的主要搜尋。",
+      "saved_replaced_main": "你的主要搜尋現在使用它。原本的篩選條件已保留，你可以在「求職方向」中復原。"
+    },
+    "notice": {
+      "agent_failed": "這一步我沒能完成。你說的內容都還在。請再試一次。",
+      "nothing_changed": "這次沒有改到求職方向。再多說一點，你希望哪裡不一樣？",
+      "search_full": "你已儲存的搜尋數量已達上限。請在儲存卡片上選擇：要不要讓這個求職方向接手你目前的搜尋。",
+      "resume_unreadable": "這份履歷裡我讀不到任何文字。我們可以不用它繼續，你也可以再新增一份。",
+      "turn_limit": "這段對話已經很長了。請重新開始才能繼續；你儲存的求職方向會保留。",
+      "draft_limit": "你今天已經要求了很多次新的求職方向。請稍後再試。",
+      "enough_questions": "這些已經足夠寫出兩個求職方向了。請稍等一下。",
+      "no_applications": "你還沒有應徵紀錄。儲存一個職缺或準備一份應徵資料，我就會幫你追蹤。",
+      "no_profile": "先儲存一個求職方向，我才能找出符合的職缺。",
+      "reminder_ambiguous": "有不只一筆應徵符合。請選出你指的那一筆。",
+      "reminder_unknown": "告訴我是哪一筆應徵、哪一天，例如「星期五追蹤 Figma」。"
+    },
+    "steps": {
+      "reading_resume": "讀取你的履歷",
+      "thinking": "思考",
+      "reading_goals": "理解你想找的工作",
+      "writing_profiles": "撰寫兩個求職方向",
+      "revising": "修改你的求職方向",
+      "saving": "儲存你的求職方向",
+      "finding_jobs": "尋找適合的職缺",
+      "checking_applications": "查看你的應徵紀錄"
+    },
+    "composer": {
+      "label": "傳訊息給 Alice",
+      "placeholder_intake": "輸入你的回答",
+      "placeholder_choosing": "哪一個比較接近？",
+      "placeholder_refining": "要改什麼？",
+      "placeholder_saved": "問 Alice 任何事",
+      "send": "送出",
+      "attach": "新增履歷",
+      "replies": "快速回答",
+      "sendPicked": "{count, plural, one {送出 # 個回答} other {送出 # 個回答}}",
+      "showProfiles": "讓我看看兩個求職方向"
+    },
+    "errors": {
+      "not_ready": "Alice 在這裡還沒有開啟。",
+      "ai_off": "Alice 需要你同意使用 AI。你可以到「設定」開啟。",
+      "busy": "Alice 還在回覆你的上一則訊息。",
+      "rate_limited": "你傳的訊息有點多。請過幾分鐘再試。",
+      "agent_failed": "Alice 沒能完成這一步。請重試。",
+      "wrong_stage": "目前這個步驟無法這樣操作。",
+      "profile_limit": "你儲存的求職方向已達 Alice 能保留的上限。請先刪除一個。",
+      "search_full": "你已儲存的搜尋數量已達上限。請在儲存卡片上選擇要怎麼做。",
+      "interrupted": "連線中斷了。你的對話已儲存；重新整理頁面就能看到最新內容。",
+      "generic": "出了點問題。請重試。",
+      "retry": "重試"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "Alice 在這裡還沒有開啟",
+        "body": "Alice 需要在這個網站完成一次性的設定。其他功能都照常運作。"
+      },
+      "aiOff": {
+        "title": "Alice 需要 AI 才能運作",
+        "body": "你的帳號目前無法使用 AI。如果是你自己關閉的，可以到「設定」重新開啟。"
+      },
+      "loadFailed": {
+        "title": "無法載入你和 Alice 的對話",
+        "body": "請檢查網路連線後再試一次。"
+      }
+    },
+    "brief": {
+      "title": "Alice 目前知道的",
+      "intro": "這裡的內容都來自你的回答。在你選定求職方向之前，一切都還可以改。",
+      "progress": "{done}/{total} 個主題",
+      "skipped": "已略過",
+      "not": "不要 {value}",
+      "fromResume": "Alice 也會參考你的履歷「{name}」。",
+      "ready": "這些已經足夠寫出兩個求職方向了。你可以繼續回答，也可以現在就看。",
+      "notReady": "再回答幾個問題，Alice 就能寫出兩個求職方向。",
+      "topics": {
+        "roles": "想做的工作",
+        "level": "層級",
+        "workSetting": "工作型態",
+        "places": "工作地點",
+        "pay": "最低薪資",
+        "industries": "產業",
+        "companyKind": "公司類型",
+        "companySize": "公司規模",
+        "companies": "欣賞的公司",
+        "dreamJob": "理想工作",
+        "values": "最重視的事",
+        "dealbreakers": "無法接受的條件",
+        "timing": "時間安排",
+        "sponsorship": "簽證贊助"
+      }
+    },
+    "fields": {
+      "label": "名稱",
+      "headline": "一句話說明",
+      "summary": "摘要",
+      "titles": "職稱",
+      "levels": "層級",
+      "workModels": "工作型態",
+      "places": "工作地點",
+      "pay": "最低薪資",
+      "industries": "產業",
+      "companyKinds": "公司類型",
+      "companySizes": "公司規模",
+      "companies": "目標公司",
+      "skills": "技能",
+      "mustHaves": "必備",
+      "niceToHaves": "加分條件",
+      "dealbreakers": "無法接受的條件",
+      "whyItFits": "為什麼適合你",
+      "tradeoff": "需要放棄什麼",
+      "jobTypes": "工作性質"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "實習生或應屆畢業生",
+        "entry": "初階",
+        "mid": "中階",
+        "senior": "資深",
+        "lead_staff": "組長或主任級",
+        "director_exec": "總監及以上"
+      },
+      "workModels": {
+        "remote": "遠端",
+        "hybrid": "混合辦公",
+        "onsite": "現場辦公"
+      },
+      "companyKinds": {
+        "startup": "新創公司",
+        "scaleup": "成長期公司",
+        "enterprise": "大公司",
+        "public_sector": "公部門",
+        "nonprofit": "非營利組織"
+      },
+      "jobTypes": {
+        "full_time": "全職",
+        "contract": "約聘／承攬",
+        "part_time": "兼職",
+        "internship": "實習"
+      },
+      "timing": {
+        "now": "越快越好",
+        "soon": "未來幾個月內",
+        "exploring": "只是先看看機會"
+      },
+      "sponsorship": {
+        "yes": "需要簽證贊助",
+        "no": "不需要簽證贊助"
+      },
+      "payPer": {
+        "year": "年薪 {amount}",
+        "month": "月薪 {amount}",
+        "hour": "時薪 {amount}"
+      },
+      "companySize": "{size} 人",
+      "companyYou": "你提到的",
+      "companyAlice": "Alice 舉的例子"
+    },
+    "compare": {
+      "title": "哪一個比較接近你想要的？",
+      "intro": "從你的回答來看，有兩個可能的方向。選出比較接近的那個。",
+      "differsHint": "圓點標出兩者不同的地方。",
+      "differs": "不同",
+      "choose": "這個比較接近",
+      "commentLabel": "告訴 Alice 要改什麼",
+      "commentPlaceholder": "例如：第一個，但要遠端、不用出差",
+      "commentHint": "先寫在這裡，再選一個求職方向：Alice 會修改你選的那個。也可以告訴她為什麼兩個都不適合。",
+      "neither": "兩個都不適合"
+    },
+    "profile": {
+      "version": "第 {version} 版",
+      "yourComment": "你說：「{comment}」",
+      "aliceNotes": "Alice 改了什麼",
+      "changed": "已修改",
+      "was": "原本：{value}",
+      "history": "版本紀錄",
+      "historyPick": "你選了「{label}」",
+      "historyEdit": "「{comment}」",
+      "historyRestore": "恢復了第 {version} 版",
+      "historySaved": "你儲存的求職方向",
+      "restore": "恢復",
+      "current": "目前版本",
+      "commentLabel": "要改哪裡？",
+      "commentPlaceholder": "例如：加上柏林的混合辦公，不要人力仲介公司",
+      "send": "修改",
+      "newPair": "重新寫兩個求職方向"
+    },
+    "save": {
+      "title": "滿意了嗎？",
+      "name": "求職方向名稱",
+      "create": "儲存並用在我的職缺搜尋",
+      "createHint": "Alice 會把它新增為已儲存的搜尋並開啟。你的其他搜尋都會保留。",
+      "update": "儲存並更新「{search}」",
+      "updateHint": "它對應的那個已儲存的搜尋也會跟著更新。",
+      "replace": "用在我的搜尋「{search}」",
+      "replaceHint": "你已儲存的搜尋數量已達上限。目前的篩選條件會保留，你可以撤銷這項變更。",
+      "none": "儲存，但不變更我的搜尋",
+      "replaceMain": "用於我的主要搜尋",
+      "updateMain": "儲存並更新我的主要搜尋"
+    },
+    "saved": {
+      "drives": "已套用到你已儲存的搜尋「{search}」",
+      "drivesNone": "沒有套用到任何已儲存的搜尋",
+      "findJobs": "查看適合的職缺",
+      "edit": "和 Alice 一起修改",
+      "undo": "撤銷搜尋的變更",
+      "undone": "搜尋已恢復原本的篩選條件。",
+      "others": "你的其他求職方向",
+      "drivesMain": "用於你的主要搜尋"
+    },
+    "jobs": {
+      "title": "符合「{name}」的職缺",
+      "titleEmpty": "符合你求職方向的職缺",
+      "honesty": "適合度是拿職缺和你的履歷比對的結果。這不是你被錄取的機率。",
+      "missing": "還缺：{gap}",
+      "meets": "符合：{fields}",
+      "named": "你提到的公司",
+      "view": "查看職缺",
+      "empty": "目前沒有符合這個求職方向的招募中職缺。",
+      "widen": "請 Alice 放寬條件",
+      "noProfile": "儲存一個求職方向後，Alice 會找出符合的職缺。",
+      "loading": "正在尋找職缺…",
+      "error": "職缺沒有載入成功。",
+      "retry": "重試",
+      "seeAll": "查看所有職缺",
+      "tier": {
+        "great": "很適合",
+        "good": "還算適合",
+        "possible": "可能適合",
+        "unlikely": "不太適合"
+      }
+    },
+    "apps": {
+      "title": "你的應徵紀錄",
+      "stages": "各階段的應徵數量",
+      "needs": "需要你處理",
+      "needsEmpty": "今天沒有需要你處理的事。",
+      "kind": {
+        "interview_tomorrow": "明天有面試",
+        "deadline_soon": "{days, plural, =0 {今天截止} one {# 天後截止} other {# 天後截止}}",
+        "follow_up_due": "該追蹤了",
+        "no_reply_10d": "已 {days} 天沒有回覆",
+        "ready_to_check": "已準備好，等你檢查"
+      },
+      "open": "開啟",
+      "check": "檢查並開啟",
+      "reminders": "提醒",
+      "remindersEmpty": "還沒有設定提醒。",
+      "due": "已到期",
+      "done": "完成",
+      "set": "設定提醒",
+      "pick": "選擇一筆應徵",
+      "date": "日期",
+      "save": "儲存提醒",
+      "saveError": "提醒沒有儲存成功。請重試。",
+      "all": "開啟應徵紀錄",
+      "empty": "還沒有應徵紀錄。儲存一個職缺或準備一份應徵資料，Alice 就會幫你追蹤。",
+      "error": "應徵紀錄沒有載入成功。",
+      "retry": "重試"
     }
   },
   "brand": {
