@@ -92,7 +92,7 @@ export function SummaryEditor({ value, onChange, runRewrite, aiEnabled = true }:
       </div>
 
       {error ? (
-        <p style={{ fontSize: 12, color: 'var(--warn)' }}>{t('rewrite.error')}</p>
+        <p style={{ fontSize: 'var(--fs-label)', color: 'var(--warn)' }}>{t('rewrite.error')}</p>
       ) : null}
 
       {options ? (

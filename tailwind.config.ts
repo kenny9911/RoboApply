@@ -184,7 +184,7 @@ export default {
         body: ['var(--font-ui)'],
         mono: ['var(--font-ui)'],
       },
-      // The complete type scale. Eight sizes, 12px floor, no half-pixels.
+      // The complete type scale. Eight sizes, 13px floor, no half-pixels.
       fontSize: {
         hero:     ['var(--fs-hero)',     { lineHeight: 'var(--lh-hero)',     letterSpacing: 'var(--ls-hero)',     fontWeight: '700' }],
         display:  ['var(--fs-display)',  { lineHeight: 'var(--lh-display)',  letterSpacing: 'var(--ls-display)',  fontWeight: '600' }],

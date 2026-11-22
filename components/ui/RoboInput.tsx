@@ -32,7 +32,7 @@ export const RoboInput = forwardRef<HTMLInputElement, Props>(
         {label ? (
           <label
             htmlFor={inputId}
-            className="text-sm font-semibold text-ink-900"
+            className="text-[length:var(--fs-body)] font-semibold text-ink-900"
           >
             {label}
           </label>
@@ -57,11 +57,11 @@ export const RoboInput = forwardRef<HTMLInputElement, Props>(
           {rightSlot}
         </div>
         {error ? (
-          <p className="text-sm text-danger" role="alert">
+          <p className="text-[length:var(--fs-body)] text-danger" role="alert">
             {error}
           </p>
         ) : hint ? (
-          <p className="text-sm text-ink-500">{hint}</p>
+          <p className="text-[length:var(--fs-body)] text-ink-500">{hint}</p>
         ) : null}
       </div>
     );

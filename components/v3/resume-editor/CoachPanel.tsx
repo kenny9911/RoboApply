@@ -46,7 +46,7 @@ export function CoachPanel({ tips, onClose }: Props) {
         <div className="iv-coach-orb" />
         <div>
           <div className="iv-coach-lbl">{t('coach.label')}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
             {t('coach.sub')}
           </div>
         </div>

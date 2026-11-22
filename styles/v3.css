@@ -2,7 +2,7 @@
    RoboApply V3 — component-class stylesheet
 
    Every value here resolves to a token declared in app/globals.css: eight
-   font sizes with a 12px floor, ONE UI family (--font-ui), three neutral
+   font sizes with a 13px floor, ONE UI family (--font-ui), three neutral
    elevations, four radii, an 8px spacing grid, four motion durations.
    Nothing in this file may reintroduce a literal font-size, an uppercase
    micro-label, a monospace or serif face, or an accent halo — see

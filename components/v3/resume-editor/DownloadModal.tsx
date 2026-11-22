@@ -272,7 +272,7 @@ export function DownloadModal({
           ) : null}
 
           {error ? (
-            <p style={{ fontSize: 12, color: 'var(--warn)', marginTop: 4 }} role="alert">
+            <p style={{ fontSize: 'var(--fs-label)', color: 'var(--warn)', marginTop: 4 }} role="alert">
               {t('download.error')}
             </p>
           ) : null}

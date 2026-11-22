@@ -33,7 +33,7 @@ export function RoboApplyAccessGate({ children }: { children: ReactNode }) {
       <div
         role="status"
         style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}
-        className="flex min-h-screen items-center justify-center px-6 text-center text-sm"
+        className="flex min-h-screen items-center justify-center px-6 text-center text-[length:var(--fs-body)]"
       >
         {line}
       </div>
