@@ -119,6 +119,17 @@ const h = vi.hoisted(() => {
         r.liveMetrics = { ...(r.liveMetrics ?? {}), workerEndedAt: params[1] };
         return 1;
       }
+      if (sql.includes('parleyFallback')) {
+        // Parley → LiveKit move (parleySessions.ts moveToLiveKit); the real
+        // SQL runs on pglite in parleySessions.test.ts.
+        const [id, from, keepStarted, identity, note] = params as [string, string, boolean, string | null, string];
+        const r = rows.get(id);
+        if (!r || r.status !== from || r.liveMetrics?.parley) return 0;
+        const { transport: _transport, ...control } = r.liveMetrics?.control ?? {};
+        r.liveMetrics = { ...(r.liveMetrics ?? {}), control, parleyFallback: JSON.parse(note) };
+        Object.assign(r, { status: 'created', startedAt: keepStarted ? r.startedAt : null, participantIdentity: identity, updatedAt: new Date() });
+        return 1;
+      }
       return 0;
     },
   };
@@ -137,6 +148,7 @@ const h = vi.hoisted(() => {
     mint: vi.fn(),
     evaluate: vi.fn(),
     ledger: vi.fn(),
+    parleyCreate: vi.fn(),
   };
 });
 
@@ -156,6 +168,10 @@ vi.mock('../livekit/liveKitClient.js', () => ({
   sendInterviewEndSignal: h.sendEnd,
 }));
 vi.mock('../livekit/egress.js', () => ({ startRoomRecording: vi.fn(async () => null), stopRecording: vi.fn(async () => {}) }));
+vi.mock('../parley/parleyClient.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../parley/parleyClient.js')>()),
+  createParleySession: h.parleyCreate,
+}));
 vi.mock('../storage/r2Storage.js', () => ({
   interviewR2Storage: { isConfigured: () => false, canStore: () => false, recordingKey: (id: string) => `rec/${id}.mp4` },
 }));
@@ -553,5 +569,41 @@ describe('Parley pilot transport', () => {
     expect(h.rows.get(livekit.id)!.status).toBe('expired');
     // No LiveKit room teardown for the Parley session.
     expect(h.deleteRoom).not.toHaveBeenCalledWith(h.rows.get(parley.id)!.roomName);
+  });
+
+  it('a session Parley cannot start connects on LiveKit instead, and stays there', async () => {
+    const parleyEnv: Record<string, string> = {
+      PARLEY_URL: 'http://parley.test',
+      PARLEY_API_KEY: 'pk_test',
+      PARLEY_WEBHOOK_SECRET: 'whsec_test',
+      PARLEY_AGENT_ID: 'agt_1',
+    };
+    const before = Object.fromEntries(Object.keys(parleyEnv).map((k) => [k, process.env[k]]));
+    Object.assign(process.env, parleyEnv);
+    try {
+      const { ParleyApiError } = await import('../parley/parleyClient.js');
+      h.parleyCreate.mockRejectedValueOnce(new ParleyApiError(0, 'unreachable', 'Parley unreachable at http://parley.test: fetch failed'));
+      const s = await createPrepared({ transport: 'parley' });
+
+      const conn = await svc.getConnection({ sessionId: s.id, userId: 'u1' });
+      expect(conn).toMatchObject({ url: 'wss://example', token: 'jwt', agentDispatched: true });
+      expect(conn.transport).toBeUndefined();
+      expect(h.parleyCreate).toHaveBeenCalledTimes(1);
+      expect(h.dispatch).toHaveBeenCalledTimes(1);
+      const row = h.rows.get(s.id)!;
+      expect(row.status).toBe('live');
+      expect(row.liveMetrics.control).not.toHaveProperty('transport');
+      expect(row.liveMetrics.parleyFallback).toMatchObject({ reason: 'unreachable' });
+
+      // A reconnect is an ordinary LiveKit reconnect: no Parley call, no second dispatch.
+      const again = await svc.getConnection({ sessionId: s.id, userId: 'u1' });
+      expect(again.transport).toBeUndefined();
+      expect(h.parleyCreate).toHaveBeenCalledTimes(1);
+      expect(h.dispatch).toHaveBeenCalledTimes(1);
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      }
+    }
   });
 });
