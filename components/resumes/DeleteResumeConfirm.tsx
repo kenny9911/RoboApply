@@ -107,7 +107,7 @@ export function DeleteResumeConfirm({
           error={showMismatchHint ? labels.mismatchHint : undefined}
         />
         {error ? (
-          <p className="text-sm text-danger" role="alert">
+          <p className="text-[length:var(--fs-body)] text-danger" role="alert">
             {error}
           </p>
         ) : null}

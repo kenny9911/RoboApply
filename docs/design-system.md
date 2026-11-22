@@ -61,9 +61,9 @@ GoApply (`styles/brands/goapply.css`) keeps the same ground, tiles, type and sha
 
 ### Typography
 
-Two self-hosted variable faces: **DM Sans** (`--font-ui`, weights 100–1000) for everything that is read and **Space Grotesk** (`--font-display`, 300–700) for h1–h3, figures and tile titles. Source Han provides Simplified and Traditional Chinese glyphs. Resume document fonts remain the user's choice. The UI scale is 12 / 13 / 15 / 17 / 20 px, `--fs-stat` 30 px, `--fs-display` 26–32 px (app titles) and `--fs-hero` 36–96 px (marketing). The marketing sheet derives its section headings from `--fs-display` (×1.65, capped at 7.2vw) so a headline stays within two lines on a phone. Beside the 3D board the home headline steps down to `min(--fs-hero, 5vw, --fs-display × 2.25)` (72 px at 1440), three lines from 1025 px up. Use `--font-ui` and `--font-display`, never literal font-family names that bypass `next/font`.
+Two self-hosted variable faces: **DM Sans** (`--font-ui`, weights 100–1000) for everything that is read and **Space Grotesk** (`--font-display`, 300–700) for h1–h3, figures and tile titles. Source Han provides Simplified and Traditional Chinese glyphs. Resume document fonts remain the user's choice. The UI scale is 13 / 14 / 15 / 17 / 20 px (label, meta, body, subtitle, title; the two detail sizes were raised 1 px on 2026-11-23 because 12 and 13 px were hard to read), `--fs-stat` 30 px, `--fs-display` 26–32 px (app titles) and `--fs-hero` 36–96 px (marketing). The marketing sheet derives its section headings from `--fs-display` (×1.65, capped at 7.2vw) so a headline stays within two lines on a phone. Beside the 3D board the home headline steps down to `min(--fs-hero, 5vw, --fs-display × 2.25)` (72 px at 1440), three lines from 1025 px up. Use `--font-ui` and `--font-display`, never literal font-family names that bypass `next/font`.
 
-No uppercase labels, no monospace, no numerals as decoration ("01", "02"): order is carried by a real `<ol>`. A short label inside a tile sits under its title in sentence case at 13 px.
+No uppercase labels, no monospace, no numerals as decoration ("01", "02"): order is carried by a real `<ol>`. A short label inside a tile sits under its title in sentence case at 14 px.
 
 ### Geometry and elevation
 

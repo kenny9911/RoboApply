@@ -115,8 +115,10 @@
   --fs-title: 20px;
   --fs-subtitle: 17px;
   --fs-body: 15px;
-  --fs-meta: 13px;
-  --fs-label: 12px;
+  /* Detail sizes, raised 1px on 2026-11-23 (were 13 and 12): the small
+   * print was hard to read. --fs-label is the floor. */
+  --fs-meta: 14px;
+  --fs-label: 13px;
   --lh-hero: 0.98;
   --lh-display: 1.08;
   --lh-title: 1.25;

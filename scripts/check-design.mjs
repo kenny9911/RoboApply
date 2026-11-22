@@ -205,7 +205,7 @@ for (const rel of TSX_FILES) {
         fail(
           rel,
           n,
-          px < 12 ? 'below-floor' : 'type-scale',
+          px < 13 ? 'below-floor' : 'type-scale',
           `fontSize: ${px}px — use a token (${FS_TOKENS.join(' ')})`,
         );
       }

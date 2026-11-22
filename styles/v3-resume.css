@@ -6,12 +6,12 @@
    1. APP CHROME — the library grid, the import/tailor/download modals,
       the editor toolbar and the editing panes. This is ordinary product
       UI and it obeys the design system in full: the eight-token type
-      scale, the 12px floor, sentence case, no mono, no serif, no glow.
+      scale, the 13px floor, sentence case, no mono, no serif, no glow.
 
    2. RÉSUMÉ DOCUMENT — `.rb-paper*` (the live preview sheet that becomes
       the PDF) and `.rb-mini*` (the miniature facsimile drawn inside
       library cards and template thumbnails). Ruling C25 exempts these
-      from the UI scale, the 12px floor and the uppercase ban: they are
+      from the UI scale, the 13px floor and the uppercase ban: they are
       typesetting the user's own artifact, where an 11px date column and
       an uppercase EXPERIENCE heading are correct and are what the
       scanner-readable PDF depends on. They use the --resume-sans /
@@ -903,7 +903,7 @@
 /* ═════════════════════════════════════════════════════════════════
    PAPER PREVIEW (light, ATS-friendly)
 
-   RÉSUMÉ DOCUMENT — exempt from the UI type scale, the 12px floor and
+   RÉSUMÉ DOCUMENT — exempt from the UI type scale, the 13px floor and
    the uppercase ban (ruling C25). These sizes ARE the document's
    typography and the uppercase section rules are what makes the
    exported PDF scanner-readable. Faces come from the --resume-* tokens

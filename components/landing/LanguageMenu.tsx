@@ -104,7 +104,7 @@ export function LanguageMenu({ label }: LanguageMenuProps = {}) {
         <GlobeIcon />
         {/* Current-language code — makes the 9-language story visible above
             the fold instead of hiding behind an unlabeled globe. */}
-        <span className="hidden font-mono text-[11px] font-medium uppercase tracking-[0.08em] sm:inline">
+        <span className="hidden font-mono text-[length:var(--fs-label)] font-medium uppercase tracking-[0.08em] sm:inline">
           {active}
         </span>
       </button>
@@ -126,7 +126,7 @@ export function LanguageMenu({ label }: LanguageMenuProps = {}) {
               // the document in the middle of its own click; it goes with the
               // page (and `pagehide` closes it for a back-forward restore).
               onClick={() => setLocaleCookie(code)}
-              className={`flex min-h-[44px] items-center justify-between gap-3 px-3.5 py-2 text-[13px] transition-colors duration-100 hover:bg-bg-page ${
+              className={`flex min-h-[44px] items-center justify-between gap-3 px-3.5 py-2 text-[length:var(--fs-meta)] transition-colors duration-100 hover:bg-bg-page ${
                 code === active
                   ? 'font-semibold text-accent-text'
                   : 'text-ink-700'
