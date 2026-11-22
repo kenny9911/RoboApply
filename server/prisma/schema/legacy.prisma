@@ -388,6 +388,8 @@ model User {
   raCopilotProposals     RACopilotProposal[]
   raCopilotMemory        RACopilotMemory[]
   raAgentSettings        RAAgentSettings?
+  raAliceThreads         RAAliceThread[]
+  raJobProfiles          RAJobProfile[]
   raAgentQueue           RAAgentQueueItem[]
   raAgentKitEvents       RAAgentKitEvent[]
   raAnswerBank           RAAnswerBankItem[]

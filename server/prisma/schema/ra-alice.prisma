@@ -1,0 +1,85 @@
+// ra-alice.prisma: Alice, the application agent (docs/alice/ALICE.md).
+// SCHEMA-10, additive only: three new tables, no change to an existing column.
+// A database without them keeps working: the Alice routes answer 503
+// `ai_unavailable` (reason `alice_not_ready`) and nothing else reads them.
+// D1: nothing here submits an application.
+
+/// One conversation with Alice. One active thread per user (`archivedAt` null,
+/// app-enforced); "Start over" archives it and opens a new one.
+model RAAliceThread {
+  id              String           @id @default(cuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand           String
+  locale          String           @default("en")
+  /// 'intake' | 'choosing' | 'refining' | 'saved' (contract ALICE_STAGES;
+  /// 'drafting' exists only inside a running turn and is never stored).
+  stage           String           @default("intake")
+  /// The resume Alice read; null = none chosen yet or the user went without.
+  resumeVariantId String?
+  /// True once the user chose to go on without a resume.
+  resumeSkipped   Boolean          @default(false)
+  /// What Alice has learned (contract AliceBrief).
+  brief           Json             @default("{}")
+  /// `{ covered: string[], declined: string[] }` (intake topic ids).
+  topics          Json             @default("{}")
+  /// The open question and its quick replies (contract AlicePending), or null.
+  pending         Json?
+  /// The goal analysis (contract AliceAnalysis), set when the first pair is written.
+  analysis        Json?
+  /// The two profiles to choose between while `choosing` (contract AliceJobProfile[]).
+  drafts          Json             @default("[]")
+  /// The chosen profile's versions, oldest first (contract AliceRevision[]).
+  revisions       Json             @default("[]")
+  /// The version shown as current (1-based; 0 = none).
+  currentVersion  Int              @default(0)
+  /// The saved job profile this thread produced or is editing.
+  savedProfileId  String?
+  turnCount       Int              @default(0)
+  draftCount      Int              @default(0)
+  archivedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  messages        RAAliceMessage[]
+
+  @@index([userId, archivedAt])
+}
+
+/// One message of a conversation with Alice.
+model RAAliceMessage {
+  id        String        @id @default(cuid())
+  threadId  String
+  thread    RAAliceThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  /// 'user' | 'alice'
+  role      String
+  /// Free text; may be empty when the blocks say everything (a localized action line).
+  content   String        @db.Text
+  /// Typed blocks shown with the message (contract AliceBlock[]).
+  blocks    Json          @default("[]")
+  /// The subagent that wrote it ('intake' | 'editor' | 'router' | 'reporter' | 'system' …), null for the user.
+  agent     String?
+  createdAt DateTime      @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+/// A job profile the user saved with Alice: what they want, and the search it drives.
+model RAJobProfile {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  /// The profile as the user approved it (contract AliceJobProfile).
+  profile         Json
+  /// The saved search (RASearchProfile.id) this profile drives; null = none.
+  searchProfileId String?
+  /// The filters that search had before this profile replaced them (for Undo); null = it was not replaced.
+  previousFilters Json?
+  /// 'active' | 'archived'
+  status          String   @default("active")
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, status, updatedAt(sort: Desc)])
+}
