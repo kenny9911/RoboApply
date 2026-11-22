@@ -195,6 +195,8 @@ Built 2026-11-23 on `worktree-alice-agent`.
 
 Intake turn about 4 s (low reasoning effort; 36 s at the provider default), two profiles about 30 s (analyst and writer), a revision about 10 s, the router about 4 s.
 
+The low effort is Alice's own request. When an admin assigns the area a call runs on in the LLM gateway (`/admin/llm`: Assistant for the `onboarding` and `intentParser` keys, Insights for the reporter's `insights`), the area's effort wins over it (Medium unless set; `docs/llm-gateway.md`), so intake turns slow down again. Set that area to Low, or Provider default to keep her own level.
+
 ### Open
 
 - SCHEMA-10 on each database (production at the owner's word).
