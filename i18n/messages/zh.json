@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, other {# 份未打开}}",
       "ready_open": "查看已备好的申请",
       "upgrade": "升级"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -8337,6 +8338,348 @@
     },
     "jobList": {
       "title": "这条回答提到的职位"
+    }
+  },
+  "alice": {
+    "tag": "AI 智能体",
+    "restart": "重新开始",
+    "restartConfirm": "要开始新的对话吗？你保存的求职方向会保留。",
+    "cancel": "取消",
+    "status": {
+      "working": "Alice 正在处理",
+      "intake": "正在了解你想要的工作 · {done}/{total} 个话题",
+      "choosing": "两个求职方向已写好，可以对比了",
+      "refining": "你的求职方向第 {version} 版",
+      "saved": "职位搜索会按你的求职方向进行",
+      "savedNeeds": "{count, plural, one {有 # 件事需要你处理} other {有 # 件事需要你处理}}"
+    },
+    "tabs": {
+      "aria": "Alice 的标签页",
+      "chat": "对话",
+      "profile": "求职方向",
+      "jobs": "职位",
+      "applications": "申请记录"
+    },
+    "greeting": {
+      "hello": "你好，我是 Alice，一个帮你找工作、管理申请的 AI 智能体。",
+      "plan": "我会先问问你对下一份工作有什么期望，再写出两个求职方向给你对比。选出更接近的那个，告诉我要改什么，我会一直修改，直到合适为止。",
+      "d1": "每份申请都由你自己提交。我会找出合适的职位，跟踪你的申请，并提醒你下一步该做什么。",
+      "withResume": "我可以从你的简历“{name}”入手。",
+      "withoutResume": "如果你有简历，可以添加进来，我会从它入手。"
+    },
+    "resume": {
+      "use": "使用“{name}”",
+      "other": "选择其他简历",
+      "pickLabel": "你的简历",
+      "upload": "上传简历",
+      "skip": "不用简历，直接继续",
+      "hint": "PDF、Word 或文本文件，不超过 15 MB。",
+      "hintNoPdf": "Word 或文本文件，不超过 15 MB。",
+      "uploading": "正在读取 {name}…",
+      "errors": {
+        "unreadable": "这个文件里没有能读取的文字。请换一个文件试试。",
+        "tooLarge": "这个文件超过了 15 MB。",
+        "wrongType": "请使用 PDF、Word 或文本文件。",
+        "dailyLimit": "你今天添加的简历已达上限。请明天再试，或者不用简历直接继续。",
+        "failed": "没有成功。请重试。",
+        "pdfNeedsConsent": "你关闭了读取选项，所以无法读取 PDF 文件。请改为上传 Word 或文本文件。",
+        "consentUnknown": "我们没能确认你的文件会以什么方式读取。请稍后再试。",
+        "consentUnanswered": "请先回答下面关于文件读取方式的问题，然后再上传。"
+      }
+    },
+    "action": {
+      "resume": "使用我的简历“{label}”",
+      "skip_resume": "不用简历，直接继续",
+      "draft_now": "给我看两个求职方向",
+      "choose": "这个更接近：{label}",
+      "regenerate": "两个都不合适",
+      "restore": "恢复第 {version} 版",
+      "save": "保存“{label}”",
+      "find_jobs": "按这个求职方向找职位",
+      "report": "我的申请进展如何？",
+      "edit_profile": "修改“{label}”"
+    },
+    "blocks": {
+      "resumeRead": "我读完了“{name}”。",
+      "resumeRoles": "简历显示你有 {roles} 的经验。",
+      "resumeRolesYears": "简历显示你有 {roles} 的经验，累计约 {years} 年。",
+      "learned": "记下了：{topics}。",
+      "profiles": "两个求职方向写好了：{a} 和 {b}。",
+      "compare": "对比一下",
+      "revisionFirst": "这是第 1 版。告诉我要改什么，或者觉得合适了就保存。",
+      "revision": "第 {version} 版好了。我改了：{fields}。",
+      "seeVersion": "查看这一版",
+      "restored": "第 {version} 版已恢复，现在是最新版本。",
+      "saved": "已保存“{name}”。",
+      "saved_created": "现在它是你的订阅搜索“{search}”，你的职位搜索会使用它。",
+      "saved_updated": "我已更新你的订阅搜索“{search}”，让它和这个求职方向一致。",
+      "saved_replaced": "你的订阅搜索“{search}”现在改用它。原来的筛选条件已保留，你可以在“求职方向”里撤销。",
+      "saved_kept": "你的订阅搜索没有改动。",
+      "matches": "{count, plural, =0 {目前没有符合这个求职方向的在招职位。你可以让我放宽条件：多加几个地点、换个级别，或多加几个职位名称。} one {有 # 个在招职位符合这个求职方向。} other {有 # 个在招职位符合这个求职方向。}}",
+      "seeJobs": "查看职位",
+      "reportFacts": "进行中 {active} · 等待回复 {waiting} · 通话或面试中 {interviewing} · 录用 {offers}",
+      "seeApplications": "查看你的申请记录",
+      "reminder": "我会在 {date} 提醒你跟进 {what}。",
+      "reminderCleared": "我已移除 {what} 的提醒。",
+      "thisApplication": "这份申请",
+      "saved_updated_main": "我已按它更新了你的主搜索。",
+      "saved_replaced_main": "你的主搜索现在使用它。原来的筛选条件已保留，你可以在“求职方向”中撤销。"
+    },
+    "notice": {
+      "agent_failed": "这一步我没能完成。你说的内容都还在，请重试。",
+      "nothing_changed": "这次没有改动求职方向。再多说说，你希望哪里不一样？",
+      "search_full": "你的订阅搜索数量已达上限。请在保存卡片上选择：是否让这个求职方向接管你现在的搜索。",
+      "resume_unreadable": "这份简历里我读不到任何文字。我们可以不用它继续，你也可以再添加一份。",
+      "turn_limit": "这段对话已经很长了。请重新开始才能继续；你保存的求职方向会保留。",
+      "draft_limit": "你今天已经要求了很多次新的求职方向。请稍后再试。",
+      "enough_questions": "这些已经够写出两个求职方向了。请稍等。",
+      "no_applications": "你还没有申请记录。保存一个职位或准备一份申请材料，我就会帮你跟踪。",
+      "no_profile": "先保存一个求职方向，我才能找到符合它的职位。",
+      "reminder_ambiguous": "有不止一份申请符合。请选出你指的那份。",
+      "reminder_unknown": "告诉我是哪份申请、哪一天，比如“周五跟进 Figma”。"
+    },
+    "steps": {
+      "reading_resume": "读取你的简历",
+      "thinking": "思考",
+      "reading_goals": "理解你想要的工作",
+      "writing_profiles": "撰写两个求职方向",
+      "revising": "修改你的求职方向",
+      "saving": "保存你的求职方向",
+      "finding_jobs": "查找合适的职位",
+      "checking_applications": "查看你的申请记录"
+    },
+    "composer": {
+      "label": "给 Alice 发消息",
+      "placeholder_intake": "输入你的回答",
+      "placeholder_choosing": "哪个更接近？",
+      "placeholder_refining": "要改什么？",
+      "placeholder_saved": "问 Alice 任何事",
+      "send": "发送",
+      "attach": "添加简历",
+      "replies": "快捷回答",
+      "sendPicked": "{count, plural, one {发送 # 个回答} other {发送 # 个回答}}",
+      "showProfiles": "给我看两个求职方向"
+    },
+    "errors": {
+      "not_ready": "Alice 在这里还没有开启。",
+      "ai_off": "Alice 需要你同意使用 AI。你可以在设置中开启。",
+      "busy": "Alice 还在回复你的上一条消息。",
+      "rate_limited": "你发的消息有点多。请过几分钟再试。",
+      "agent_failed": "Alice 没能完成这一步。请重试。",
+      "wrong_stage": "当前这一步不能这样操作。",
+      "profile_limit": "你保存的求职方向已达到 Alice 能保留的上限。请先删除一个。",
+      "search_full": "你的订阅搜索数量已达上限。请在保存卡片上选择怎么处理。",
+      "interrupted": "连接断开了。你的对话已保存，刷新页面就能看到最新内容。",
+      "generic": "出了点问题。请重试。",
+      "retry": "重试"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "Alice 在这里还没有开启",
+        "body": "Alice 需要在本站完成一次性设置。其他功能照常可用。"
+      },
+      "aiOff": {
+        "title": "Alice 需要 AI 才能工作",
+        "body": "你的账号目前无法使用 AI。如果是你自己关闭的，可以在设置中重新开启。"
+      },
+      "loadFailed": {
+        "title": "无法加载你和 Alice 的对话",
+        "body": "请检查网络连接后重试。"
+      }
+    },
+    "brief": {
+      "title": "Alice 目前了解到的",
+      "intro": "这里的内容都来自你的回答。在你选定求职方向之前，一切都还可以改。",
+      "progress": "{done}/{total} 个话题",
+      "skipped": "已跳过",
+      "not": "不要 {value}",
+      "fromResume": "Alice 也在参考你的简历“{name}”。",
+      "ready": "这些已经够写出两个求职方向了。你可以继续回答，也可以现在就看。",
+      "notReady": "再回答几个问题，Alice 就能写出两个求职方向。",
+      "topics": {
+        "roles": "想做的工作",
+        "level": "级别",
+        "workSetting": "工作方式",
+        "places": "工作地点",
+        "pay": "最低薪资",
+        "industries": "行业",
+        "companyKind": "公司类型",
+        "companySize": "公司规模",
+        "companies": "欣赏的公司",
+        "dreamJob": "理想工作",
+        "values": "最看重的事",
+        "dealbreakers": "不能接受的条件",
+        "timing": "时间安排",
+        "sponsorship": "签证担保"
+      }
+    },
+    "fields": {
+      "label": "名称",
+      "headline": "一句话概括",
+      "summary": "概述",
+      "titles": "职位名称",
+      "levels": "级别",
+      "workModels": "工作方式",
+      "places": "工作地点",
+      "pay": "最低薪资",
+      "industries": "行业",
+      "companyKinds": "公司类型",
+      "companySizes": "公司规模",
+      "companies": "目标公司",
+      "skills": "技能",
+      "mustHaves": "必备",
+      "niceToHaves": "加分项",
+      "dealbreakers": "不能接受的条件",
+      "whyItFits": "为什么适合你",
+      "tradeoff": "需要放弃什么",
+      "jobTypes": "工作性质"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "实习生或应届生",
+        "entry": "初级",
+        "mid": "中级",
+        "senior": "高级",
+        "lead_staff": "团队负责人或专家",
+        "director_exec": "总监及以上"
+      },
+      "workModels": {
+        "remote": "远程",
+        "hybrid": "混合办公",
+        "onsite": "现场办公"
+      },
+      "companyKinds": {
+        "startup": "初创公司",
+        "scaleup": "成长期公司",
+        "enterprise": "大公司",
+        "public_sector": "公共部门",
+        "nonprofit": "非营利组织"
+      },
+      "jobTypes": {
+        "full_time": "全职",
+        "contract": "合同制",
+        "part_time": "兼职",
+        "internship": "实习"
+      },
+      "timing": {
+        "now": "越快越好",
+        "soon": "未来几个月内",
+        "exploring": "只是看看机会"
+      },
+      "sponsorship": {
+        "yes": "需要签证担保",
+        "no": "不需要签证担保"
+      },
+      "payPer": {
+        "year": "{amount}/年",
+        "month": "{amount}/月",
+        "hour": "{amount}/小时"
+      },
+      "companySize": "{size} 人",
+      "companyYou": "你提到的",
+      "companyAlice": "Alice 举的例子"
+    },
+    "compare": {
+      "title": "哪个更接近你想要的？",
+      "intro": "你的回答留下了两个可能的方向。选出更接近的那个。",
+      "differsHint": "圆点标出两者不同的地方。",
+      "differs": "不同",
+      "choose": "这个更接近",
+      "commentLabel": "告诉 Alice 要改什么",
+      "commentPlaceholder": "例如：第一个，但要远程、不出差",
+      "commentHint": "先写在这里，再选一个求职方向：Alice 会修改你选的那个。也可以告诉她为什么两个都不合适。",
+      "neither": "两个都不合适"
+    },
+    "profile": {
+      "version": "第 {version} 版",
+      "yourComment": "你说：“{comment}”",
+      "aliceNotes": "Alice 改了什么",
+      "changed": "已修改",
+      "was": "原来：{value}",
+      "history": "版本记录",
+      "historyPick": "你选了“{label}”",
+      "historyEdit": "“{comment}”",
+      "historyRestore": "恢复了第 {version} 版",
+      "historySaved": "你保存的求职方向",
+      "restore": "恢复",
+      "current": "当前版本",
+      "commentLabel": "要改哪里？",
+      "commentPlaceholder": "例如：加上柏林的混合办公，不要人力资源公司",
+      "send": "修改",
+      "newPair": "重新写两个求职方向"
+    },
+    "save": {
+      "title": "满意了吗？",
+      "name": "求职方向名称",
+      "create": "保存并用于我的职位搜索",
+      "createHint": "Alice 会把它添加为订阅搜索并启用。你的其他搜索都会保留。",
+      "update": "保存并更新“{search}”",
+      "updateHint": "它对应的订阅搜索会随之更新。",
+      "replace": "用于我的搜索“{search}”",
+      "replaceHint": "你的订阅搜索数量已达上限。当前的筛选条件会保留，你可以撤销这次更改。",
+      "none": "保存，但不改动我的搜索",
+      "replaceMain": "用于我的主搜索",
+      "updateMain": "保存并更新我的主搜索"
+    },
+    "saved": {
+      "drives": "已用于你的订阅搜索“{search}”",
+      "drivesNone": "没有用于任何订阅搜索",
+      "findJobs": "查看合适的职位",
+      "edit": "和 Alice 一起修改",
+      "undo": "撤销对搜索的更改",
+      "undone": "搜索已恢复原来的筛选条件。",
+      "others": "你的其他求职方向",
+      "drivesMain": "用于你的主搜索"
+    },
+    "jobs": {
+      "title": "符合“{name}”的职位",
+      "titleEmpty": "符合你求职方向的职位",
+      "honesty": "匹配度是把职位和你的简历做对比的结果。这不是你被录用的概率。",
+      "missing": "缺少：{gap}",
+      "meets": "符合：{fields}",
+      "named": "你提到的公司",
+      "view": "查看职位",
+      "empty": "目前没有符合这个求职方向的在招职位。",
+      "widen": "让 Alice 放宽条件",
+      "noProfile": "保存一个求职方向后，Alice 会找出符合它的职位。",
+      "loading": "正在查找职位…",
+      "error": "职位没有加载出来。",
+      "retry": "重试",
+      "seeAll": "查看全部职位",
+      "tier": {
+        "great": "很合适",
+        "good": "较合适",
+        "possible": "可能合适",
+        "unlikely": "不太合适"
+      }
+    },
+    "apps": {
+      "title": "你的申请记录",
+      "stages": "各阶段的申请数量",
+      "needs": "需要你处理",
+      "needsEmpty": "今天没有需要你处理的事。",
+      "kind": {
+        "interview_tomorrow": "明天有面试",
+        "deadline_soon": "{days, plural, =0 {今天截止} one {还有 # 天截止} other {还有 # 天截止}}",
+        "follow_up_due": "该跟进了",
+        "no_reply_10d": "已 {days} 天没有回复",
+        "ready_to_check": "已备好，等你检查"
+      },
+      "open": "打开",
+      "check": "检查并打开",
+      "reminders": "提醒",
+      "remindersEmpty": "还没有设置提醒。",
+      "due": "已到期",
+      "done": "完成",
+      "set": "设置提醒",
+      "pick": "选择一份申请",
+      "date": "日期",
+      "save": "保存提醒",
+      "saveError": "提醒没有保存成功。请重试。",
+      "all": "打开申请记录",
+      "empty": "还没有申请记录。保存一个职位或准备一份申请材料，Alice 就会帮你跟踪。",
+      "error": "申请记录没有加载出来。",
+      "retry": "重试"
     }
   },
   "brand": {

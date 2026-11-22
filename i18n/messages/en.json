@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, one {# not opened yet} other {# not opened yet}}",
       "ready_open": "See what's ready",
       "upgrade": "Upgrade"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -6018,6 +6019,348 @@
     },
     "jobList": {
       "title": "Jobs mentioned in this answer"
+    }
+  },
+  "alice": {
+    "tag": "AI agent",
+    "restart": "Start over",
+    "restartConfirm": "Start a new conversation? Your saved job profiles stay.",
+    "cancel": "Cancel",
+    "status": {
+      "working": "Alice is working on it",
+      "intake": "Getting to know the job you want · {done} of {total} topics",
+      "choosing": "Two job profiles are ready to compare",
+      "refining": "Version {version} of your job profile",
+      "saved": "Your job profile drives your job search",
+      "savedNeeds": "{count, plural, one {# thing needs you} other {# things need you}}"
+    },
+    "tabs": {
+      "aria": "Alice's views",
+      "chat": "Chat",
+      "profile": "Profile",
+      "jobs": "Jobs",
+      "applications": "Applications"
+    },
+    "greeting": {
+      "hello": "Hi, I'm Alice, an AI agent for your job search and your applications.",
+      "plan": "I'll ask what you want from your next job, then write two job profiles for you to compare. Pick the closer one, tell me what to change, and I'll revise it until it's right.",
+      "d1": "You submit every application yourself. I find jobs that fit, keep track of your applications and remind you what's next.",
+      "withResume": "I can start from your resume \"{name}\".",
+      "withoutResume": "If you have a resume, add it and I'll start from it."
+    },
+    "resume": {
+      "use": "Use \"{name}\"",
+      "other": "Choose another resume",
+      "pickLabel": "Your resumes",
+      "upload": "Upload a resume",
+      "skip": "Continue without a resume",
+      "hint": "PDF, Word or text, up to 15 MB.",
+      "hintNoPdf": "Word or text, up to 15 MB.",
+      "uploading": "Reading {name}…",
+      "errors": {
+        "unreadable": "That file has no text that can be read. Try another file.",
+        "tooLarge": "That file is larger than 15 MB.",
+        "wrongType": "Use a PDF, Word or text file.",
+        "dailyLimit": "You've added as many resumes as you can today. Try again tomorrow, or continue without one.",
+        "failed": "That didn't work. Try again.",
+        "pdfNeedsConsent": "PDF files can't be read with the reading option you turned off. Upload a Word or text file instead.",
+        "consentUnknown": "We couldn't check how your file would be read. Try again in a moment.",
+        "consentUnanswered": "Answer the question below about how your file is read, then upload it."
+      }
+    },
+    "action": {
+      "resume": "Use my resume \"{label}\"",
+      "skip_resume": "Continue without a resume",
+      "draft_now": "Show me two profiles",
+      "choose": "This one is closer: {label}",
+      "regenerate": "Neither is right",
+      "restore": "Bring back version {version}",
+      "save": "Save \"{label}\"",
+      "find_jobs": "Find jobs for this profile",
+      "report": "How are my applications going?",
+      "edit_profile": "Edit \"{label}\""
+    },
+    "blocks": {
+      "resumeRead": "I read \"{name}\".",
+      "resumeRoles": "It shows experience as {roles}.",
+      "resumeRolesYears": "It shows experience as {roles}, over about {years} years.",
+      "learned": "Noted: {topics}.",
+      "profiles": "Two job profiles are ready: {a} and {b}.",
+      "compare": "Compare them",
+      "revisionFirst": "This is version 1. Tell me what to change, or save it when it looks right.",
+      "revision": "Version {version} is ready. I changed: {fields}.",
+      "seeVersion": "See this version",
+      "restored": "Version {version} is back, as the newest version.",
+      "saved": "Saved \"{name}\".",
+      "saved_created": "It is now your saved search \"{search}\", and your job search uses it.",
+      "saved_updated": "I updated your saved search \"{search}\" to match it.",
+      "saved_replaced": "Your saved search \"{search}\" now uses it. Its old filters are kept, so you can undo this in Profile.",
+      "saved_kept": "Your saved searches are unchanged.",
+      "matches": "{count, plural, =0 {No open jobs fit this profile right now. Ask me to widen it: more places, another level or more titles.} one {# open job fits this profile.} other {# open jobs fit this profile.}}",
+      "seeJobs": "See the jobs",
+      "reportFacts": "{active} open · {waiting} waiting for a reply · {interviewing} in calls or interviews · {offers} offers",
+      "seeApplications": "See your applications",
+      "reminder": "I'll remind you about {what} on {date}.",
+      "reminderCleared": "I removed the reminder for {what}.",
+      "thisApplication": "this application",
+      "saved_updated_main": "I updated your main search to match it.",
+      "saved_replaced_main": "Your main search now uses it. Its old filters are kept, so you can undo this in Profile."
+    },
+    "notice": {
+      "agent_failed": "I couldn't finish that. Nothing you said is lost. Try again.",
+      "nothing_changed": "That didn't change the profile. Tell me more about what you'd like to be different.",
+      "search_full": "You have no room for another saved search. Choose on the save card whether this profile should take over your current search.",
+      "resume_unreadable": "I couldn't read any text in that resume. We can go on without it, or you can add another one.",
+      "turn_limit": "This conversation has grown very long. Start over to keep going; your saved profiles stay.",
+      "draft_limit": "You've asked for many new profiles today. Try again later.",
+      "enough_questions": "That's enough to write two job profiles. One moment.",
+      "no_applications": "You have no applications yet. Save a job or prepare an application, and I'll keep track of it.",
+      "no_profile": "Save a job profile first, then I can find jobs that fit it.",
+      "reminder_ambiguous": "More than one application matches. Pick the one you mean.",
+      "reminder_unknown": "Tell me which application and which day, for example \"follow up with Figma on Friday\"."
+    },
+    "steps": {
+      "reading_resume": "Reading your resume",
+      "thinking": "Thinking",
+      "reading_goals": "Reading what you want",
+      "writing_profiles": "Writing two job profiles",
+      "revising": "Revising your profile",
+      "saving": "Saving your profile",
+      "finding_jobs": "Finding jobs that fit",
+      "checking_applications": "Checking your applications"
+    },
+    "composer": {
+      "label": "Message Alice",
+      "placeholder_intake": "Type your answer",
+      "placeholder_choosing": "Which one is closer?",
+      "placeholder_refining": "What should change?",
+      "placeholder_saved": "Ask Alice anything",
+      "send": "Send",
+      "attach": "Add a resume",
+      "replies": "Quick answers",
+      "sendPicked": "{count, plural, one {Send # answer} other {Send # answers}}",
+      "showProfiles": "Show me two profiles"
+    },
+    "errors": {
+      "not_ready": "Alice isn't switched on here yet.",
+      "ai_off": "Alice needs your consent to use AI. You can turn it on in Settings.",
+      "busy": "Alice is still answering your last message.",
+      "rate_limited": "You've sent a lot of messages. Try again in a few minutes.",
+      "agent_failed": "Alice couldn't finish that. Try again.",
+      "wrong_stage": "That isn't available at this step.",
+      "profile_limit": "You've saved as many job profiles as Alice keeps. Delete one first.",
+      "search_full": "You have no room for another saved search. Choose on the save card what to do.",
+      "interrupted": "The connection dropped. Your conversation is saved; reload to see the latest.",
+      "generic": "Something went wrong. Try again.",
+      "retry": "Try again"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "Alice isn't switched on here yet",
+        "body": "Alice needs a one-time setup on this site. Everything else works as usual."
+      },
+      "aiOff": {
+        "title": "Alice needs AI to work",
+        "body": "AI isn't available for your account right now. If you turned it off, you can turn it on in Settings."
+      },
+      "loadFailed": {
+        "title": "Couldn't load your conversation with Alice",
+        "body": "Check your connection and try again."
+      }
+    },
+    "brief": {
+      "title": "What Alice knows so far",
+      "intro": "Everything here comes from your answers. Nothing is fixed until you pick a profile.",
+      "progress": "{done} of {total} topics",
+      "skipped": "Skipped",
+      "not": "Not {value}",
+      "fromResume": "Alice is also reading your resume \"{name}\".",
+      "ready": "That's enough to write two job profiles. You can answer more, or see them now.",
+      "notReady": "A few more answers and Alice can write two job profiles.",
+      "topics": {
+        "roles": "Kind of job",
+        "level": "Level",
+        "workSetting": "How you work",
+        "places": "Where",
+        "pay": "Lowest pay",
+        "industries": "Industries",
+        "companyKind": "Kind of company",
+        "companySize": "Company size",
+        "companies": "Companies you admire",
+        "dreamJob": "Dream job",
+        "values": "What matters most",
+        "dealbreakers": "Dealbreakers",
+        "timing": "When",
+        "sponsorship": "Visa sponsorship"
+      }
+    },
+    "fields": {
+      "label": "Name",
+      "headline": "In one line",
+      "summary": "Summary",
+      "titles": "Job titles",
+      "levels": "Level",
+      "workModels": "How you work",
+      "places": "Where",
+      "pay": "Lowest pay",
+      "industries": "Industries",
+      "companyKinds": "Kind of company",
+      "companySizes": "Company size",
+      "companies": "Companies",
+      "skills": "Skills",
+      "mustHaves": "Must have",
+      "niceToHaves": "Nice to have",
+      "dealbreakers": "Dealbreakers",
+      "whyItFits": "Why it fits you",
+      "tradeoff": "What you give up",
+      "jobTypes": "Contract"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "Intern or new grad",
+        "entry": "Entry level",
+        "mid": "Mid level",
+        "senior": "Senior",
+        "lead_staff": "Lead or staff",
+        "director_exec": "Director or above"
+      },
+      "workModels": {
+        "remote": "Remote",
+        "hybrid": "Hybrid",
+        "onsite": "In the office"
+      },
+      "companyKinds": {
+        "startup": "Start-up",
+        "scaleup": "Scale-up",
+        "enterprise": "Large company",
+        "public_sector": "Public sector",
+        "nonprofit": "Non-profit"
+      },
+      "jobTypes": {
+        "full_time": "Full time",
+        "contract": "Contract",
+        "part_time": "Part time",
+        "internship": "Internship"
+      },
+      "timing": {
+        "now": "As soon as possible",
+        "soon": "In the next few months",
+        "exploring": "Just exploring"
+      },
+      "sponsorship": {
+        "yes": "Needs visa sponsorship",
+        "no": "No sponsorship needed"
+      },
+      "payPer": {
+        "year": "{amount} a year",
+        "month": "{amount} a month",
+        "hour": "{amount} an hour"
+      },
+      "companySize": "{size} people",
+      "companyYou": "You named it",
+      "companyAlice": "Alice's example"
+    },
+    "compare": {
+      "title": "Which is closer to what you want?",
+      "intro": "Two directions your answers leave open. Pick the closer one.",
+      "differsHint": "A dot marks where the two differ.",
+      "differs": "differs",
+      "choose": "This one is closer",
+      "commentLabel": "Tell Alice what to change",
+      "commentPlaceholder": "For example: the first one, but remote and no travel",
+      "commentHint": "Write it here, then pick a profile: Alice revises the one you pick. Or tell her why neither is right.",
+      "neither": "Neither is right"
+    },
+    "profile": {
+      "version": "Version {version}",
+      "yourComment": "You said: \"{comment}\"",
+      "aliceNotes": "What Alice changed",
+      "changed": "Changed",
+      "was": "Was: {value}",
+      "history": "Versions",
+      "historyPick": "You picked \"{label}\"",
+      "historyEdit": "\"{comment}\"",
+      "historyRestore": "Brought back version {version}",
+      "historySaved": "Your saved profile",
+      "restore": "Restore",
+      "current": "Current",
+      "commentLabel": "What should change?",
+      "commentPlaceholder": "For example: add hybrid work in Berlin, and no agencies",
+      "send": "Revise",
+      "newPair": "Start from two new profiles"
+    },
+    "save": {
+      "title": "Happy with it?",
+      "name": "Profile name",
+      "create": "Save and use it for my job search",
+      "createHint": "Alice adds it as a saved search and turns it on. Your other searches stay.",
+      "update": "Save and update \"{search}\"",
+      "updateHint": "The saved search it drives changes to match.",
+      "replace": "Use it for my search \"{search}\"",
+      "replaceHint": "You have no room for another saved search. Your current filters are kept, so you can undo this.",
+      "none": "Save without changing my search",
+      "replaceMain": "Use it for my main search",
+      "updateMain": "Save and update my main search"
+    },
+    "saved": {
+      "drives": "Drives your saved search \"{search}\"",
+      "drivesNone": "Not used by a saved search",
+      "findJobs": "See jobs that fit",
+      "edit": "Edit with Alice",
+      "undo": "Undo the search change",
+      "undone": "Your search's old filters are back.",
+      "others": "Your other job profiles",
+      "drivesMain": "Drives your main search"
+    },
+    "jobs": {
+      "title": "Jobs that fit \"{name}\"",
+      "titleEmpty": "Jobs that fit your profile",
+      "honesty": "A fit compares a job with your resume. It is not your chance of getting hired.",
+      "missing": "Missing: {gap}",
+      "meets": "Matches: {fields}",
+      "named": "A company you named",
+      "view": "View job",
+      "empty": "No open jobs fit this profile right now.",
+      "widen": "Ask Alice to widen it",
+      "noProfile": "Save a job profile and Alice finds the jobs that fit it.",
+      "loading": "Finding jobs…",
+      "error": "Couldn't load the jobs.",
+      "retry": "Try again",
+      "seeAll": "See all jobs",
+      "tier": {
+        "great": "Great fit",
+        "good": "Good fit",
+        "possible": "Possible",
+        "unlikely": "Unlikely"
+      }
+    },
+    "apps": {
+      "title": "Your applications",
+      "stages": "Applications by stage",
+      "needs": "Needs you",
+      "needsEmpty": "Nothing needs you today.",
+      "kind": {
+        "interview_tomorrow": "Interview tomorrow",
+        "deadline_soon": "{days, plural, =0 {Deadline today} one {Deadline in # day} other {Deadline in # days}}",
+        "follow_up_due": "Follow-up due",
+        "no_reply_10d": "No reply for {days} days",
+        "ready_to_check": "Ready for you to check"
+      },
+      "open": "Open",
+      "check": "Check and open",
+      "reminders": "Reminders",
+      "remindersEmpty": "No reminders set.",
+      "due": "Due",
+      "done": "Done",
+      "set": "Set a reminder",
+      "pick": "Choose an application",
+      "date": "Day",
+      "save": "Save reminder",
+      "saveError": "Couldn't save the reminder. Try again.",
+      "all": "Open Applications",
+      "empty": "No applications yet. Save a job or prepare an application, and Alice keeps track of it.",
+      "error": "Couldn't load your applications.",
+      "retry": "Try again"
     }
   },
   "authCn": {

@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, one {# pas encore ouverte} other {# pas encore ouvertes}}",
       "ready_open": "Voir ce qui est prêt",
       "upgrade": "Mettre à niveau"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -5927,6 +5928,348 @@
     },
     "jobList": {
       "title": "Offres mentionnées dans cette réponse"
+    }
+  },
+  "alice": {
+    "tag": "Agent IA",
+    "restart": "Recommencer",
+    "restartConfirm": "Commencer une nouvelle conversation ? Tes profils de poste enregistrés sont conservés.",
+    "cancel": "Annuler",
+    "status": {
+      "working": "Alice s’en occupe",
+      "intake": "Découverte du poste que tu veux · {done} sujets sur {total}",
+      "choosing": "Deux profils de poste sont prêts à être comparés",
+      "refining": "Version {version} de ton profil de poste",
+      "saved": "Ton profil de poste guide ta recherche d’emploi",
+      "savedNeeds": "{count, plural, one {# point demande ton attention} other {# points demandent ton attention}}"
+    },
+    "tabs": {
+      "aria": "Vues d’Alice",
+      "chat": "Discussion",
+      "profile": "Profil",
+      "jobs": "Offres",
+      "applications": "Candidatures"
+    },
+    "greeting": {
+      "hello": "Bonjour, je suis Alice, un agent IA dédié à ta recherche d’emploi et à tes candidatures.",
+      "plan": "Je vais te demander ce que tu attends de ton prochain poste, puis rédiger deux profils de poste à comparer. Choisis le plus proche, dis-moi ce qu’il faut changer, et je le retravaillerai jusqu’à ce qu’il te convienne.",
+      "d1": "Tu envoies chaque candidature toi-même. Je trouve les offres qui te correspondent, je fais le suivi de tes candidatures et je te rappelle les prochaines étapes.",
+      "withResume": "Je peux partir de ton CV « {name} ».",
+      "withoutResume": "Si tu as un CV, ajoute-le et je partirai de là."
+    },
+    "resume": {
+      "use": "Utiliser « {name} »",
+      "other": "Choisir un autre CV",
+      "pickLabel": "Tes CV",
+      "upload": "Importer un CV",
+      "skip": "Continuer sans CV",
+      "hint": "PDF, Word ou texte, 15 Mo maximum.",
+      "hintNoPdf": "Word ou texte, 15 Mo maximum.",
+      "uploading": "Lecture de {name}…",
+      "errors": {
+        "unreadable": "Ce fichier ne contient aucun texte lisible. Essaie un autre fichier.",
+        "tooLarge": "Ce fichier dépasse 15 Mo.",
+        "wrongType": "Utilise un fichier PDF, Word ou texte.",
+        "dailyLimit": "Tu as ajouté le nombre maximum de CV pour aujourd’hui. Réessaie demain, ou continue sans CV.",
+        "failed": "Ça n’a pas marché. Réessaie.",
+        "pdfNeedsConsent": "Les fichiers PDF ne peuvent pas être lus sans l’option de lecture que tu as désactivée. Importe plutôt un fichier Word ou texte.",
+        "consentUnknown": "Nous n’avons pas pu vérifier comment ton fichier serait lu. Réessaie dans un instant.",
+        "consentUnanswered": "Réponds à la question ci-dessous sur la façon dont ton fichier est lu, puis importe-le."
+      }
+    },
+    "action": {
+      "resume": "Utilise mon CV « {label} »",
+      "skip_resume": "Continuons sans CV",
+      "draft_now": "Montre-moi deux profils",
+      "choose": "Celui-ci est plus proche : {label}",
+      "regenerate": "Aucun ne convient",
+      "restore": "Reviens à la version {version}",
+      "save": "Enregistre « {label} »",
+      "find_jobs": "Trouve des offres pour ce profil",
+      "report": "Où en sont mes candidatures ?",
+      "edit_profile": "Modifions « {label} »"
+    },
+    "blocks": {
+      "resumeRead": "J’ai lu « {name} ».",
+      "resumeRoles": "On y voit de l’expérience comme {roles}.",
+      "resumeRolesYears": "On y voit de l’expérience comme {roles}, sur environ {years} ans.",
+      "learned": "C’est noté : {topics}.",
+      "profiles": "Deux profils de poste sont prêts : {a} et {b}.",
+      "compare": "Les comparer",
+      "revisionFirst": "Voici la version 1. Dis-moi ce qu’il faut changer, ou enregistre-la quand elle te convient.",
+      "revision": "La version {version} est prête. J’ai modifié : {fields}.",
+      "seeVersion": "Voir cette version",
+      "restored": "La version {version} est de retour, en tant que version la plus récente.",
+      "saved": "J’ai enregistré « {name} ».",
+      "saved_created": "C’est désormais ta recherche enregistrée « {search} », et ta recherche d’emploi l’utilise.",
+      "saved_updated": "J’ai mis à jour ta recherche enregistrée « {search} » pour qu’elle lui corresponde.",
+      "saved_replaced": "Ta recherche enregistrée « {search} » l’utilise désormais. Ses anciens filtres sont conservés : tu peux annuler ce changement dans Profil.",
+      "saved_kept": "Tes recherches enregistrées n’ont pas changé.",
+      "matches": "{count, plural, =0 {Aucune offre ouverte ne correspond à ce profil pour l’instant. Demande-moi de l’élargir : plus de lieux, un autre niveau ou plus d’intitulés.} one {# offre ouverte correspond à ce profil.} other {# offres ouvertes correspondent à ce profil.}}",
+      "seeJobs": "Voir les offres",
+      "reportFacts": "{active} en cours · {waiting} en attente de réponse · {interviewing} en entretien · {offers} avec une proposition",
+      "seeApplications": "Voir tes candidatures",
+      "reminder": "Le {date}, je te ferai un rappel pour {what}.",
+      "reminderCleared": "J’ai supprimé le rappel pour {what}.",
+      "thisApplication": "cette candidature",
+      "saved_updated_main": "J’ai mis à jour ta recherche principale pour qu’elle corresponde.",
+      "saved_replaced_main": "Ta recherche principale l’utilise maintenant. Ses anciens filtres sont gardés, tu peux annuler dans Profil."
+    },
+    "notice": {
+      "agent_failed": "Je n’ai pas pu terminer. Rien de ce que tu as dit n’est perdu. Réessaie.",
+      "nothing_changed": "Ça n’a rien changé au profil. Dis-m’en plus sur ce que tu voudrais de différent.",
+      "search_full": "Tu n’as plus de place pour une autre recherche enregistrée. Choisis sur la carte d’enregistrement si ce profil doit remplacer ta recherche actuelle.",
+      "resume_unreadable": "Je n’ai pu lire aucun texte dans ce CV. On peut continuer sans, ou tu peux en ajouter un autre.",
+      "turn_limit": "Cette conversation est devenue très longue. Recommence pour continuer ; tes profils enregistrés sont conservés.",
+      "draft_limit": "Tu as demandé beaucoup de nouveaux profils aujourd’hui. Réessaie plus tard.",
+      "enough_questions": "J’en sais assez pour rédiger deux profils de poste. Un instant.",
+      "no_applications": "Tu n’as pas encore de candidature. Garde une offre ou prépare une candidature, et j’en ferai le suivi.",
+      "no_profile": "Enregistre d’abord un profil de poste, puis je pourrai trouver les offres qui y correspondent.",
+      "reminder_ambiguous": "Plusieurs candidatures correspondent. Choisis celle dont tu parles.",
+      "reminder_unknown": "Dis-moi quelle candidature et quel jour, par exemple « relancer Figma vendredi »."
+    },
+    "steps": {
+      "reading_resume": "Lecture de ton CV",
+      "thinking": "Réflexion",
+      "reading_goals": "Lecture de ce que tu veux",
+      "writing_profiles": "Rédaction de deux profils de poste",
+      "revising": "Révision de ton profil",
+      "saving": "Enregistrement de ton profil",
+      "finding_jobs": "Recherche d’offres qui te correspondent",
+      "checking_applications": "Vérification de tes candidatures"
+    },
+    "composer": {
+      "label": "Message à Alice",
+      "placeholder_intake": "Écris ta réponse",
+      "placeholder_choosing": "Lequel est le plus proche ?",
+      "placeholder_refining": "Que faut-il changer ?",
+      "placeholder_saved": "Demande ce que tu veux à Alice",
+      "send": "Envoyer",
+      "attach": "Ajouter un CV",
+      "replies": "Réponses rapides",
+      "sendPicked": "{count, plural, one {Envoyer # réponse} other {Envoyer # réponses}}",
+      "showProfiles": "Montre-moi deux profils"
+    },
+    "errors": {
+      "not_ready": "Alice n’est pas encore activée ici.",
+      "ai_off": "Alice a besoin de ton consentement au traitement par IA. Tu peux l’activer dans les Réglages.",
+      "busy": "Alice est encore en train de répondre à ton dernier message.",
+      "rate_limited": "Tu as envoyé beaucoup de messages. Réessaie dans quelques minutes.",
+      "agent_failed": "Alice n’a pas pu terminer. Réessaie.",
+      "wrong_stage": "Ce n’est pas disponible à cette étape.",
+      "profile_limit": "Tu as enregistré autant de profils de poste qu’Alice peut en garder. Supprimes-en un d’abord.",
+      "search_full": "Tu n’as plus de place pour une autre recherche enregistrée. Choisis sur la carte d’enregistrement ce que tu veux faire.",
+      "interrupted": "La connexion a été coupée. Ta conversation est enregistrée ; recharge la page pour voir les derniers messages.",
+      "generic": "Un problème est survenu. Réessaie.",
+      "retry": "Réessayer"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "Alice n’est pas encore activée ici",
+        "body": "Alice doit être configurée une fois sur ce site. Tout le reste fonctionne comme d’habitude."
+      },
+      "aiOff": {
+        "title": "Alice a besoin de l’IA pour fonctionner",
+        "body": "L’IA n’est pas disponible pour ton compte en ce moment. Si tu l’as désactivée, tu peux la réactiver dans les Réglages."
+      },
+      "loadFailed": {
+        "title": "Impossible de charger ta conversation avec Alice",
+        "body": "Vérifie ta connexion et réessaie."
+      }
+    },
+    "brief": {
+      "title": "Ce qu’Alice sait déjà",
+      "intro": "Tout ce qui figure ici vient de tes réponses. Rien n’est figé tant que tu n’as pas choisi de profil.",
+      "progress": "{done} sujets sur {total}",
+      "skipped": "Passé",
+      "not": "Sauf {value}",
+      "fromResume": "Alice lit aussi ton CV « {name} ».",
+      "ready": "C’est assez pour rédiger deux profils de poste. Tu peux répondre à d’autres questions, ou les voir maintenant.",
+      "notReady": "Encore quelques réponses et Alice pourra rédiger deux profils de poste.",
+      "topics": {
+        "roles": "Type de poste",
+        "level": "Niveau",
+        "workSetting": "Mode de travail",
+        "places": "Lieux",
+        "pay": "Salaire minimum",
+        "industries": "Secteurs",
+        "companyKind": "Type d’entreprise",
+        "companySize": "Taille de l’entreprise",
+        "companies": "Entreprises que tu admires",
+        "dreamJob": "Poste de rêve",
+        "values": "Ce qui compte le plus",
+        "dealbreakers": "Critères éliminatoires",
+        "timing": "Délai",
+        "sponsorship": "Parrainage de visa"
+      }
+    },
+    "fields": {
+      "label": "Nom",
+      "headline": "En une phrase",
+      "summary": "Résumé",
+      "titles": "Intitulés de poste",
+      "levels": "Niveau",
+      "workModels": "Mode de travail",
+      "places": "Lieux",
+      "pay": "Salaire minimum",
+      "industries": "Secteurs",
+      "companyKinds": "Type d’entreprise",
+      "companySizes": "Taille de l’entreprise",
+      "companies": "Entreprises",
+      "skills": "Compétences",
+      "mustHaves": "Indispensable",
+      "niceToHaves": "Un plus",
+      "dealbreakers": "Critères éliminatoires",
+      "whyItFits": "Pourquoi ça te correspond",
+      "tradeoff": "Ce à quoi tu renonces",
+      "jobTypes": "Type de contrat"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "Stagiaire ou jeune diplômé",
+        "entry": "Débutant",
+        "mid": "Confirmé",
+        "senior": "Senior",
+        "lead_staff": "Lead ou staff",
+        "director_exec": "Direction et au-delà"
+      },
+      "workModels": {
+        "remote": "Télétravail",
+        "hybrid": "Hybride",
+        "onsite": "Sur site"
+      },
+      "companyKinds": {
+        "startup": "Start-up",
+        "scaleup": "Scale-up",
+        "enterprise": "Grande entreprise",
+        "public_sector": "Secteur public",
+        "nonprofit": "Association ou ONG"
+      },
+      "jobTypes": {
+        "full_time": "Temps plein",
+        "contract": "Contrat temporaire",
+        "part_time": "Temps partiel",
+        "internship": "Stage"
+      },
+      "timing": {
+        "now": "Dès que possible",
+        "soon": "Dans les prochains mois",
+        "exploring": "Je regarde simplement"
+      },
+      "sponsorship": {
+        "yes": "Besoin d’un parrainage de visa",
+        "no": "Pas besoin de parrainage"
+      },
+      "payPer": {
+        "year": "{amount} par an",
+        "month": "{amount} par mois",
+        "hour": "{amount} par heure"
+      },
+      "companySize": "{size} personnes",
+      "companyYou": "Tu l’as citée",
+      "companyAlice": "Exemple d’Alice"
+    },
+    "compare": {
+      "title": "Lequel se rapproche le plus de ce que tu veux ?",
+      "intro": "Deux pistes que tes réponses laissent ouvertes. Choisis la plus proche.",
+      "differsHint": "Un point indique où les deux diffèrent.",
+      "differs": "diffère",
+      "choose": "Celui-ci est plus proche",
+      "commentLabel": "Dis à Alice ce qu’il faut changer",
+      "commentPlaceholder": "Par exemple : le premier, mais en télétravail et sans déplacements",
+      "commentHint": "Écris-le ici, puis choisis un profil : Alice retravaille celui que tu choisis. Ou dis-lui pourquoi aucun ne convient.",
+      "neither": "Aucun ne convient"
+    },
+    "profile": {
+      "version": "Version {version}",
+      "yourComment": "Tu as dit : « {comment} »",
+      "aliceNotes": "Ce qu’Alice a modifié",
+      "changed": "Modifié",
+      "was": "Avant : {value}",
+      "history": "Versions",
+      "historyPick": "Tu as choisi « {label} »",
+      "historyEdit": "« {comment} »",
+      "historyRestore": "Retour à la version {version}",
+      "historySaved": "Ton profil enregistré",
+      "restore": "Restaurer",
+      "current": "Actuelle",
+      "commentLabel": "Qu’est-ce qui doit changer ?",
+      "commentPlaceholder": "Par exemple : ajoute le travail hybride à Paris, et pas d’agences de recrutement",
+      "send": "Retravailler",
+      "newPair": "Repartir de deux nouveaux profils"
+    },
+    "save": {
+      "title": "Ça te convient ?",
+      "name": "Nom du profil",
+      "create": "Enregistrer et l’utiliser pour ma recherche d’emploi",
+      "createHint": "Alice l’ajoute comme recherche enregistrée et l’active. Tes autres recherches restent en place.",
+      "update": "Enregistrer et mettre à jour « {search} »",
+      "updateHint": "La recherche enregistrée qu’il guide est mise à jour pour lui correspondre.",
+      "replace": "L’utiliser pour ma recherche « {search} »",
+      "replaceHint": "Tu n’as plus de place pour une autre recherche enregistrée. Tes filtres actuels sont conservés : tu pourras annuler ce changement.",
+      "none": "Enregistrer sans modifier ma recherche",
+      "replaceMain": "L’utiliser pour ma recherche principale",
+      "updateMain": "Enregistrer et mettre à jour ma recherche principale"
+    },
+    "saved": {
+      "drives": "Guide ta recherche enregistrée « {search} »",
+      "drivesNone": "Aucune recherche enregistrée ne l’utilise",
+      "findJobs": "Voir les offres qui correspondent",
+      "edit": "Modifier avec Alice",
+      "undo": "Annuler le changement de recherche",
+      "undone": "Les anciens filtres de ta recherche sont rétablis.",
+      "others": "Tes autres profils de poste",
+      "drivesMain": "Utilisé par ta recherche principale"
+    },
+    "jobs": {
+      "title": "Offres qui correspondent à « {name} »",
+      "titleEmpty": "Offres qui correspondent à ton profil",
+      "honesty": "L’adéquation compare une offre à ton CV. Ce n’est pas ta probabilité d’être recruté.",
+      "missing": "Il manque : {gap}",
+      "meets": "Correspond : {fields}",
+      "named": "Une entreprise que tu as citée",
+      "view": "Voir l’offre",
+      "empty": "Aucune offre ouverte ne correspond à ce profil pour l’instant.",
+      "widen": "Demander à Alice de l’élargir",
+      "noProfile": "Enregistre un profil de poste et Alice trouvera les offres qui y correspondent.",
+      "loading": "Recherche d’offres…",
+      "error": "Impossible de charger les offres.",
+      "retry": "Réessayer",
+      "seeAll": "Voir toutes les offres",
+      "tier": {
+        "great": "Très adapté",
+        "good": "Bien adapté",
+        "possible": "Possible",
+        "unlikely": "Peu probable"
+      }
+    },
+    "apps": {
+      "title": "Tes candidatures",
+      "stages": "Candidatures par étape",
+      "needs": "Demande ton attention",
+      "needsEmpty": "Rien ne demande ton attention aujourd’hui.",
+      "kind": {
+        "interview_tomorrow": "Entretien demain",
+        "deadline_soon": "{days, plural, =0 {Date limite aujourd’hui} one {Date limite dans # jour} other {Date limite dans # jours}}",
+        "follow_up_due": "Relance à faire",
+        "no_reply_10d": "Pas de réponse depuis {days} jours",
+        "ready_to_check": "Prête pour ta vérification"
+      },
+      "open": "Ouvrir",
+      "check": "Vérifier et ouvrir",
+      "reminders": "Rappels",
+      "remindersEmpty": "Aucun rappel prévu.",
+      "due": "À faire",
+      "done": "Fait",
+      "set": "Programmer un rappel",
+      "pick": "Choisir une candidature",
+      "date": "Jour",
+      "save": "Enregistrer le rappel",
+      "saveError": "Impossible d’enregistrer le rappel. Réessaie.",
+      "all": "Ouvrir les candidatures",
+      "empty": "Pas encore de candidature. Garde une offre ou prépare une candidature, et Alice en fera le suivi.",
+      "error": "Impossible de charger tes candidatures.",
+      "retry": "Réessayer"
     }
   },
   "brand": {

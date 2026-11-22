@@ -93,6 +93,7 @@ export type CapabilityKey = (typeof CAPABILITY_KEYS)[number];
 export const PRODUCT_FLAG_KEYS = [
   'copilot',
   'agent',
+  'alice',
   'extension',
   'coaching',
   'interviewBank',
@@ -317,7 +318,7 @@ function wechatPayReady(brand: ProductBrand, env: EnvSource): boolean {
  * requirement, so when a brand cannot run AI text they are hidden and their
  * routes answer 503 `ai_unavailable`.
  */
-export const AI_DEPENDENT_FLAGS: ReadonlySet<FlagKey> = new Set<FlagKey>(['copilot', 'agent', 'visitorAssistant', 'competitiveness']);
+export const AI_DEPENDENT_FLAGS: ReadonlySet<FlagKey> = new Set<FlagKey>(['copilot', 'agent', 'alice', 'visitorAssistant', 'competitiveness']);
 
 /**
  * Campus calendar requirement, shared by `campusCalendar` and
@@ -456,6 +457,7 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
     // ── AI-only product surfaces ─────────────────────────────────────────
     case 'copilot':
     case 'agent':
+    case 'alice':
     case 'visitorAssistant':
     case 'competitiveness':
       return aiTextConfigured(brand, env);

@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, other {#건 미확인}}",
       "ready_open": "준비된 것 보기",
       "upgrade": "업그레이드"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -5927,6 +5928,348 @@
     },
     "jobList": {
       "title": "이 답변에서 언급한 공고"
+    }
+  },
+  "alice": {
+    "tag": "AI 에이전트",
+    "restart": "처음부터 다시 하기",
+    "restartConfirm": "새 대화를 시작할까요? 저장한 직무 프로필은 그대로 남아요.",
+    "cancel": "취소",
+    "status": {
+      "working": "Alice가 작업하고 있어요",
+      "intake": "원하는 일을 알아보는 중 · {total}개 항목 중 {done}개",
+      "choosing": "비교할 직무 프로필 두 개가 준비됐어요",
+      "refining": "직무 프로필 버전 {version}",
+      "saved": "직무 프로필이 공고 검색에 쓰이고 있어요",
+      "savedNeeds": "{count, plural, one {처리할 일이 #건 있어요} other {처리할 일이 #건 있어요}}"
+    },
+    "tabs": {
+      "aria": "Alice 화면",
+      "chat": "대화",
+      "profile": "프로필",
+      "jobs": "채용공고",
+      "applications": "지원 현황"
+    },
+    "greeting": {
+      "hello": "안녕하세요, 저는 Alice예요. 구직과 지원을 돕는 AI 에이전트예요.",
+      "plan": "먼저 다음 일자리에서 원하는 것을 여쭤볼게요. 그다음 비교해 보실 수 있게 직무 프로필 두 개를 작성할게요. 더 가까운 쪽을 고르고 바꿀 점을 알려 주시면, 마음에 드실 때까지 수정할게요.",
+      "d1": "지원서는 모두 직접 제출하시게 돼요. 저는 잘 맞는 공고를 찾고, 지원 현황을 챙기고, 다음에 할 일을 알려 드려요.",
+      "withResume": "‘{name}’ 이력서를 바탕으로 시작할 수 있어요.",
+      "withoutResume": "이력서가 있으면 추가해 주세요. 그 이력서를 바탕으로 시작할게요."
+    },
+    "resume": {
+      "use": "‘{name}’ 사용하기",
+      "other": "다른 이력서 고르기",
+      "pickLabel": "내 이력서",
+      "upload": "이력서 올리기",
+      "skip": "이력서 없이 계속하기",
+      "hint": "PDF, Word 또는 텍스트 파일, 최대 15 MB.",
+      "hintNoPdf": "Word 또는 텍스트 파일, 최대 15 MB.",
+      "uploading": "{name} 읽는 중…",
+      "errors": {
+        "unreadable": "이 파일에는 읽을 수 있는 텍스트가 없어요. 다른 파일로 시도해 주세요.",
+        "tooLarge": "이 파일은 15 MB보다 커요.",
+        "wrongType": "PDF, Word 또는 텍스트 파일을 사용해 주세요.",
+        "dailyLimit": "오늘 추가할 수 있는 이력서를 모두 추가했어요. 내일 다시 시도하거나 이력서 없이 계속해 주세요.",
+        "failed": "잘 되지 않았어요. 다시 시도해 주세요.",
+        "pdfNeedsConsent": "꺼 둔 읽기 옵션 없이는 PDF 파일을 읽을 수 없어요. Word나 텍스트 파일을 올려 주세요.",
+        "consentUnknown": "파일을 어떻게 읽게 될지 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
+        "consentUnanswered": "파일을 읽는 방식에 대한 아래 질문에 답한 뒤 올려 주세요."
+      }
+    },
+    "action": {
+      "resume": "‘{label}’ 이력서를 사용해 주세요",
+      "skip_resume": "이력서 없이 진행해 주세요",
+      "draft_now": "프로필 두 개를 보여 주세요",
+      "choose": "이쪽이 더 가까워요: {label}",
+      "regenerate": "둘 다 맞지 않아요",
+      "restore": "버전 {version} 다시 불러와 주세요",
+      "save": "‘{label}’ 프로필을 저장해 주세요",
+      "find_jobs": "이 프로필에 맞는 공고를 찾아 주세요",
+      "report": "내 지원 현황은 어때요?",
+      "edit_profile": "‘{label}’ 프로필을 수정해 주세요"
+    },
+    "blocks": {
+      "resumeRead": "‘{name}’ 이력서를 읽었어요.",
+      "resumeRoles": "{roles} 경력이 나와 있어요.",
+      "resumeRolesYears": "{roles} 경력이 약 {years}년 나와 있어요.",
+      "learned": "메모했어요: {topics}.",
+      "profiles": "직무 프로필 두 개가 준비됐어요: ‘{a}’, ‘{b}’.",
+      "compare": "비교해 보기",
+      "revisionFirst": "버전 1이에요. 바꿀 점을 알려 주시거나, 마음에 드시면 저장해 주세요.",
+      "revision": "버전 {version} 준비됐어요. 바꾼 항목: {fields}.",
+      "seeVersion": "이 버전 보기",
+      "restored": "버전 {version}의 내용을 최신 버전으로 되돌렸어요.",
+      "saved": "‘{name}’ 프로필을 저장했어요.",
+      "saved_created": "검색을 새로 저장했어요: ‘{search}’. 이제 공고 검색에 이 검색이 쓰여요.",
+      "saved_updated": "저장한 검색 ‘{search}’의 조건을 이 프로필에 맞게 바꿨어요.",
+      "saved_replaced": "이제 저장한 검색 ‘{search}’에 이 프로필을 써요. 이전 필터는 남겨 두었으니 ‘프로필’ 탭에서 되돌릴 수 있어요.",
+      "saved_kept": "저장한 검색은 그대로예요.",
+      "matches": "{count, plural, =0 {지금은 이 프로필에 맞는 채용 중인 공고가 없어요. 조건을 넓혀 달라고 말씀해 주세요. 근무지를 늘리거나, 다른 직급으로 바꾸거나, 직무 이름을 더 넣을 수 있어요.} one {이 프로필에 맞는 채용 중인 공고가 #건 있어요.} other {이 프로필에 맞는 채용 중인 공고가 #건 있어요.}}",
+      "seeJobs": "공고 보기",
+      "reportFacts": "진행 중 {active}건 · 답변 대기 {waiting}건 · 통화·면접 중 {interviewing}건 · 합격 {offers}건",
+      "seeApplications": "지원 현황 보기",
+      "reminder": "{date}에 {what} 관련 알림을 보내 드릴게요.",
+      "reminderCleared": "{what} 리마인더를 지웠어요.",
+      "thisApplication": "이 지원 건",
+      "saved_updated_main": "이 프로필에 맞게 기본 검색을 업데이트했어요.",
+      "saved_replaced_main": "이제 기본 검색이 이 프로필을 사용해요. 이전 필터는 남겨 두었으니 프로필에서 되돌릴 수 있어요."
+    },
+    "notice": {
+      "agent_failed": "끝까지 처리하지 못했어요. 말씀하신 내용은 그대로 남아 있어요. 다시 시도해 주세요.",
+      "nothing_changed": "프로필이 바뀌지 않았어요. 어떤 점이 달라지면 좋을지 조금 더 알려 주세요.",
+      "search_full": "저장한 검색을 더 추가할 수 없어요. 이 프로필을 지금 쓰는 검색에 적용할지 저장 카드에서 골라 주세요.",
+      "resume_unreadable": "그 이력서에서는 글자를 읽지 못했어요. 이력서 없이 진행하거나 다른 이력서를 추가할 수 있어요.",
+      "turn_limit": "대화가 많이 길어졌어요. 계속하려면 처음부터 다시 시작해 주세요. 저장한 프로필은 그대로 남아요.",
+      "draft_limit": "오늘 새 프로필을 많이 요청하셨어요. 나중에 다시 시도해 주세요.",
+      "enough_questions": "직무 프로필 두 개를 작성하기에 충분해요. 잠시만 기다려 주세요.",
+      "no_applications": "아직 지원 건이 없어요. 공고를 저장하거나 지원서를 준비하시면 제가 현황을 챙길게요.",
+      "no_profile": "먼저 직무 프로필을 저장해 주세요. 그러면 맞는 공고를 찾아 드릴 수 있어요.",
+      "reminder_ambiguous": "해당하는 지원 건이 여러 개예요. 어느 건인지 골라 주세요.",
+      "reminder_unknown": "어느 지원 건을 어느 날 알려 드릴지 말씀해 주세요. 예: “금요일에 Figma에 확인 연락”"
+    },
+    "steps": {
+      "reading_resume": "이력서를 읽는 중",
+      "thinking": "생각하는 중",
+      "reading_goals": "원하는 조건을 살펴보는 중",
+      "writing_profiles": "직무 프로필 두 개를 작성하는 중",
+      "revising": "프로필을 수정하는 중",
+      "saving": "프로필을 저장하는 중",
+      "finding_jobs": "맞는 공고를 찾는 중",
+      "checking_applications": "지원 현황을 확인하는 중"
+    },
+    "composer": {
+      "label": "Alice에게 보낼 메시지",
+      "placeholder_intake": "답변을 입력해 주세요",
+      "placeholder_choosing": "어느 쪽이 더 가깝나요?",
+      "placeholder_refining": "무엇을 바꿀까요?",
+      "placeholder_saved": "Alice에게 무엇이든 물어보세요",
+      "send": "보내기",
+      "attach": "이력서 추가",
+      "replies": "빠른 답변",
+      "sendPicked": "{count, plural, one {답변 #개 보내기} other {답변 #개 보내기}}",
+      "showProfiles": "프로필 두 개 보기"
+    },
+    "errors": {
+      "not_ready": "이 사이트에서는 아직 Alice가 켜져 있지 않아요.",
+      "ai_off": "Alice를 쓰려면 AI 처리에 동의해야 해요. 설정에서 켤 수 있어요.",
+      "busy": "Alice가 아직 이전 메시지에 답하고 있어요.",
+      "rate_limited": "메시지를 많이 보냈어요. 몇 분 뒤에 다시 시도해 주세요.",
+      "agent_failed": "Alice가 끝까지 처리하지 못했어요. 다시 시도해 주세요.",
+      "wrong_stage": "이 단계에서는 쓸 수 없어요.",
+      "profile_limit": "Alice가 보관할 수 있는 직무 프로필 수를 모두 채웠어요. 먼저 하나를 삭제해 주세요.",
+      "search_full": "저장한 검색을 더 추가할 수 없어요. 어떻게 할지 저장 카드에서 골라 주세요.",
+      "interrupted": "연결이 끊겼어요. 대화는 저장돼 있으니 새로고침하면 최신 내용을 볼 수 있어요.",
+      "generic": "문제가 생겼어요. 다시 시도해 주세요.",
+      "retry": "다시 시도"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "이 사이트에서는 아직 Alice가 켜져 있지 않아요",
+        "body": "이 사이트에서는 아직 Alice를 쓰기 위한 첫 설정이 끝나지 않았어요. 다른 기능은 평소처럼 쓸 수 있어요."
+      },
+      "aiOff": {
+        "title": "Alice는 AI가 있어야 작동해요",
+        "body": "지금은 이 계정에서 AI를 쓸 수 없어요. AI를 꺼 두었다면 설정에서 켤 수 있어요."
+      },
+      "loadFailed": {
+        "title": "Alice와의 대화를 불러오지 못했어요",
+        "body": "연결 상태를 확인하고 다시 시도해 주세요."
+      }
+    },
+    "brief": {
+      "title": "지금까지 Alice가 알게 된 것",
+      "intro": "여기 있는 내용은 모두 내 답변에서 나왔어요. 프로필을 고르기 전까지는 아무것도 확정되지 않아요.",
+      "progress": "{total}개 항목 중 {done}개",
+      "skipped": "건너뜀",
+      "not": "{value} 제외",
+      "fromResume": "Alice는 ‘{name}’ 이력서도 함께 보고 있어요.",
+      "ready": "직무 프로필 두 개를 작성하기에 충분해요. 더 답하거나 지금 바로 볼 수 있어요.",
+      "notReady": "몇 가지만 더 답하면 Alice가 직무 프로필 두 개를 작성할 수 있어요.",
+      "topics": {
+        "roles": "직종",
+        "level": "직급",
+        "workSetting": "근무 방식",
+        "places": "근무지",
+        "pay": "최소 급여",
+        "industries": "업계",
+        "companyKind": "회사 유형",
+        "companySize": "회사 규모",
+        "companies": "가고 싶은 회사",
+        "dreamJob": "꿈꾸는 일",
+        "values": "가장 중요한 것",
+        "dealbreakers": "받아들일 수 없는 조건",
+        "timing": "희망 시기",
+        "sponsorship": "비자 스폰서십"
+      }
+    },
+    "fields": {
+      "label": "이름",
+      "headline": "한 줄 소개",
+      "summary": "요약",
+      "titles": "직무 이름",
+      "levels": "직급",
+      "workModels": "근무 방식",
+      "places": "근무지",
+      "pay": "최소 급여",
+      "industries": "업계",
+      "companyKinds": "회사 유형",
+      "companySizes": "회사 규모",
+      "companies": "회사",
+      "skills": "기술",
+      "mustHaves": "꼭 필요한 조건",
+      "niceToHaves": "있으면 좋은 조건",
+      "dealbreakers": "받아들일 수 없는 조건",
+      "whyItFits": "나와 맞는 이유",
+      "tradeoff": "포기하는 것",
+      "jobTypes": "고용 형태"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "인턴 또는 신규 졸업자",
+        "entry": "신입",
+        "mid": "중간 경력",
+        "senior": "시니어",
+        "lead_staff": "리드 또는 스태프",
+        "director_exec": "디렉터 이상"
+      },
+      "workModels": {
+        "remote": "원격",
+        "hybrid": "하이브리드",
+        "onsite": "사무실 출근"
+      },
+      "companyKinds": {
+        "startup": "스타트업",
+        "scaleup": "급성장 기업",
+        "enterprise": "대기업",
+        "public_sector": "공공 부문",
+        "nonprofit": "비영리 단체"
+      },
+      "jobTypes": {
+        "full_time": "풀타임",
+        "contract": "계약직",
+        "part_time": "파트타임",
+        "internship": "인턴십"
+      },
+      "timing": {
+        "now": "가능한 한 빨리",
+        "soon": "몇 달 안에",
+        "exploring": "일단 둘러보는 중"
+      },
+      "sponsorship": {
+        "yes": "비자 스폰서십 필요",
+        "no": "스폰서십 필요 없음"
+      },
+      "payPer": {
+        "year": "연봉 {amount}",
+        "month": "월급 {amount}",
+        "hour": "시급 {amount}"
+      },
+      "companySize": "{size}명",
+      "companyYou": "내가 꼽은 회사",
+      "companyAlice": "Alice가 든 예시"
+    },
+    "compare": {
+      "title": "어느 쪽이 원하는 것에 더 가까운가요?",
+      "intro": "답변을 보면 두 방향이 모두 가능해요. 더 가까운 쪽을 골라 주세요.",
+      "differsHint": "점이 표시된 항목은 두 프로필이 서로 달라요.",
+      "differs": "차이 있음",
+      "choose": "이쪽이 더 가까워요",
+      "commentLabel": "바꿀 점을 Alice에게 알려 주세요",
+      "commentPlaceholder": "예: 첫 번째가 좋은데, 원격 근무에 출장은 없게 해 주세요",
+      "commentHint": "여기에 적은 뒤 프로필을 골라 주세요. 고른 쪽을 Alice가 수정해요. 둘 다 맞지 않으면 그 이유를 알려 주세요.",
+      "neither": "둘 다 아니에요"
+    },
+    "profile": {
+      "version": "버전 {version}",
+      "yourComment": "내 의견: “{comment}”",
+      "aliceNotes": "Alice가 바꾼 점",
+      "changed": "변경됨",
+      "was": "이전: {value}",
+      "history": "버전 기록",
+      "historyPick": "‘{label}’ 선택",
+      "historyEdit": "“{comment}”",
+      "historyRestore": "버전 {version} 복원",
+      "historySaved": "저장한 프로필",
+      "restore": "복원",
+      "current": "현재",
+      "commentLabel": "무엇을 바꿀까요?",
+      "commentPlaceholder": "예: 베를린 하이브리드 근무를 추가하고 채용 대행사는 빼 주세요",
+      "send": "수정하기",
+      "newPair": "새 프로필 두 개로 다시 시작하기"
+    },
+    "save": {
+      "title": "이대로 괜찮나요?",
+      "name": "프로필 이름",
+      "create": "저장하고 공고 검색에 쓰기",
+      "createHint": "Alice가 저장한 검색으로 추가하고 켜 둬요. 다른 검색은 그대로 남아요.",
+      "update": "저장하고 ‘{search}’ 업데이트",
+      "updateHint": "이 프로필을 쓰는 저장한 검색도 맞춰서 바뀌어요.",
+      "replace": "‘{search}’ 검색에 쓰기",
+      "replaceHint": "저장한 검색을 더 추가할 수 없어요. 지금 필터는 남겨 두니 나중에 되돌릴 수 있어요.",
+      "none": "검색은 그대로 두고 저장",
+      "replaceMain": "내 기본 검색에 사용",
+      "updateMain": "저장하고 기본 검색 업데이트"
+    },
+    "saved": {
+      "drives": "저장한 검색 ‘{search}’에 쓰이고 있어요",
+      "drivesNone": "저장한 검색에 쓰이지 않아요",
+      "findJobs": "맞는 공고 보기",
+      "edit": "Alice와 함께 수정하기",
+      "undo": "검색 변경 되돌리기",
+      "undone": "검색 필터를 이전 상태로 되돌렸어요.",
+      "others": "내 다른 직무 프로필",
+      "drivesMain": "기본 검색에 사용 중"
+    },
+    "jobs": {
+      "title": "‘{name}’에 맞는 공고",
+      "titleEmpty": "내 프로필에 맞는 공고",
+      "honesty": "적합도는 공고와 내 이력서를 비교한 거예요. 합격 확률이 아니에요.",
+      "missing": "부족한 점: {gap}",
+      "meets": "맞는 항목: {fields}",
+      "named": "내가 꼽은 회사",
+      "view": "공고 보기",
+      "empty": "지금은 이 프로필에 맞는 채용 중인 공고가 없어요.",
+      "widen": "Alice에게 조건을 넓혀 달라고 하기",
+      "noProfile": "직무 프로필을 저장하면 Alice가 그에 맞는 공고를 찾아요.",
+      "loading": "공고를 찾는 중…",
+      "error": "공고를 불러오지 못했어요.",
+      "retry": "다시 시도",
+      "seeAll": "모든 공고 보기",
+      "tier": {
+        "great": "아주 잘 맞음",
+        "good": "잘 맞음",
+        "possible": "가능성 있음",
+        "unlikely": "맞기 어려움"
+      }
+    },
+    "apps": {
+      "title": "내 지원 현황",
+      "stages": "단계별 지원 현황",
+      "needs": "처리할 일",
+      "needsEmpty": "오늘 처리할 일은 없어요.",
+      "kind": {
+        "interview_tomorrow": "내일 면접",
+        "deadline_soon": "{days, plural, =0 {오늘 마감} one {마감 #일 전} other {마감 #일 전}}",
+        "follow_up_due": "확인 연락할 때예요",
+        "no_reply_10d": "{days}일째 답 없음",
+        "ready_to_check": "확인할 준비가 됐어요"
+      },
+      "open": "열기",
+      "check": "확인하고 열기",
+      "reminders": "리마인더",
+      "remindersEmpty": "설정한 리마인더가 없어요.",
+      "due": "확인 연락할 때예요",
+      "done": "완료",
+      "set": "리마인더 설정",
+      "pick": "지원 건 선택",
+      "date": "날짜",
+      "save": "리마인더 저장",
+      "saveError": "리마인더를 저장하지 못했어요. 다시 시도해 주세요.",
+      "all": "지원 현황 열기",
+      "empty": "아직 지원 건이 없어요. 공고를 저장하거나 지원서를 준비하면 Alice가 현황을 챙겨요.",
+      "error": "지원 현황을 불러오지 못했어요.",
+      "retry": "다시 시도"
     }
   },
   "brand": {
