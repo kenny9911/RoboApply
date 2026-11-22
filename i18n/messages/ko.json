@@ -4005,6 +4005,10 @@
           "sub": "공고 출처, 백그라운드 작업, 이메일, 어시스턴트, 비용을 실시간으로 집계해요.",
           "title": "시스템"
         },
+        "llm": {
+          "title": "LLM 게이트웨이",
+          "sub": "AI 제공업체와 모델, 그리고 작업별로 쓰는 모델이에요."
+        },
         "visitors": {
           "title": "방문자와 가입",
           "sub": "누가 왔는지, 어디서 왔는지, 몇 명이 계정을 만들었는지."
@@ -4517,6 +4521,215 @@
           "off": "연결되지 않음",
           "rapidapi": "검색 서비스",
           "syndication": "채용 피드에서 읽음"
+        }
+      },
+      "llm": {
+        "eyebrow": "관리자",
+        "title": "LLM 게이트웨이",
+        "sub": "AI 제공업체를 한 번 저장한 뒤 작업 종류별로 제공업체와 모델을 고르세요. 변경 사항은 약 30초 안에 새 요청부터 적용돼요.",
+        "loading": "불러오는 중…",
+        "refresh": "새로고침",
+        "refreshing": "새로고침 중…",
+        "cancel": "취소",
+        "environment": {
+          "production": "운영 설정",
+          "development": "개발 설정"
+        },
+        "dbDisabled": "이 서버에서는 저장된 설정이 꺼져 있어요(LLM_SETTINGS_DB_DISABLED). 설정은 계속 수정할 수 있지만, 이 값을 끄기 전까지 모든 요청은 환경 변수를 사용해요.",
+        "encryptionMissing": "이 서버에 FIELD_ENCRYPTION_KEY가 없어서 API 키를 저장할 수 없어요. 제공업체를 추가하기 전에 먼저 설정해 주세요.",
+        "types": {
+          "newapi": "OpenAI 호환"
+        },
+        "providers": {
+          "title": "제공업체",
+          "sub": "제공업체 하나는 엔드포인트 하나와 API 키 하나예요. 계정이나 게이트웨이를 둘 쓰려면 같은 서비스를 두 번 추가하세요.",
+          "add": "제공업체 추가",
+          "empty": "아직 제공업체가 없어요. 하나 추가한 뒤 아래 영역에 지정해 주세요.",
+          "full": "제공업체는 최대 {max}개까지 둘 수 있어요. 새로 추가하려면 하나를 삭제해 주세요.",
+          "noUrl": "URL 없음",
+          "off": "꺼짐",
+          "ready": "사용 가능",
+          "keyUnreadable": "키를 읽을 수 없음",
+          "keyUnreadableHelp": "저장된 키가 다른 FIELD_ENCRYPTION_KEY로 암호화돼 있어서 여기서는 읽을 수 없어요. 키를 다시 입력하기 전까지 이 제공업체에 지정된 영역은 상속받은 모델을 사용해요.",
+          "key": "API 키",
+          "noKey": "없음",
+          "models": "모델",
+          "modelCount": "{count, plural, one {모델 {n}개} other {모델 {n}개}}",
+          "modelsNever": "아직 가져오지 않음",
+          "fetchedAt": "목록을 가져온 시각",
+          "edit": "수정",
+          "fetchModels": "모델 가져오기",
+          "refreshModels": "모델 새로고침",
+          "fetching": "가져오는 중…",
+          "showModels": "모델 보기",
+          "hideModels": "모델 숨기기",
+          "turnOff": "끄기",
+          "turnOn": "켜기",
+          "remove": "삭제",
+          "removeConfirm": "{name} 삭제"
+        },
+        "form": {
+          "addTitle": "제공업체 추가",
+          "editTitle": "제공업체 수정",
+          "name": "이름",
+          "nameHint": "영역 목록에 표시돼요. 예: \"OpenRouter (메인)\"",
+          "type": "유형",
+          "typeHint": "엔드포인트가 사용하는 API예요. 게이트웨이나 프록시라면 OpenAI 호환을 고르세요.",
+          "typeHintNoTools": "이 유형은 여기서 도구 호출을 스트리밍할 수 없어서 어시스턴트 영역에는 쓸 수 없어요.",
+          "baseUrl": "API 기본 URL",
+          "baseUrlRequired": "필수예요. https://gateway.example.com/v1처럼 버전 경로까지 입력하고, /chat/completions 같은 엔드포인트는 붙이지 마세요.",
+          "baseUrlOptional": "비워 두면 {url}을(를) 사용해요.",
+          "apiKey": "API 키",
+          "apiKeyHint": "암호화해서 저장해요. 저장한 뒤에는 다시 표시되지 않아요.",
+          "apiKeyKeep": "비워 두면 저장된 키를 그대로 써요. URL을 다른 호스트로 바꾸면 키를 다시 입력해야 해요.",
+          "notes": "메모(선택)",
+          "enabled": "이 제공업체 사용",
+          "save": "제공업체 저장",
+          "saving": "저장하는 중…",
+          "test": "저장하지 않고 테스트",
+          "testing": "테스트하는 중…",
+          "saveHint": "저장할 때 이 키로 제공업체의 모델 목록도 함께 가져와요."
+        },
+        "modelList": {
+          "ok": "{count, plural, one {제공업체가 모델 {n}개를 제공해요.} other {제공업체가 모델 {n}개를 제공해요.}}",
+          "okTruncated": "제공업체의 모델이 {n}개보다 많아서 처음 {n}개만 보관했어요. 다른 모델은 모델 ID를 직접 입력해 주세요.",
+          "invalid_base_url": "이 기본 URL은 사용할 수 없어요. 주소를 확인해 주세요. 사설 호스트는 자체 호스팅 유형만 가리킬 수 있어요.",
+          "key_required": "제공업체에 모델 목록을 요청하려면 API 키를 입력해 주세요.",
+          "auth_rejected": "제공업체가 API 키를 거부했어요.",
+          "not_supported": "이 엔드포인트에는 모델 목록이 없어요. 기본 URL을 확인하거나 모델 ID를 직접 입력해 주세요.",
+          "rate_limited": "제공업체가 요청을 제한하고 있어요. 1분 뒤에 다시 시도해 주세요.",
+          "timeout": "제공업체가 8초 안에 응답하지 않았어요.",
+          "unreachable": "제공업체에 연결할 수 없어요. 기본 URL을 확인해 주세요.",
+          "invalid_response": "제공업체가 응답했지만 모델 목록이 아니었어요.",
+          "response_too_large": "제공업체의 모델 목록이 너무 커서 읽을 수 없어요.",
+          "provider_error": "제공업체에서 오류가 발생했어요."
+        },
+        "areas": {
+          "title": "기능 영역",
+          "sub": "영역마다 제공업체와 모델을 지정하거나, 지정하지 않고 상속받게 둘 수 있어요. 건드리지 않은 영역은 지금과 똑같이 동작해요.",
+          "brand": "사이트",
+          "goapplyNote": "{site}는 자체 지정이 없는 영역에 {shared}의 지정을 사용해요.",
+          "noProviders": "영역을 지정하려면 위에서 제공업체를 추가해 주세요.",
+          "assigned": "지정됨",
+          "notInEffect": "적용 안 됨",
+          "inherits": "상속",
+          "provider": "제공업체",
+          "inheritOption": "지정 안 함(상속)",
+          "providerOff": "{name}(꺼짐)",
+          "model": "모델",
+          "save": "저장",
+          "clear": "지정 해제",
+          "modelHint": "제공업체의 목록에서 모델을 고르거나, 목록에 없는 모델 ID를 직접 입력하세요.",
+          "noModelList": "이 제공업체는 아직 모델 목록이 없어요. 위에서 모델을 가져오거나 모델 ID를 입력해 주세요.",
+          "needsTools": "이 영역은 도구를 호출하므로 모델이 도구 호출을 지원해야 해요.",
+          "needsImages": "이 영역은 이미지를 읽으므로 모델이 이미지 입력을 지원해야 해요.",
+          "toolsBlocked": "이 제공업체 유형은 여기서 도구 호출을 스트리밍할 수 없어요. 이 영역에는 OpenAI 호환 제공업체를 고르세요.",
+          "modelNotListed": "이 모델은 가져온 제공업체 목록에 없어요. 입력한 그대로 사용해요.",
+          "now": "지금 요청이 사용하는 것",
+          "colSetting": "용도",
+          "colModel": "모델",
+          "colSource": "출처"
+        },
+        "routeStatus": {
+          "provider_missing": "지정된 제공업체가 삭제돼서 이 영역은 상속받은 모델을 사용해요.",
+          "provider_disabled": "지정된 제공업체가 꺼져 있어서 이 영역은 상속받은 모델을 사용해요.",
+          "provider_key_missing": "지정된 제공업체에 API 키가 없어서 이 영역은 상속받은 모델을 사용해요.",
+          "provider_key_unreadable": "이 서버에서는 지정된 제공업체의 키를 읽을 수 없어서 이 영역은 상속받은 모델을 사용해요."
+        },
+        "area": {
+          "default": {
+            "title": "기본",
+            "sub": "자체 모델이 없는 모든 작업이에요."
+          },
+          "matchResume": {
+            "title": "이력서 매칭",
+            "sub": "이력서가 공고에 얼마나 맞는지 점수를 매겨요."
+          },
+          "parseResume": {
+            "title": "이력서 파싱",
+            "sub": "이력서 텍스트를 구조화된 정보로 읽어 와요."
+          },
+          "visual": {
+            "title": "비주얼",
+            "sub": "이미지와 스캔한 페이지를 읽어요(OCR)."
+          },
+          "evaluation": {
+            "title": "평가",
+            "sub": "끝난 연습 면접에 점수를 매기고 리포트를 작성해요."
+          },
+          "insights": {
+            "title": "인사이트",
+            "sub": "주간 커리어 요약과 검색 요약이에요."
+          },
+          "writing": {
+            "title": "글쓰기",
+            "sub": "자기소개서, 연락 메시지, 이력서 다시 쓰기예요."
+          },
+          "assistant": {
+            "title": "어시스턴트",
+            "sub": "채팅 어시스턴트, 온보딩, 사용자가 요청한 내용 파악이에요."
+          },
+          "jobs": {
+            "title": "공고 세부 정보",
+            "sub": "채용 공고에 세부 정보와 태그를 추가해요."
+          }
+        },
+        "setting": {
+          "defaultModel": "기본 모델",
+          "matching": "적합도 점수",
+          "matchResume": "매칭 리포트",
+          "matchScreen": "매칭 스크리닝",
+          "prematchFilter": "매칭 전 필터",
+          "extract": "이력서 텍스트",
+          "resumeTag": "이력서 태그",
+          "vision": "이미지와 스캔",
+          "evaluation": "면접 리포트",
+          "insights": "인사이트",
+          "writing": "긴 글 작성",
+          "rewrite": "이력서 다시 쓰기",
+          "copilot": "어시스턴트 채팅",
+          "onboarding": "온보딩",
+          "intentParser": "검색 의도",
+          "enrich": "공고 보강",
+          "jobTag": "공고 태그",
+          "quickJob": "공고 빠르게 읽기"
+        },
+        "source": {
+          "assigned": "이 영역에 지정된 값",
+          "override": "저장된 설정별 재정의",
+          "shared": "{shared}의 설정",
+          "env": "환경 변수 {name}",
+          "noneDefault": "설정된 것이 없어요",
+          "noDefault": "설정 없음",
+          "fallback": {
+            "default": "설정된 것이 없어요",
+            "matchResume": "자체 모델이 없어서 기본 모델({model})을 써요",
+            "parseResume": "자체 모델이 없어서 기본 모델({model})을 써요",
+            "visual": "자체 모델이 없어서 이력서 파싱 모델을 써요",
+            "evaluation": "자체 모델이 없어서 면접 모델을 써요",
+            "insights": "자체 모델이 없어서 기본 모델({model})을 써요",
+            "writing": "자체 모델이 없어서 기본 모델({model})을 써요",
+            "assistant": "자체 모델이 없어서 기본 모델({model})을 써요",
+            "jobs": "자체 모델이 없어서 기본 모델({model})을 써요"
+          }
+        },
+        "errors": {
+          "generic": "처리하지 못했어요. 다시 시도해 주세요.",
+          "invalid_name": "이름은 60자 이하로 입력해 주세요.",
+          "duplicate_name": "다른 제공업체가 이미 이 이름을 쓰고 있어요.",
+          "invalid_type": "제공업체 유형을 골라 주세요.",
+          "invalid_base_url": "이 기본 URL은 사용할 수 없어요. /chat/completions 같은 엔드포인트 없이 API 기본 URL만 입력해 주세요. 사설 호스트는 자체 호스팅 유형만 가리킬 수 있어요.",
+          "key_required": "API 키를 입력해 주세요.",
+          "key_required_for_new_url": "엔드포인트가 바뀌었어요. 저장된 키가 다른 호스트로 전송되지 않도록 API 키를 다시 입력해 주세요.",
+          "too_many_providers": "제공업체가 최대 개수까지 저장돼 있어요. 먼저 하나를 삭제해 주세요.",
+          "not_found": "이 제공업체는 더 이상 없어요. 페이지를 새로고침해 주세요.",
+          "invalid_notes": "메모는 2,000자 이하로 입력해 주세요.",
+          "encryption_unavailable": "이 서버는 API 키를 저장할 수 없어요. FIELD_ENCRYPTION_KEY가 설정되지 않았어요.",
+          "invalid_area": "알 수 없는 영역이에요. 페이지를 새로고침해 주세요.",
+          "invalid_route": "제공업체와 모델을 골라 주세요.",
+          "unknown_provider": "이 제공업체는 더 이상 없어요. 페이지를 새로고침해 주세요.",
+          "tools_unsupported": "이 제공업체 유형은 이 영역에 필요한 도구 호출 스트리밍을 지원하지 않아요.",
+          "provider_in_use": "아직 이 제공업체에 지정된 영역이 있어요. 먼저 그 영역을 다시 지정하거나 해제해 주세요."
         }
       },
       "visitors": {

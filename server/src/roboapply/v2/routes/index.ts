@@ -32,6 +32,7 @@ import preferencesRouter from './preferences.js';
 import mockRouter from './mock.js';
 import discoverRouter from './discover.js';
 import adminRouter from './admin.js';
+import adminLlmRouter from './adminLlm.js';
 
 const router = Router();
 
@@ -44,6 +45,8 @@ router.use('/mock', mockRouter);
 // Cross-bank job-search agent team — searches RoboHire + GoHire banks.
 router.use('/discover', discoverRouter);
 // Admin analytics + profitability console (admin-gated inside the router).
+// LLM gateway settings: before /admin, whose router would otherwise take the path.
+router.use('/admin/llm', adminLlmRouter);
 router.use('/admin', adminRouter);
 
 export default router;

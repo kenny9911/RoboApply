@@ -263,9 +263,12 @@ describe('RoboApply home', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
-  it('only the home pages put the switch in the footer (other public pages keep it in their header)', () => {
-    const { container } = renderWithBrand(<MarketingFooter />);
-    expect(container.querySelector('[data-footer-theme]')).toBeNull();
+  it('every marketing footer carries the phone theme switch (the headers hide theirs below 760px), unless a page opts out', () => {
+    const { container, unmount } = renderWithBrand(<MarketingFooter />);
+    expect(container.querySelector('[data-footer-theme]')).not.toBeNull();
+    unmount();
+    const off = renderWithBrand(<MarketingFooter themeSwitch={false} />);
+    expect(off.container.querySelector('[data-footer-theme]')).toBeNull();
   });
 
   it('the phone switch is hidden above 760 px and shown below, where the header button is hidden', () => {

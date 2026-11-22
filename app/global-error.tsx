@@ -57,8 +57,8 @@ export default function GlobalError({
           alignItems: 'center',
           justifyContent: 'center',
           padding: '24px',
-          background: 'var(--bg, #F4F1E9)',
-          color: 'var(--text, #121313)',
+          background: 'var(--bg, #F4F6FB)',
+          color: 'var(--text, #0B0D1A)',
           fontFamily:
             "var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif)",
         }}
@@ -75,7 +75,7 @@ export default function GlobalError({
           >
             {copy.title}
           </h1>
-          <p style={{ marginTop: '12px', color: 'var(--text-2, #3D3F3B)' }}>{copy.body}</p>
+          <p style={{ marginTop: '12px', color: 'var(--text-2, #3A3F54)' }}>{copy.body}</p>
           <div style={{ marginTop: '24px' }}>
             <button
               type="button"
@@ -87,9 +87,8 @@ export default function GlobalError({
                 fontFamily: 'inherit',
                 fontSize: 'inherit',
                 fontWeight: 600,
-                background: 'var(--action, #121313)',
-                boxShadow:
-                  'var(--e1, 0 2px 6px rgba(32, 32, 43, 0.08))',
+                background: 'var(--action, #0B0D1A)',
+                boxShadow: 'none',
                 border: 'none',
                 cursor: 'pointer',
               }}

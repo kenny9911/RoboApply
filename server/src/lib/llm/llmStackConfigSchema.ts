@@ -70,6 +70,8 @@ export const PURPOSE_KEYS = [
   'writing',
   'vision',
   'intentParser',
+  // Weekly career insights and the cross-bank search summary (RAInsightService).
+  'insights',
   // SCRM / CS Copilot (the /crm-ai workspace). crmHealth runs the merged
   // health+profile narrative; crmEmail drafts customer-facing reminders;
   // crmDigest writes the Command-Deck summary; crmCoaching writes the
@@ -126,6 +128,8 @@ export const MODEL_ENV: Record<ModelKey, string> = {
   writing: 'LLM_WRITING_MODEL',
   vision: 'LLM_VISION_MODEL',
   intentParser: 'LLM_INTENT_PARSER',
+  // The name the insight agent has always read; now also a stack key.
+  insights: 'RA_V2_CAREER_INSIGHT_MODEL',
   crmHealth: 'LLM_CRM_HEALTH',
   crmProfile: 'LLM_CRM_PROFILE',
   crmEmail: 'LLM_CRM_EMAIL',
@@ -148,6 +152,91 @@ export const ALL_BRAND_MODEL_ENV_VARS: readonly string[] = [
 
 export type LlmStackPurposes = Record<PurposeKey, string | null>;
 
+/* ── Functionality areas (the LLM gateway) ───────────────────────────────────
+ * An area is what an admin assigns a provider entry and a model to: Default,
+ * and one area per kind of work. Each area owns the model keys its call sites
+ * read, so assigning an area sets all of them at once. A key belongs to at
+ * most one area; a key in no area (interview, fallbackModel, the CRM keys) is
+ * not assignable here and keeps its per-key override and env value.
+ *
+ *   - `interview` is left out on purpose: the voice interview accepts only the
+ *     models LiveKit lists (interview-engine/config.ts), which a free choice
+ *     of provider would break.
+ *   - `assistant` owns `copilot`, which streams tool calls. An entry whose
+ *     provider type cannot (Google, Anthropic) is refused for that area when
+ *     it is saved (AREAS_NEEDING_TOOLS).
+ *
+ * An unassigned area changes nothing: its keys resolve exactly as before
+ * (per-key override, then env), and a key with no value uses the default
+ * model, which is the Default area when that one is assigned. */
+export const LLM_AREAS = [
+  'default',
+  'matchResume',
+  'parseResume',
+  'visual',
+  'evaluation',
+  'insights',
+  'writing',
+  'assistant',
+  'jobs',
+] as const;
+
+export type LlmArea = (typeof LLM_AREAS)[number];
+
+export const AREA_MODEL_KEYS: Record<LlmArea, readonly ModelKey[]> = {
+  default: ['defaultModel'],
+  // Resume-to-job fit: the scorer (matching), the deep match report and its screens.
+  matchResume: ['matching', 'matchResume', 'matchScreen', 'prematchFilter'],
+  // Reading a resume's text into structured data.
+  parseResume: ['extract', 'resumeTag'],
+  // Reading images and scanned pages (OCR). Unassigned and unset, it uses the Parse resume model.
+  visual: ['vision'],
+  // Interview scoring: scorecard, per-question review, recommendations, coaching notes.
+  evaluation: ['evaluation'],
+  insights: ['insights'],
+  writing: ['writing', 'rewrite'],
+  assistant: ['copilot', 'onboarding', 'intentParser'],
+  jobs: ['enrich', 'jobTag', 'quickJob'],
+};
+
+/** Areas whose calls stream tool calls; their entry's provider type must support it. */
+export const AREAS_NEEDING_TOOLS: readonly LlmArea[] = ['assistant'];
+
+/** Areas whose calls send images; shown as a hint, not enforced (a model list does not say). */
+export const AREAS_NEEDING_IMAGES: readonly LlmArea[] = ['visual'];
+
+const AREA_OF_KEY: Partial<Record<ModelKey, LlmArea>> = LLM_AREAS.reduce(
+  (acc, area) => {
+    for (const key of AREA_MODEL_KEYS[area]) acc[key] = area;
+    return acc;
+  },
+  {} as Partial<Record<ModelKey, LlmArea>>,
+);
+
+/** The area that owns a model key, or null. */
+export function areaOfModelKey(key: ModelKey): LlmArea | null {
+  return AREA_OF_KEY[key] ?? null;
+}
+
+export function isLlmArea(value: unknown): value is LlmArea {
+  return typeof value === 'string' && (LLM_AREAS as readonly string[]).includes(value);
+}
+
+/** An area's assignment: a provider entry (gatewayProviders.ts) and one of its model ids. */
+export interface LlmAreaRoute {
+  providerId: string;
+  model: string;
+}
+
+export type LlmStackRoutes = Record<LlmArea, LlmAreaRoute | null>;
+
+export function emptyRoutes(): LlmStackRoutes {
+  return LLM_AREAS.reduce((acc, area) => {
+    acc[area] = null;
+    return acc;
+  }, {} as LlmStackRoutes);
+}
+
 export interface LlmStackTuning {
   retryAttempts: number | null; // LLM_RETRY_ATTEMPTS
   retryBaseMs: number | null; // LLM_RETRY_BASE_MS
@@ -163,6 +252,8 @@ export interface LlmStackConfigBlob {
   /** LLM_FALLBACK_MODEL override; null → env. */
   fallbackModel: string | null;
   purposes: LlmStackPurposes;
+  /** Area assignments; null → the area's keys resolve as if it did not exist. */
+  routes: LlmStackRoutes;
   tuning: LlmStackTuning;
 }
 
@@ -186,6 +277,7 @@ export function emptyLlmStackBlob(): LlmStackConfigBlob {
     defaultModel: null,
     fallbackModel: null,
     purposes: emptyPurposes(),
+    routes: emptyRoutes(),
     tuning: emptyTuning(),
   };
 }
@@ -213,6 +305,7 @@ export function buildEnvDefaultsSnapshot(brandId: LlmStackBrand = 'roboapply'): 
     defaultModel: envStr('LLM_MODEL'),
     fallbackModel: envStr('LLM_FALLBACK_MODEL'),
     purposes,
+    routes: emptyRoutes(),
     tuning: {
       retryAttempts: envInt('LLM_RETRY_ATTEMPTS'),
       retryBaseMs: envInt('LLM_RETRY_BASE_MS'),
@@ -259,6 +352,22 @@ export function validateLlmStackBlob(blob: unknown): ValidationError[] {
     }
   }
 
+  // `routes` is optional: a blob saved before the gateway existed has none.
+  if (c.routes != null) {
+    if (typeof c.routes !== 'object') {
+      errors.push({ field: 'routes', message: 'routes must be an object' });
+    } else {
+      for (const area of LLM_AREAS) {
+        const v = (c.routes as unknown as Record<string, unknown>)[area];
+        if (v == null) continue;
+        const r = v as Partial<LlmAreaRoute>;
+        if (typeof v !== 'object' || typeof r.providerId !== 'string' || typeof r.model !== 'string') {
+          errors.push({ field: `routes.${area}`, message: `${area} must be null or { providerId, model }` });
+        }
+      }
+    }
+  }
+
   if (c.tuning == null || typeof c.tuning !== 'object') {
     errors.push({ field: 'tuning', message: 'tuning section is required' });
   } else {
@@ -289,6 +398,14 @@ export function normalizeLlmStackBlob(input: unknown): LlmStackConfigBlob {
   base.fallbackModel = str(c.fallbackModel);
   if (c.purposes && typeof c.purposes === 'object') {
     for (const k of PURPOSE_KEYS) base.purposes[k] = str(c.purposes[k]);
+  }
+  if (c.routes && typeof c.routes === 'object') {
+    for (const area of LLM_AREAS) {
+      const r = c.routes[area];
+      const providerId = r && typeof r === 'object' ? str(r.providerId) : null;
+      const model = r && typeof r === 'object' ? str(r.model) : null;
+      base.routes[area] = providerId && model ? { providerId: providerId.toLowerCase(), model } : null;
+    }
   }
   if (c.tuning && typeof c.tuning === 'object') {
     base.tuning.retryAttempts = num(c.tuning.retryAttempts);

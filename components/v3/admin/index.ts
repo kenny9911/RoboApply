@@ -51,3 +51,5 @@ export { UserOverridesPanel, RefundQuotePanel, parseOverrideValue } from './User
 export { ViewAsButton, viewAsBlockedReasonFor, viewAsRefusalReason, type ViewAsTarget } from './ViewAsButton';
 // Job sources per brand (PAR-7): the shared sources panel and GoApply's company job boards.
 export { SourcesConsole, JobSourcesPanel, CareerBoardsPanel, BOARD_SYSTEMS, boardProblemKey, tallyLines } from './SourcesConsole';
+// The LLM gateway: provider entries and the model each functionality area uses.
+export { LlmGatewayConsole, PROVIDER_TYPE_NAMES, modelListText, typeLabel } from './LlmGatewayConsole';

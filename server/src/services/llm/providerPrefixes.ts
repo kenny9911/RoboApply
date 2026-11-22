@@ -63,9 +63,54 @@ export type LlmSelectorProfile = 'global' | 'domestic_cn';
 export function resolveProviderPrefix(prefix: string, profile: LlmSelectorProfile = 'global'): string | null {
   const lower = (prefix || '').trim().toLowerCase();
   if (!lower) return null;
+  // `<type>@<entry>`: a named provider entry of the LLM gateway (see below).
+  const at = lower.indexOf('@');
+  if (at >= 0) {
+    const base = at > 0 ? resolveProviderPrefix(lower.slice(0, at), profile) : null;
+    const entry = lower.slice(at + 1);
+    return base && !base.includes('@') && PROVIDER_ENTRY_ID_RE.test(entry) ? `${base}@${entry}` : null;
+  }
   if (DOMESTIC_ONLY_PREFIXES.has(lower) && profile !== 'domestic_cn') return null;
   const providerType = PROVIDER_PREFIX_ALIASES[lower] ?? lower;
   return DIRECT_PROVIDER_PREFIXES.has(providerType) ? providerType : null;
+}
+
+/* ── Provider entries (the LLM gateway; lib/llm/gatewayProviders.ts) ───────── */
+//
+// An admin can save several named provider entries, each with its own base URL
+// and key. A route to one is written `<type>@<entry>`: the provider type whose
+// client speaks to it, and the entry's id. As a selector prefix it pins the
+// entry on every profile and under every provider mode:
+//
+//   newapi@aigw/gpt-6.1-sol             the "aigw" entry, an OpenAI-compatible gateway
+//   openrouter@backup/google/gemini-3   a second OpenRouter account
+//
+// Code that needs the client, the policy or the capability of a route asks for
+// its base type (`providerBaseType`); the credential resolver is the one place
+// that reads the entry (lib/llm/systemCredentials.ts).
+
+/** An entry id: a lowercase slug, at most 40 characters. */
+export const PROVIDER_ENTRY_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/** `newapi@aigw` → `newapi`; a plain provider type is returned lowercased. */
+export function providerBaseType(providerType: string): string {
+  const lower = (providerType || '').trim().toLowerCase();
+  const at = lower.indexOf('@');
+  return at >= 0 ? lower.slice(0, at) : lower;
+}
+
+/** `newapi@aigw` → `aigw`; null for a plain provider type. */
+export function providerEntryId(providerType: string): string | null {
+  const lower = (providerType || '').trim().toLowerCase();
+  const at = lower.indexOf('@');
+  if (at < 0) return null;
+  const entry = lower.slice(at + 1);
+  return PROVIDER_ENTRY_ID_RE.test(entry) ? entry : null;
+}
+
+/** The selector that sends `model` to a provider entry. */
+export function providerEntrySelector(type: string, entryId: string, model: string): string {
+  return `${providerBaseType(type)}@${entryId}/${model}`;
 }
 
 /** Normalize a configured provider name (`LLM_PROVIDER`, `CN_LLM_PROVIDER`) to its provider type. */

@@ -17,7 +17,7 @@
 // indistinguishable from "no questions to flag", and the UI rendered praise.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
-import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
+import { getEvaluationModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
 import type { TranscriptTurn } from '../types.js';
 import type { BlueprintQuestion } from '../prompt/InterviewBlueprintAgent.js';
 import type { QuestionAnalysisItem, QuestionRating } from './reportTypes.js';
@@ -231,7 +231,7 @@ Write all human-facing text in the interview language as instructed at the very 
       langSource,
       options.requestId,
       options.locale,
-      getTaskModel('interview'),
+      getEvaluationModel(),
       options.signal,
     );
   }

@@ -7,7 +7,7 @@ import { withLLMRetry } from './llm/withRetry.js';
 import { generateRequestId, logger } from './LoggerService.js';
 import { runConcurrent } from '../utils/concurrency.js';
 import { getProviderSetting } from '../lib/llm/llmModels.js';
-import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
+import { getTaskReasoningEffort, getVisionModel } from '../lib/llm/llmTaskSettings.js';
 import { resolveProviderCredential } from '../lib/llm/systemCredentials.js';
 import type { Message, MessageContent, ProviderExtra } from '../types/index.js';
 
@@ -243,12 +243,14 @@ export class PDFService {
   }
 
   private getExtractionMultimodalModel(): string {
-    // One task setting owns BOTH textual resume parsing and file OCR. Read it on
-    // every call so an admin override/env reload applies without a restart.
-    const model = getTaskModel('extract')?.trim();
+    // File OCR reads the Visual area's model (LLM gateway) or LLM_VISION_MODEL,
+    // and otherwise the extract model, which owns textual resume parsing and
+    // owned OCR too before the area existed. Read on every call so an admin
+    // change or env reload applies without a restart.
+    const model = getVisionModel()?.trim();
     if (!model) {
       throw new Error(
-        'File extraction requires LLM_EXTRACT_MODEL (or the extract task admin override) to be configured.',
+        'File extraction requires a model: assign the Visual area in the LLM gateway, or set LLM_VISION_MODEL or LLM_EXTRACT_MODEL.',
       );
     }
 
@@ -257,7 +259,7 @@ export class PDFService {
     if (this.isKnownTextOnlyModel(model)) {
       throw new Error(
         `Configured extraction model "${model}" cannot process PDF/image input. ` +
-          'Set LLM_EXTRACT_MODEL to a multimodal model.',
+          'Assign the Visual area (or set LLM_VISION_MODEL / LLM_EXTRACT_MODEL) to a multimodal model.',
       );
     }
 

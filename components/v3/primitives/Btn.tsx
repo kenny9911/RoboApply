@@ -1,7 +1,9 @@
 'use client';
 
-// Btn — the V3 button (.btn family). Variants: default (surface), primary
-// (accent fill + glow), violet (secondary fill), ghost (transparent). Renders
+// Btn — the V3 button (.btn family). Variants: default (white pill with a
+// hairline), primary (the action-colour pill), violet (the --brand-mark
+// highlight with --brand-plane ink: the stronger of two adjacent calls to
+// action, never a selected state), ghost (transparent). Renders
 // as a <button> by default; pass `as="a"` + `href` for a link-styled button
 // (used in the topbar / launch bars). Forwards an optional leading icon.
 //

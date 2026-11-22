@@ -39,6 +39,19 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - When changing user-facing copy, update every supported locale and run the
   repository's copy checks. Use the `i18n-locale-sync` skill for locale work.
 
+## Shipping
+
+When a task is finished, ship it without asking:
+
+1. Run `npm run build`. If it fails, stop and report; do not merge or push.
+2. If it succeeds, commit the work, merge the branch into `main`, and push
+   `main` (and the branch) to the GitHub remote.
+
+Only the build gates this. Stage explicit paths so other sessions' uncommitted
+work in the shared checkout is not swept in, never force-push `main`, and stop
+and report if the merge conflicts. `prisma db push` and production deploy
+commands still need explicit confirmation.
+
 ## Common commands
 
 ```bash
@@ -57,11 +70,13 @@ Use Node 24.x and the committed `package-lock.json`; install dependencies with
 
 ## Work in progress on this branch
 
-The app runs the **Desk** design system after resume.io (`docs/design-system.md`; teardown in `docs/resume-io/TEARDOWN.md`) with the agent-driven redesign (`docs/agent-driven/REDESIGN.md`; §11 for how the two meet), merged in November 2026 (PR 17). The signed-in home is `/dashboard` (the agent desk inside resume.io's dashboard; `/today` and `/home` redirect to it). `feat/agent-followups` (PR 18) adds the opt-in weekly auto-prepare, first-class target companies and the `/pay` pay check. The product still never submits an application (R1/D1). Preview without a backend: `node scripts/design-preview.mjs` (port 3612).
+The app runs the **Pulse** design system (`docs/design-system.md`): RoboApply's own brand, drawn on 2026-11-19 on `feat/brand-pulse` (blue-black ink, electric blue, a cobalt field and a sunny yellow highlight, flat tiles, pills, Space Grotesk over DM Sans; no gradients, no shadows at rest; the home page has a three.js scene, `components/features/marketing/HeroScene.tsx`). It replaced Desk, the resume.io clone (teardown in `docs/resume-io/TEARDOWN.md`), and keeps its layout, token names and the agent-driven redesign (`docs/agent-driven/REDESIGN.md`; §11), merged in November 2026 (PR 17). The signed-in home is `/dashboard` (the agent desk inside resume.io's dashboard; `/today` and `/home` redirect to it). `feat/agent-followups` (PR 18) adds the opt-in weekly auto-prepare, first-class target companies and the `/pay` pay check. The product still never submits an application (R1/D1). Preview without a backend: `node scripts/design-preview.mjs` (port 3612).
 
 `feat/practice-prep` adds the interview-prep agents and skills to practice interviews (job search for the practice target, per-job interview plans with generated interviewers and focuses, researched company interview styles, 15/20/30-minute practices). Read `docs/interview-practice/PREP_AGENTS.md` before changing `server/src/interview-engine/prep/`, `server/src/interview-engine/skills/` or the `/practice` setup.
 
 The Jobright clone (dual brand: RoboApply and GoApply) is merged; its record and the rules that are easy to break (Alipay tests are frozen, schema changes are additive only, the local Stripe key is live) are in `docs/jobright-clone/HANDOFF.md`.
+
+The LLM gateway (`/admin/llm`, 2026-11-22) lets admins save named AI provider entries (type, API base URL, encrypted key, fetched model list) and assign a provider and model to each functionality area (Default, Match resume, Parse resume, Visual, Evaluation, Insights, Writing, Assistant, Job details). An unassigned area resolves exactly as before. Read `docs/llm-gateway.md` before changing `server/src/lib/llm/`, `server/src/services/llm/providerPrefixes.ts` or the provider-type checks in `LLMService`.
 
 ## Verification
 
