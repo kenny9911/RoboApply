@@ -19,9 +19,9 @@ import { brandEnv, brandOwnEnv, brandStack, cnLlmDomesticOnly, type EnvSource } 
 import { transportNameFor } from '../../platform/email/index.js';
 import { requirementsMet } from '../../platform/flags.js';
 import { getGatewayProviderSync } from '../../lib/llm/gatewayProviders.js';
-import { areaRouteSelector } from '../../lib/llm/llmModels.js';
+import { blobAreaFallbackSelectors, blobModelSelector } from '../../lib/llm/llmModels.js';
 import { getLlmStack } from '../../lib/llm/llmStackConfigResolver.js';
-import { MODEL_ENV, areaOfModelKey, isDbConfigDisabled, type LlmStackBrand, type LlmStackConfigBlob, type ModelKey, type PurposeKey } from '../../lib/llm/llmStackConfigSchema.js';
+import { MODEL_ENV, isDbConfigDisabled, type LlmStackBrand, type LlmStackConfigBlob, type ModelKey } from '../../lib/llm/llmStackConfigSchema.js';
 import { normalizeProviderType, providerBaseType, providerEntryId, resolveProviderPrefix } from '../../services/llm/providerPrefixes.js';
 import { GOAPPLY_DIRECT_PROVIDERS, MAINLAND_LLM_HOST_SUFFIXES, extraDomesticHosts, hostOf, isMainlandLlmHost } from '../../platform/llm/brandPolicy.js';
 import { contentSafetyReadiness } from '../../platform/llm/contentSafety/config.js';
@@ -143,15 +143,18 @@ type SettingKey = ModelKey | 'provider';
 function overrideOf(env: EnvSource, brandId: LlmStackBrand, key: SettingKey): string | undefined {
   const blob = SNAPSHOTS.get(env)?.[brandId];
   if (!blob) return undefined;
-  // A model key's override is its functionality area's assignment (the LLM
-  // gateway), else its own value: the order the resolver uses (llmModels.ts).
-  const raw =
-    key === 'provider'
-      ? blob.provider
-      : areaRouteSelector(blob, areaOfModelKey(key)) ??
-        (key === 'defaultModel' ? blob.defaultModel : key === 'fallbackModel' ? blob.fallbackModel : blob.purposes[key as PurposeKey]);
+  // A model key's override is the LLM gateway first (its functionality area's
+  // assignment, else the Default area's), then its own value: the order the
+  // resolver uses (llmModels.ts).
+  const raw = key === 'provider' ? blob.provider : blobModelSelector(blob, key);
   const t = typeof raw === 'string' ? raw.trim() : '';
   return t ? t : undefined;
+}
+
+/** The fallback models of the gateway area a resolved selector stands for (none for any other selector). */
+function areaFallbacksOf(env: EnvSource, brandId: LlmStackBrand, selector: string): string[] {
+  const blob = SNAPSHOTS.get(env)?.[brandId];
+  return blob ? blobAreaFallbackSelectors(blob, selector) : [];
 }
 
 /** One setting of the shared stack: RoboApply's admin override, else the unprefixed variable. */
@@ -329,10 +332,22 @@ export function configuredModels(brand: ProductBrand, env: EnvSource = process.e
     const region = entry ? entry.region : VENDOR_COUNTRY[vendor] ?? null;
     if (walled && setting.stack === 'shared' && region !== 'CN') continue;
     const key = `${vendor}/${model}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const filing = filings.find((f) => f.model === model || f.model === id);
-    out.push({ task, vendor, model, region, filingNo: filing?.filingNo ?? null, source: setting.source });
+    if (!seen.has(key)) {
+      seen.add(key);
+      const filing = filings.find((f) => f.model === model || f.model === id);
+      out.push({ task, vendor, model, region, filingNo: filing?.filingNo ?? null, source: setting.source });
+    }
+    // An area's fallback models are where its requests go when its model fails.
+    const stackBrand: LlmStackBrand = setting.stack === 'own' ? (brand.id as LlmStackBrand) : DEFAULT_BRAND;
+    for (const fallback of areaFallbacksOf(env, stackBrand, id)) {
+      const hop = entryDisclosure(fallback, env);
+      if (!hop || (walled && setting.stack === 'shared' && hop.region !== 'CN')) continue;
+      const hopKey = `${hop.vendor}/${hop.model}`;
+      if (seen.has(hopKey)) continue;
+      seen.add(hopKey);
+      const filing = filings.find((f) => f.model === hop.model || f.model === fallback);
+      out.push({ task: 'fallback', vendor: hop.vendor, model: hop.model, region: hop.region, filingNo: filing?.filingNo ?? null, source: setting.source });
+    }
   }
   // Models ops disclosed with a filing that are not in the task settings (e.g. used by the voice worker).
   for (const f of filings) {

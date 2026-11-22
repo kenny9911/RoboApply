@@ -243,14 +243,14 @@ export class PDFService {
   }
 
   private getExtractionMultimodalModel(): string {
-    // File OCR reads the Visual area's model (LLM gateway) or LLM_VISION_MODEL,
-    // and otherwise the extract model, which owns textual resume parsing and
-    // owned OCR too before the area existed. Read on every call so an admin
-    // change or env reload applies without a restart.
+    // File OCR reads the Visual area's model (LLM gateway; an unassigned area
+    // uses the Default area), then its saved override or LLM_VISION_MODEL, and
+    // otherwise the default model. Read on every call so an admin change or env
+    // reload applies without a restart.
     const model = getVisionModel()?.trim();
     if (!model) {
       throw new Error(
-        'File extraction requires a model: assign the Visual area in the LLM gateway, or set LLM_VISION_MODEL or LLM_EXTRACT_MODEL.',
+        'File extraction requires a model: assign the Visual or Default area in the LLM gateway, or set LLM_VISION_MODEL or LLM_MODEL.',
       );
     }
 
@@ -259,7 +259,7 @@ export class PDFService {
     if (this.isKnownTextOnlyModel(model)) {
       throw new Error(
         `Configured extraction model "${model}" cannot process PDF/image input. ` +
-          'Assign the Visual area (or set LLM_VISION_MODEL / LLM_EXTRACT_MODEL) to a multimodal model.',
+          'Assign the Visual area (or set LLM_VISION_MODEL / LLM_MODEL) to a multimodal model.',
       );
     }
 

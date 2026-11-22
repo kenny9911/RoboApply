@@ -166,9 +166,14 @@ export type LlmStackPurposes = Record<PurposeKey, string | null>;
  *     provider type cannot (Google, Anthropic) is refused for that area when
  *     it is saved (AREAS_NEEDING_TOOLS).
  *
- * An unassigned area changes nothing: its keys resolve exactly as before
- * (per-key override, then env), and a key with no value uses the default
- * model, which is the Default area when that one is assigned. */
+ * Resolution, the LLM gateway first and the env after it (llmModels.ts):
+ *   1. the area's own assignment;
+ *   2. an unassigned area uses the Default area's assignment (its model, its
+ *      fallbacks and its effort), except for a key that needs what the
+ *      Default entry cannot do (`copilot` streams tool calls);
+ *   3. without either, the key's saved per-key override, then its env
+ *      variable, then the default model (the defaultModel override, then
+ *      LLM_MODEL). No model is chosen in code. */
 export const LLM_AREAS = [
   'default',
   'matchResume',
@@ -189,7 +194,7 @@ export const AREA_MODEL_KEYS: Record<LlmArea, readonly ModelKey[]> = {
   matchResume: ['matching', 'matchResume', 'matchScreen', 'prematchFilter'],
   // Reading a resume's text into structured data.
   parseResume: ['extract', 'resumeTag'],
-  // Reading images and scanned pages (OCR). Unassigned and unset, it uses the Parse resume model.
+  // Reading images and scanned pages (OCR). Unassigned and unset, it uses the default model.
   visual: ['vision'],
   // Interview scoring: scorecard, per-question review, recommendations, coaching notes.
   evaluation: ['evaluation'],
@@ -202,8 +207,45 @@ export const AREA_MODEL_KEYS: Record<LlmArea, readonly ModelKey[]> = {
 /** Areas whose calls stream tool calls; their entry's provider type must support it. */
 export const AREAS_NEEDING_TOOLS: readonly LlmArea[] = ['assistant'];
 
+/**
+ * Keys whose calls stream tool calls. Such a key does not inherit the Default
+ * area when the Default entry's type cannot stream them; it keeps its own
+ * per-key override and env value instead (the boot check refuses a copilot
+ * model without tool streaming).
+ */
+export const MODEL_KEYS_NEEDING_TOOLS: readonly ModelKey[] = ['copilot'];
+
 /** Areas whose calls send images; shown as a hint, not enforced (a model list does not say). */
 export const AREAS_NEEDING_IMAGES: readonly LlmArea[] = ['visual'];
+
+/** The route tag an area's selectors carry (`newapi@aigw:matchresume/…`; providerPrefixes.ts). */
+export function areaRouteTag(area: LlmArea): string {
+  return area.toLowerCase();
+}
+
+/** The area a route tag names, or null. */
+export function areaOfRouteTag(tag: string | null | undefined): LlmArea | null {
+  if (!tag) return null;
+  const lower = tag.toLowerCase();
+  return LLM_AREAS.find((area) => area.toLowerCase() === lower) ?? null;
+}
+
+/* ── Reasoning effort and fallbacks of an assignment ─────────────────────────
+ * `provider` sends no effort of the gateway's own: the call keeps what its
+ * caller and the env send (LLM_<TASK>_REASONING_EFFORT, LLM_REASONING_EFFORT),
+ * else the provider's default. Any other level is sent to every call on the
+ * route, mapped to the nearest level the provider takes (reasoningEffort.ts
+ * gatewayEffortFor). An assignment saved without one uses `medium`. */
+export const GATEWAY_EFFORTS = ['provider', 'minimal', 'low', 'medium', 'high', 'max'] as const;
+export type GatewayEffort = (typeof GATEWAY_EFFORTS)[number];
+export const DEFAULT_GATEWAY_EFFORT: GatewayEffort = 'medium';
+
+export function isGatewayEffort(value: unknown): value is GatewayEffort {
+  return typeof value === 'string' && (GATEWAY_EFFORTS as readonly string[]).includes(value);
+}
+
+/** Ordered fallback models per assignment, tried after the area's own model. */
+export const MAX_AREA_FALLBACKS = 3;
 
 const AREA_OF_KEY: Partial<Record<ModelKey, LlmArea>> = LLM_AREAS.reduce(
   (acc, area) => {
@@ -222,10 +264,20 @@ export function isLlmArea(value: unknown): value is LlmArea {
   return typeof value === 'string' && (LLM_AREAS as readonly string[]).includes(value);
 }
 
-/** An area's assignment: a provider entry (gatewayProviders.ts) and one of its model ids. */
-export interface LlmAreaRoute {
+/** One model on a provider entry (gatewayProviders.ts), with the effort sent to it. */
+export interface LlmRouteTarget {
   providerId: string;
   model: string;
+  effort: GatewayEffort;
+}
+
+/**
+ * An area's assignment: its model and, in order, up to MAX_AREA_FALLBACKS
+ * models tried when that one fails (a dead or rate-limited key, an outage, a
+ * model the endpoint does not serve). No two targets name the same entry and model.
+ */
+export interface LlmAreaRoute extends LlmRouteTarget {
+  fallbacks: LlmRouteTarget[];
 }
 
 export type LlmStackRoutes = Record<LlmArea, LlmAreaRoute | null>;
@@ -362,7 +414,14 @@ export function validateLlmStackBlob(blob: unknown): ValidationError[] {
         if (v == null) continue;
         const r = v as Partial<LlmAreaRoute>;
         if (typeof v !== 'object' || typeof r.providerId !== 'string' || typeof r.model !== 'string') {
-          errors.push({ field: `routes.${area}`, message: `${area} must be null or { providerId, model }` });
+          errors.push({ field: `routes.${area}`, message: `${area} must be null or { providerId, model, effort, fallbacks }` });
+          continue;
+        }
+        if (r.effort !== undefined && !isGatewayEffort(r.effort)) {
+          errors.push({ field: `routes.${area}.effort`, message: `effort must be one of ${GATEWAY_EFFORTS.join(', ')}` });
+        }
+        if (r.fallbacks !== undefined && !Array.isArray(r.fallbacks)) {
+          errors.push({ field: `routes.${area}.fallbacks`, message: 'fallbacks must be a list' });
         }
       }
     }
@@ -379,6 +438,38 @@ export function validateLlmStackBlob(blob: unknown): ValidationError[] {
     }
   }
   return errors;
+}
+
+function normalizeTarget(raw: unknown): LlmRouteTarget | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const providerId = typeof r.providerId === 'string' ? r.providerId.trim().toLowerCase() : '';
+  const model = typeof r.model === 'string' ? r.model.trim() : '';
+  if (!providerId || !model) return null;
+  return { providerId, model, effort: isGatewayEffort(r.effort) ? r.effort : DEFAULT_GATEWAY_EFFORT };
+}
+
+/**
+ * One area's assignment, read leniently: a missing effort is `medium`, and a
+ * fallback that is malformed, repeats an earlier target or comes after
+ * MAX_AREA_FALLBACKS is dropped. Saving goes through gatewayAdmin.ts, which
+ * refuses those instead.
+ */
+export function normalizeAreaRoute(raw: unknown): LlmAreaRoute | null {
+  const primary = normalizeTarget(raw);
+  if (!primary) return null;
+  const seen = new Set([`${primary.providerId}::${primary.model}`]);
+  const fallbacks: LlmRouteTarget[] = [];
+  const list = (raw as { fallbacks?: unknown }).fallbacks;
+  for (const item of Array.isArray(list) ? list : []) {
+    const target = normalizeTarget(item);
+    if (!target || fallbacks.length >= MAX_AREA_FALLBACKS) continue;
+    const key = `${target.providerId}::${target.model}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    fallbacks.push(target);
+  }
+  return { ...primary, fallbacks };
 }
 
 /** Coerce arbitrary input into a fully-shaped blob (missing → null). Trims strings. */
@@ -400,12 +491,7 @@ export function normalizeLlmStackBlob(input: unknown): LlmStackConfigBlob {
     for (const k of PURPOSE_KEYS) base.purposes[k] = str(c.purposes[k]);
   }
   if (c.routes && typeof c.routes === 'object') {
-    for (const area of LLM_AREAS) {
-      const r = c.routes[area];
-      const providerId = r && typeof r === 'object' ? str(r.providerId) : null;
-      const model = r && typeof r === 'object' ? str(r.model) : null;
-      base.routes[area] = providerId && model ? { providerId: providerId.toLowerCase(), model } : null;
-    }
+    for (const area of LLM_AREAS) base.routes[area] = normalizeAreaRoute(c.routes[area]);
   }
   if (c.tuning && typeof c.tuning === 'object') {
     base.tuning.retryAttempts = num(c.tuning.retryAttempts);
