@@ -3994,6 +3994,10 @@
         "visitors": {
           "title": "Visitors and sign-ups",
           "sub": "Who came, where from, and how many created an account."
+        },
+        "llm": {
+          "title": "LLM gateway",
+          "sub": "AI providers, their models, and which model each kind of work uses."
         }
       },
       "system": {
@@ -4750,6 +4754,215 @@
             "pages": "Pages",
             "account": "Account"
           }
+        }
+      },
+      "llm": {
+        "eyebrow": "Admin",
+        "title": "LLM gateway",
+        "sub": "Save AI providers once, then choose the provider and model for each kind of work. A change applies to new requests within about 30 seconds.",
+        "loading": "Loading…",
+        "refresh": "Refresh",
+        "refreshing": "Refreshing…",
+        "cancel": "Cancel",
+        "environment": {
+          "production": "Production settings",
+          "development": "Development settings"
+        },
+        "dbDisabled": "Saved settings are switched off on this server (LLM_SETTINGS_DB_DISABLED). You can still edit them, but every request uses the environment variables until that is turned off.",
+        "encryptionMissing": "This server has no FIELD_ENCRYPTION_KEY, so an API key cannot be stored. Set it before adding a provider.",
+        "types": {
+          "newapi": "OpenAI-compatible"
+        },
+        "providers": {
+          "title": "Providers",
+          "sub": "Each provider is one endpoint and one API key. Add the same service twice to use two accounts or two gateways.",
+          "add": "Add provider",
+          "empty": "No provider yet. Add one, then assign it to an area below.",
+          "full": "You have the maximum of {max} providers. Remove one to add another.",
+          "noUrl": "No URL",
+          "off": "Off",
+          "ready": "Ready",
+          "keyUnreadable": "Key unreadable",
+          "keyUnreadableHelp": "The saved key was encrypted with a different FIELD_ENCRYPTION_KEY and cannot be read here. Areas assigned to this provider use their inherited model until you enter the key again.",
+          "key": "API key",
+          "noKey": "None",
+          "models": "Models",
+          "modelCount": "{count, plural, one {{n} model} other {{n} models}}",
+          "modelsNever": "Not fetched yet",
+          "fetchedAt": "List fetched",
+          "edit": "Edit",
+          "fetchModels": "Fetch models",
+          "refreshModels": "Refresh models",
+          "fetching": "Fetching…",
+          "showModels": "Show models",
+          "hideModels": "Hide models",
+          "turnOff": "Turn off",
+          "turnOn": "Turn on",
+          "remove": "Remove",
+          "removeConfirm": "Remove {name}"
+        },
+        "form": {
+          "addTitle": "Add a provider",
+          "editTitle": "Edit provider",
+          "name": "Name",
+          "nameHint": "Shown in the area lists, for example \"OpenRouter (main)\".",
+          "type": "Type",
+          "typeHint": "The API the endpoint speaks. Choose OpenAI-compatible for a gateway or proxy.",
+          "typeHintNoTools": "This type cannot stream tool calls here, so it cannot serve the Assistant area.",
+          "baseUrl": "API base URL",
+          "baseUrlRequired": "Required. Include the version path, for example https://gateway.example.com/v1, and no endpoint such as /chat/completions.",
+          "baseUrlOptional": "Leave empty to use {url}.",
+          "apiKey": "API key",
+          "apiKeyHint": "Stored encrypted. It is never shown again after you save.",
+          "apiKeyKeep": "Leave empty to keep the saved key. Changing the URL to another host needs the key again.",
+          "notes": "Notes (optional)",
+          "enabled": "Use this provider",
+          "save": "Save provider",
+          "saving": "Saving…",
+          "test": "Test without saving",
+          "testing": "Testing…",
+          "saveHint": "Saving also fetches the provider's model list with this key."
+        },
+        "modelList": {
+          "ok": "{count, plural, one {The provider lists {n} model.} other {The provider lists {n} models.}}",
+          "okTruncated": "The provider lists more than {n} models; the first {n} are kept. Type any other model ID by hand.",
+          "invalid_base_url": "This base URL cannot be used. Check the address; only a self-hosted type may point at a private host.",
+          "key_required": "Enter an API key to ask the provider for its models.",
+          "auth_rejected": "The provider rejected the API key.",
+          "not_supported": "This endpoint has no model list. Check the base URL, or type model IDs by hand.",
+          "rate_limited": "The provider is limiting requests. Try again in a minute.",
+          "timeout": "The provider did not answer within 8 seconds.",
+          "unreachable": "The provider could not be reached. Check the base URL.",
+          "invalid_response": "The provider answered, but not with a model list.",
+          "response_too_large": "The provider's model list is too large to read.",
+          "provider_error": "The provider returned an error."
+        },
+        "areas": {
+          "title": "Functionality areas",
+          "sub": "Assign a provider and a model to an area, or leave it to inherit. An area you leave alone keeps working exactly as it does now.",
+          "brand": "Site",
+          "goapplyNote": "{site} uses {shared}'s assignment for any area it does not assign itself.",
+          "noProviders": "Add a provider above to assign an area.",
+          "assigned": "Assigned",
+          "notInEffect": "Not in effect",
+          "inherits": "Inherits",
+          "provider": "Provider",
+          "inheritOption": "Not assigned (inherit)",
+          "providerOff": "{name} (off)",
+          "model": "Model",
+          "save": "Save",
+          "clear": "Clear assignment",
+          "modelHint": "Pick a model from the provider's list, or type a model ID it does not list.",
+          "noModelList": "This provider has no model list yet. Fetch its models above, or type a model ID.",
+          "needsTools": "This area calls tools, so the model must support tool calls.",
+          "needsImages": "This area reads images, so the model must accept image input.",
+          "toolsBlocked": "This provider type cannot stream tool calls here. Choose an OpenAI-compatible provider for this area.",
+          "modelNotListed": "This model is not in the provider's fetched list. It is used as typed.",
+          "now": "What requests use now",
+          "colSetting": "Used for",
+          "colModel": "Model",
+          "colSource": "Comes from"
+        },
+        "routeStatus": {
+          "provider_missing": "The assigned provider was removed, so this area uses its inherited model.",
+          "provider_disabled": "The assigned provider is off, so this area uses its inherited model.",
+          "provider_key_missing": "The assigned provider has no API key, so this area uses its inherited model.",
+          "provider_key_unreadable": "The assigned provider's key cannot be read on this server, so this area uses its inherited model."
+        },
+        "area": {
+          "default": {
+            "title": "Default",
+            "sub": "Every kind of work that has no model of its own."
+          },
+          "matchResume": {
+            "title": "Match resume",
+            "sub": "Scoring how well a resume fits a job."
+          },
+          "parseResume": {
+            "title": "Parse resume",
+            "sub": "Reading a resume's text into structured details."
+          },
+          "visual": {
+            "title": "Visual",
+            "sub": "Reading images and scanned pages (OCR)."
+          },
+          "evaluation": {
+            "title": "Evaluation",
+            "sub": "Scoring a finished practice interview and writing its report."
+          },
+          "insights": {
+            "title": "Insights",
+            "sub": "The weekly career summary and search summaries."
+          },
+          "writing": {
+            "title": "Writing",
+            "sub": "Cover letters, outreach messages and resume rewrites."
+          },
+          "assistant": {
+            "title": "Assistant",
+            "sub": "The chat Assistant, onboarding and reading what a person asks for."
+          },
+          "jobs": {
+            "title": "Job details",
+            "sub": "Adding details and tags to job postings."
+          }
+        },
+        "setting": {
+          "defaultModel": "Default model",
+          "matching": "Fit score",
+          "matchResume": "Match report",
+          "matchScreen": "Match screening",
+          "prematchFilter": "Pre-match filter",
+          "extract": "Resume text",
+          "resumeTag": "Resume tags",
+          "vision": "Images and scans",
+          "evaluation": "Interview report",
+          "insights": "Insights",
+          "writing": "Long-form writing",
+          "rewrite": "Resume rewrite",
+          "copilot": "Assistant chat",
+          "onboarding": "Onboarding",
+          "intentParser": "Search intent",
+          "enrich": "Job enrichment",
+          "jobTag": "Job tags",
+          "quickJob": "Quick job read"
+        },
+        "source": {
+          "assigned": "This area's assignment",
+          "override": "A saved per-setting override",
+          "shared": "{shared}'s setting",
+          "env": "Environment variable {name}",
+          "noneDefault": "Nothing is configured",
+          "noDefault": "none configured",
+          "fallback": {
+            "default": "Nothing is configured",
+            "matchResume": "No model of its own; uses the default model ({model})",
+            "parseResume": "No model of its own; uses the default model ({model})",
+            "visual": "No model of its own; uses the Parse resume model",
+            "evaluation": "No model of its own; uses the interview model",
+            "insights": "No model of its own; uses the default model ({model})",
+            "writing": "No model of its own; uses the default model ({model})",
+            "assistant": "No model of its own; uses the default model ({model})",
+            "jobs": "No model of its own; uses the default model ({model})"
+          }
+        },
+        "errors": {
+          "generic": "That did not work. Try again.",
+          "invalid_name": "Enter a name of at most 60 characters.",
+          "duplicate_name": "Another provider already has this name.",
+          "invalid_type": "Choose a provider type.",
+          "invalid_base_url": "This base URL cannot be used. Enter the API base URL without an endpoint such as /chat/completions; only a self-hosted type may point at a private host.",
+          "key_required": "Enter an API key.",
+          "key_required_for_new_url": "The endpoint changed. Enter the API key again, so the saved key is not sent to a different host.",
+          "too_many_providers": "The maximum number of providers is saved. Remove one first.",
+          "not_found": "This provider no longer exists. Refresh the page.",
+          "invalid_notes": "Notes can be at most 2,000 characters.",
+          "encryption_unavailable": "This server cannot store API keys: FIELD_ENCRYPTION_KEY is not set.",
+          "invalid_area": "This area is not known. Refresh the page.",
+          "invalid_route": "Choose a provider and a model.",
+          "unknown_provider": "This provider no longer exists. Refresh the page.",
+          "tools_unsupported": "This provider type cannot stream tool calls, which this area needs.",
+          "provider_in_use": "An area is still assigned to this provider. Reassign or clear that area first."
         }
       }
     }

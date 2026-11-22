@@ -4008,6 +4008,10 @@
         "visitors": {
           "title": "訪客與註冊",
           "sub": "誰來過、從哪裡來、有多少人建立了帳號。"
+        },
+        "llm": {
+          "title": "LLM 閘道",
+          "sub": "AI 供應商、它們的模型，以及每種工作使用哪個模型。"
         }
       },
       "overrides": {
@@ -4659,6 +4663,215 @@
             "pages": "頁面數",
             "account": "帳號"
           }
+        }
+      },
+      "llm": {
+        "eyebrow": "管理台",
+        "title": "LLM 閘道",
+        "sub": "先儲存 AI 供應商，再為每種工作選擇供應商和模型。變更會在約 30 秒內套用到新的請求。",
+        "loading": "載入中…",
+        "refresh": "重新整理",
+        "refreshing": "重新整理中…",
+        "cancel": "取消",
+        "environment": {
+          "production": "正式環境設定",
+          "development": "開發環境設定"
+        },
+        "dbDisabled": "這台伺服器已關閉已儲存的設定（LLM_SETTINGS_DB_DISABLED）。你仍可編輯，但在重新開啟之前，所有請求都使用環境變數。",
+        "encryptionMissing": "這台伺服器沒有 FIELD_ENCRYPTION_KEY，因此無法儲存 API 金鑰。新增供應商前請先設定。",
+        "types": {
+          "newapi": "OpenAI 相容"
+        },
+        "providers": {
+          "title": "供應商",
+          "sub": "每個供應商是一個端點加一組 API 金鑰。同一項服務新增兩次，即可使用兩個帳號或兩個閘道。",
+          "add": "新增供應商",
+          "empty": "還沒有供應商。請新增一個，再指派給下方的區域。",
+          "full": "供應商已達上限 {max} 個。請先移除一個再新增。",
+          "noUrl": "沒有網址",
+          "off": "關閉",
+          "ready": "可用",
+          "keyUnreadable": "金鑰無法讀取",
+          "keyUnreadableHelp": "已儲存的金鑰是用不同的 FIELD_ENCRYPTION_KEY 加密的，這裡無法讀取。指派給此供應商的區域會改用繼承的模型，直到你重新輸入金鑰。",
+          "key": "API 金鑰",
+          "noKey": "無",
+          "models": "模型",
+          "modelCount": "{count, plural, one {{n} 個模型} other {{n} 個模型}}",
+          "modelsNever": "尚未取得",
+          "fetchedAt": "清單取得時間",
+          "edit": "編輯",
+          "fetchModels": "取得模型",
+          "refreshModels": "重新整理模型",
+          "fetching": "取得中…",
+          "showModels": "顯示模型",
+          "hideModels": "隱藏模型",
+          "turnOff": "關閉",
+          "turnOn": "開啟",
+          "remove": "移除",
+          "removeConfirm": "移除 {name}"
+        },
+        "form": {
+          "addTitle": "新增供應商",
+          "editTitle": "編輯供應商",
+          "name": "名稱",
+          "nameHint": "會顯示在區域清單中，例如「OpenRouter（主要）」。",
+          "type": "類型",
+          "typeHint": "端點所使用的 API。閘道或代理伺服器請選擇 OpenAI 相容。",
+          "typeHintNoTools": "這個類型在這裡無法串流工具呼叫，因此不能用於助理區域。",
+          "baseUrl": "API 基礎網址",
+          "baseUrlRequired": "必填。請包含版本路徑，例如 https://gateway.example.com/v1，不要加上 /chat/completions 這類端點。",
+          "baseUrlOptional": "留空則使用 {url}。",
+          "apiKey": "API 金鑰",
+          "apiKeyHint": "以加密方式儲存。儲存後不會再顯示。",
+          "apiKeyKeep": "留空會保留已儲存的金鑰。把網址改成另一個主機時，需要重新輸入金鑰。",
+          "notes": "備註（選填）",
+          "enabled": "使用這個供應商",
+          "save": "儲存供應商",
+          "saving": "儲存中…",
+          "test": "不儲存，直接測試",
+          "testing": "測試中…",
+          "saveHint": "儲存時也會用這組金鑰取得該供應商的模型清單。"
+        },
+        "modelList": {
+          "ok": "{count, plural, one {供應商列出 {n} 個模型。} other {供應商列出 {n} 個模型。}}",
+          "okTruncated": "供應商列出的模型超過 {n} 個，只保留前 {n} 個。其他模型請手動輸入模型 ID。",
+          "invalid_base_url": "無法使用這個基礎網址。請檢查位址；只有自行架設的類型才能指向私有主機。",
+          "key_required": "請輸入 API 金鑰，才能向供應商查詢模型。",
+          "auth_rejected": "供應商拒絕了這組 API 金鑰。",
+          "not_supported": "這個端點沒有模型清單。請檢查基礎網址，或手動輸入模型 ID。",
+          "rate_limited": "供應商正在限制請求。請一分鐘後再試。",
+          "timeout": "供應商在 8 秒內沒有回應。",
+          "unreachable": "無法連線到供應商。請檢查基礎網址。",
+          "invalid_response": "供應商有回應，但內容不是模型清單。",
+          "response_too_large": "供應商的模型清單太大，無法讀取。",
+          "provider_error": "供應商回傳了錯誤。"
+        },
+        "areas": {
+          "title": "功能區域",
+          "sub": "為區域指派供應商和模型，或讓它繼承。你不動的區域，運作方式維持不變。",
+          "brand": "網站",
+          "goapplyNote": "{site} 沒有自行指派的區域，會使用 {shared} 的指派。",
+          "noProviders": "請先在上方新增供應商，才能指派區域。",
+          "assigned": "已指派",
+          "notInEffect": "未生效",
+          "inherits": "繼承",
+          "provider": "供應商",
+          "inheritOption": "不指派（繼承）",
+          "providerOff": "{name}（已關閉）",
+          "model": "模型",
+          "save": "儲存",
+          "clear": "清除指派",
+          "modelHint": "從供應商的清單中選一個模型，或輸入清單中沒有的模型 ID。",
+          "noModelList": "這個供應商還沒有模型清單。請先在上方取得模型，或輸入模型 ID。",
+          "needsTools": "這個區域會呼叫工具，所以模型必須支援工具呼叫。",
+          "needsImages": "這個區域會讀取圖片，所以模型必須接受圖片輸入。",
+          "toolsBlocked": "這個供應商類型在這裡無法串流工具呼叫。這個區域請選擇 OpenAI 相容的供應商。",
+          "modelNotListed": "這個模型不在供應商取得的清單中，會照你輸入的使用。",
+          "now": "目前請求使用的設定",
+          "colSetting": "用於",
+          "colModel": "模型",
+          "colSource": "來源"
+        },
+        "routeStatus": {
+          "provider_missing": "已指派的供應商已被移除，所以這個區域使用繼承的模型。",
+          "provider_disabled": "已指派的供應商已關閉，所以這個區域使用繼承的模型。",
+          "provider_key_missing": "已指派的供應商沒有 API 金鑰，所以這個區域使用繼承的模型。",
+          "provider_key_unreadable": "這台伺服器無法讀取已指派供應商的金鑰，所以這個區域使用繼承的模型。"
+        },
+        "area": {
+          "default": {
+            "title": "預設",
+            "sub": "所有沒有自己模型的工作。"
+          },
+          "matchResume": {
+            "title": "履歷比對",
+            "sub": "評分履歷與職缺的符合程度。"
+          },
+          "parseResume": {
+            "title": "解析履歷",
+            "sub": "把履歷文字讀取成結構化的資料。"
+          },
+          "visual": {
+            "title": "影像",
+            "sub": "讀取圖片和掃描頁面（OCR）。"
+          },
+          "evaluation": {
+            "title": "評估",
+            "sub": "為完成的模擬面試評分並撰寫報告。"
+          },
+          "insights": {
+            "title": "洞察",
+            "sub": "每週求職摘要和搜尋摘要。"
+          },
+          "writing": {
+            "title": "寫作",
+            "sub": "求職信、聯絡訊息和履歷改寫。"
+          },
+          "assistant": {
+            "title": "助理",
+            "sub": "聊天助理、新手引導，以及理解使用者的需求。"
+          },
+          "jobs": {
+            "title": "職缺詳情",
+            "sub": "為職缺補充細節和標籤。"
+          }
+        },
+        "setting": {
+          "defaultModel": "預設模型",
+          "matching": "符合度分數",
+          "matchResume": "比對報告",
+          "matchScreen": "比對初篩",
+          "prematchFilter": "比對前篩選",
+          "extract": "履歷文字",
+          "resumeTag": "履歷標籤",
+          "vision": "圖片與掃描檔",
+          "evaluation": "面試報告",
+          "insights": "洞察",
+          "writing": "長篇寫作",
+          "rewrite": "履歷改寫",
+          "copilot": "助理聊天",
+          "onboarding": "新手引導",
+          "intentParser": "搜尋意圖",
+          "enrich": "職缺補充",
+          "jobTag": "職缺標籤",
+          "quickJob": "快速讀取職缺"
+        },
+        "source": {
+          "assigned": "這個區域的指派",
+          "override": "已儲存的個別設定覆寫",
+          "shared": "{shared} 的設定",
+          "env": "環境變數 {name}",
+          "noneDefault": "尚未設定任何項目",
+          "noDefault": "尚未設定",
+          "fallback": {
+            "default": "尚未設定任何項目",
+            "matchResume": "沒有自己的模型，使用預設模型（{model}）",
+            "parseResume": "沒有自己的模型，使用預設模型（{model}）",
+            "visual": "沒有自己的模型，使用解析履歷的模型",
+            "evaluation": "沒有自己的模型，使用面試模型",
+            "insights": "沒有自己的模型，使用預設模型（{model}）",
+            "writing": "沒有自己的模型，使用預設模型（{model}）",
+            "assistant": "沒有自己的模型，使用預設模型（{model}）",
+            "jobs": "沒有自己的模型，使用預設模型（{model}）"
+          }
+        },
+        "errors": {
+          "generic": "沒有成功。請重試。",
+          "invalid_name": "請輸入不超過 60 個字元的名稱。",
+          "duplicate_name": "已有另一個供應商使用這個名稱。",
+          "invalid_type": "請選擇供應商類型。",
+          "invalid_base_url": "無法使用這個基礎網址。請輸入不含 /chat/completions 這類端點的 API 基礎網址；只有自行架設的類型才能指向私有主機。",
+          "key_required": "請輸入 API 金鑰。",
+          "key_required_for_new_url": "端點已變更。請重新輸入 API 金鑰，以免把已儲存的金鑰送到不同的主機。",
+          "too_many_providers": "已儲存的供應商數量達上限。請先移除一個。",
+          "not_found": "這個供應商已不存在。請重新整理頁面。",
+          "invalid_notes": "備註最多 2,000 個字元。",
+          "encryption_unavailable": "這台伺服器無法儲存 API 金鑰：未設定 FIELD_ENCRYPTION_KEY。",
+          "invalid_area": "不認得這個區域。請重新整理頁面。",
+          "invalid_route": "請選擇供應商和模型。",
+          "unknown_provider": "這個供應商已不存在。請重新整理頁面。",
+          "tools_unsupported": "這個供應商類型無法串流工具呼叫，而這個區域需要它。",
+          "provider_in_use": "仍有區域指派給這個供應商。請先重新指派或清除該區域。"
         }
       }
     }
