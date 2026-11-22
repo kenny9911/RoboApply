@@ -49,6 +49,8 @@ export type HiringContactsMode = 'off' | 'deeplinks_only' | 'on';
 export interface BrandFlags {
   copilot: boolean;
   agent: boolean;
+  /** Alice, the application agent (docs/alice/ALICE.md). AI-dependent, like copilot and agent. */
+  alice: boolean;
   extension: boolean;
   /** Coaching roster (also needs a non-empty roster to show in nav). */
   coaching: boolean;
@@ -212,6 +214,7 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
     flags: {
       copilot: true,
       agent: true,
+      alice: true,
       extension: true,
       coaching: true,
       interviewBank: true,
@@ -286,6 +289,7 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
     flags: {
       copilot: true,
       agent: true,
+      alice: true,
       extension: true,
       coaching: true,
       interviewBank: true,

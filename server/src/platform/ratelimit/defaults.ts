@@ -83,6 +83,16 @@ export const RATE_LIMITS = {
   ],
   /** Student school-email code confirmations per user: 10 per 15 min (WP-79; Wave 5 gate). */
   studentConfirmPerUser: [{ limit: 10, windowSec: 15 * MINUTE }],
+  /** Alice turns per user: 20 per 10 min, 150/day (docs/alice/ALICE.md §2 "Limits"; turns spend no credits). */
+  aliceTurn: [
+    { limit: 20, windowSec: 10 * MINUTE },
+    { limit: 150, windowSec: DAY },
+  ],
+  /** Alice profile writes and revisions per user (the costly turns): 30/h, 80/day. */
+  aliceDraft: [
+    { limit: 30, windowSec: HOUR },
+    { limit: 80, windowSec: DAY },
+  ],
 } as const satisfies Record<string, readonly RateWindow[]>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

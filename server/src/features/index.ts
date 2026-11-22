@@ -47,6 +47,7 @@ import { createOffersRouter } from './offers/routes.js';
 import { createNetworkRouter } from './network/routes.js';
 import { createCnReferralsAdminRouter, createCnReferralsRouter } from './cn/referrals/routes.js';
 import { createAgentRouter } from './agent/routes.js';
+import { createAliceRouter } from './alice/routes.js';
 import { createExtensionPublicRouter, createExtensionRouter } from './extension/routes.js';
 import { createBillingPlansRouter, createCreditsRouter, createPublicCancelRouter } from './credits/routes.js';
 import { createCreditsAdminRouter } from './credits/adminRoutes.js';
@@ -155,6 +156,8 @@ export const FEATURE_MOUNTS: readonly FeatureMount[] = [
   { id: 'network', area: 'network', path: s('/network'), kind: 'seeker', owner: 'WP-54', build: createNetworkRouter },
   { id: 'cn.referrals', area: 'cn/referrals', path: s('/cn/referrals'), kind: 'seeker', owner: 'WP-54', build: createCnReferralsRouter },
   { id: 'agent', area: 'agent', path: s('/agent'), kind: 'seeker', owner: 'WP-52', build: createAgentRouter },
+  // Alice, the application agent (docs/alice/ALICE.md; owner request 2026-11-23).
+  { id: 'alice', area: 'alice', path: s('/alice'), kind: 'seeker', owner: 'ALICE', build: createAliceRouter },
   { id: 'extension', area: 'extension', path: s('/ext'), kind: 'seeker', owner: 'WP-55a', build: createExtensionRouter },
   { id: 'extension.public', area: 'extension', path: pub('/ext'), kind: 'public', owner: 'WP-55a', build: createExtensionPublicRouter },
 

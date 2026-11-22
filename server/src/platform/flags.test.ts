@@ -941,6 +941,7 @@ describe('no model credential is a capability requirement any more (D5)', () => 
   it('competitiveness stays an AI-dependent flag (owner decision, deferred)', async () => {
     const { AI_DEPENDENT_FLAGS } = await import('./flags.js');
     expect(AI_DEPENDENT_FLAGS.has('competitiveness')).toBe(true);
-    expect([...AI_DEPENDENT_FLAGS].sort()).toEqual(['agent', 'competitiveness', 'copilot', 'visitorAssistant']);
+    // `alice` (the application agent, docs/alice/ALICE.md) is AI-only like copilot and agent.
+    expect([...AI_DEPENDENT_FLAGS].sort()).toEqual(['agent', 'alice', 'competitiveness', 'copilot', 'visitorAssistant']);
   });
 });
