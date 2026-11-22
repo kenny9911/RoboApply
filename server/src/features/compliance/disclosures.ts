@@ -18,9 +18,11 @@ import { DEFAULT_BRAND, type ProductBrand } from '../../platform/brand/registry.
 import { brandEnv, brandOwnEnv, brandStack, cnLlmDomesticOnly, type EnvSource } from '../../platform/brand/brandEnv.js';
 import { transportNameFor } from '../../platform/email/index.js';
 import { requirementsMet } from '../../platform/flags.js';
+import { getGatewayProviderSync } from '../../lib/llm/gatewayProviders.js';
+import { areaRouteSelector } from '../../lib/llm/llmModels.js';
 import { getLlmStack } from '../../lib/llm/llmStackConfigResolver.js';
-import { MODEL_ENV, isDbConfigDisabled, type LlmStackBrand, type LlmStackConfigBlob, type ModelKey, type PurposeKey } from '../../lib/llm/llmStackConfigSchema.js';
-import { normalizeProviderType, resolveProviderPrefix } from '../../services/llm/providerPrefixes.js';
+import { MODEL_ENV, areaOfModelKey, isDbConfigDisabled, type LlmStackBrand, type LlmStackConfigBlob, type ModelKey, type PurposeKey } from '../../lib/llm/llmStackConfigSchema.js';
+import { normalizeProviderType, providerBaseType, providerEntryId, resolveProviderPrefix } from '../../services/llm/providerPrefixes.js';
 import { GOAPPLY_DIRECT_PROVIDERS, MAINLAND_LLM_HOST_SUFFIXES, extraDomesticHosts, hostOf, isMainlandLlmHost } from '../../platform/llm/brandPolicy.js';
 import { contentSafetyReadiness } from '../../platform/llm/contentSafety/config.js';
 import { PROVIDER_DEFAULT_BASE_URLS, openRouterIgnoredUpstreams } from '../../platform/llm/egressPolicy.js';
@@ -141,7 +143,13 @@ type SettingKey = ModelKey | 'provider';
 function overrideOf(env: EnvSource, brandId: LlmStackBrand, key: SettingKey): string | undefined {
   const blob = SNAPSHOTS.get(env)?.[brandId];
   if (!blob) return undefined;
-  const raw = key === 'provider' ? blob.provider : key === 'defaultModel' ? blob.defaultModel : key === 'fallbackModel' ? blob.fallbackModel : blob.purposes[key as PurposeKey];
+  // A model key's override is its functionality area's assignment (the LLM
+  // gateway), else its own value: the order the resolver uses (llmModels.ts).
+  const raw =
+    key === 'provider'
+      ? blob.provider
+      : areaRouteSelector(blob, areaOfModelKey(key)) ??
+        (key === 'defaultModel' ? blob.defaultModel : key === 'fallbackModel' ? blob.fallbackModel : blob.purposes[key as PurposeKey]);
   const t = typeof raw === 'string' ? raw.trim() : '';
   return t ? t : undefined;
 }
@@ -240,6 +248,30 @@ export function parseModelId(id: string, provider: string | null, dialect: Selec
   return { vendor: route || 'unknown', model: id };
 }
 
+/**
+ * A selector that names a provider entry of the LLM gateway
+ * (`<type>@<entry>/<model>`), as a disclosure row: the vendor is the provider
+ * type while the entry uses that vendor's own host, else the host the entry
+ * points at; the region is CN for a mainland host, the vendor's country on its
+ * own host, and not listed for any other host (we cannot know where a gateway
+ * processes). Null when the selector names no entry.
+ */
+function entryDisclosure(id: string, env: EnvSource): { vendor: string; model: string; region: string | null } | null {
+  const slash = id.indexOf('/');
+  const head = slash > 0 ? id.slice(0, slash) : '';
+  const entryId = providerEntryId(head);
+  if (!entryId) return null;
+  const type = providerBaseType(head);
+  const model = id.slice(slash + 1);
+  const entry = getGatewayProviderSync(entryId);
+  const ownHost = hostOf(PROVIDER_DEFAULT_BASE_URLS[type] ?? null);
+  const host = hostOf(entry?.baseUrl ?? null) ?? ownHost;
+  const onOwnHost = !!host && host === ownHost;
+  const vendor = onOwnHost || !host ? type : host;
+  const region = host && isMainlandLlmHost(host, env) ? 'CN' : onOwnHost ? VENDOR_COUNTRY[type] ?? null : null;
+  return { vendor, model, region };
+}
+
 interface GenaiFiling {
   model: string;
   vendor: string;
@@ -288,11 +320,13 @@ export function configuredModels(brand: ProductBrand, env: EnvSource = process.e
     const setting = resolveSetting(brand, modelKey, env);
     if (!setting) continue;
     const id = setting.value;
+    const entry = entryDisclosure(id, env);
     const { vendor, model } =
-      setting.stack === 'shared'
+      entry ??
+      (setting.stack === 'shared'
         ? parseModelId(id, sharedProvider, 'global')
-        : parseModelId(id, ownProvider, brand.llmProfile === 'domestic_cn' ? 'domestic_cn' : 'global');
-    const region = VENDOR_COUNTRY[vendor] ?? null;
+        : parseModelId(id, ownProvider, brand.llmProfile === 'domestic_cn' ? 'domestic_cn' : 'global'));
+    const region = entry ? entry.region : VENDOR_COUNTRY[vendor] ?? null;
     if (walled && setting.stack === 'shared' && region !== 'CN') continue;
     const key = `${vendor}/${model}`;
     if (seen.has(key)) continue;

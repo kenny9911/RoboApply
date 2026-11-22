@@ -18,6 +18,11 @@
  *   GoApply     llm_stack.goapply.{env} blob  ??  CN_<NAME>
  *               ??  llm_stack.{env} blob (RoboApply's)  ??  <NAME>
  *
+ * "The blob" is, for a key, the assignment of the functionality area that owns
+ * it (the LLM gateway: a provider entry and a model, see `areaRouteSelector`),
+ * else the key's own override. An area assignment is therefore an admin
+ * override like any other, in the same place in the order above.
+ *
  * So a China-specific model is an optional override: with no `CN_LLM_*` and
  * no GoApply blob, every model key and the provider mode resolve to the same
  * strings for both brands. RoboApply never reads a `CN_` value or GoApply's
@@ -48,15 +53,19 @@ import {
   DEFAULT_PROVIDER_MODE,
   normalizeProviderType,
   pinDomesticSelector,
+  providerEntrySelector,
   qualifySelector,
   resolveSelectorRoute,
 } from '../../services/llm/providerPrefixes.js';
 import { contextlessLlmBrand, effectiveLlmProfile } from './llmBrand.js';
+import { getGatewayProviderSync } from './gatewayProviders.js';
 import { getLlmStackSync } from './llmStackConfigResolver.js';
 import {
   MODEL_ENV,
   PURPOSE_KEYS,
+  areaOfModelKey,
   isDbConfigDisabled,
+  type LlmArea,
   type LlmStackConfigBlob,
   type ModelKey,
   type PurposeKey,
@@ -95,10 +104,31 @@ export type LlmSettingSource = 'override' | 'env' | 'shared' | 'none';
 type BlobPick = (blob: LlmStackConfigBlob) => string | null | undefined;
 
 const PICK_PROVIDER: BlobPick = (blob) => blob.provider;
+
+/**
+ * The selector an area assignment stands for: `<type>@<entry>/<model>`, which
+ * pins the provider entry (providerPrefixes.ts). Undefined when the area is
+ * not assigned, or its entry cannot be used right now (removed, disabled, no
+ * readable key, or the provider cache is still cold): the key then resolves as
+ * if the area did not exist, so a broken entry never blacks out an area.
+ */
+export function areaRouteSelector(blob: LlmStackConfigBlob, area: LlmArea | null): string | undefined {
+  const route = area ? blob.routes?.[area] : null;
+  if (!route) return undefined;
+  const entry = getGatewayProviderSync(route.providerId);
+  return entry ? providerEntrySelector(entry.type, entry.id, route.model) : undefined;
+}
+
+/** A model key's admin value in one blob: its area's assignment, else its own override. */
 function pickModel(key: ModelKey): BlobPick {
-  if (key === 'defaultModel') return (blob) => blob.defaultModel;
-  if (key === 'fallbackModel') return (blob) => blob.fallbackModel;
-  return (blob) => blob.purposes[key as PurposeKey];
+  const area = areaOfModelKey(key);
+  const own: BlobPick =
+    key === 'defaultModel'
+      ? (blob) => blob.defaultModel
+      : key === 'fallbackModel'
+        ? (blob) => blob.fallbackModel
+        : (blob) => blob.purposes[key as PurposeKey];
+  return (blob) => areaRouteSelector(blob, area) ?? own(blob);
 }
 
 function blobValue(brandId: BrandId, pick: BlobPick | null): string | undefined {
