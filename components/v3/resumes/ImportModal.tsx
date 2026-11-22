@@ -362,7 +362,7 @@ export function ImportModal({
                 </div>
                 <div
                   style={{
-                    fontSize: 12.5,
+                    fontSize: 'var(--fs-meta)',
                     color: 'var(--text-muted)',
                     marginTop: 14,
                     textAlign: 'center',
@@ -439,7 +439,7 @@ export function ImportModal({
                 <div style={{ marginBottom: 16 }}>
                   <div
                     style={{
-                      fontSize: 12.5,
+                      fontSize: 'var(--fs-meta)',
                       fontWeight: 600,
                       color: 'var(--text)',
                       marginBottom: 8,
@@ -451,7 +451,7 @@ export function ImportModal({
                     style={{
                       margin: 0,
                       paddingLeft: 18,
-                      fontSize: 12.5,
+                      fontSize: 'var(--fs-meta)',
                       color: 'var(--text-2)',
                       lineHeight: 1.7,
                     }}
@@ -520,7 +520,7 @@ export function ImportModal({
             )}
 
             {error ? (
-              <p style={{ marginTop: 14, fontSize: 13, color: 'var(--warn)' }} role="alert">
+              <p style={{ marginTop: 14, fontSize: 'var(--fs-meta)', color: 'var(--warn)' }} role="alert">
                 {errorText}
               </p>
             ) : null}
@@ -581,7 +581,7 @@ export function ImportModal({
             </h3>
             <p
               style={{
-                fontSize: 13.5,
+                fontSize: 'var(--fs-body)',
                 color: 'var(--text-2)',
                 maxWidth: 360,
                 margin: '0 auto 6px',

@@ -75,6 +75,38 @@ export function googleThinkingConfigFor(
   return { thinkingLevel };
 }
 
+/**
+ * The effort an LLM gateway route (lib/llm/llmStackConfigSchema.ts
+ * GATEWAY_EFFORTS) sends to a provider type, mapped to the nearest level that
+ * provider's API takes. `provider` (the admin chose none) and a level the
+ * provider has no equivalent for give `undefined`: the call then keeps the
+ * effort its caller and the env would send without the gateway.
+ *   OpenAI-style APIs (OpenAI, OpenAI-compatible gateways): minimal…high; max → high.
+ *   OpenRouter: the whole ladder (the router maps it per upstream model).
+ *   Anthropic: low…max; minimal → low.
+ *   Google: minimal…high; max → high (googleThinkingConfigFor maps it per model).
+ *   DeepSeek: high and max only; a lower level sends nothing (its own default).
+ *   Kimi: no effort control.
+ */
+export function gatewayEffortFor(providerBaseType: string, effort: string | null | undefined): ReasoningEffort | undefined {
+  const level = parseReasoningEffort(effort);
+  if (!level) return undefined;
+  switch ((providerBaseType || '').toLowerCase()) {
+    case 'openrouter':
+      return level;
+    case 'anthropic':
+      return level === 'minimal' ? 'low' : level;
+    case 'deepseek':
+      return level === 'high' || level === 'max' ? level : undefined;
+    case 'kimi':
+    case 'moonshot':
+      return undefined;
+    default:
+      // openai, google, newapi, ollama, minimax and the domestic vendors.
+      return level === 'max' ? 'high' : level;
+  }
+}
+
 /** The global env dial. Provider-specific vars are passed per call site. */
 export const GLOBAL_REASONING_EFFORT_ENV = 'LLM_REASONING_EFFORT';
 

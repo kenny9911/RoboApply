@@ -4607,29 +4607,45 @@
         },
         "areas": {
           "title": "功能區域",
-          "sub": "為區域指派供應商和模型，或讓它繼承。你不動的區域，運作方式維持不變。",
+          "sub": "為區域指派供應商、模型和推理強度，需要時再加上備援模型。未指派的區域會使用「預設」區域的指派；「預設」也未指派時，區域維持現在的設定。",
           "brand": "網站",
-          "goapplyNote": "{site} 沒有自行指派的區域，會使用 {shared} 的指派。",
+          "goapplyNote": "{site} 會先讀取自己的區域和自己的「預設」。兩者都沒有時，會使用 {shared} 的。",
           "noProviders": "請先在上方新增供應商，才能指派區域。",
           "assigned": "已指派",
           "notInEffect": "未生效",
           "inherits": "繼承",
           "provider": "供應商",
-          "inheritOption": "不指派（繼承）",
+          "inheritOption": "不指派（使用預設）",
           "providerOff": "{name}（已關閉）",
           "model": "模型",
           "save": "儲存",
           "clear": "清除指派",
           "modelHint": "從供應商的清單中選一個模型，或輸入清單中沒有的模型 ID。",
           "noModelList": "這個供應商還沒有模型清單。請先在上方取得模型，或輸入模型 ID。",
-          "needsTools": "這個區域會呼叫工具，所以模型必須支援工具呼叫。",
+          "needsTools": "這個區域會呼叫工具，所以它的模型和每個備援模型都必須支援工具呼叫。",
           "needsImages": "這個區域會讀取圖片，所以模型必須接受圖片輸入。",
-          "toolsBlocked": "這個供應商類型在這裡無法串流工具呼叫。這個區域請選擇 OpenAI 相容的供應商。",
+          "toolsBlocked": "這裡選擇的某個供應商類型無法串流工具呼叫。這個區域的模型和備援模型請選擇 OpenAI 相容的供應商。",
           "modelNotListed": "這個模型不在供應商取得的清單中，會照你輸入的使用。",
           "now": "目前請求使用的設定",
           "colSetting": "用於",
           "colModel": "模型",
-          "colSource": "來源"
+          "colSource": "來源",
+          "inheritOptionDefault": "不指派（使用環境變數）",
+          "usesDefault": "使用預設",
+          "chooseProvider": "選擇供應商",
+          "effort": "推理強度",
+          "effortHint": "推理強度會隨每個送往該模型的請求一起送出，並換算成供應商支援的最接近等級。「供應商預設」不送出任何值，這時會使用環境變數的強度或供應商自己的預設值。",
+          "fallbacks": "備援模型",
+          "fallbacksHint": "上面的模型失敗時會依序嘗試：金鑰被拒或額度用完、服務中斷或觸發流量限制、端點不提供該模型。最多 {max} 個。之後仍會嘗試備援模型設定（LLM_FALLBACK_MODEL）。",
+          "fallbackN": "備援 {n}",
+          "addFallback": "新增備援模型",
+          "fallbacksFull": "這個區域的備援模型已達上限（{max} 個）。",
+          "moveUp": "上移",
+          "moveDown": "下移",
+          "removeFallback": "移除",
+          "moveUpLabel": "上移備援 {n}",
+          "moveDownLabel": "下移備援 {n}",
+          "removeFallbackLabel": "移除備援 {n}"
         },
         "routeStatus": {
           "provider_missing": "已指派的供應商已被移除，所以這個區域使用繼承的模型。",
@@ -4640,7 +4656,7 @@
         "area": {
           "default": {
             "title": "預設",
-            "sub": "所有沒有自己模型的工作。"
+            "sub": "所有未指派的區域都會使用這個模型、它的備援模型和推理強度。"
           },
           "matchResume": {
             "title": "履歷比對",
@@ -4706,13 +4722,16 @@
             "default": "尚未設定任何項目",
             "matchResume": "沒有自己的模型，使用預設模型（{model}）",
             "parseResume": "沒有自己的模型，使用預設模型（{model}）",
-            "visual": "沒有自己的模型，使用解析履歷的模型",
-            "evaluation": "沒有自己的模型，使用面試模型",
+            "visual": "沒有自己的模型，使用預設模型（{model}）",
+            "evaluation": "沒有自己的模型，使用預設模型（{model}）",
             "insights": "沒有自己的模型，使用預設模型（{model}）",
             "writing": "沒有自己的模型，使用預設模型（{model}）",
             "assistant": "沒有自己的模型，使用預設模型（{model}）",
             "jobs": "沒有自己的模型，使用預設模型（{model}）"
-          }
+          },
+          "default": "「預設」區域的指派",
+          "sharedArea": "{shared} 為這個區域的指派",
+          "sharedDefault": "{shared} 的「預設」區域"
         },
         "errors": {
           "generic": "沒有成功。請重試。",
@@ -4730,7 +4749,19 @@
           "invalid_route": "請選擇供應商和模型。",
           "unknown_provider": "這個供應商已不存在。請重新整理頁面。",
           "tools_unsupported": "這個供應商類型無法串流工具呼叫，而這個區域需要它。",
-          "provider_in_use": "仍有區域指派給這個供應商。請先重新指派或清除該區域。"
+          "provider_in_use": "仍有區域在模型或備援模型中使用這個供應商。請先修改或清除該區域。",
+          "invalid_effort": "請選擇推理強度。",
+          "invalid_fallback": "請為每個備援模型選擇供應商和模型。",
+          "duplicate_fallback": "同一個區域中，每個模型只能出現一次。",
+          "too_many_fallbacks": "一個區域最多可設定 {max} 個備援模型。"
+        },
+        "effort": {
+          "provider": "供應商預設",
+          "minimal": "最低",
+          "low": "低",
+          "medium": "中",
+          "high": "高",
+          "max": "最高"
         }
       },
       "visitors": {

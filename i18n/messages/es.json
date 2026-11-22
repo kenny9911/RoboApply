@@ -4607,29 +4607,45 @@
         },
         "areas": {
           "title": "Áreas de funcionalidad",
-          "sub": "Asigna un proveedor y un modelo a un área, o déjala heredar. Un área que no toques sigue funcionando exactamente como ahora.",
+          "sub": "Asigna a un área un proveedor, un modelo y un esfuerzo de razonamiento, con modelos de respaldo si quieres. Un área sin asignar usa la asignación de Predeterminado; si Predeterminado tampoco está asignado, conserva el ajuste que tiene ahora.",
           "brand": "Sitio",
-          "goapplyNote": "{site} usa la asignación de {shared} en cualquier área que no asigne por sí mismo.",
+          "goapplyNote": "{site} lee primero sus propias áreas y su propio Predeterminado. Donde no tiene ninguno de los dos, usa los de {shared}.",
           "noProviders": "Añade un proveedor arriba para asignar un área.",
           "assigned": "Asignada",
           "notInEffect": "Sin efecto",
           "inherits": "Hereda",
           "provider": "Proveedor",
-          "inheritOption": "Sin asignar (heredar)",
+          "inheritOption": "Sin asignar (usar Predeterminado)",
           "providerOff": "{name} (desactivado)",
           "model": "Modelo",
           "save": "Guardar",
           "clear": "Quitar asignación",
           "modelHint": "Elige un modelo de la lista del proveedor o escribe un ID de modelo que no aparezca en ella.",
           "noModelList": "Este proveedor aún no tiene lista de modelos. Obtén sus modelos arriba o escribe un ID de modelo.",
-          "needsTools": "Esta área llama a herramientas, así que el modelo debe admitir llamadas a herramientas.",
+          "needsTools": "Esta área llama a herramientas, así que su modelo y cada modelo de respaldo deben admitir llamadas a herramientas.",
           "needsImages": "Esta área lee imágenes, así que el modelo debe aceptar imágenes como entrada.",
-          "toolsBlocked": "Este tipo de proveedor no puede transmitir llamadas a herramientas aquí. Elige un proveedor compatible con OpenAI para esta área.",
+          "toolsBlocked": "Un tipo de proveedor elegido aquí no puede transmitir llamadas a herramientas. Elige proveedores compatibles con OpenAI para el modelo y los respaldos de esta área.",
           "modelNotListed": "Este modelo no está en la lista obtenida del proveedor. Se usa tal como lo escribiste.",
           "now": "Qué usan ahora las solicitudes",
           "colSetting": "Se usa para",
           "colModel": "Modelo",
-          "colSource": "Viene de"
+          "colSource": "Viene de",
+          "inheritOptionDefault": "Sin asignar (usar el entorno)",
+          "usesDefault": "Usa Predeterminado",
+          "chooseProvider": "Elige un proveedor",
+          "effort": "Esfuerzo de razonamiento",
+          "effortHint": "El esfuerzo de razonamiento se envía con cada solicitud a ese modelo, ajustado al nivel más cercano que admite su proveedor. Predeterminado del proveedor no envía ninguno, así que se aplica el del entorno o el del propio proveedor.",
+          "fallbacks": "Modelos de respaldo",
+          "fallbacksHint": "Se prueban en orden cuando falla el modelo de arriba: una clave rechazada o sin crédito, una caída o un límite de uso, o un modelo que el endpoint no ofrece. Hasta {max}. Después de ellos se sigue probando el ajuste del modelo de respaldo (LLM_FALLBACK_MODEL).",
+          "fallbackN": "Respaldo {n}",
+          "addFallback": "Añadir modelo de respaldo",
+          "fallbacksFull": "Esta área ya tiene el máximo de modelos de respaldo ({max}).",
+          "moveUp": "Subir",
+          "moveDown": "Bajar",
+          "removeFallback": "Quitar",
+          "moveUpLabel": "Subir el respaldo {n}",
+          "moveDownLabel": "Bajar el respaldo {n}",
+          "removeFallbackLabel": "Quitar el respaldo {n}"
         },
         "routeStatus": {
           "provider_missing": "Se quitó el proveedor asignado, así que esta área usa su modelo heredado.",
@@ -4640,7 +4656,7 @@
         "area": {
           "default": {
             "title": "Predeterminado",
-            "sub": "Todo trabajo que no tiene un modelo propio."
+            "sub": "Cada área que no asignes usa este modelo, sus modelos de respaldo y su esfuerzo."
           },
           "matchResume": {
             "title": "Comparar currículum",
@@ -4706,13 +4722,16 @@
             "default": "No hay nada configurado",
             "matchResume": "Sin modelo propio; usa el modelo predeterminado ({model})",
             "parseResume": "Sin modelo propio; usa el modelo predeterminado ({model})",
-            "visual": "Sin modelo propio; usa el modelo de Analizar currículum",
-            "evaluation": "Sin modelo propio; usa el modelo de entrevista",
+            "visual": "Sin modelo propio; usa el modelo predeterminado ({model})",
+            "evaluation": "Sin modelo propio; usa el modelo predeterminado ({model})",
             "insights": "Sin modelo propio; usa el modelo predeterminado ({model})",
             "writing": "Sin modelo propio; usa el modelo predeterminado ({model})",
             "assistant": "Sin modelo propio; usa el modelo predeterminado ({model})",
             "jobs": "Sin modelo propio; usa el modelo predeterminado ({model})"
-          }
+          },
+          "default": "La asignación del área Predeterminado",
+          "sharedArea": "La asignación de {shared} para esta área",
+          "sharedDefault": "El área Predeterminado de {shared}"
         },
         "errors": {
           "generic": "Eso no funcionó. Inténtalo otra vez.",
@@ -4730,7 +4749,19 @@
           "invalid_route": "Elige un proveedor y un modelo.",
           "unknown_provider": "Este proveedor ya no existe. Actualiza la página.",
           "tools_unsupported": "Este tipo de proveedor no puede transmitir llamadas a herramientas, que esta área necesita.",
-          "provider_in_use": "Todavía hay un área asignada a este proveedor. Reasigna o quita primero esa asignación."
+          "provider_in_use": "Un área todavía usa este proveedor, para su modelo o un respaldo. Cambia o quita primero esa área.",
+          "invalid_effort": "Elige un esfuerzo de razonamiento.",
+          "invalid_fallback": "Elige un proveedor y un modelo para cada modelo de respaldo.",
+          "duplicate_fallback": "Cada modelo puede aparecer una sola vez en un área.",
+          "too_many_fallbacks": "Un área admite como máximo {max} modelos de respaldo."
+        },
+        "effort": {
+          "provider": "Predeterminado del proveedor",
+          "minimal": "Mínimo",
+          "low": "Bajo",
+          "medium": "Medio",
+          "high": "Alto",
+          "max": "Máximo"
         }
       },
       "visitors": {

@@ -108,20 +108,15 @@ export interface RACareerInsightOutput {
   recommendations: RARecommendation[];
 }
 
-// Env var that overrides the model at runtime.
-const ENV_MODEL = 'RA_V2_CAREER_INSIGHT_MODEL';
-
 /**
- * Resolve the career-insight model. Reads `process.env` at CALL TIME (not
- * module-load) so it picks up dotenv values regardless of ESM import order —
- * the backend's `dotenv.config()` runs after this module is hoisted, so a
- * module-level read would miss the override. Falls back to the configured LLM
- * stack rather than a vendor literal.
+ * Resolve the career-insight model at CALL TIME (not module-load), so an admin
+ * change or a dotenv value read after this module was hoisted applies. The
+ * `insights` stack key is the LLM gateway first (the Insights area, else the
+ * Default area), then its saved override, then RA_V2_CAREER_INSIGHT_MODEL;
+ * with none of them, the default model. Never a vendor literal.
  */
 export function pickCareerInsightModel(): string {
-  // The Insights area (LLM gateway), else RA_V2_CAREER_INSIGHT_MODEL (the
-  // `insights` stack key reads that variable), else the default model.
-  return getInsightsModel() || process.env[ENV_MODEL]?.trim() || llmService.getModel();
+  return getInsightsModel() || llmService.getModel();
 }
 
 const VALID_ACTIONS = new Set<RARecommendationAction>([

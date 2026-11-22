@@ -83,7 +83,7 @@ export function SkillsEditor({
               border: '1px solid var(--action)',
               borderRadius: 99,
               padding: '6px 11px',
-              fontSize: 12.5,
+              fontSize: 'var(--fs-meta)',
             }}
           />
         ) : (

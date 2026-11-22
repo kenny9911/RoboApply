@@ -4607,29 +4607,45 @@
         },
         "areas": {
           "title": "Funktionsbereiche",
-          "sub": "Weise einem Bereich einen Anbieter und ein Modell zu oder lass ihn erben. Ein Bereich, den du nicht anfasst, funktioniert genau wie bisher.",
+          "sub": "Weise einem Bereich einen Anbieter, ein Modell und einen Denkaufwand zu, auf Wunsch mit Fallback-Modellen. Ein nicht zugewiesener Bereich nutzt die Zuweisung von „Standard“; ist auch „Standard“ nicht zugewiesen, behält er seine bisherige Einstellung.",
           "brand": "Website",
-          "goapplyNote": "{site} nutzt die Zuweisung von {shared} für jeden Bereich, den es nicht selbst zuweist.",
+          "goapplyNote": "{site} liest zuerst seine eigenen Bereiche und sein eigenes „Standard“. Wo es beides nicht hat, nutzt es die Zuweisung von {shared}.",
           "noProviders": "Füg oben einen Anbieter hinzu, um einen Bereich zuzuweisen.",
           "assigned": "Zugewiesen",
           "notInEffect": "Nicht wirksam",
           "inherits": "Erbt",
           "provider": "Anbieter",
-          "inheritOption": "Nicht zugewiesen (erben)",
+          "inheritOption": "Nicht zugewiesen („Standard“ nutzen)",
           "providerOff": "{name} (aus)",
           "model": "Modell",
           "save": "Speichern",
           "clear": "Zuweisung löschen",
           "modelHint": "Wähl ein Modell aus der Liste des Anbieters oder gib eine Modell-ID ein, die er nicht listet.",
           "noModelList": "Dieser Anbieter hat noch keine Modellliste. Ruf oben seine Modelle ab oder gib eine Modell-ID ein.",
-          "needsTools": "Dieser Bereich ruft Tools auf, daher muss das Modell Tool-Aufrufe unterstützen.",
+          "needsTools": "Dieser Bereich ruft Tools auf, daher müssen sein Modell und jedes Fallback-Modell Tool-Aufrufe unterstützen.",
           "needsImages": "Dieser Bereich liest Bilder, daher muss das Modell Bildeingaben akzeptieren.",
-          "toolsBlocked": "Dieser Anbietertyp kann hier keine Tool-Aufrufe streamen. Wähl für diesen Bereich einen OpenAI-kompatiblen Anbieter.",
+          "toolsBlocked": "Ein hier gewählter Anbietertyp kann keine Tool-Aufrufe streamen. Wähl für das Modell und die Fallback-Modelle dieses Bereichs OpenAI-kompatible Anbieter.",
           "modelNotListed": "Dieses Modell steht nicht in der abgerufenen Liste des Anbieters. Es wird so verwendet, wie du es eingegeben hast.",
           "now": "Was Anfragen jetzt nutzen",
           "colSetting": "Verwendet für",
           "colModel": "Modell",
-          "colSource": "Stammt von"
+          "colSource": "Stammt von",
+          "inheritOptionDefault": "Nicht zugewiesen (Umgebung nutzen)",
+          "usesDefault": "Nutzt „Standard“",
+          "chooseProvider": "Anbieter wählen",
+          "effort": "Denkaufwand",
+          "effortHint": "Der Denkaufwand wird mit jeder Anfrage an dieses Modell gesendet, angepasst an die nächstliegende Stufe, die sein Anbieter kennt. „Anbieter-Standard“ sendet keinen, dann gilt der Wert aus der Umgebung oder der des Anbieters.",
+          "fallbacks": "Fallback-Modelle",
+          "fallbacksHint": "Werden der Reihe nach versucht, wenn das Modell oben scheitert: ein abgelehnter oder aufgebrauchter Schlüssel, ein Ausfall oder ein Ratenlimit oder ein Modell, das der Endpunkt nicht anbietet. Bis zu {max}. Danach wird weiterhin die Fallback-Modell-Einstellung (LLM_FALLBACK_MODEL) versucht.",
+          "fallbackN": "Fallback {n}",
+          "addFallback": "Fallback-Modell hinzufügen",
+          "fallbacksFull": "Dieser Bereich hat die höchste Zahl an Fallback-Modellen ({max}).",
+          "moveUp": "Nach oben",
+          "moveDown": "Nach unten",
+          "removeFallback": "Entfernen",
+          "moveUpLabel": "Fallback {n} nach oben verschieben",
+          "moveDownLabel": "Fallback {n} nach unten verschieben",
+          "removeFallbackLabel": "Fallback {n} entfernen"
         },
         "routeStatus": {
           "provider_missing": "Der zugewiesene Anbieter wurde entfernt, daher nutzt dieser Bereich sein geerbtes Modell.",
@@ -4640,7 +4656,7 @@
         "area": {
           "default": {
             "title": "Standard",
-            "sub": "Jede Aufgabe, die kein eigenes Modell hat."
+            "sub": "Jeder nicht zugewiesene Bereich nutzt dieses Modell, seine Fallback-Modelle und seinen Denkaufwand."
           },
           "matchResume": {
             "title": "Lebenslauf abgleichen",
@@ -4706,13 +4722,16 @@
             "default": "Nichts ist konfiguriert",
             "matchResume": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
             "parseResume": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
-            "visual": "Kein eigenes Modell; nutzt das Modell für Lebenslauf auslesen",
-            "evaluation": "Kein eigenes Modell; nutzt das Interviewmodell",
+            "visual": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "evaluation": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
             "insights": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
             "writing": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
             "assistant": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
             "jobs": "Kein eigenes Modell; nutzt das Standardmodell ({model})"
-          }
+          },
+          "default": "Zuweisung des Bereichs „Standard“",
+          "sharedArea": "Zuweisung von {shared} für diesen Bereich",
+          "sharedDefault": "Bereich „Standard“ von {shared}"
         },
         "errors": {
           "generic": "Das hat nicht geklappt. Versuch es erneut.",
@@ -4730,7 +4749,19 @@
           "invalid_route": "Wähl einen Anbieter und ein Modell.",
           "unknown_provider": "Dieser Anbieter existiert nicht mehr. Lad die Seite neu.",
           "tools_unsupported": "Dieser Anbietertyp kann keine Tool-Aufrufe streamen, die dieser Bereich braucht.",
-          "provider_in_use": "Dieser Anbieter ist noch einem Bereich zugewiesen. Weise den Bereich neu zu oder lösche die Zuweisung zuerst."
+          "provider_in_use": "Ein Bereich nutzt diesen Anbieter noch, für sein Modell oder ein Fallback-Modell. Ändere oder lösche diesen Bereich zuerst.",
+          "invalid_effort": "Wähl einen Denkaufwand.",
+          "invalid_fallback": "Wähl für jedes Fallback-Modell einen Anbieter und ein Modell.",
+          "duplicate_fallback": "Jedes Modell kann in einem Bereich nur einmal vorkommen.",
+          "too_many_fallbacks": "Ein Bereich nimmt höchstens {max} Fallback-Modelle."
+        },
+        "effort": {
+          "provider": "Anbieter-Standard",
+          "minimal": "Minimal",
+          "low": "Niedrig",
+          "medium": "Mittel",
+          "high": "Hoch",
+          "max": "Maximal"
         }
       },
       "visitors": {

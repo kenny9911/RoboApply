@@ -22,7 +22,7 @@
      animations — and the reduced-motion block that existed to suppress them
      — are gone.
 
-   Sizes: the 8-token scale, 12px floor. Text-entry controls (input, textarea,
+   Sizes: the 8-token scale, 13px floor. Text-entry controls (input, textarea,
    select, chip field) sit at --fs-body rather than the --fs-meta their old
    13.5px would map to: typed text is read text.
 ═══════════════════════════════════════════════════════════════════ */

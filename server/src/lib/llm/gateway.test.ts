@@ -46,9 +46,10 @@ const { supportsToolStreaming } = await import('../../services/llm/toolStreaming
 
 const NAMES = [
   'LLM_PROVIDER', 'LLM_MODEL', 'LLM_MATCHING_MODEL', 'LLM_EXTRACT_MODEL', 'LLM_VISION_MODEL', 'LLM_EVALUATION', 'LLM_INTERVIEW_MODEL',
-  'LLM_COPILOT_MODEL', 'RA_V2_CAREER_INSIGHT_MODEL', 'LLM_PROXY_KEY', 'OPENAI_BASE_URL', 'OPENAI_API_KEY',
+  'LLM_COPILOT_MODEL', 'LLM_ONBOARDING_MODEL', 'RA_V2_CAREER_INSIGHT_MODEL', 'LLM_PROXY_KEY', 'OPENAI_BASE_URL', 'OPENAI_API_KEY',
   'CN_LLM_PROVIDER', 'CN_LLM_MODEL', 'CN_LLM_MATCHING_MODEL', 'CN_LLM_DOMESTIC_ONLY', 'CN_RESIDENCY_STRICT',
   'LLM_SETTINGS_DB_DISABLED', 'NODE_ENV', 'FIELD_ENCRYPTION_KEY', 'BRAND_LOCK', 'ALLOWED_BRANDS',
+  'LLM_FALLBACK_MODEL', 'LLM_AUTO_FALLBACK_MODELS', 'LLM_REASONING_EFFORT', 'LLM_WRITING_REASONING_EFFORT', 'LLM_RETRY_ATTEMPTS',
 ];
 let saved: Record<string, string | undefined> = {};
 const KEY = 'sk-test-1234567890abcdef';
@@ -112,6 +113,26 @@ describe('provider entry references', () => {
     expect(prefixes.providerEntrySelector('newapi', 'aigw', 'gpt-6.1-sol')).toBe('newapi@aigw/gpt-6.1-sol');
     expect(supportsToolStreaming('newapi@aigw')).toBe(true);
     expect(supportsToolStreaming('google@main')).toBe(false);
+  });
+
+  it('carries an area as a route tag that changes nothing about where the call goes', () => {
+    expect(prefixes.providerEntrySelector('newapi', 'aigw', 'gpt-6.1-sol', 'visual')).toBe('newapi@aigw:visual/gpt-6.1-sol');
+    expect(prefixes.resolveSelectorRoute('newapi@aigw:visual/gpt-6.1-sol', 'google')).toEqual({ providerType: 'newapi@aigw:visual', model: 'gpt-6.1-sol' });
+    expect(prefixes.providerEntryId('newapi@aigw:visual')).toBe('aigw');
+    expect(prefixes.providerBaseType('newapi@aigw:visual')).toBe('newapi');
+    expect(prefixes.providerRouteTag('newapi@aigw:visual')).toBe('visual');
+    expect(prefixes.providerRouteTag('newapi@aigw')).toBeNull();
+    expect(prefixes.providerEntryRef('newapi@aigw:visual')).toBe('newapi@aigw');
+    expect(prefixes.providerEntryRef('OpenRouter')).toBe('openrouter');
+    expect(supportsToolStreaming('newapi@aigw:assistant')).toBe(true);
+    for (const bad of ['newapi@aigw:', 'newapi@aigw:vis-ual', 'newapi@aigw:a:b', 'newapi@:visual']) {
+      expect(prefixes.resolveProviderPrefix(bad), bad).toBeNull();
+    }
+    expect(schema.areaRouteTag('matchResume')).toBe('matchresume');
+    expect(schema.areaOfRouteTag('matchresume')).toBe('matchResume');
+    expect(schema.areaOfRouteTag('nosuch')).toBeNull();
+    // Credentials and the policy see the entry, whatever the tag.
+    expect(creds.resolveProviderCredential('newapi@gone:visual').apiKey).toBe('');
   });
 });
 
@@ -280,29 +301,63 @@ describe('areas', () => {
     await admin.saveGatewayRoutes('roboapply', { matchResume: { providerId: 'aigw', model: 'gpt-6.1-sol' } }, 'admin_1');
     await warm();
     for (const key of schema.AREA_MODEL_KEYS.matchResume) {
-      expect(models.getModelSetting(key, 'roboapply'), key).toBe('newapi@aigw/gpt-6.1-sol');
+      expect(models.getModelSetting(key, 'roboapply'), key).toBe('newapi@aigw:matchresume/gpt-6.1-sol');
     }
     expect(models.resolveModelKey('matching', 'roboapply')).toMatchObject({ source: 'override', env: 'openrouter/openai/gpt-6-luna' });
+    // No Default assignment: other keys keep their env value, else nothing.
     expect(models.getModelSetting('extract', 'roboapply')).toBeUndefined();
     expect(models.getDefaultModel('roboapply')).toBe('google/gemini-3.8-flash');
   });
 
-  it('the Default area is the default model, so every unset key ends on it', async () => {
+  it('the LLM gateway comes first: an unassigned area uses the Default area before a key setting or env value', async () => {
+    await addProvider();
+    await resolver.saveLlmStack('development', { ...schema.emptyLlmStackBlob(), purposes: { ...schema.emptyPurposes(), rewrite: 'openrouter/old-rewrite' } }, 'admin_1', 'seed');
+    await admin.saveGatewayRoutes('roboapply', { default: { providerId: 'aigw', model: 'gpt-6.1-sol' } }, 'admin_1');
+    await warm();
+    expect(models.getDefaultModel('roboapply')).toBe('newapi@aigw:default/gpt-6.1-sol');
+    expect(tasks.getTaskModelOrDefault('writing', 'roboapply')).toBe('newapi@aigw:default/gpt-6.1-sol');
+    // An env value and a saved per-key override come after the gateway.
+    expect(models.getModelSetting('matching', 'roboapply')).toBe('newapi@aigw:default/gpt-6.1-sol');
+    expect(models.getModelSetting('rewrite', 'roboapply')).toBe('newapi@aigw:default/gpt-6.1-sol');
+    // An area of its own still wins over Default.
+    await admin.saveGatewayRoutes('roboapply', { matchResume: { providerId: 'aigw', model: 'match-1' } }, 'admin_1');
+    await warm();
+    expect(models.getModelSetting('matching', 'roboapply')).toBe('newapi@aigw:matchresume/match-1');
+    // Keys outside every area are not moved: the voice interview and the fallback model.
+    process.env.LLM_INTERVIEW_MODEL = 'openai/gpt-6-luna';
+    expect(tasks.getTaskModel('interview', 'roboapply')).toBe('openai/gpt-6-luna');
+    expect(models.getFallbackModelSetting('roboapply')).toBeUndefined();
+  });
+
+  it('with Default unassigned too, an area keeps its env value, then the default model', async () => {
+    process.env.LLM_EXTRACT_MODEL = 'openrouter/parse-model';
+    expect(models.getModelSetting('matching', 'roboapply')).toBe('openrouter/openai/gpt-6-luna');
+    expect(tasks.getTaskModelOrDefault('writing', 'roboapply')).toBe('google/gemini-3.8-flash');
+    expect(tasks.getTaskModel('extract', 'roboapply')).toBe('openrouter/parse-model');
+  });
+
+  it('the Assistant inherits Default only when the Default entry can stream tool calls', async () => {
+    process.env.LLM_COPILOT_MODEL = 'openrouter/openai/gpt-6-luna';
+    await addProvider({ name: 'Gemini', type: 'google', baseUrl: '' });
+    await admin.saveGatewayRoutes('roboapply', { default: { providerId: 'gemini', model: 'gemini-3.8-flash' } }, 'admin_1');
+    await warm();
+    // Copilot keeps its own tool-capable model; the rest of the area follows Default.
+    expect(models.getModelSetting('copilot', 'roboapply')).toBe('openrouter/openai/gpt-6-luna');
+    expect(models.getModelSetting('onboarding', 'roboapply')).toBe('google@gemini:default/gemini-3.8-flash');
     await addProvider();
     await admin.saveGatewayRoutes('roboapply', { default: { providerId: 'aigw', model: 'gpt-6.1-sol' } }, 'admin_1');
     await warm();
-    expect(models.getDefaultModel('roboapply')).toBe('newapi@aigw/gpt-6.1-sol');
-    expect(tasks.getTaskModelOrDefault('writing', 'roboapply')).toBe('newapi@aigw/gpt-6.1-sol');
-    // A key with an env value of its own keeps it: only its own area overrides it.
-    expect(models.getModelSetting('matching', 'roboapply')).toBe('openrouter/openai/gpt-6-luna');
+    expect(models.getModelSetting('copilot', 'roboapply')).toBe('newapi@aigw:default/gpt-6.1-sol');
   });
 
-  it('Visual, Evaluation and Insights fall back to what served them before the areas existed', async () => {
-    process.env.LLM_EXTRACT_MODEL = 'google/gemini-3.8-flash';
+  it('Visual and Evaluation use the default model when nothing is set, not another task\'s model', async () => {
+    process.env.LLM_EXTRACT_MODEL = 'openrouter/parse-model';
     process.env.LLM_INTERVIEW_MODEL = 'openai/gpt-6-luna';
     expect(tasks.getVisionModel('roboapply')).toBe('google/gemini-3.8-flash');
-    expect(tasks.getEvaluationModel('roboapply')).toBe('openai/gpt-6-luna');
+    expect(tasks.getEvaluationModel('roboapply')).toBe('google/gemini-3.8-flash');
     expect(tasks.getInsightsModel('roboapply')).toBeUndefined();
+    process.env.LLM_VISION_MODEL = 'google/gemini-vision';
+    expect(tasks.getVisionModel('roboapply')).toBe('google/gemini-vision');
     await addProvider();
     await admin.saveGatewayRoutes('roboapply', {
       visual: { providerId: 'aigw', model: 'vision-1' },
@@ -310,11 +365,11 @@ describe('areas', () => {
       insights: { providerId: 'aigw', model: 'insight-1' },
     }, 'admin_1');
     await warm();
-    expect(tasks.getVisionModel('roboapply')).toBe('newapi@aigw/vision-1');
-    expect(tasks.getEvaluationModel('roboapply')).toBe('newapi@aigw/eval-1');
-    expect(tasks.getInsightsModel('roboapply')).toBe('newapi@aigw/insight-1');
+    expect(tasks.getVisionModel('roboapply')).toBe('newapi@aigw:visual/vision-1');
+    expect(tasks.getEvaluationModel('roboapply')).toBe('newapi@aigw:evaluation/eval-1');
+    expect(tasks.getInsightsModel('roboapply')).toBe('newapi@aigw:insights/insight-1');
     // Parsing text and the live interview are not moved by those three areas.
-    expect(tasks.getTaskModel('extract', 'roboapply')).toBe('google/gemini-3.8-flash');
+    expect(tasks.getTaskModel('extract', 'roboapply')).toBe('openrouter/parse-model');
     expect(tasks.getTaskModel('interview', 'roboapply')).toBe('openai/gpt-6-luna');
   });
 
@@ -341,19 +396,24 @@ describe('areas', () => {
     await addProvider({ name: 'CN gateway', baseUrl: 'https://llm.example.cn/v1' });
     await admin.saveGatewayRoutes('roboapply', { matchResume: { providerId: 'aigw', model: 'gpt-6.1-sol' } }, 'admin_1');
     await warm();
-    expect(models.getModelSetting('matching', 'goapply')).toBe('newapi@aigw/gpt-6.1-sol');
+    expect(models.getModelSetting('matching', 'goapply')).toBe('newapi@aigw:matchresume/gpt-6.1-sol');
     expect(models.resolveModelKey('matching', 'goapply').source).toBe('shared');
 
     await admin.saveGatewayRoutes('goapply', { matchResume: { providerId: 'cn-gateway', model: 'qwen-max' } }, 'admin_1');
     await warm();
-    expect(models.getModelSetting('matching', 'goapply')).toBe('newapi@cn-gateway/qwen-max');
-    expect(models.getModelSetting('matching', 'roboapply')).toBe('newapi@aigw/gpt-6.1-sol');
+    expect(models.getModelSetting('matching', 'goapply')).toBe('newapi@cn-gateway:matchresume/qwen-max');
+    expect(models.getModelSetting('matching', 'roboapply')).toBe('newapi@aigw:matchresume/gpt-6.1-sol');
 
-    await admin.saveGatewayRoutes('goapply', { matchResume: null }, 'admin_1');
+    // GoApply's own Default comes before RoboApply's areas: its gateway first.
+    await admin.saveGatewayRoutes('goapply', { matchResume: null, default: { providerId: 'cn-gateway', model: 'qwen-plus' } }, 'admin_1');
+    await warm();
+    expect(models.getModelSetting('matching', 'goapply')).toBe('newapi@cn-gateway:default/qwen-plus');
+
+    await admin.saveGatewayRoutes('goapply', { default: null }, 'admin_1');
     await warm();
     process.env.CN_LLM_DOMESTIC_ONLY = 'true';
     expect(models.getModelSetting('matching', 'goapply')).toBeUndefined();
-    expect(models.resolveModelKey('matching', 'goapply').sharedWalledOff).toBe('newapi@aigw/gpt-6.1-sol');
+    expect(models.resolveModelKey('matching', 'goapply').sharedWalledOff).toBe('newapi@aigw:matchresume/gpt-6.1-sol');
   });
 
   it('refuses an unknown area, an unknown provider, and a provider that cannot stream tools for the Assistant', async () => {
@@ -365,8 +425,8 @@ describe('areas', () => {
     await expect(admin.saveGatewayRoutes('roboapply', { assistant: { providerId: 'gemini', model: 'gemini-3.8-flash' } }, 'admin_1')).rejects.toMatchObject({ code: 'tools_unsupported' });
     await admin.saveGatewayRoutes('roboapply', { assistant: { providerId: 'aigw', model: 'gpt-6.1-sol' }, visual: { providerId: 'gemini', model: 'gemini-3.8-flash' } }, 'admin_1');
     await warm();
-    expect(models.getModelSetting('copilot', 'roboapply')).toBe('newapi@aigw/gpt-6.1-sol');
-    expect(models.getModelSetting('vision', 'roboapply')).toBe('google@gemini/gemini-3.8-flash');
+    expect(models.getModelSetting('copilot', 'roboapply')).toBe('newapi@aigw:assistant/gpt-6.1-sol');
+    expect(models.getModelSetting('vision', 'roboapply')).toBe('google@gemini:visual/gemini-3.8-flash');
   });
 
   it('keeps per-key overrides and tuning of the blob when assignments are saved', async () => {
@@ -377,33 +437,377 @@ describe('areas', () => {
     const { blob: after } = await resolver.getLlmStackForEnvironment('development');
     expect(after.fallbackModel).toBe('deepseek/deepseek-v4-flash');
     expect(after.tuning.timeoutMs).toBe(90000);
-    expect(after.routes.insights).toEqual({ providerId: 'aigw', model: 'm' });
+    // An assignment saved without an effort starts at medium, with no fallbacks.
+    expect(after.routes.insights).toEqual({ providerId: 'aigw', model: 'm', effort: 'medium', fallbacks: [] });
   });
 
-  it('does not remove a provider an area of either brand is assigned to', async () => {
+  it('does not remove a provider an area of either brand uses, for its model or a fallback', async () => {
     await addProvider();
+    await addProvider({ name: 'Backup', baseUrl: 'https://backup.example.com/v1' });
     await admin.saveGatewayRoutes('goapply', { writing: { providerId: 'aigw', model: 'm' } }, 'admin_1');
     await expect(admin.removeGatewayProvider('aigw', 'admin_1')).rejects.toMatchObject({ code: 'provider_in_use', detail: { areas: [{ brand: 'goapply', area: 'writing' }] } });
+    await admin.saveGatewayRoutes('goapply', { writing: { providerId: 'backup', model: 'm', fallbacks: [{ providerId: 'aigw', model: 'm' }] } }, 'admin_1');
+    await expect(admin.removeGatewayProvider('aigw', 'admin_1')).rejects.toMatchObject({ code: 'provider_in_use' });
     await admin.saveGatewayRoutes('goapply', { writing: null }, 'admin_1');
     await admin.removeGatewayProvider('aigw', 'admin_1');
-    expect(await providers.listGatewayProviders()).toEqual([]);
+    expect((await providers.listGatewayProviders()).map((p) => p.id)).toEqual(['backup']);
   });
 
   it('the overview names what every area resolves to and where it comes from', async () => {
     await addProvider();
     await admin.saveGatewayRoutes('roboapply', { parseResume: { providerId: 'aigw', model: 'gpt-6.1-sol' } }, 'admin_1');
     const overview = await admin.getGatewayOverview('roboapply');
-    expect(overview).toMatchObject({ environment: 'development', brand: 'roboapply', dbDisabled: false, encryptionReady: true, defaultModel: 'google/gemini-3.8-flash' });
+    expect(overview).toMatchObject({
+      environment: 'development', brand: 'roboapply', dbDisabled: false, encryptionReady: true, defaultModel: 'google/gemini-3.8-flash',
+      maxFallbacks: 3, defaultEffort: 'medium', efforts: ['provider', 'minimal', 'low', 'medium', 'high', 'max'],
+    });
     expect(overview.areas.map((a) => a.area)).toEqual([...schema.LLM_AREAS]);
     const parse = overview.areas.find((a) => a.area === 'parseResume')!;
-    expect(parse).toMatchObject({ route: { providerId: 'aigw', model: 'gpt-6.1-sol' }, routeStatus: 'ok', modelListed: null });
-    expect(parse.keys[0]).toMatchObject({ key: 'extract', source: 'override', providerId: 'aigw', providerType: 'newapi', model: 'gpt-6.1-sol', envName: 'LLM_EXTRACT_MODEL' });
+    expect(parse).toMatchObject({ route: { providerId: 'aigw', model: 'gpt-6.1-sol', effort: 'medium', fallbacks: [] }, routeStatus: 'ok', modelListed: null, fallbackStatus: [], inheritsDefault: false });
+    expect(parse.keys[0]).toMatchObject({ key: 'extract', source: 'override', via: 'area', shared: false, providerId: 'aigw', providerType: 'newapi', model: 'gpt-6.1-sol', envName: 'LLM_EXTRACT_MODEL' });
     const match = overview.areas.find((a) => a.area === 'matchResume')!;
-    expect(match).toMatchObject({ route: null, routeStatus: null });
-    expect(match.keys[0]).toMatchObject({ key: 'matching', source: 'env', providerId: null, providerType: 'openrouter', model: 'openai/gpt-6-luna' });
+    expect(match).toMatchObject({ route: null, routeStatus: null, inheritsDefault: false });
+    expect(match.keys[0]).toMatchObject({ key: 'matching', source: 'env', via: 'env', providerId: null, providerType: 'openrouter', model: 'openai/gpt-6-luna' });
     expect(overview.areas.find((a) => a.area === 'assistant')?.needsTools).toBe(true);
     expect(overview.providerTypes.find((t) => t.type === 'google')).toMatchObject({ tools: false, baseUrl: 'optional' });
     expect(JSON.stringify(overview)).not.toContain(KEY);
+
+    // With Default assigned, an unassigned area says it uses Default.
+    await admin.saveGatewayRoutes('roboapply', { default: { providerId: 'aigw', model: 'gpt-6.1-terra' } }, 'admin_1');
+    const after = await admin.getGatewayOverview('roboapply');
+    const match2 = after.areas.find((a) => a.area === 'matchResume')!;
+    expect(match2).toMatchObject({ route: null, inheritsDefault: true });
+    expect(match2.keys[0]).toMatchObject({ key: 'matching', via: 'default', providerId: 'aigw', model: 'gpt-6.1-terra' });
+    expect(after.areas.find((a) => a.area === 'default')?.keys[0]).toMatchObject({ key: 'defaultModel', via: 'area' });
+    expect(after.defaultModel).toBe('newapi@aigw:default/gpt-6.1-terra');
+  });
+});
+
+describe('effort and fallback models of an assignment', () => {
+  it('reads an assignment leniently: medium when the effort is missing or unknown, malformed or repeated fallbacks dropped, at most three', () => {
+    const route = schema.normalizeAreaRoute({
+      providerId: 'AIGW', model: ' m ', effort: 'turbo',
+      fallbacks: [
+        { providerId: 'b', model: 'x', effort: 'high' },
+        { providerId: 'aigw', model: 'm' },
+        { providerId: 'b', model: 'x' },
+        { providerId: '', model: 'y' },
+        { providerId: 'c', model: 'y' },
+        { providerId: 'd', model: 'z' },
+        { providerId: 'e', model: 'w' },
+      ],
+    });
+    expect(route).toEqual({
+      providerId: 'aigw', model: 'm', effort: 'medium',
+      fallbacks: [
+        { providerId: 'b', model: 'x', effort: 'high' },
+        { providerId: 'c', model: 'y', effort: 'medium' },
+        { providerId: 'd', model: 'z', effort: 'medium' },
+      ],
+    });
+    // A route saved before efforts and fallbacks existed.
+    expect(schema.parseLlmStackBlob(JSON.stringify({ ...schema.emptyLlmStackBlob(), routes: { visual: { providerId: 'aigw', model: 'v' } } }))?.routes.visual)
+      .toEqual({ providerId: 'aigw', model: 'v', effort: 'medium', fallbacks: [] });
+    expect(schema.validateLlmStackBlob({ ...schema.emptyLlmStackBlob(), routes: { visual: { providerId: 'a', model: 'v', effort: 'turbo' } } })).toEqual([
+      expect.objectContaining({ field: 'routes.visual.effort' }),
+    ]);
+  });
+
+  it('saves an effort and ordered fallbacks, and refuses a bad effort, a repeated model, too many fallbacks and a non-tool fallback for the Assistant', async () => {
+    await addProvider();
+    await addProvider({ name: 'Backup', baseUrl: 'https://backup.example.com/v1' });
+    await addProvider({ name: 'Gemini', type: 'google', baseUrl: '' });
+    await admin.saveGatewayRoutes('roboapply', {
+      writing: { providerId: 'aigw', model: 'w1', effort: 'high', fallbacks: [{ providerId: 'backup', model: 'w2', effort: 'low' }, { providerId: 'gemini', model: 'gemini-3.8-flash' }] },
+    }, 'admin_1');
+    const { blob } = await resolver.getLlmStackForEnvironment('development');
+    expect(blob.routes.writing).toEqual({
+      providerId: 'aigw', model: 'w1', effort: 'high',
+      fallbacks: [{ providerId: 'backup', model: 'w2', effort: 'low' }, { providerId: 'gemini', model: 'gemini-3.8-flash', effort: 'medium' }],
+    });
+    const save = (route: unknown, area = 'writing') => admin.saveGatewayRoutes('roboapply', { [area]: route }, 'admin_1');
+    await expect(save({ providerId: 'aigw', model: 'w1', effort: 'turbo' })).rejects.toMatchObject({ code: 'invalid_effort' });
+    await expect(save({ providerId: 'aigw', model: 'w1', fallbacks: [{ providerId: 'aigw', model: 'w1' }] })).rejects.toMatchObject({ code: 'duplicate_fallback', detail: { area: 'writing', fallback: 0 } });
+    await expect(save({ providerId: 'aigw', model: 'w1', fallbacks: [{ providerId: 'gone', model: 'x' }] })).rejects.toMatchObject({ code: 'unknown_provider', detail: { fallback: 0 } });
+    await expect(save({ providerId: 'aigw', model: 'w1', fallbacks: [{ providerId: 'backup', model: '' }] })).rejects.toMatchObject({ code: 'invalid_fallback' });
+    await expect(save({ providerId: 'aigw', model: 'w1', fallbacks: 'backup' })).rejects.toMatchObject({ code: 'invalid_fallback' });
+    await expect(save({ providerId: 'aigw', model: 'w1', fallbacks: ['a', 'b', 'c', 'd'].map((m) => ({ providerId: 'backup', model: m })) })).rejects.toMatchObject({ code: 'too_many_fallbacks' });
+    await expect(save({ providerId: 'aigw', model: 'a1', fallbacks: [{ providerId: 'gemini', model: 'gemini-3.8-flash' }] }, 'assistant')).rejects.toMatchObject({ code: 'tools_unsupported', detail: { fallback: 0 } });
+    // A refused save changes nothing.
+    expect((await resolver.getLlmStackForEnvironment('development')).blob.routes.writing?.model).toBe('w1');
+  });
+
+  it('finds the effort and fallbacks of the route a call resolved, and skips a fallback whose entry cannot be used', async () => {
+    await addProvider();
+    await addProvider({ name: 'Backup', baseUrl: 'https://backup.example.com/v1' });
+    await addProvider({ name: 'Spare', baseUrl: 'https://spare.example.com/v1' });
+    await admin.saveGatewayRoutes('roboapply', {
+      writing: { providerId: 'aigw', model: 'w1', effort: 'high', fallbacks: [{ providerId: 'spare', model: 's1' }, { providerId: 'backup', model: 'w2', effort: 'low' }] },
+    }, 'admin_1');
+    await providers.saveGatewayProvider({ id: 'spare', name: 'Spare', type: 'newapi', baseUrl: 'https://spare.example.com/v1', enabled: false }, 'admin_1');
+    await warm();
+    expect(models.gatewayRouteProfile('newapi@aigw:writing', 'w1', 'roboapply')).toEqual({
+      area: 'writing', brand: 'roboapply', effort: 'high',
+      fallbacks: [{ providerType: 'newapi@backup', model: 'w2', selector: 'newapi@backup/w2', effort: 'low' }],
+    });
+    // A route without a tag, a stale model, or another area: no profile.
+    expect(models.gatewayRouteProfile('newapi@aigw', 'w1', 'roboapply')).toBeNull();
+    expect(models.gatewayRouteProfile('newapi@aigw:writing', 'old-model', 'roboapply')).toBeNull();
+    expect(models.gatewayRouteProfile('newapi@aigw:visual', 'w1', 'roboapply')).toBeNull();
+    // GoApply on RoboApply's assignment finds RoboApply's profile.
+    expect(models.gatewayRouteProfile('newapi@aigw:writing', 'w1', 'goapply')).toMatchObject({ brand: 'roboapply', effort: 'high' });
+    process.env.LLM_SETTINGS_DB_DISABLED = 'true';
+    expect(models.gatewayRouteProfile('newapi@aigw:writing', 'w1', 'roboapply')).toBeNull();
+  });
+
+  it('maps a gateway effort to the nearest level each provider takes', async () => {
+    const { gatewayEffortFor } = await import('../../services/llm/reasoningEffort.js');
+    expect(gatewayEffortFor('newapi', 'medium')).toBe('medium');
+    expect(gatewayEffortFor('newapi', 'max')).toBe('high');
+    expect(gatewayEffortFor('openai', 'minimal')).toBe('minimal');
+    expect(gatewayEffortFor('openrouter', 'max')).toBe('max');
+    expect(gatewayEffortFor('anthropic', 'minimal')).toBe('low');
+    expect(gatewayEffortFor('google', 'max')).toBe('high');
+    expect(gatewayEffortFor('deepseek', 'medium')).toBeUndefined();
+    expect(gatewayEffortFor('deepseek', 'max')).toBe('max');
+    expect(gatewayEffortFor('kimi', 'high')).toBeUndefined();
+    expect(gatewayEffortFor('newapi', 'provider')).toBeUndefined();
+  });
+});
+
+describe('the auto-fallback list', () => {
+  it('is read from the saved settings first, then the env, per brand', async () => {
+    expect(models.resolveAutoFallbackSetting('roboapply')).toEqual({ value: undefined, source: 'none' });
+    process.env.LLM_AUTO_FALLBACK_MODELS = 'openrouter/openai/gpt-6-luna';
+    expect(models.resolveAutoFallbackSetting('roboapply')).toEqual({ value: 'openrouter/openai/gpt-6-luna', source: 'env' });
+    // GoApply reads RoboApply's when it sets none of its own.
+    expect(models.resolveAutoFallbackSetting('goapply')).toEqual({ value: 'openrouter/openai/gpt-6-luna', source: 'shared' });
+
+    await resolver.saveLlmStack('development', { ...schema.emptyLlmStackBlob(), autoFallbackModels: 'anthropic/claude-sonnet-4-6, openrouter/openai/gpt-6-luna' }, 'admin_1', 'seed');
+    await warm();
+    expect(models.resolveAutoFallbackSetting('roboapply')).toEqual({ value: 'anthropic/claude-sonnet-4-6, openrouter/openai/gpt-6-luna', source: 'override' });
+    expect(models.getAutoFallbackSetting('goapply')).toBe('anthropic/claude-sonnet-4-6, openrouter/openai/gpt-6-luna');
+    // Behind the domestic-only wall GoApply uses only a list of its own.
+    process.env.CN_LLM_DOMESTIC_ONLY = 'true';
+    expect(models.resolveAutoFallbackSetting('goapply')).toEqual({ value: undefined, source: 'none' });
+    process.env.LLM_SETTINGS_DB_DISABLED = 'true';
+    expect(models.getAutoFallbackSetting('roboapply')).toBe('openrouter/openai/gpt-6-luna');
+  });
+
+  it('a blob saved before the field existed reads as unset, and the audit names a change to it', () => {
+    expect(schema.parseLlmStackBlob(JSON.stringify({ provider: null, defaultModel: null, fallbackModel: null, purposes: {}, tuning: {} }))?.autoFallbackModels).toBeNull();
+    const before = schema.emptyLlmStackBlob();
+    const after = { ...before, autoFallbackModels: 'openrouter/openai/gpt-6-luna' };
+    expect(resolver.diffLlmStack(before, after)).toEqual(['autoFallbackModels: (inherit) → openrouter/openai/gpt-6-luna']);
+    // An effort or a fallback change of an assignment is audited too.
+    const routed = { ...before, routes: { ...before.routes, writing: { providerId: 'aigw', model: 'w1', effort: 'medium' as const, fallbacks: [] } } };
+    const edited = { ...routed, routes: { ...routed.routes, writing: { ...routed.routes.writing!, effort: 'high' as const, fallbacks: [{ providerId: 'b', model: 'w2', effort: 'low' as const }] } } };
+    expect(resolver.diffLlmStack(routed, edited)).toEqual(['routes.writing: aigw/w1 (medium) → aigw/w1 (high) then b/w2 (low)']);
+  });
+
+  it('a dead key moves to the saved list before the env one', async () => {
+    await addProvider();
+    await addProvider({ name: 'Backup', baseUrl: 'https://backup.example.com/v1' });
+    await addProvider({ name: 'Other', baseUrl: 'https://other.example.com/v1' });
+    process.env.LLM_AUTO_FALLBACK_MODELS = 'newapi@other/o1';
+    await resolver.saveLlmStack('development', { ...schema.emptyLlmStackBlob(), autoFallbackModels: 'newapi@backup/b1' }, 'admin_1', 'seed');
+    await admin.saveGatewayRoutes('roboapply', { writing: { providerId: 'aigw', model: 'w1' } }, 'admin_1');
+    await warm();
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const req = url instanceof Request ? url : new Request(String(url), init);
+      const host = new URL(req.url).host;
+      seen.push(host);
+      return host === 'aigw.example.com'
+        ? new Response(JSON.stringify({ error: { message: 'Invalid API key' } }), { status: 401, headers: { 'content-type': 'application/json' } })
+        : new Response(
+            JSON.stringify({ id: 'c1', object: 'chat.completion', model: 'b1', choices: [{ index: 0, message: { role: 'assistant', content: 'from backup' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+    }));
+    const { llmService } = await import('../../services/llm/LLMService.js');
+    (await import('../../services/llm/fallbackRouting.js')).resetCircuits();
+    const result = await llmService.chatWithUsage([{ role: 'user', content: 'ping' }], { model: tasks.getTaskModel('writing', 'roboapply'), brand: 'roboapply' });
+    expect(result.content).toBe('from backup');
+    expect(seen).toEqual(['aigw.example.com', 'backup.example.com']);
+  });
+});
+
+describe('disclosures of gateway routes', () => {
+  it('list an unassigned area on the Default model, and every fallback model a request can reach', async () => {
+    await addProvider();
+    await addProvider({ name: 'Backup', baseUrl: 'https://backup.example.com/v1' });
+    await admin.saveGatewayRoutes('roboapply', { default: { providerId: 'aigw', model: 'd1', fallbacks: [{ providerId: 'backup', model: 'd2' }] } }, 'admin_1');
+    await warm();
+    const { loadAiStackSnapshot, configuredModels } = await import('../../features/compliance/disclosures.js');
+    const { getBrand } = await import('../../platform/brand/registry.js');
+    await loadAiStackSnapshot(process.env);
+    const rows = configuredModels(getBrand('roboapply'));
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ task: 'default', vendor: 'aigw.example.com', model: 'd1', region: null }),
+      expect.objectContaining({ task: 'fallback', vendor: 'backup.example.com', model: 'd2', region: null }),
+    ]));
+    // Matching has an env model, but runs on the Default area now: that env model is not a destination.
+    expect(rows.some((r) => r.model === 'openai/gpt-6-luna')).toBe(false);
+  });
+
+  it('list the auto-fallback models, from the saved settings first', async () => {
+    process.env.LLM_AUTO_FALLBACK_MODELS = 'openrouter/x-ai/grok-5';
+    await resolver.saveLlmStack('development', { ...schema.emptyLlmStackBlob(), autoFallbackModels: 'anthropic/claude-sonnet-4-6' }, 'admin_1', 'seed');
+    await warm();
+    const { loadAiStackSnapshot, configuredModels } = await import('../../features/compliance/disclosures.js');
+    const { getBrand } = await import('../../platform/brand/registry.js');
+    await loadAiStackSnapshot(process.env);
+    const rows = configuredModels(getBrand('roboapply'));
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ task: 'fallback', vendor: 'anthropic', model: 'claude-sonnet-4-6', region: 'US', source: 'override' }),
+    ]));
+    // The env list is not used while a saved one exists.
+    expect(rows.some((r) => r.model === 'x-ai/grok-5')).toBe(false);
+  });
+});
+
+describe('calls on a gateway route', () => {
+  type Seen = { host: string; body: Record<string, unknown> };
+  const ok = (model: string, content = 'pong') =>
+    new Response(
+      JSON.stringify({ id: 'c1', object: 'chat.completion', model, choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }], usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 } }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  const fail = (status: number, message: string) =>
+    new Response(JSON.stringify({ error: { message, type: 'invalid_request_error' } }), { status, headers: { 'content-type': 'application/json' } });
+  function stubHosts(handler: (host: string, body: Record<string, unknown>) => Response): Seen[] {
+    const seen: Seen[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const req = url instanceof Request ? url : new Request(String(url), init);
+      const body = JSON.parse(await req.text()) as Record<string, unknown>;
+      const host = new URL(req.url).host;
+      seen.push({ host, body });
+      return handler(host, body);
+    }));
+    return seen;
+  }
+  async function service() {
+    const { llmService } = await import('../../services/llm/LLMService.js');
+    const routing = await import('../../services/llm/fallbackRouting.js');
+    routing.resetCircuits();
+    return llmService;
+  }
+  const ping = [{ role: 'user' as const, content: 'ping' }];
+
+  beforeEach(async () => {
+    await addProvider();
+    await addProvider({ name: 'Backup', baseUrl: 'https://backup.example.com/v1' });
+  });
+
+  it('sends the route effort (medium unless set), over the effort the call and the env ask for', async () => {
+    process.env.LLM_REASONING_EFFORT = 'low';
+    await admin.saveGatewayRoutes('roboapply', { writing: { providerId: 'aigw', model: 'w1' } }, 'admin_1');
+    await warm();
+    const seen = stubHosts((_h, body) => ok(String(body.model)));
+    const llm = await service();
+    await llm.chatWithUsage(ping, { model: tasks.getTaskModel('writing', 'roboapply'), reasoningEffort: 'minimal', brand: 'roboapply' });
+    expect(seen.map((s) => [s.host, s.body.model, s.body.reasoning_effort])).toEqual([['aigw.example.com', 'w1', 'medium']]);
+
+    // `provider` sends none of the gateway's own: the call's own effort goes as before.
+    await admin.saveGatewayRoutes('roboapply', { writing: { providerId: 'aigw', model: 'w1', effort: 'provider' } }, 'admin_1');
+    await warm();
+    seen.length = 0;
+    await llm.chatWithUsage(ping, { model: tasks.getTaskModel('writing', 'roboapply'), reasoningEffort: 'minimal', brand: 'roboapply' });
+    await llm.chatWithUsage(ping, { model: tasks.getTaskModel('writing', 'roboapply'), brand: 'roboapply' });
+    expect(seen.map((s) => s.body.reasoning_effort)).toEqual(['minimal', undefined]);
+  });
+
+  it('walks the area fallbacks in order when the model is down or not served, each with its own effort', async () => {
+    await addProvider({ name: 'Spare', baseUrl: 'https://spare.example.com/v1' });
+    await admin.saveGatewayRoutes('roboapply', {
+      writing: { providerId: 'aigw', model: 'w1', fallbacks: [{ providerId: 'backup', model: 'w2', effort: 'high' }, { providerId: 'spare', model: 'w3', effort: 'low' }] },
+    }, 'admin_1');
+    await warm();
+    const seen = stubHosts((host, body) =>
+      host === 'aigw.example.com' ? fail(503, 'Service unavailable') : host === 'backup.example.com' ? fail(404, 'The model `w2` does not exist') : ok(String(body.model), 'from spare'),
+    );
+    const llm = await service();
+    const result = await llm.chatWithUsage(ping, { model: tasks.getTaskModel('writing', 'roboapply'), brand: 'roboapply' });
+    expect(result.content).toBe('from spare');
+    expect(seen.map((s) => [s.host, s.body.model, s.body.reasoning_effort])).toEqual([
+      ['aigw.example.com', 'w1', 'medium'],
+      ['backup.example.com', 'w2', 'high'],
+      ['spare.example.com', 'w3', 'low'],
+    ]);
+  });
+
+  it('moves on when the endpoint does not serve the model, only for an area with fallbacks', async () => {
+    await admin.saveGatewayRoutes('roboapply', { writing: { providerId: 'aigw', model: 'w1', fallbacks: [{ providerId: 'backup', model: 'w2' }] } }, 'admin_1');
+    await warm();
+    let seen = stubHosts((host, body) => (host === 'aigw.example.com' ? fail(404, 'model w1 not found') : ok(String(body.model))));
+    const llm = await service();
+    await llm.chatWithUsage(ping, { model: tasks.getTaskModel('writing', 'roboapply'), brand: 'roboapply' });
+    expect(seen.map((s) => s.host)).toEqual(['aigw.example.com', 'backup.example.com']);
+
+    await admin.saveGatewayRoutes('roboapply', { writing: { providerId: 'aigw', model: 'w1' } }, 'admin_1');
+    await warm();
+    seen = stubHosts((host, body) => (host === 'aigw.example.com' ? fail(404, 'model w1 not found') : ok(String(body.model))));
+    await expect(llm.chatWithUsage(ping, { model: tasks.getTaskModel('writing', 'roboapply'), brand: 'roboapply' })).rejects.toThrow(/404/);
+    expect(seen.map((s) => s.host)).toEqual(['aigw.example.com']);
+  });
+
+  it('sends the request again without the effort when the model refuses the field, and remembers it', async () => {
+    await admin.saveGatewayRoutes('roboapply', { writing: { providerId: 'aigw', model: 'gpt-4o' } }, 'admin_1');
+    await warm();
+    const seen = stubHosts((_h, body) =>
+      body.reasoning_effort !== undefined ? fail(400, "Unsupported parameter: 'reasoning_effort' is not supported with this model.") : ok(String(body.model)),
+    );
+    const llm = await service();
+    const first = await llm.chatWithUsage(ping, { model: tasks.getTaskModel('writing', 'roboapply'), brand: 'roboapply' });
+    expect(first.content).toBe('pong');
+    await llm.chatWithUsage(ping, { model: tasks.getTaskModel('writing', 'roboapply'), brand: 'roboapply' });
+    expect(seen.map((s) => s.body.reasoning_effort)).toEqual(['medium', undefined, undefined]);
+  });
+
+  it('an unassigned area runs on the Default area: its model, its effort and its fallbacks', async () => {
+    await admin.saveGatewayRoutes('roboapply', { default: { providerId: 'aigw', model: 'd1', effort: 'low', fallbacks: [{ providerId: 'backup', model: 'd2', effort: 'max' }] } }, 'admin_1');
+    await warm();
+    const seen = stubHosts((host, body) => (host === 'aigw.example.com' ? fail(503, 'Service unavailable') : ok(String(body.model))));
+    const llm = await service();
+    await llm.chatWithUsage(ping, { model: tasks.getTaskModelOrDefault('writing', 'roboapply'), brand: 'roboapply' });
+    // `max` is sent as the nearest level an OpenAI-compatible gateway takes.
+    expect(seen.map((s) => [s.host, s.body.model, s.body.reasoning_effort])).toEqual([
+      ['aigw.example.com', 'd1', 'low'],
+      ['backup.example.com', 'd2', 'high'],
+    ]);
+  });
+
+  it('a streamed Assistant round sends the route effort and moves to the area fallback when the model is down', async () => {
+    process.env.LLM_RETRY_ATTEMPTS = '1'; // one attempt per hop, so the test does not wait out backoff
+    await admin.saveGatewayRoutes('roboapply', { assistant: { providerId: 'aigw', model: 'a1', effort: 'high', fallbacks: [{ providerId: 'backup', model: 'a2' }] } }, 'admin_1');
+    await warm();
+    const llm = await service();
+    const sent: Array<{ providerType: string; params: Record<string, unknown> }> = [];
+    const result = await llm.streamChatWithTools([{ role: 'user', content: 'hi' }], {
+      task: 'copilot',
+      tools: [],
+      brand: 'roboapply',
+      clientFactory: (providerType) => ({
+        chat: {
+          completions: {
+            create: async (params: Record<string, unknown>) => {
+              sent.push({ providerType, params });
+              if (params.model === 'a1') throw Object.assign(new Error('503 Service unavailable'), { status: 503 });
+              return (async function* () {
+                yield { model: 'a2', choices: [{ index: 0, delta: { content: 'hello' } }] };
+                yield { model: 'a2', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] };
+              })();
+            },
+          },
+        },
+      }),
+    });
+    expect(result.content).toBe('hello');
+    expect(sent.map((s) => [s.providerType, s.params.model, s.params.reasoning_effort])).toEqual([
+      ['newapi@aigw:assistant', 'a1', 'high'],
+      ['newapi@backup', 'a2', 'medium'],
+    ]);
   });
 });
 
@@ -447,7 +851,7 @@ describe('credentials and policy of a provider entry', () => {
     await admin.saveGatewayRoutes('roboapply', { matchResume: { providerId: 'aigw', model: 'gpt-6.1-sol' } }, 'admin_1');
     await warm();
     expect(llmService.explainRoute('matching', 'roboapply')).toMatchObject({
-      selector: 'newapi@aigw/gpt-6.1-sol', providerType: 'newapi@aigw', model: 'gpt-6.1-sol', host: 'aigw.example.com', hasKey: true, allowed: true, toolsSupported: true,
+      selector: 'newapi@aigw:matchresume/gpt-6.1-sol', providerType: 'newapi@aigw:matchresume', model: 'gpt-6.1-sol', host: 'aigw.example.com', hasKey: true, allowed: true, toolsSupported: true,
     });
   });
 

@@ -4607,29 +4607,45 @@
         },
         "areas": {
           "title": "Domaines fonctionnels",
-          "sub": "Assigne un fournisseur et un modèle à un domaine, ou laisse-le hériter. Un domaine que tu ne touches pas continue de fonctionner exactement comme aujourd’hui.",
+          "sub": "Assigne à un domaine un fournisseur, un modèle et un effort de raisonnement, avec des modèles de secours si tu veux. Un domaine non assigné utilise l’assignation de Par défaut ; si Par défaut n’est pas assigné non plus, il garde son réglage actuel.",
           "brand": "Site",
-          "goapplyNote": "{site} utilise l’assignation de {shared} pour tout domaine qu’il n’assigne pas lui-même.",
+          "goapplyNote": "{site} lit d’abord ses propres domaines et son propre Par défaut. Là où il n’a ni l’un ni l’autre, il utilise ceux de {shared}.",
           "noProviders": "Ajoute un fournisseur ci-dessus pour assigner un domaine.",
           "assigned": "Assigné",
           "notInEffect": "Sans effet",
           "inherits": "Hérite",
           "provider": "Fournisseur",
-          "inheritOption": "Non assigné (hérite)",
+          "inheritOption": "Non assigné (utiliser Par défaut)",
           "providerOff": "{name} (désactivé)",
           "model": "Modèle",
           "save": "Enregistrer",
           "clear": "Effacer l’assignation",
           "modelHint": "Choisis un modèle dans la liste du fournisseur, ou saisis un ID de modèle qu’elle ne contient pas.",
           "noModelList": "Ce fournisseur n’a pas encore de liste de modèles. Récupère ses modèles ci-dessus, ou saisis un ID de modèle.",
-          "needsTools": "Ce domaine appelle des outils, donc le modèle doit prendre en charge les appels d’outils.",
+          "needsTools": "Ce domaine appelle des outils, donc son modèle et chaque modèle de secours doivent prendre en charge les appels d’outils.",
           "needsImages": "Ce domaine lit des images, donc le modèle doit accepter les images en entrée.",
-          "toolsBlocked": "Ce type de fournisseur ne peut pas diffuser d’appels d’outils ici. Choisis un fournisseur Compatible OpenAI pour ce domaine.",
+          "toolsBlocked": "Un type de fournisseur choisi ici ne peut pas diffuser d’appels d’outils. Choisis des fournisseurs Compatible OpenAI pour le modèle et les secours de ce domaine.",
           "modelNotListed": "Ce modèle ne figure pas dans la liste récupérée du fournisseur. Il est utilisé tel que saisi.",
           "now": "Ce que les requêtes utilisent maintenant",
           "colSetting": "Utilisé pour",
           "colModel": "Modèle",
-          "colSource": "Provient de"
+          "colSource": "Provient de",
+          "inheritOptionDefault": "Non assigné (utiliser l’environnement)",
+          "usesDefault": "Utilise Par défaut",
+          "chooseProvider": "Choisis un fournisseur",
+          "effort": "Effort de raisonnement",
+          "effortHint": "L’effort de raisonnement est envoyé avec chaque requête à ce modèle, ramené au niveau le plus proche que son fournisseur accepte. Par défaut du fournisseur n’en envoie aucun : l’effort de l’environnement ou celui du fournisseur s’applique alors.",
+          "fallbacks": "Modèles de secours",
+          "fallbacksHint": "Essayés dans l’ordre quand le modèle ci-dessus échoue : une clé refusée ou sans crédit, une panne ou une limite de débit, ou un modèle que le point d’accès ne sert pas. Jusqu’à {max}. Ensuite, le réglage du modèle de secours (LLM_FALLBACK_MODEL) est toujours essayé.",
+          "fallbackN": "Secours {n}",
+          "addFallback": "Ajouter un modèle de secours",
+          "fallbacksFull": "Ce domaine a déjà le maximum de modèles de secours ({max}).",
+          "moveUp": "Monter",
+          "moveDown": "Descendre",
+          "removeFallback": "Retirer",
+          "moveUpLabel": "Monter le secours {n}",
+          "moveDownLabel": "Descendre le secours {n}",
+          "removeFallbackLabel": "Retirer le secours {n}"
         },
         "routeStatus": {
           "provider_missing": "Le fournisseur assigné a été retiré, donc ce domaine utilise son modèle hérité.",
@@ -4640,7 +4656,7 @@
         "area": {
           "default": {
             "title": "Par défaut",
-            "sub": "Toute tâche qui n’a pas de modèle propre."
+            "sub": "Chaque domaine que tu n’assignes pas utilise ce modèle, ses modèles de secours et son effort."
           },
           "matchResume": {
             "title": "Correspondance CV",
@@ -4706,13 +4722,16 @@
             "default": "Rien n’est configuré",
             "matchResume": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
             "parseResume": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
-            "visual": "Pas de modèle propre ; utilise le modèle d’Analyse de CV",
-            "evaluation": "Pas de modèle propre ; utilise le modèle d’entretien",
+            "visual": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "evaluation": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
             "insights": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
             "writing": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
             "assistant": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
             "jobs": "Pas de modèle propre ; utilise le modèle par défaut ({model})"
-          }
+          },
+          "default": "L’assignation du domaine Par défaut",
+          "sharedArea": "L’assignation de {shared} pour ce domaine",
+          "sharedDefault": "Le domaine Par défaut de {shared}"
         },
         "errors": {
           "generic": "Ça n’a pas fonctionné. Réessaie.",
@@ -4730,7 +4749,19 @@
           "invalid_route": "Choisis un fournisseur et un modèle.",
           "unknown_provider": "Ce fournisseur n’existe plus. Actualise la page.",
           "tools_unsupported": "Ce type de fournisseur ne peut pas diffuser d’appels d’outils, dont ce domaine a besoin.",
-          "provider_in_use": "Un domaine est encore assigné à ce fournisseur. Réassigne ou efface d’abord ce domaine."
+          "provider_in_use": "Un domaine utilise encore ce fournisseur, pour son modèle ou un secours. Modifie ou efface d’abord ce domaine.",
+          "invalid_effort": "Choisis un effort de raisonnement.",
+          "invalid_fallback": "Choisis un fournisseur et un modèle pour chaque modèle de secours.",
+          "duplicate_fallback": "Chaque modèle ne peut figurer qu’une fois dans un domaine.",
+          "too_many_fallbacks": "Un domaine accepte au plus {max} modèles de secours."
+        },
+        "effort": {
+          "provider": "Par défaut du fournisseur",
+          "minimal": "Minimal",
+          "low": "Faible",
+          "medium": "Moyen",
+          "high": "Élevé",
+          "max": "Maximal"
         }
       },
       "visitors": {

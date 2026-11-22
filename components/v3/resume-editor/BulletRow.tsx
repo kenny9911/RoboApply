@@ -316,7 +316,7 @@ export function BulletRow({
             </div>
           ) : error ? (
             <>
-              <p style={{ fontSize: 13, color: 'var(--warn)', margin: '0 0 12px' }}>
+              <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--warn)', margin: '0 0 12px' }}>
                 {t('rewrite.error')}
               </p>
               <div className="rb-rewrite-foot">

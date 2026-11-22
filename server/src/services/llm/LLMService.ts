@@ -17,18 +17,32 @@ import {
 } from '../../lib/byokService.js';
 import { resolveProviderCredential, type ProviderTuning } from '../../lib/llm/systemCredentials.js';
 import {
+  gatewayRouteProfile,
+  getAutoFallbackSetting,
   getFallbackModelSetting,
   getLlmRoutingDefaults,
   getRetryAttempts,
   getRetryBaseMs,
   getRetryMaxMs,
   resolveModelKey,
+  type GatewayRouteHop,
+  type GatewayRouteProfile,
   type LlmSettingSource,
 } from '../../lib/llm/llmModels.js';
+import type { GatewayEffort } from '../../lib/llm/llmStackConfigSchema.js';
+import { gatewayEffortFor } from './reasoningEffort.js';
 import { contextlessLlmBrand, llmCallBrand, requireLlmCallBrand } from '../../lib/llm/llmBrand.js';
 import { getTaskModel, getTaskModelOrDefault, type LlmTask } from '../../lib/llm/llmTaskSettings.js';
 import { isTransientLLMError } from './withRetry.js';
-import { normalizeProviderType, providerBaseType, resolveSelectorRoute, splitSelectorPrefix, stripProviderPrefix } from './providerPrefixes.js';
+import {
+  normalizeProviderType,
+  providerBaseType,
+  providerEntryId,
+  providerEntryRef,
+  resolveSelectorRoute,
+  splitSelectorPrefix,
+  stripProviderPrefix,
+} from './providerPrefixes.js';
 import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
 import { allowedBrands } from '../../platform/brand/runtime.js';
 import { LlmBrandPolicyError, llmDomesticOnlyApplies } from '../../platform/llm/brandPolicy.js';
@@ -61,7 +75,7 @@ import {
   type ToolChoice,
 } from './toolStreaming.js';
 import {
-  AUTO_FALLBACK_PREFERENCE,
+  AUTO_FALLBACK_ENV,
   CIRCUIT_OPEN_MS,
   LLMUnavailableError,
   MISSING_CREDENTIAL_FLAG,
@@ -71,9 +85,14 @@ import {
   fallbackMaxTokens,
   getOpenCircuit,
   isAutoFallbackEnabled,
+  isEffortRejected,
+  isModelRejection,
+  isReasoningEffortRejection,
   markCircuitBypassLogged,
   noteAutoFallbackChoice,
+  noteEffortRejected,
   openCircuit,
+  parseFallbackList,
   type CredentialFailureKind,
 } from './fallbackRouting.js';
 import type { LLMUsageInfo, ProviderExtra, ReasoningEffort } from '../../types/index.js';
@@ -197,11 +216,29 @@ interface FallbackCandidate {
   model: string;
   /** The selector as configured, for logs. */
   selector: string;
-  source: 'configured' | 'auto';
+  /**
+   * `area`: a fallback model of the call's LLM gateway area; `configured`: the
+   * fallback model setting; `auto`: LLM_AUTO_FALLBACK_MODELS, then the default
+   * model, on a credential failure only.
+   */
+  source: 'area' | 'configured' | 'auto';
+  /** The gateway effort of an area hop (others send the call's own effort). */
+  effort?: GatewayEffort;
 }
 
 /** Why the call is being rerouted. */
-type FallbackReason = CredentialFailureKind | 'circuit_open' | 'transient';
+type FallbackReason = CredentialFailureKind | 'circuit_open' | 'transient' | 'model_rejected';
+
+/** How one provider call sends reasoning effort (LLMService.chatOnRoute). */
+interface EffortPlan {
+  /** The route's provider, for the "refused the effort field" memory. */
+  providerType: string;
+  model: string;
+  /** What is sent: the gateway route's effort, else the call's own. */
+  effort: ReasoningEffort | undefined;
+  /** What the call sends without the gateway (its caller and the env). */
+  callerEffort: ReasoningEffort | undefined;
+}
 
 /**
  * Map an LLMService provider type ('kimi', 'openai', etc.) to the BYOK
@@ -549,17 +586,21 @@ export class LLMService {
 
   /**
    * The ordered fallback hops for one failed (or circuit-open) primary call.
+   * Configuration first, never a model named in code:
    *
-   * 1. The configured fallback (admin DB override ?? LLM_FALLBACK_MODEL), for
+   * 1. The fallback models of the call's LLM gateway area (an unassigned area
+   *    has the Default area's), in the admin's order, each with its own effort.
+   * 2. The configured fallback (admin DB override ?? LLM_FALLBACK_MODEL), for
    *    every fallback-worthy failure, exactly as before.
-   * 2. On a CREDENTIAL failure only (auth, billing, missing key, open
-   *    circuit), the auto-selected direct routes from AUTO_FALLBACK_PREFERENCE.
-   *    A transient blip (429/5xx/timeout) without a configured fallback still
-   *    goes back to withLLMRetry on the primary, so a rate-limit hiccup never
+   * 3. On a CREDENTIAL failure only (auth, billing, missing key, open
+   *    circuit): LLM_AUTO_FALLBACK_MODELS, then the brand's default model.
+   *    A transient blip (429/5xx/timeout) with nothing configured still goes
+   *    back to withLLMRetry on the primary, so a rate-limit hiccup never
    *    silently switches model.
    *
-   * Hops are skipped when their provider has no key, has an open circuit, or
-   * is the provider whose credentials just failed.
+   * Hops are skipped when their provider has no key, has an open circuit, is
+   * refused by the brand policy, or is the provider whose credentials just
+   * failed. A provider entry counts as one provider for all its areas.
    */
   private buildFallbackCandidates(input: {
     primaryModel: string;
@@ -571,70 +612,137 @@ export class LLMService {
     carriesUserData?: boolean;
     /** Keep only hops whose provider can stream tool calls. */
     requireTools?: boolean;
+    /** The fallback models of the call's gateway area (gatewayRouteProfile). */
+    areaFallbacks?: readonly GatewayRouteHop[];
   }): FallbackCandidate[] {
-    const primaryType = input.primaryProviderType.toLowerCase();
+    const primaryRef = providerEntryRef(input.primaryProviderType);
     const out: FallbackCandidate[] = [];
-    const seen = new Set<string>([`${primaryType}::${input.primaryModel}`]);
+    const seen = new Set<string>([`${primaryRef}::${input.primaryModel}`]);
     const usable = (providerType: string): boolean => {
-      const lower = providerType.toLowerCase();
-      if (input.credentialFailure && lower === primaryType) return false;
-      if (input.requireTools && !supportsToolStreaming(lower)) return false;
+      const ref = providerEntryRef(providerType);
+      if (input.credentialFailure && ref === primaryRef) return false;
+      if (input.requireTools && !supportsToolStreaming(ref)) return false;
       // The brand policy filters the chain: a RoboApply prompt with user data
-      // drops mainland endpoints (Wave 0's auto list includes
-      // deepseek-v4-flash); GoApply keeps every hop, and only the domestic ones
-      // behind the domestic-only wall.
-      if (!this.routeDecision(input.brand, lower, { carriesUserData: input.carriesUserData }).allowed) return false;
-      const cred = this.platformCredential(lower);
+      // drops mainland endpoints; GoApply keeps every hop, and only the
+      // domestic ones behind the domestic-only wall.
+      if (!this.routeDecision(input.brand, ref, { carriesUserData: input.carriesUserData }).allowed) return false;
+      const cred = this.platformCredential(ref);
       if (!cred.hasKey) return false;
-      return !getOpenCircuit(lower, cred.fingerprint);
+      return !getOpenCircuit(ref, cred.fingerprint);
     };
+    const add = (candidate: FallbackCandidate): boolean => {
+      if (!candidate.providerType) return false;
+      const key = `${providerEntryRef(candidate.providerType)}::${candidate.model}`;
+      if (seen.has(key) || !usable(candidate.providerType)) return false;
+      seen.add(key);
+      out.push(candidate);
+      return true;
+    };
+
+    for (const hop of input.areaFallbacks ?? []) {
+      add({ providerType: hop.providerType, model: hop.model, selector: hop.selector, source: 'area', effort: hop.effort });
+    }
 
     const configured = this.getConfiguredFallbackModel(input.primaryModel, input.brand);
     if (configured) {
       const route = this.resolvePlatformRoute(configured, input.providerMode, input.defaultModel, undefined, input.brand);
-      const key = `${route.providerType.toLowerCase()}::${route.model}`;
-      if (route.providerType && !seen.has(key) && usable(route.providerType)) {
-        seen.add(key);
-        out.push({ ...route, selector: configured, source: 'configured' });
-      }
+      add({ ...route, selector: configured, source: 'configured' });
     }
 
     if (input.credentialFailure && isAutoFallbackEnabled()) {
-      const auto: FallbackCandidate[] = [];
-      for (const selector of AUTO_FALLBACK_PREFERENCE) {
-        const route = this.resolveDirectModel(selector, input.brand);
-        // Auto-selection is direct-provider only: never openrouter.
-        if (!route || route.providerType === 'openrouter') continue;
-        const key = `${route.providerType}::${route.model}`;
-        if (seen.has(key) || !usable(route.providerType)) continue;
-        seen.add(key);
-        auto.push({ ...route, selector, source: 'auto' });
+      const before = out.length;
+      for (const selector of this.autoFallbackSelectors(input.brand, input.defaultModel)) {
+        const route = this.resolvePlatformRoute(selector, input.providerMode, input.defaultModel, undefined, input.brand);
+        add({ ...route, selector, source: 'auto' });
       }
+      const auto = out.slice(before);
       const summary = auto.map((c) => c.selector).join(' → ') || '(none)';
       if (noteAutoFallbackChoice(`${input.brand.id}:${summary}`)) {
         logger.warn('LLM_SERVICE', `Auto-selected LLM fallback route: ${summary}`, {
           brand: input.brand.id,
-          primaryProvider: primaryType,
+          primaryProvider: primaryRef,
           configuredFallback: configured ?? null,
           candidates: auto.map((c) => `${c.providerType}/${c.model}`),
         });
       }
-      out.push(...auto);
     }
     return out;
   }
 
+  /**
+   * The selectors a credential failure may move to after the configured ones:
+   * the auto-fallback list, the database first (`autoFallbackModels` in the
+   * LLM stack row, else LLM_AUTO_FALLBACK_MODELS; llmModels.ts
+   * getAutoFallbackSetting), then the brand's default model. Every one is
+   * configuration.
+   */
+  private autoFallbackSelectors(brand: ProductBrand, defaultModel?: string): string[] {
+    const list = parseFallbackList(getAutoFallbackSetting(brand.id));
+    if (defaultModel) list.push(defaultModel);
+    return [...new Set(list)];
+  }
+
   /** The auto-fallback providers this brand may use (for error messages). */
   private autoFallbackProvidersFor(brand: ProductBrand): string[] {
-    return AUTO_FALLBACK_PREFERENCE
-      .map((selector) => this.resolveDirectModel(selector, brand)?.providerType ?? selector.split('/')[0])
-      .filter((provider) => this.routeDecision(brand, provider).allowed);
+    const defaults = this.resolveDefaults(brand);
+    const providers = this.autoFallbackSelectors(brand, defaults.model)
+      .map((selector) => providerEntryRef(this.resolvePlatformRoute(selector, defaults.providerMode, defaults.model, undefined, brand).providerType))
+      .filter((provider) => !!provider && this.routeDecision(brand, provider).allowed);
+    return [...new Set(providers)];
+  }
+
+  /**
+   * The effort sent on a gateway route: the route's level mapped for its
+   * provider (reasoningEffort.ts gatewayEffortFor). `provider`, a level the
+   * provider has no equivalent for, and a model that refused the field
+   * recently all send what the call would send without the gateway.
+   */
+  private routeEffort(
+    providerType: string,
+    model: string,
+    effort: GatewayEffort | undefined,
+    callerEffort: ReasoningEffort | undefined,
+  ): ReasoningEffort | undefined {
+    if (!effort || isEffortRejected(providerType, model)) return callerEffort;
+    return gatewayEffortFor(providerBaseType(providerType), effort) ?? callerEffort;
+  }
+
+  /**
+   * One provider call with its effort plan. When the gateway's effort is not
+   * what the caller sends and the provider refuses the field (a model without
+   * reasoning control), the call is sent once more with the caller's effort,
+   * and the route sends no gateway effort for a while (fallbackRouting.ts).
+   */
+  private async chatOnRoute(
+    provider: LLMProvider,
+    messages: Message[],
+    options: LLMOptions,
+    plan: EffortPlan,
+    requestId: string,
+  ): Promise<LLMResponse> {
+    if (plan.effort === plan.callerEffort) return provider.chat(messages, { ...options, reasoningEffort: plan.effort });
+    try {
+      return await provider.chat(messages, { ...options, reasoningEffort: plan.effort });
+    } catch (error) {
+      if (!isReasoningEffortRejection(error)) throw error;
+      if (noteEffortRejected(plan.providerType, plan.model)) {
+        logger.warn('LLM_SERVICE', `${plan.providerType}/${plan.model} refused reasoning effort "${plan.effort}"; the LLM gateway sends none to it for now`, {
+          provider: plan.providerType,
+          model: plan.model,
+          effort: plan.effort ?? null,
+          error: error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300),
+        }, requestId);
+      }
+      return provider.chat(messages, { ...options, reasoningEffort: plan.callerEffort });
+    }
   }
 
   /**
    * Run the fallback hops in order. A hop that fails on its own credentials
-   * opens that provider's circuit and moves to the next hop; any other failure
-   * ends the chain (it is not a "dead key" problem, and timing out on several
+   * opens that provider's circuit and moves to the next hop. A gateway area's
+   * own fallback also moves on when it is down, rate-limited or does not serve
+   * its model: the admin listed those hops to be walked. Any other failure ends
+   * the chain (it is not a "dead key" problem, and timing out on several
    * providers in a row would multiply latency).
    */
   private async runFallbackChain(input: {
@@ -676,10 +784,15 @@ export class LLMService {
           input.options?.reasoningMaxTokens,
         ),
       };
+      const callerEffort = input.options?.reasoningEffort;
+      const effort = candidate.effort !== undefined
+        ? this.routeEffort(candidate.providerType, candidate.model, candidate.effort, callerEffort)
+        : callerEffort;
       const logOptions = {
         ...input.requestOptions,
         model: candidate.model,
         maxTokens: fallbackOptions.maxTokens,
+        reasoningEffort: effort,
         fallbackFrom: input.primaryModel,
         fallbackFromProvider: input.primaryProviderType,
         fallbackReason: input.reason,
@@ -697,7 +810,13 @@ export class LLMService {
       }, input.requestId);
 
       try {
-        const fallbackResponse = await fallbackProvider.chat(input.messages, fallbackOptions);
+        const fallbackResponse = await this.chatOnRoute(
+          fallbackProvider,
+          input.messages,
+          fallbackOptions,
+          { providerType: providerEntryRef(candidate.providerType), model: candidate.model, effort, callerEffort },
+          input.requestId,
+        );
         logger.logLLMCall({
           requestId: input.requestId,
           model: fallbackResponse.model || candidate.model,
@@ -744,6 +863,7 @@ export class LLMService {
           this.tripCircuit(candidate.providerType, kind, fallbackError, input.requestId);
           continue;
         }
+        if (candidate.source === 'area' && (this.shouldTryFallback(fallbackError) || isModelRejection(fallbackError))) continue;
         throw fallbackError;
       }
     }
@@ -751,7 +871,7 @@ export class LLMService {
     // Every hop was a dead key (or none could be built). For a transient
     // primary failure, hand back the last error so withLLMRetry keeps its
     // semantics; for a credential failure, say clearly that nothing is left.
-    if (input.reason === 'transient') throw lastError;
+    if (input.reason === 'transient' || input.reason === 'model_rejected') throw lastError;
     throw this.unavailableError({
       reason: input.reason,
       providerType: input.primaryProviderType,
@@ -794,7 +914,8 @@ export class LLMService {
   }): LLMUnavailableError {
     const brand = input.brand ?? this.callBrand();
     const fallbackEnv = `${brand.llmEnvPrefix}LLM_FALLBACK_MODEL`;
-    const autoProviders = this.autoFallbackProvidersFor(brand);
+    const failed = providerEntryRef(input.providerType);
+    const autoProviders = this.autoFallbackProvidersFor(brand).filter((p) => p !== failed);
     const primaryKind: CredentialFailureKind =
       classifyCredentialFailure(input.primaryError) ??
       (input.reason === 'billing' || input.reason === 'missing_key' ? input.reason : 'auth');
@@ -810,8 +931,9 @@ export class LLMService {
     const tail = input.attempted.length
       ? ` Fallback routes also failed: ${input.attempted.join(', ')}` +
         (input.lastError instanceof Error ? ` (last error: ${input.lastError.message.slice(0, 200)}).` : '.')
-      : ` No fallback route is available: set ${fallbackEnv} (or the admin fallback model)` +
-        (autoProviders.length ? ` or configure an API key for one of: ${autoProviders.join(', ')}.` : '.');
+      : ` No fallback route is available: add fallback models to the area in the LLM gateway, or set ${fallbackEnv}` +
+        ` or the auto-fallback list (autoFallbackModels in the LLM settings, or ${brand.llmEnvPrefix}${AUTO_FALLBACK_ENV})` +
+        (autoProviders.length ? ` (or configure an API key for one of: ${autoProviders.join(', ')}).` : '.');
     return new LLMUnavailableError({
       message: `LLM provider "${input.providerType}" ${what} for model "${input.model}".${tail}`,
       reason: primaryKind,
@@ -1126,6 +1248,10 @@ export class LLMService {
     this.assertPrimaryRoute(brand, primaryRoute, carriesUserData, requestId);
     await beforeProviderCall();
     const model = primaryRoute.model;
+    // An LLM gateway area route carries its effort and fallback models.
+    const profile: GatewayRouteProfile | null = gatewayRouteProfile(primaryRoute.providerType, model, brand.id);
+    const callerEffort = options?.reasoningEffort;
+    const primaryEffort = profile ? this.routeEffort(primaryRoute.providerType, model, profile.effort, callerEffort) : callerEffort;
     // A missing platform key is a credential failure like any other: keep it
     // so BYOK can still serve the call, else reroute to a fallback below.
     let activeProvider: LLMProvider | null = null;
@@ -1146,6 +1272,10 @@ export class LLMService {
     // out to eliminate. See docs/prd-byok.md.
     const userId = getCurrentUserId();
     const providerNamePreByok = activeProvider?.getProviderName() ?? primaryRoute.providerType.toLowerCase();
+    // The provider the call goes to, for circuits and "same provider" checks:
+    // a gateway entry is itself (`newapi@aigw`, whatever its area), not every
+    // entry of its type; any other route keeps its provider name.
+    const primaryRef = providerEntryId(primaryRoute.providerType) ? providerEntryRef(primaryRoute.providerType) : providerNamePreByok;
     // BYOK follows RoboApply on both brands; it is off for GoApply only behind
     // the domestic-only wall (a user key could point anywhere).
     const byokProviderKey = isByokAllowedForBrand(brand.id) ? llmProviderToByokProvider(providerNamePreByok) : null;
@@ -1180,6 +1310,7 @@ export class LLMService {
     const requestOptions = {
       ...options,
       model,
+      ...(profile ? { reasoningEffort: primaryEffort, gatewayArea: profile.area } : {}),
     };
     const fallbackContext = {
       messages,
@@ -1187,18 +1318,19 @@ export class LLMService {
       requestOptions,
       requestId,
       primaryModel: model,
-      primaryProviderType: providerNamePreByok,
+      primaryProviderType: primaryRef,
       brand,
     };
     const candidatesFor = (credentialFailure: boolean): FallbackCandidate[] =>
       this.buildFallbackCandidates({
         primaryModel: model,
-        primaryProviderType: providerNamePreByok,
+        primaryProviderType: primaryRef,
         providerMode,
         defaultModel: defaults.model,
         credentialFailure,
         brand,
         carriesUserData,
+        areaFallbacks: profile?.fallbacks,
       });
 
     // No platform key and no BYOK: go straight to a fallback, or fail clearly.
@@ -1207,7 +1339,7 @@ export class LLMService {
       if (candidates.length === 0) {
         throw this.unavailableError({
           reason: 'missing_key',
-          providerType: providerNamePreByok,
+          providerType: primaryRef,
           model,
           primaryError: primaryCreateError,
           attempted: [],
@@ -1228,15 +1360,15 @@ export class LLMService {
     // primary is tried anyway (the key may have been fixed upstream).
     if (!byokActive) {
       const circuit = getOpenCircuit(
-        providerNamePreByok,
-        this.platformCredential(providerNamePreByok).fingerprint,
+        primaryRef,
+        this.platformCredential(primaryRef).fingerprint,
       );
       if (circuit) {
         const candidates = candidatesFor(true);
         if (candidates.length > 0) {
-          if (markCircuitBypassLogged(providerNamePreByok)) {
-            logger.warn('LLM_SERVICE', `Circuit open for "${providerNamePreByok}"; routing calls to ${candidates[0].providerType}/${candidates[0].model} until ${new Date(circuit.until).toISOString()}`, {
-              provider: providerNamePreByok,
+          if (markCircuitBypassLogged(primaryRef)) {
+            logger.warn('LLM_SERVICE', `Circuit open for "${primaryRef}"; routing calls to ${candidates[0].providerType}/${candidates[0].model} until ${new Date(circuit.until).toISOString()}`, {
+              provider: primaryRef,
               kind: circuit.kind,
               reason: circuit.reason,
             }, requestId);
@@ -1260,10 +1392,13 @@ export class LLMService {
     }, requestId);
 
     try {
-      const response = await activeProvider.chat(messages, {
-        ...options,
-        model,
-      });
+      const response = await this.chatOnRoute(
+        activeProvider,
+        messages,
+        { ...options, model },
+        { providerType: primaryRef, model, effort: primaryEffort, callerEffort },
+        requestId,
+      );
 
       const duration = Date.now() - startTime;
 
@@ -1339,14 +1474,14 @@ export class LLMService {
       // historical rule: configured fallback only, on fallback-worthy errors.
       const credentialKind = classifyCredentialFailure(error);
       if (credentialKind === 'auth' || credentialKind === 'billing') {
-        this.tripCircuit(providerName, credentialKind, error, requestId);
+        this.tripCircuit(primaryRef, credentialKind, error, requestId);
       }
       if (credentialKind) {
         const candidates = candidatesFor(true);
         if (candidates.length === 0) {
           throw this.unavailableError({
             reason: credentialKind,
-            providerType: providerName,
+            providerType: primaryRef,
             model,
             primaryError: error,
             attempted: [],
@@ -1361,7 +1496,10 @@ export class LLMService {
         });
       }
 
-      if (this.shouldTryFallback(error)) {
+      // An area with fallback models also moves on when its endpoint does
+      // not serve the model (a 404, "no available channel", a renamed model).
+      const modelRejected = !!profile?.fallbacks.length && isModelRejection(error);
+      if (this.shouldTryFallback(error) || modelRejected) {
         // Resolved as its own selector, independent of the global provider
         // mode: a native task selector may fall back through an explicit
         // openrouter/... selector (or vice versa).
@@ -1370,7 +1508,7 @@ export class LLMService {
           return this.runFallbackChain({
             ...fallbackContext,
             candidates,
-            reason: 'transient',
+            reason: modelRejected && !this.shouldTryFallback(error) ? 'model_rejected' : 'transient',
             primaryError: error,
           });
         }
@@ -1590,14 +1728,30 @@ export class LLMService {
     const safetyCtx = { brand, task: opts.task, requestId, callId };
     await this.contentSafety('input', this.safetyInputText(messages), safetyCtx);
 
+    // An LLM gateway area route (the Assistant, or the Default it inherits)
+    // carries its effort and fallback models.
+    const profile = gatewayRouteProfile(primary.providerType, primary.model, brand.id);
+    const callerEffort = opts.reasoningEffort;
+
     // Credentials: BYOK (both brands unless GoApply's wall is on; endpoint re-checked) → system/env.
-    type Hop = { providerType: string; model: string; apiKey: string; baseUrl: string | null; byok: boolean; rowId?: string; source: 'primary' | 'configured' | 'auto' };
+    type Hop = {
+      providerType: string;
+      model: string;
+      apiKey: string;
+      baseUrl: string | null;
+      byok: boolean;
+      rowId?: string;
+      source: 'primary' | 'area' | 'configured' | 'auto';
+      /** The gateway effort of the hop (primary and area hops of a gateway route). */
+      effort?: GatewayEffort;
+    };
+    const hopKey = (providerType: string, model: string) => `${providerEntryRef(providerType)}::${model}`;
     const hops: Hop[] = [];
-    const platformHop = (providerType: string, model: string, source: Hop['source']): Hop | null => {
+    const platformHop = (providerType: string, model: string, source: Hop['source'], effort?: GatewayEffort): Hop | null => {
       try {
         const cred = resolveProviderCredential(providerType);
         if (!cred.apiKey?.trim() && providerBaseType(providerType) !== 'ollama') return null;
-        return { providerType, model, apiKey: cred.apiKey, baseUrl: cred.baseUrl ?? null, byok: false, source };
+        return { providerType, model, apiKey: cred.apiKey, baseUrl: cred.baseUrl ?? null, byok: false, source, ...(effort ? { effort } : {}) };
       } catch {
         return null;
       }
@@ -1607,12 +1761,12 @@ export class LLMService {
     if (userId && byokKey) {
       const row = await resolveByok(userId, byokKey);
       if (row && this.routeDecision(brand, primary.providerType, { carriesUserData: opts.carriesUserData, byok: true, baseUrl: row.baseUrl }).allowed) {
-        hops.push({ providerType: primary.providerType, model: primary.model, apiKey: row.apiKey, baseUrl: row.baseUrl, byok: true, rowId: row.rowId, source: 'primary' });
+        hops.push({ providerType: primary.providerType, model: primary.model, apiKey: row.apiKey, baseUrl: row.baseUrl, byok: true, rowId: row.rowId, source: 'primary', ...(profile ? { effort: profile.effort } : {}) });
       }
     }
     const primaryCircuit = getOpenCircuit(primary.providerType, this.platformCredential(primary.providerType).fingerprint);
     if (hops.length === 0) {
-      const hop = platformHop(primary.providerType, primary.model, 'primary');
+      const hop = platformHop(primary.providerType, primary.model, 'primary', profile?.effort);
       if (hop && !primaryCircuit) hops.push(hop);
     }
     const fallbacksFor = (credentialFailure: boolean): Hop[] =>
@@ -1625,11 +1779,17 @@ export class LLMService {
         brand,
         carriesUserData: opts.carriesUserData,
         requireTools: true,
+        areaFallbacks: profile?.fallbacks,
       })
-        .map((c) => platformHop(c.providerType, c.model, c.source))
+        .map((c) => platformHop(c.providerType, c.model, c.source, c.effort))
         .filter((h): h is Hop => h !== null);
-    // A user key never falls back to the platform (no surprise billing).
+    // A user key never falls back to the platform (no surprise billing). The
+    // area's own fallback models follow a platform primary straight away, so a
+    // primary that is down or does not serve its model moves to them.
     if (hops.length === 0) hops.push(...fallbacksFor(true));
+    else if (!hops[0].byok && profile?.fallbacks.length) {
+      for (const hop of fallbacksFor(false)) if (hop.source === 'area') hops.push(hop);
+    }
     // Circuit open and nothing else left: try the primary anyway (the key may
     // have been fixed upstream), as chat() does.
     if (hops.length === 0 && primaryCircuit) {
@@ -1680,7 +1840,7 @@ export class LLMService {
 
     for (let hopIndex = 0; hopIndex < hops.length; hopIndex += 1) {
       const hop = hops[hopIndex];
-      tried.add(`${hop.providerType}::${hop.model}`);
+      tried.add(hopKey(hop.providerType, hop.model));
       const tuning = hop.byok ? undefined : resolveProviderCredential(hop.providerType).tuning;
       const client = (opts.clientFactory ?? createStreamingClient)(hop.providerType, {
         apiKey: hop.apiKey,
@@ -1688,7 +1848,8 @@ export class LLMService {
         ...(tuning ? { proxyKey: tuning.proxyKey } : {}),
         ...(tuning?.timeoutMs !== undefined ? { timeoutMs: tuning.timeoutMs } : {}),
       });
-      const params = buildStreamParams({
+      let hopEffort = hop.effort !== undefined ? this.routeEffort(hop.providerType, hop.model, hop.effort, callerEffort) : callerEffort;
+      const paramsFor = (reasoningEffort: ReasoningEffort | undefined) => buildStreamParams({
         providerType: hop.providerType,
         model: hop.model,
         messages,
@@ -1697,10 +1858,11 @@ export class LLMService {
         maxTokens: opts.maxTokens,
         reasoningMaxTokens: opts.reasoningMaxTokens,
         temperature: opts.temperature,
-        reasoningEffort: opts.reasoningEffort,
+        reasoningEffort,
         thinkingMode: opts.thinkingMode,
         tunedThinkingMode: tuning?.thinkingMode,
       });
+      let params = paramsFor(hopEffort);
 
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         if (opts.signal?.aborted) throw abortError();
@@ -1764,6 +1926,8 @@ export class LLMService {
               task: opts.task,
               stream: true,
               tools: opts.tools.map((t) => t.name),
+              ...(hopEffort ? { reasoningEffort: hopEffort } : {}),
+              ...(profile ? { gatewayArea: profile.area } : {}),
               ...(hop.source !== 'primary' ? { fallbackFrom: primary.model, fallbackSource: hop.source } : {}),
             },
             responseText: round.content + round.toolCalls.map((c) => `\n[tool_call ${c.name}] ${c.arguments}`).join(''),
@@ -1799,6 +1963,19 @@ export class LLMService {
             transient,
           });
           if (emitted) throw new LlmStreamInterruptedError(error, emittedText);
+          // The model refused the gateway's effort field: send the round again
+          // with the caller's own effort (and none from the gateway for a while).
+          if (hopEffort !== callerEffort && isReasoningEffortRejection(error)) {
+            if (noteEffortRejected(hop.providerType, hop.model)) {
+              logger.warn('LLM_SERVICE', `${providerEntryRef(hop.providerType)}/${hop.model} refused reasoning effort "${hopEffort}"; the LLM gateway sends none to it for now`, {
+                provider: providerEntryRef(hop.providerType),
+                model: hop.model,
+              }, requestId);
+            }
+            hopEffort = callerEffort;
+            params = paramsFor(hopEffort);
+            continue;
+          }
           const credentialKind = classifyCredentialFailure(error);
           if (credentialKind) {
             if (!hop.byok && (credentialKind === 'auth' || credentialKind === 'billing')) {
@@ -1808,7 +1985,7 @@ export class LLMService {
             // Next hop: add the brand-filtered, tool-capable fallbacks once.
             if (hopIndex === hops.length - 1) {
               for (const next of fallbacksFor(true)) {
-                if (!tried.has(`${next.providerType}::${next.model}`)) hops.push(next);
+                if (!tried.has(hopKey(next.providerType, next.model))) hops.push(next);
               }
             }
             break;
@@ -1818,6 +1995,10 @@ export class LLMService {
             await sleep(Math.round(expDelay / 2 + Math.random() * expDelay * 0.5), opts.signal);
             continue;
           }
+          // The area's next fallback model takes over when this one is down,
+          // rate-limited or does not serve its model.
+          const next = hops[hopIndex + 1];
+          if (!hop.byok && next?.source === 'area' && (transient || this.shouldTryFallback(error) || isModelRejection(error))) break;
           throw error;
         }
       }

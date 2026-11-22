@@ -4698,29 +4698,45 @@
         },
         "areas": {
           "title": "Functionality areas",
-          "sub": "Assign a provider and a model to an area, or leave it to inherit. An area you leave alone keeps working exactly as it does now.",
+          "sub": "Assign a provider, a model and a reasoning effort to an area, with fallback models if you want them. An area you leave unassigned uses the Default area's assignment; with Default unassigned as well, it keeps the setting it has now.",
           "brand": "Site",
-          "goapplyNote": "{site} uses {shared}'s assignment for any area it does not assign itself.",
+          "goapplyNote": "{site} reads its own areas and its own Default first. Where it has neither, it uses {shared}'s.",
           "noProviders": "Add a provider above to assign an area.",
           "assigned": "Assigned",
           "notInEffect": "Not in effect",
           "inherits": "Inherits",
           "provider": "Provider",
-          "inheritOption": "Not assigned (inherit)",
+          "inheritOption": "Not assigned (use Default)",
           "providerOff": "{name} (off)",
           "model": "Model",
           "save": "Save",
           "clear": "Clear assignment",
           "modelHint": "Pick a model from the provider's list, or type a model ID it does not list.",
           "noModelList": "This provider has no model list yet. Fetch its models above, or type a model ID.",
-          "needsTools": "This area calls tools, so the model must support tool calls.",
+          "needsTools": "This area calls tools, so its model and every fallback must support tool calls.",
           "needsImages": "This area reads images, so the model must accept image input.",
-          "toolsBlocked": "This provider type cannot stream tool calls here. Choose an OpenAI-compatible provider for this area.",
+          "toolsBlocked": "A provider type chosen here cannot stream tool calls. Choose OpenAI-compatible providers for this area's model and fallbacks.",
           "modelNotListed": "This model is not in the provider's fetched list. It is used as typed.",
           "now": "What requests use now",
           "colSetting": "Used for",
           "colModel": "Model",
-          "colSource": "Comes from"
+          "colSource": "Comes from",
+          "inheritOptionDefault": "Not assigned (use the environment)",
+          "usesDefault": "Uses Default",
+          "chooseProvider": "Choose a provider",
+          "effort": "Reasoning effort",
+          "effortHint": "The reasoning effort is sent with every request to that model, mapped to the nearest level its provider takes. Provider default sends none, so the environment's effort or the provider's own applies.",
+          "fallbacks": "Fallback models",
+          "fallbacksHint": "Tried in order when the model above fails: a rejected or out-of-credit key, an outage or rate limit, or a model the endpoint does not serve. Up to {max}. After them, the fallback model setting (LLM_FALLBACK_MODEL) is still tried.",
+          "fallbackN": "Fallback {n}",
+          "addFallback": "Add fallback model",
+          "fallbacksFull": "This area has the most fallback models it can take ({max}).",
+          "moveUp": "Move up",
+          "moveDown": "Move down",
+          "removeFallback": "Remove",
+          "moveUpLabel": "Move fallback {n} up",
+          "moveDownLabel": "Move fallback {n} down",
+          "removeFallbackLabel": "Remove fallback {n}"
         },
         "routeStatus": {
           "provider_missing": "The assigned provider was removed, so this area uses its inherited model.",
@@ -4731,7 +4747,7 @@
         "area": {
           "default": {
             "title": "Default",
-            "sub": "Every kind of work that has no model of its own."
+            "sub": "Every area you leave unassigned uses this model, its fallbacks and its effort."
           },
           "matchResume": {
             "title": "Match resume",
@@ -4797,13 +4813,16 @@
             "default": "Nothing is configured",
             "matchResume": "No model of its own; uses the default model ({model})",
             "parseResume": "No model of its own; uses the default model ({model})",
-            "visual": "No model of its own; uses the Parse resume model",
-            "evaluation": "No model of its own; uses the interview model",
+            "visual": "No model of its own; uses the default model ({model})",
+            "evaluation": "No model of its own; uses the default model ({model})",
             "insights": "No model of its own; uses the default model ({model})",
             "writing": "No model of its own; uses the default model ({model})",
             "assistant": "No model of its own; uses the default model ({model})",
             "jobs": "No model of its own; uses the default model ({model})"
-          }
+          },
+          "default": "The Default area's assignment",
+          "sharedArea": "{shared}'s assignment for this area",
+          "sharedDefault": "{shared}'s Default area"
         },
         "errors": {
           "generic": "That did not work. Try again.",
@@ -4821,7 +4840,19 @@
           "invalid_route": "Choose a provider and a model.",
           "unknown_provider": "This provider no longer exists. Refresh the page.",
           "tools_unsupported": "This provider type cannot stream tool calls, which this area needs.",
-          "provider_in_use": "An area is still assigned to this provider. Reassign or clear that area first."
+          "provider_in_use": "An area still uses this provider, for its model or a fallback. Change or clear that area first.",
+          "invalid_effort": "Choose a reasoning effort.",
+          "invalid_fallback": "Choose a provider and a model for each fallback model.",
+          "duplicate_fallback": "Each model can be used once in an area.",
+          "too_many_fallbacks": "An area takes at most {max} fallback models."
+        },
+        "effort": {
+          "provider": "Provider default",
+          "minimal": "Minimal",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "max": "Max"
         }
       },
       "visitors": {

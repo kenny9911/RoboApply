@@ -8,9 +8,11 @@
 //                        key. Add, edit, turn off, fetch models, remove.
 //   Functionality areas  Default and one area per kind of work (match resume,
 //                        parse resume, visual, evaluation, insights, …). Each
-//                        is assigned one provider entry and one of its models,
-//                        or left to inherit. Under each area: what its calls
-//                        resolve to right now and where that value comes from.
+//                        is assigned a provider entry, a model and a reasoning
+//                        effort (Medium to start), plus up to three ordered
+//                        fallback models, or left unassigned, which uses the
+//                        Default area. Under each area: what its calls resolve
+//                        to right now and where that value comes from.
 //
 // An API key is typed here and sent once; the server never sends it back (an
 // entry shows a preview such as `sk-…ab12`). A model can be picked from the
@@ -22,7 +24,10 @@ import { useLocale, useTranslations } from 'next-intl';
 import {
   LLM_PROVIDER_TYPES,
   adminLlmApi,
+  type LlmAreaRoute,
+  type LlmAreaRouteInput,
   type LlmAreaView,
+  type LlmEffort,
   type LlmGatewayBrand,
   type LlmGatewayOverview,
   type LlmKeyResolution,
@@ -63,6 +68,7 @@ const BRAND_NAMES: Readonly<Record<LlmGatewayBrand, string>> = { roboapply: 'Rob
 const SAVE_ERRORS = new Set([
   'invalid_name', 'duplicate_name', 'invalid_type', 'invalid_base_url', 'key_required', 'key_required_for_new_url', 'too_many_providers',
   'not_found', 'invalid_notes', 'encryption_unavailable', 'invalid_area', 'invalid_route', 'unknown_provider', 'tools_unsupported', 'provider_in_use',
+  'invalid_effort', 'invalid_fallback', 'duplicate_fallback', 'too_many_fallbacks',
 ]);
 const LIST_ERRORS = new Set([
   'invalid_base_url', 'key_required', 'auth_rejected', 'not_supported', 'rate_limited', 'timeout', 'unreachable', 'invalid_response', 'response_too_large', 'provider_error',
@@ -72,9 +78,9 @@ export function typeLabel(type: string, t: T): string {
   return type === 'newapi' ? t('types.newapi') : PROVIDER_TYPE_NAMES[type as Exclude<LlmProviderType, 'newapi'>] ?? type;
 }
 
-function saveError(err: unknown, t: T): string {
+function saveError(err: unknown, t: T, values?: Record<string, number>): string {
   const code = apiErrorCode(err);
-  return code && SAVE_ERRORS.has(code) ? t(`errors.${code}`) : t('errors.generic');
+  return code && SAVE_ERRORS.has(code) ? t(`errors.${code}`, values) : t('errors.generic');
 }
 
 /** One line for the result of a model-list request. */
@@ -382,33 +388,139 @@ function sourceText(key: LlmKeyResolution, view: LlmAreaView, overview: LlmGatew
   if (!key.effective) {
     return view.area === 'default' ? t('source.noneDefault') : t(`source.fallback.${view.area}`, { model: overview.defaultModel ?? t('source.noDefault') });
   }
-  if (key.source === 'override') return t(key.providerId && key.providerId === view.route?.providerId ? 'source.assigned' : 'source.override');
-  if (key.source === 'shared') return t('source.shared', { shared: BRAND_NAMES.roboapply });
+  const shared = { shared: BRAND_NAMES.roboapply };
+  if (key.via === 'area') return key.shared ? t('source.sharedArea', shared) : t('source.assigned');
+  if (key.via === 'default') return key.shared ? t('source.sharedDefault', shared) : t('source.default');
+  if (key.via === 'override') return t('source.override');
+  if (key.via === 'shared') return t('source.shared', shared);
   return t('source.env', { name: key.envName });
+}
+
+/** One model of an assignment as the form edits it. */
+interface TargetDraft {
+  providerId: string;
+  model: string;
+  effort: LlmEffort;
+}
+
+interface RouteDraft {
+  primary: TargetDraft;
+  fallbacks: TargetDraft[];
+}
+
+function draftOf(route: LlmAreaRoute | null, defaultEffort: LlmEffort): RouteDraft {
+  return {
+    primary: { providerId: route?.providerId ?? '', model: route?.model ?? '', effort: route?.effort ?? defaultEffort },
+    fallbacks: (route?.fallbacks ?? []).map((f) => ({ providerId: f.providerId, model: f.model, effort: f.effort })),
+  };
+}
+
+/** A draft as it would be saved, for the dirty check and the request. */
+function savedShape(d: RouteDraft): LlmAreaRouteInput | null {
+  if (!d.primary.providerId) return null;
+  const target = (x: TargetDraft) => ({ providerId: x.providerId, model: x.model.trim(), effort: x.effort });
+  return { ...target(d.primary), fallbacks: d.fallbacks.map(target) };
+}
+
+const targetKey = (x: Pick<TargetDraft, 'providerId' | 'model'>) => `${x.providerId}::${x.model.trim()}`;
+
+/** Provider, model (from the entry's list or typed) and reasoning effort for one target. */
+function TargetFields({ draft, overview, inheritLabel, onChange, describedBy }: {
+  draft: TargetDraft;
+  overview: LlmGatewayOverview;
+  /** The "not assigned" option of the primary model; fallbacks always name a provider. */
+  inheritLabel: string | null;
+  onChange: (next: TargetDraft) => void;
+  describedBy: string;
+}) {
+  const t = useTranslations('admin.console.llm');
+  const id = useId();
+  const provider = overview.providers.find((p) => p.id === draft.providerId);
+  return (
+    <>
+      <label className={styles.field}>
+        {t('areas.provider')}
+        <select value={draft.providerId} onChange={(e) => onChange({ ...draft, providerId: e.target.value, model: '' })}>
+          {inheritLabel !== null ? <option value="">{inheritLabel}</option> : <option value="" disabled>{t('areas.chooseProvider')}</option>}
+          {overview.providers.map((p) => (
+            <option key={p.id} value={p.id}>{p.enabled ? p.name : t('areas.providerOff', { name: p.name })}</option>
+          ))}
+        </select>
+      </label>
+      <label className={styles.field}>
+        {t('areas.model')}
+        <input
+          value={draft.model}
+          list={`${id}-models`}
+          disabled={!draft.providerId}
+          maxLength={200}
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          onChange={(e) => onChange({ ...draft, model: e.target.value })}
+          aria-describedby={describedBy}
+        />
+        <datalist id={`${id}-models`}>
+          {(provider?.models ?? []).map((m) => <option key={m} value={m} />)}
+        </datalist>
+      </label>
+      <label className={styles.field}>
+        {t('areas.effort')}
+        <select value={draft.effort} disabled={!draft.providerId} onChange={(e) => onChange({ ...draft, effort: e.target.value as LlmEffort })} aria-describedby={describedBy}>
+          {overview.efforts.map((e) => <option key={e} value={e}>{t(`effort.${e}`)}</option>)}
+        </select>
+      </label>
+    </>
+  );
 }
 
 function AreaCard({ view, overview, brand }: { view: LlmAreaView; overview: LlmGatewayOverview; brand: LlmGatewayBrand }) {
   const t = useTranslations('admin.console.llm');
   const write = useOverviewWriter(brand);
   const id = useId();
-  const [providerId, setProviderId] = useState(view.route?.providerId ?? '');
-  const [model, setModel] = useState(view.route?.model ?? '');
+  const saved = draftOf(view.route, overview.defaultEffort);
+  const savedKey = JSON.stringify(savedShape(saved));
+  const [draft, setDraft] = useState<RouteDraft>(saved);
   // The saved assignment is the starting point again whenever it changes (a save, a refresh).
   useEffect(() => {
-    setProviderId(view.route?.providerId ?? '');
-    setModel(view.route?.model ?? '');
-  }, [view.route?.providerId, view.route?.model]);
-  const provider = overview.providers.find((p) => p.id === providerId);
+    setDraft(draftOf(view.route, overview.defaultEffort));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- savedKey stands for view.route
+  }, [savedKey, overview.defaultEffort]);
   const save = useMutation({
-    mutationFn: (route: { providerId: string; model: string } | null) => adminLlmApi.saveRoutes(brand, { [view.area]: route }),
+    mutationFn: (route: LlmAreaRouteInput | null) => adminLlmApi.saveRoutes(brand, { [view.area]: route }),
     onSuccess: write,
   });
-  const dirty = providerId !== (view.route?.providerId ?? '') || model.trim() !== (view.route?.model ?? '');
-  const toolsBlocked = view.needsTools && !!provider && !overview.providerTypes.find((p) => p.type === provider.type)?.tools;
+  const next = savedShape(draft);
+  const dirty = JSON.stringify(next) !== savedKey;
+  const typeOf = (providerId: string) => overview.providers.find((p) => p.id === providerId)?.type;
+  const streamsTools = (providerId: string) => !!overview.providerTypes.find((p) => p.type === typeOf(providerId))?.tools;
+  const provider = overview.providers.find((p) => p.id === draft.primary.providerId);
+  const assigned = !!draft.primary.providerId;
+  const targets = assigned ? [draft.primary, ...draft.fallbacks] : [];
+  const toolsBlocked = view.needsTools && targets.some((x) => x.providerId && !streamsTools(x.providerId));
+  const incomplete = targets.some((x) => !x.providerId || !x.model.trim());
+  const duplicate = new Set(targets.map(targetKey)).size !== targets.length;
+  const full = draft.fallbacks.length >= overview.maxFallbacks;
+  const setPrimary = (primary: TargetDraft) =>
+    setDraft((d) => ({ primary, fallbacks: primary.providerId ? d.fallbacks : [] }));
+  const setFallback = (index: number, value: TargetDraft) =>
+    setDraft((d) => ({ ...d, fallbacks: d.fallbacks.map((f, i) => (i === index ? value : f)) }));
+  const moveFallback = (index: number, by: -1 | 1) =>
+    setDraft((d) => {
+      const list = [...d.fallbacks];
+      const to = index + by;
+      if (to < 0 || to >= list.length) return d;
+      [list[index], list[to]] = [list[to], list[index]];
+      return { ...d, fallbacks: list };
+    });
+  const removeFallback = (index: number) => setDraft((d) => ({ ...d, fallbacks: d.fallbacks.filter((_, i) => i !== index) }));
+  const addFallback = () =>
+    setDraft((d) => ({ ...d, fallbacks: [...d.fallbacks, { providerId: '', model: '', effort: overview.defaultEffort }] }));
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    save.mutate(providerId ? { providerId, model: model.trim() } : null);
+    save.mutate(next);
   };
+  const hintId = `${id}-model-hint`;
   return (
     <li className={styles.card} aria-labelledby={`${id}-title`}>
       <div className={styles.cardHead}>
@@ -419,6 +531,8 @@ function AreaCard({ view, overview, brand }: { view: LlmAreaView; overview: LlmG
         <div className={styles.tags}>
           {view.route ? (
             <Tag tone={view.routeStatus === 'ok' ? 'strong' : 'warn'}>{t(view.routeStatus === 'ok' ? 'areas.assigned' : 'areas.notInEffect')}</Tag>
+          ) : view.inheritsDefault ? (
+            <Tag>{t('areas.usesDefault')}</Tag>
           ) : (
             <Tag>{t('areas.inherits')}</Tag>
           )}
@@ -427,49 +541,64 @@ function AreaCard({ view, overview, brand }: { view: LlmAreaView; overview: LlmG
       {view.route && view.routeStatus && view.routeStatus !== 'ok' && <p className={styles.error}>{t(`routeStatus.${view.routeStatus}`)}</p>}
       {view.route && view.routeStatus === 'ok' && view.modelListed === false && <p className={styles.muted}>{t('areas.modelNotListed')}</p>}
       <form className={styles.filters} onSubmit={onSubmit} noValidate>
-        <label className={styles.field}>
-          {t('areas.provider')}
-          <select value={providerId} onChange={(e) => { setProviderId(e.target.value); setModel(''); }}>
-            <option value="">{t('areas.inheritOption')}</option>
-            {overview.providers.map((p) => (
-              <option key={p.id} value={p.id}>{p.enabled ? p.name : t('areas.providerOff', { name: p.name })}</option>
-            ))}
-          </select>
-        </label>
-        <label className={styles.field}>
-          {t('areas.model')}
-          <input
-            value={model}
-            list={`${id}-models`}
-            disabled={!providerId}
-            maxLength={200}
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            onChange={(e) => setModel(e.target.value)}
-            aria-describedby={`${id}-model-hint`}
-          />
-          <datalist id={`${id}-models`}>
-            {(provider?.models ?? []).map((m) => <option key={m} value={m} />)}
-          </datalist>
-        </label>
-        <div className={styles.actions}>
-          <Btn variant="primary" type="submit" disabled={save.isPending || !dirty || toolsBlocked || (!!providerId && !model.trim())}>
-            {t(save.isPending ? 'form.saving' : providerId || !view.route ? 'areas.save' : 'areas.clear')}
-          </Btn>
-        </div>
-        <p className={`${styles.muted} ${styles.full}`} id={`${id}-model-hint`}>
+        <TargetFields
+          draft={draft.primary}
+          overview={overview}
+          inheritLabel={t(view.area === 'default' ? 'areas.inheritOptionDefault' : 'areas.inheritOption')}
+          onChange={setPrimary}
+          describedBy={hintId}
+        />
+        <p className={`${styles.muted} ${styles.full}`} id={hintId}>
           {toolsBlocked
             ? t('areas.toolsBlocked')
-            : providerId && provider && provider.models.length === 0
+            : assigned && provider && provider.models.length === 0
               ? t('areas.noModelList')
               : view.needsTools
                 ? t('areas.needsTools')
                 : view.needsImages
                   ? t('areas.needsImages')
                   : t('areas.modelHint')}
+          {' '}{t('areas.effortHint')}
         </p>
-        {save.isError && <p className={`${styles.error} ${styles.full}`} role="alert">{saveError(save.error, t)}</p>}
+        {assigned && (
+          <div className={styles.subgroup} role="group" aria-labelledby={`${id}-fallbacks`}>
+            <p className={styles.factsTitle} id={`${id}-fallbacks`}>{t('areas.fallbacks')}</p>
+            <p className={styles.muted}>{t('areas.fallbacksHint', { max: overview.maxFallbacks })}</p>
+            {draft.fallbacks.length > 0 && (
+              <ol className={styles.list} aria-labelledby={`${id}-fallbacks`}>
+                {draft.fallbacks.map((f, i) => {
+                  const savedHere = view.route?.fallbacks[i];
+                  const status = savedHere && targetKey(savedHere) === targetKey(f) ? view.fallbackStatus[i] : undefined;
+                  const unlisted = savedHere && targetKey(savedHere) === targetKey(f) ? view.fallbackListed[i] === false : false;
+                  return (
+                    <li key={i} className={styles.subRow}>
+                      <p className={styles.rowLabel}>{t('areas.fallbackN', { n: i + 1 })}</p>
+                      <TargetFields draft={f} overview={overview} inheritLabel={null} onChange={(v) => setFallback(i, v)} describedBy={`${id}-fallbacks`} />
+                      <div className={styles.actions}>
+                        <Btn variant="ghost" type="button" disabled={i === 0} onClick={() => moveFallback(i, -1)} aria-label={t('areas.moveUpLabel', { n: i + 1 })}>{t('areas.moveUp')}</Btn>
+                        <Btn variant="ghost" type="button" disabled={i === draft.fallbacks.length - 1} onClick={() => moveFallback(i, 1)} aria-label={t('areas.moveDownLabel', { n: i + 1 })}>{t('areas.moveDown')}</Btn>
+                        <Btn variant="ghost" type="button" onClick={() => removeFallback(i)} aria-label={t('areas.removeFallbackLabel', { n: i + 1 })}>{t('areas.removeFallback')}</Btn>
+                      </div>
+                      {status && status !== 'ok' && <p className={`${styles.error} ${styles.full}`}>{t(`routeStatus.${status}`)}</p>}
+                      {unlisted && <p className={`${styles.muted} ${styles.full}`}>{t('areas.modelNotListed')}</p>}
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            <div className={styles.actions}>
+              <Btn type="button" disabled={full} onClick={addFallback}>{t('areas.addFallback')}</Btn>
+              {full && <span className={styles.muted}>{t('areas.fallbacksFull', { max: overview.maxFallbacks })}</span>}
+            </div>
+          </div>
+        )}
+        {duplicate && <p className={`${styles.error} ${styles.full}`} role="status">{t('errors.duplicate_fallback')}</p>}
+        <div className={`${styles.actions} ${styles.full}`}>
+          <Btn variant="primary" type="submit" disabled={save.isPending || !dirty || toolsBlocked || incomplete || duplicate}>
+            {t(save.isPending ? 'form.saving' : assigned || !view.route ? 'areas.save' : 'areas.clear')}
+          </Btn>
+        </div>
+        {save.isError && <p className={`${styles.error} ${styles.full}`} role="alert">{saveError(save.error, t, { max: overview.maxFallbacks })}</p>}
       </form>
       <p className={styles.factsTitle} id={`${id}-now`}>{t('areas.now')}</p>
       <div className={styles.tableWrap}>
