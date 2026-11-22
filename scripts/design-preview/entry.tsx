@@ -15,6 +15,7 @@ import PracticePage from '../../app/(auth)/practice/page';
 import PracticeReportPage from '../../app/(auth)/practice/[id]/report/page';
 import PracticeLivePage from '../../app/(auth)/practice/[id]/page';
 import SettingsPage from '../../app/(auth)/settings/page';
+import AlicePage from '../../app/(auth)/alice/page';
 import { loadMessages } from '../../lib/i18n';
 import { isLocale, LOCALE_COOKIE } from '../../lib/localeConfig';
 import { usePathname, usePreviewLocation, navigate } from './navigation';
@@ -57,6 +58,7 @@ function Preview() {
   else if (path === '/practice/live') page = <PracticeLivePage params={reportParams} />;
   else if (path === '/practice') page = <PracticePage />;
   else if (path === '/settings') page = <SettingsPage />;
+  else if (path === '/alice') page = <AlicePage />;
   else page = <div className="preview-error">This page is not part of the local preview. <button onClick={() => navigate('/jobs')}>Return to jobs</button></div>;
   // The two-screen setup renders in its own layout (no rail), as the app serves it.
   if (path === '/onboarding/start') {

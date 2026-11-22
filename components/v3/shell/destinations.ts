@@ -82,6 +82,7 @@ import { useCoachRosterAvailable, type NavBadgeId } from '../../../hooks/shared/
 import {
   IconBolt,
   IconCalendar,
+  IconChat,
   IconFile,
   IconGift,
   IconHome,
@@ -143,6 +144,8 @@ const matchApplications = (p: string) => under('/applications')(p) || under('/re
 export const NAV_ENTRIES: readonly NavEntry[] = [
   // ── RoboApply · top (Dashboard · Jobs · Applications · Resume · Interview prep) ──
   { id: 'dashboard', href: '/dashboard', labelKey: 'dashboard', icon: IconHome, group: 'top', brands: RA, flag: null, badge: 'ready', mobile: 1, ready: true, match: under('/dashboard') },
+  // Alice, the application agent (docs/alice/ALICE.md): after the home, in More on the phone.
+  { id: 'alice', href: '/alice', labelKey: 'alice', icon: IconChat, group: 'top', brands: RA, flag: 'alice', badge: null, mobile: 'more', ready: true, match: under('/alice') },
   { id: 'jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: RA, flag: null, badge: 'jobs', mobile: 2, ready: true, match: matchJobs },
   { id: 'applications', href: '/applications', labelKey: 'applications', icon: IconStack, group: 'top', brands: RA, flag: null, badge: 'applications', mobile: 3, ready: true, match: matchApplications },
   { id: 'resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: RA, flag: null, badge: null, mobile: 4, ready: true, match: under('/resume') },
@@ -158,6 +161,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
 
   // ── GoApply · top (首页 · 职位 · 校招日历 · 投递记录 · 简历 · 面试练习) ──
   { id: 'cn.dashboard', href: '/dashboard', labelKey: 'dashboard', icon: IconHome, group: 'top', brands: GA, flag: null, badge: 'ready', mobile: 1, ready: true, match: under('/dashboard') },
+  { id: 'cn.alice', href: '/alice', labelKey: 'alice', icon: IconChat, group: 'top', brands: GA, flag: 'alice', badge: null, mobile: 'more', ready: true, match: under('/alice') },
   { id: 'cn.jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: GA, flag: null, badge: 'jobs', mobile: 2, ready: true, match: matchJobs },
   { id: 'cn.campus', href: '/campus', labelKey: 'campus', mobileLabelKey: 'campus_short', icon: IconCalendar, group: 'top', brands: GA, flag: 'jobs.campusCalendar', badge: null, mobile: 3, ready: true, match: under('/campus') },
   { id: 'cn.applications', href: '/applications', labelKey: 'cn_applications', mobileLabelKey: 'cn_applications_short', icon: IconStack, group: 'top', brands: GA, flag: null, badge: 'applications', mobile: 4, ready: true, match: matchApplications },

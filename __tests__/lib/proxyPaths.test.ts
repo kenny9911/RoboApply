@@ -95,7 +95,7 @@ describe('proxyPaths.isProtectedPath', () => {
     }
   });
 
-  it('lists exactly the seventeen protected prefixes', () => {
+  it('lists exactly the eighteen protected prefixes', () => {
     expect([...PROTECTED_PREFIXES]).toEqual([
       '/dashboard',
       '/jobs',
@@ -114,6 +114,7 @@ describe('proxyPaths.isProtectedPath', () => {
       '/coaching',
       '/referrals',
       '/pay',
+      '/alice',
     ]);
   });
 
