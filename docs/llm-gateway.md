@@ -128,17 +128,22 @@ A call moves to the next model when its model:
 
 After the area's own fallbacks come the configured fallback model
 (`fallbackModel` override, else `LLM_FALLBACK_MODEL`) and, on a credential
-failure only, `LLM_AUTO_FALLBACK_MODELS` and then the default model. A fallback
+failure only, the auto-fallback list and then the default model. A fallback
 on an entry that is removed, disabled or keyless, on the provider whose key just
 failed, or refused by the brand policy is skipped. A personal (BYOK) key never
 falls back to the platform. A streamed Assistant round moves on only before
 anything was shown.
 
 The code once auto-selected four hard-coded models after a dead key
-(`AUTO_FALLBACK_PREFERENCE`). That list is gone: set `LLM_AUTO_FALLBACK_MODELS`
-(comma-separated selectors; GoApply: `CN_LLM_AUTO_FALLBACK_MODELS`, else the
-shared value) or add fallback models in the gateway. `LLM_FALLBACK_AUTO=false`
-still turns the credential-failure routes off.
+(`AUTO_FALLBACK_PREFERENCE`). That list is gone. The auto-fallback list is
+comma-separated selectors, read the database first like every other setting
+(`getAutoFallbackSetting`): `autoFallbackModels` in the stack blob
+(`llm_stack.{env}`; no page edits it yet), else `LLM_AUTO_FALLBACK_MODELS`
+(GoApply: its own saved value and `CN_LLM_AUTO_FALLBACK_MODELS`, else
+RoboApply's). Price every selector in it (`npm run verify:llm -- --require-priced`
+checks the env list). `LLM_FALLBACK_AUTO=false` still turns the
+credential-failure routes off. Production sets `openrouter/openai/gpt-6-luna` in
+both places since 2026-11-23.
 
 ## Rules that are easy to break
 
@@ -176,8 +181,8 @@ still turns the credential-failure routes off.
   `llm_stack_config:{env}`). A route saved before efforts and fallbacks
   existed reads as Medium with no fallbacks.
 - **Disclosures.** `features/compliance/disclosures.ts` reads the same order
-  (`blobModelSelector`) and lists every fallback model as a destination
-  (task `fallback`). A model is listed under the entry's vendor when it uses the
+  (`blobModelSelector`) and lists every fallback model, and every model of the
+  auto-fallback list, as a destination (task `fallback`). A model is listed under the entry's vendor when it uses the
   vendor's own host, else under the entry's host; a mainland host is region CN,
   any other gateway is not listed.
 
