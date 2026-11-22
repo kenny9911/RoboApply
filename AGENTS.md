@@ -150,6 +150,8 @@ PR #15 added the visit record and the `/admin/visitors` report; PR #21
 product still never submits an application (R1/D1). Preview the UI without a
 backend: `node scripts/design-preview.mjs` (port 3612).
 
+Alice (`/alice`, 2026-11-23) is the application agent: a named AI agent (the owner reversed C9/D4 for her only) who interviews the person, writes two job profiles to choose between, revises the chosen one by comment, saves it as the search the feed uses, and keeps the applications and follow-up reminders in order. Read `docs/alice/ALICE.md` before changing `server/src/features/alice/` or `components/features/alice/`; her screens use three colours only (ink, paper, electric blue for her own work), and her three tables (SCHEMA-10, `docs/jobright-clone/schema-diffs/schema10-alice.sql`) must exist on a database before she answers there.
+
 The LLM gateway (`/admin/llm`, 2026-11-22) lets admins save named AI provider entries (type, API base URL, encrypted key, fetched model list) and assign a provider and model to each functionality area (Default, Match resume, Parse resume, Visual, Evaluation, Insights, Writing, Assistant, Job details). An unassigned area resolves exactly as before. Read `docs/llm-gateway.md` before changing `server/src/lib/llm/`, `server/src/services/llm/providerPrefixes.ts` or the provider-type checks in `LLMService`.
 
 ## Verification
