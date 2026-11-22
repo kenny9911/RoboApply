@@ -39,6 +39,19 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - When changing user-facing copy, update every supported locale and run the
   repository's copy checks. Use the `i18n-locale-sync` skill for locale work.
 
+## Shipping
+
+When a task is finished, ship it without asking:
+
+1. Run `npm run build`. If it fails, stop and report; do not merge or push.
+2. If it succeeds, commit the work, merge the branch into `main`, and push
+   `main` (and the branch) to the GitHub remote.
+
+Only the build gates this. Stage explicit paths so other sessions' uncommitted
+work in the shared checkout is not swept in, never force-push `main`, and stop
+and report if the merge conflicts. `prisma db push` and production deploy
+commands still need explicit confirmation.
+
 ## Common commands
 
 ```bash
