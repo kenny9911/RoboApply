@@ -106,7 +106,9 @@
   letter-spacing: var(--ls-label);
   text-align: center;
 }
-.progressList { margin: 0; padding: 0 0 8px; list-style: none; }
+/* The rows share the card's height, so a card stretched to the hero beside
+ * it has no blank band under its last row. */
+.progressList { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; margin: 0; padding: 0 0 8px; list-style: none; }
 .row {
   display: flex;
   align-items: center;
@@ -140,7 +142,7 @@
   background: var(--surface-3);
   color: var(--text-2);
 }
-.row[data-on='true'] .rowIcon { background: var(--action-subtle); color: var(--action); }
+.row[data-on='true'] .rowIcon { background: var(--text); color: var(--bg); }
 .rowDone {
   position: absolute;
   right: -5px;

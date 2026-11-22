@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   chat: vi.fn(),
   getTaskModel: vi.fn<() => string | undefined>(),
+  // The Visual area's model (LLM gateway) or LLM_VISION_MODEL; undefined → OCR uses the extract model.
+  getVisionSetting: vi.fn<() => string | undefined>(),
   getTaskReasoningEffort: vi.fn<() => 'medium' | undefined>(),
   getProviderSetting: vi.fn<() => string | undefined>(),
 }));
@@ -10,6 +12,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../lib/llm/llmTaskSettings.js', () => ({
   getTaskModel: mocks.getTaskModel,
   getTaskReasoningEffort: mocks.getTaskReasoningEffort,
+  // The real rule (llmTaskSettings.ts getVisionModel): the vision setting, else the extract model.
+  getVisionModel: () => mocks.getVisionSetting() ?? mocks.getTaskModel(),
 }));
 
 vi.mock('../lib/llm/llmModels.js', () => ({
@@ -66,6 +70,7 @@ describe('file-extraction task routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getTaskModel.mockReturnValue(MODEL);
+    mocks.getVisionSetting.mockReturnValue(undefined);
     mocks.getTaskReasoningEffort.mockReturnValue('medium');
     mocks.getProviderSetting.mockReturnValue('openrouter');
   });
@@ -158,6 +163,16 @@ describe('file-extraction task routing', () => {
       }),
     );
     expect(mocks.chat.mock.calls[0]?.[1]).not.toHaveProperty('visionModel');
+  });
+
+  it('routes image OCR to the Visual model when one is set, leaving text parsing on the extraction model', async () => {
+    mocks.getVisionSetting.mockReturnValue('newapi@aigw/vision-ocr-2');
+    mocks.chat.mockResolvedValue('Ada Lovelace\nMathematician');
+
+    await new PDFService().extractImage(Buffer.from('image bytes'), 'image/png');
+
+    expect(mocks.chat).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ model: 'newapi@aigw/vision-ocr-2' }));
+    expect(mocks.getTaskModel()).toBe(MODEL);
   });
 
   it('rejects a configured text-only extraction model instead of substituting a model', async () => {

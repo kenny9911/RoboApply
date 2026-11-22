@@ -24,6 +24,8 @@ import { logger } from '../../services/LoggerService.js';
 import { isDbConfigDisabled } from './llmStackConfigSchema.js';
 import { parseReasoningEffort, type ReasoningEffort } from '../../services/llm/reasoningEffort.js';
 import { openRouterBaseUrlFromEnv } from '../../platform/llm/openRouterBaseUrl.js';
+import { providerBaseType, providerEntryId } from '../../services/llm/providerPrefixes.js';
+import { effectiveProviderBaseUrl, getGatewayProviderSync } from './gatewayProviders.js';
 import {
   BYOK_PROVIDERS,
   baseUrlRequirement,
@@ -51,7 +53,8 @@ export interface ResolvedProviderCredential {
   apiKey: string;
   baseUrl?: string;
   tuning: ProviderTuning;
-  source: 'system' | 'env';
+  /** `gateway`: a named provider entry of the LLM gateway (gatewayProviders.ts). */
+  source: 'system' | 'env' | 'gateway';
 }
 
 /**
@@ -256,7 +259,33 @@ export async function warmupSystemCredentials(): Promise<void> {
 /* ── The 3-tier resolver entry point (system → env) ─────────────────────────
  * NOTE: user BYOK sits ABOVE this, in LLMService.chat()'s existing swap. */
 
+/**
+ * The credential of a provider entry (`<type>@<entry>`): the entry's own key
+ * and base URL, never the provider type's system key or env key. The base URL
+ * is always explicit (the entry's, else the type's own host) so an env proxy
+ * override of the type does not redirect the entry. `LLM_PROXY_KEY` is NOT
+ * sent (`proxyKey: ''`): it is the secret of the deployment's own proxy, and an
+ * entry's host is whatever an admin typed. An entry that cannot be used
+ * (removed, disabled, unreadable key, cold cache) resolves to an empty key,
+ * which callers treat as a missing credential and reroute.
+ */
+function gatewayCredential(providerType: string, entryId: string): ResolvedProviderCredential {
+  const baseType = providerBaseType(providerType);
+  const { proxyKey: _proxyKey, ...typeTuning } = envCredential(baseType).tuning;
+  void _proxyKey;
+  const entry = getGatewayProviderSync(entryId);
+  const usable = entry && entry.type === normalizeProviderForSystemKey(baseType) ? entry : null;
+  return {
+    apiKey: usable?.apiKey ?? '',
+    baseUrl: usable ? effectiveProviderBaseUrl(usable.type, usable.baseUrl) ?? undefined : undefined,
+    tuning: { ...typeTuning, proxyKey: '' },
+    source: 'gateway',
+  };
+}
+
 export function resolveProviderCredential(providerType: string): ResolvedProviderCredential {
+  const entryId = providerEntryId(providerType);
+  if (entryId) return gatewayCredential(providerType, entryId);
   const env = envCredential(providerType);
   if (isDbConfigDisabled()) return env;
   const norm = normalizeProviderForSystemKey(providerType);

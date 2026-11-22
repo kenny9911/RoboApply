@@ -18,10 +18,16 @@ import type { EmailTranslator } from '../i18n.js';
 
 export type EmailCategory = 'transactional' | 'alert' | 'tips' | 'marketing';
 
-const ACCENT = '#5b5bd6';
-const TEXT = '#111111';
-const BODY = '#444444';
-const MUTED = '#9aa0aa';
+/**
+ * The accent body helpers write (buttons, links). It is RoboApply's email
+ * accent, and the shell repaints it with the brand's own (`brand.email.accent`,
+ * e.g. GoApply's jade) when it wraps the body, so the helpers need no brand.
+ * Lower case on purpose: nothing else in a body is written this way.
+ */
+export const BODY_ACCENT = '#2b4dff';
+const TEXT = '#0b0d1a';
+const BODY = '#3a3f54';
+const MUTED = '#596079';
 
 export function escapeHtml(value: string): string {
   return value
@@ -47,7 +53,7 @@ export function paragraph(text: string): string {
 }
 
 export function button(label: string, url: string): string {
-  return `<div style="margin:16px 0 4px;"><a href="${escapeHtml(safeUrl(url))}" style="display:inline-block;background:${ACCENT};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:10px;font-size:15px;">${escapeHtml(label)}</a></div>`;
+  return `<div style="margin:16px 0 4px;"><a href="${escapeHtml(safeUrl(url))}" style="display:inline-block;background:${BODY_ACCENT};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:999px;font-size:15px;">${escapeHtml(label)}</a></div>`;
 }
 
 export interface LegalFooter {
@@ -118,11 +124,13 @@ export function renderShell(input: ShellInput): ShellOutput {
     ...legalLines.map((l) => `<div style="margin-top:6px;">${escapeHtml(l)}</div>`),
   ].join('');
 
-  const html = `<!doctype html><html lang="${escapeHtml(t.locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f4f4f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">${preheader}
+  const accent = brand.email.accent.toLowerCase();
+  const bodyHtml = accent === BODY_ACCENT ? input.bodyHtml : input.bodyHtml.split(BODY_ACCENT).join(accent);
+  const html = `<!doctype html><html lang="${escapeHtml(t.locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f4f6fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">${preheader}
   <div style="max-width:520px;margin:0 auto;padding:32px 16px;">
     <div style="background:#ffffff;border-radius:16px;padding:32px;">
-      <div style="font-size:20px;font-weight:700;color:${ACCENT};margin-bottom:24px;">${escapeHtml(brand.name)}</div>
-      ${input.bodyHtml}
+      <div style="font-size:20px;font-weight:700;color:${accent};margin-bottom:24px;">${escapeHtml(brand.name)}</div>
+      ${bodyHtml}
     </div>
     <div style="text-align:center;color:${MUTED};font-size:12px;margin-top:20px;line-height:1.6;">${footerHtml}</div>
   </div></body></html>`;

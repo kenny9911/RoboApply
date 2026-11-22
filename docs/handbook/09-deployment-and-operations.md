@@ -1,6 +1,6 @@
 # 09 · Deployment and operations
 
-As of 2026-11-03 (main @ b89d5256).
+As of 2026-11-03 (main @ b89d5256); section 3.1 updated 2026-11-22 for the LLM gateway (main @ 62eb63a1).
 
 How RoboApply runs in production, how to release and roll back, and what to look at when it breaks. Statements marked "last known (date)" come from earlier operator notes and could not be re-checked from the repository (this handbook was written without access to Vercel, Neon or any provider).
 
@@ -112,7 +112,7 @@ Last known production set (2026-10-12/13, from operator notes): database pair, `
 Consequences:
 
 - Changing `LLM_MODEL` on Vercel has no effect while the row names a model. Last known (2026-10-13): every model in the row set to `google/gemini-3.8-flash`, `copilot` set to `openrouter/google/gemini-3.8-flash`.
-- RoboApply has **no admin UI** for this row: `saveLlmStack` has no caller in the repository. Edits are direct database writes on production; back up the old value first.
+- The admin LLM gateway page (`/admin/llm`, 2026-11-22) writes only this row's area assignments (`routes`) and the provider entries (`llm_providers.production`); an area assignment wins over the per-key values. The per-key values (`defaultModel`, `fallbackModel`, `purposes.*`) still have **no admin UI**: edits are direct database writes on production; back up the old value first.
 - Other `AppConfig` rows (for example `agent_alex.*`) are RoboHire leftovers that no RoboApply code reads (last known).
 
 ## 4. Databases

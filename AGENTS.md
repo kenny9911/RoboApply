@@ -92,6 +92,19 @@ stack, features, deployment and current status. This file is the short version.
   the `/practice` setup. The two-brand build record, and the owner items still
   open, are in `docs/jobright-clone/HANDOFF.md` (its §2 predates the merge).
 
+## Shipping
+
+When a task is finished, ship it without asking:
+
+1. Run `npm run build`. If it fails, stop and report; do not merge or push.
+2. If it succeeds, commit the work, merge the branch into `main`, and push
+   `main` (and the branch) to the GitHub remote.
+
+Only the build gates this. Stage explicit paths so other sessions' uncommitted
+work in the shared checkout is not swept in, never force-push `main`, and stop
+and report if the merge conflicts. `prisma db push` and production deploy
+commands still need explicit confirmation.
+
 ## Common commands
 
 ```bash
@@ -121,16 +134,23 @@ extension and interview-agent suites separately.
 
 ## Recent work
 
-The resume.io clone and the agent-driven redesign are merged (PR #17,
-2026-11-13). The design system is now Desk (`docs/design-system.md`; teardown in
-`docs/resume-io/TEARDOWN.md`), the signed-in home is `/dashboard` (`/today` and
-`/home` redirect to it), and "Ready to apply" is the Getting ready view of
-Applications (`docs/agent-driven/REDESIGN.md`, §11 for how the two meet). PR #18
-(2026-11-18) added the opt-in weekly auto-prepare, first-class target companies
-and the `/pay` pay check; PR #15 added the visit record and the
-`/admin/visitors` report. The product still never submits an application
-(R1/D1). Preview the UI without a backend: `node scripts/design-preview.mjs`
-(port 3612).
+The app runs the **Pulse** design system (`docs/design-system.md`), merged into
+`main` on 2026-11-22: blue-black ink, electric blue, a cobalt field and a sunny
+yellow highlight, flat tiles and pills, Space Grotesk over DM Sans, no gradients
+and no shadows at rest, and a three.js scene on the home page
+(`components/features/marketing/HeroScene.tsx`). It replaced Desk, the
+resume.io clone (PR #17, 2026-11-13; teardown in `docs/resume-io/TEARDOWN.md`),
+and keeps its layout, token names and the agent-driven redesign
+(`docs/agent-driven/REDESIGN.md`, §11 for how the two meet). The signed-in home
+is `/dashboard` (`/today` and `/home` redirect to it), and "Ready to apply" is
+the Getting ready view of Applications. PR #18 (2026-11-18) added the opt-in
+weekly auto-prepare, first-class target companies and the `/pay` pay check;
+PR #15 added the visit record and the `/admin/visitors` report; PR #21
+(2026-11-22) moved `next` to 16.4.5 for the November security release. The
+product still never submits an application (R1/D1). Preview the UI without a
+backend: `node scripts/design-preview.mjs` (port 3612).
+
+The LLM gateway (`/admin/llm`, 2026-11-22) lets admins save named AI provider entries (type, API base URL, encrypted key, fetched model list) and assign a provider and model to each functionality area (Default, Match resume, Parse resume, Visual, Evaluation, Insights, Writing, Assistant, Job details). An unassigned area resolves exactly as before. Read `docs/llm-gateway.md` before changing `server/src/lib/llm/`, `server/src/services/llm/providerPrefixes.ts` or the provider-type checks in `LLMService`.
 
 ## Verification
 

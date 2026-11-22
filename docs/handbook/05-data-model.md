@@ -68,8 +68,8 @@ The database was split off RoboHire's on 2026-07-02 (owner's note; not visible i
 - `SeekerProfile`: every candidate has one. It holds the account soft-delete (`deletedAt`), onboarding state, locale, market and timezone. Login refuses a non-admin user without one; admins get one provisioned at login (`SeekerAuthService.ts`).
 - `SeekerSubscription`: the plan (`planKey`, `interval`, `rail` = stripe | alipay | wechatpay, `brand`) and the practice-minute balance `mockCredits`. Every change to that balance writes `MockInterviewCreditLedger`.
 - `AlipayOrder`: every CN-rail order. **Frozen**: no edits to the model, its callback or `fulfilPass.ts` (HANDOFF §5; `marketSchema.test.ts` checks the model is byte-identical).
-- `AppConfig`: key/value plaintext JSON config. It holds the LLM override blobs `llm_stack.{env}` and `llm_stack.goapply.{env}` ([06](06-ai-and-llm-stack.md)), `credits.catalog.v1`, `rate_card.{env}`, and RoboHire leftovers such as `agent_alex.*` that nothing reads.
-- `AdminAdjustment`: the audit trail for admin changes (rate-card saves, `saveLlmStack`, billing adjustments). Editing `AppConfig` by hand bypasses it.
+- `AppConfig`: key/value plaintext JSON config. It holds the LLM override blobs `llm_stack.{env}` and `llm_stack.goapply.{env}` and the LLM gateway provider entries `llm_providers.{env}` (keys encrypted with `FIELD_ENCRYPTION_KEY`; [06](06-ai-and-llm-stack.md)), `credits.catalog.v1`, `rate_card.{env}`, and RoboHire leftovers such as `agent_alex.*` that nothing reads.
+- `AdminAdjustment`: the audit trail for admin changes (rate-card saves, `saveLlmStack` and the LLM gateway saves, billing adjustments). Editing `AppConfig` by hand bypasses it.
 - `SystemLLMKey` / `UserLLMKey`: encrypted provider API keys (platform keys and BYOK).
 - `InterviewSession`: one voice mock interview (LiveKit or Parley). It covers the room and dispatch, recording keys in R2, transcript, report, cost and `blueprint`.
 - `UsageDeductionLog`, `LLMCallLog`: usage and cost records.

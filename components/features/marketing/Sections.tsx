@@ -37,7 +37,7 @@ export interface FaqItem {
 export function Faq({ title, items, id }: { title: string; items: FaqItem[]; id?: string }) {
   return (
     <section className={styles.section} id={id} aria-labelledby={id ? `${id}-title` : undefined}>
-      <div className={`${styles.wrap} ${styles.narrow}`}>
+      <div className={`${styles.wrap} ${styles.faqWrap}`}>
         <h2 className={styles.h2} id={id ? `${id}-title` : undefined}>
           {title}
         </h2>
@@ -60,7 +60,7 @@ export function Faq({ title, items, id }: { title: string; items: FaqItem[]; id?
 export function ExampleFrame({ title, children, tabs }: { title: string; children: ReactNode; tabs?: ReactNode }) {
   const t = useTranslations('landing.example');
   return (
-    <figure className={styles.sample} data-example="" aria-label={`${t('label')}: ${title}`}>
+    <figure className={styles.sample} data-example="" data-ui="" aria-label={`${t('label')}: ${title}`}>
       <div className={styles.sampleHead}>
         <span className={styles.h3}>{title}</span>
         <span className={styles.exampleChip}>{t('label')}</span>
@@ -370,7 +370,6 @@ export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricin
     <section className={styles.sectionAlt} id={id} aria-labelledby="home-pricing-title" data-pricing-summary="">
       <div className={styles.wrap}>
         <div className={styles.sectionHead}>
-          <p className={styles.eyebrow}>{t('eyebrow')}</p>
           <h2 className={styles.h2} id="home-pricing-title">
             {t('title')}
           </h2>

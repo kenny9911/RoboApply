@@ -145,12 +145,12 @@ function FooterThemeSwitch() {
 export interface MarketingFooterProps {
   /** Show the crawlable locale links (the home pages' hreflang cluster). */
   localeLinks?: boolean;
-  /** Carry the light/dark switch on a phone (pages whose header hides it there: the home pages). */
+  /** Carry the light/dark switch on a phone. On by default: every marketing header (the home pages' and HybridShell's) hides its switch below 760 px. */
   themeSwitch?: boolean;
 }
 
 /** The site footer. Its <footer> landmark is LegalFooter's (a footer may not nest another). */
-export function MarketingFooter({ localeLinks = false, themeSwitch = false }: MarketingFooterProps) {
+export function MarketingFooter({ localeLinks = false, themeSwitch = true }: MarketingFooterProps) {
   const t = useTranslations('landing.site.footer');
   const brand = useBrand();
   const features = featuresFor(brand.id);
@@ -161,7 +161,7 @@ export function MarketingFooter({ localeLinks = false, themeSwitch = false }: Ma
       <div className={styles.wrap}>
         <nav className={styles.footerGrid} aria-label={t('label')}>
           <div>
-            <BrandWordmark href={null} size="md" />
+            <BrandWordmark href={null} size="md" className={styles.footerWordmark} />
             <p className={`${styles.muted} ${styles.footerTagline}`}>
               {brand.market === 'cn' ? t('taglineCn') : t('tagline')}
             </p>
@@ -224,6 +224,9 @@ export function MarketingFooter({ localeLinks = false, themeSwitch = false }: Ma
           </div>
           <PopularLists />
         </nav>
+        <p className={styles.footerMark} aria-hidden="true">
+          {brand.name}
+        </p>
         <div className={styles.footerBottom}>
           {themeSwitch ? <FooterThemeSwitch /> : null}
           {localeLinks && locales.length > 1 ? (

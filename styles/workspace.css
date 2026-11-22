@@ -1,9 +1,9 @@
-/* Desk: shared workspace composition (docs/design-system.md). Tokens live in
- * app/globals.css. The shell follows resume.io's app (docs/resume-io/
- * TEARDOWN.md, measured 2026-11-12): a 240px white rail with the person on
- * top, 40px nav rows that light up as a light-blue wash, and one flat white
- * workspace under a 72px header row. Feature-specific evidence styles live in
- * discovery.css. */
+/* Pulse: shared workspace composition (docs/design-system.md). Tokens live in
+ * app/globals.css. The shell is an open plane: a 240px rail and the workspace
+ * share the cool-white ground, and everything the user works on is a flat
+ * white tile on it. The current page is a white pill in the rail with an ink
+ * label and a blue icon; controls are pills. Feature-specific evidence styles
+ * live in discovery.css. */
 .app {
   grid-template-columns: 240px minmax(0, 1fr);
   /* Less the admin "view as" banner above the shell (--view-as-h; 0 otherwise). */
@@ -11,7 +11,7 @@
   max-width: none;
   background: var(--bg);
 }
-/* One flat sheet: the rail and the workspace share the canvas (white; navy
+/* One flat plane: the rail and the workspace share the ground (blue-black
  * in dark). Below 760px the rail leaves and the bottom bar takes over (see
  * the end). */
 .main {
@@ -28,9 +28,9 @@
   border-right: 0;
 }
 .brand { gap: 10px; padding: 0 20px; }
-.brand-name { font-size: var(--fs-subtitle); font-weight: 600; letter-spacing: var(--ls-subtitle); }
+.brand-name { font-family: var(--font-display); font-size: var(--fs-title); font-weight: 600; letter-spacing: var(--ls-title); }
 /* The identity tile: the brand glyph on the brand plane. */
-.brand-mark { width: 32px; height: 32px; border-radius: var(--r-sm); background: var(--brand-plane); }
+.brand-mark { width: 34px; height: 34px; border-radius: var(--r-sm); background: var(--brand-plane); }
 .brand-mark svg { stroke: var(--brand-mark); }
 /* The person (components/v3/shell/SidebarProfile.tsx): the avatar in a ring
  * that fills to the profile's completeness, the percentage on a chip, the
@@ -46,12 +46,12 @@
   text-decoration: none;
   transition: background var(--dur-hover) var(--ease-out);
 }
-.side-profile:hover { background: var(--surface-2); }
+.side-profile:hover { background: var(--surface); }
 .side-profile:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .side-profile-avatar { position: relative; flex-shrink: 0; width: 52px; height: 52px; }
 .side-profile-avatar svg { position: absolute; inset: 0; width: 52px; height: 52px; transform: rotate(-90deg); }
 .side-profile-avatar .track { stroke: var(--rule); }
-.side-profile-avatar .fill { stroke: var(--warn); transition: stroke-dashoffset var(--dur-modal) var(--ease-out); }
+.side-profile-avatar .fill { stroke: var(--accent-line); transition: stroke-dashoffset var(--dur-modal) var(--ease-out); }
 .side-profile-avatar[data-complete='true'] .fill { stroke: var(--ok); }
 .side-profile-initials {
   position: absolute;
@@ -59,8 +59,9 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--surface-3);
-  color: var(--text-2);
+  background: var(--brand-plane);
+  color: var(--brand-mark);
+  font-family: var(--font-display);
   font-size: var(--fs-body);
   font-weight: 600;
 }
@@ -71,7 +72,7 @@
   padding: 0 6px;
   border: 2px solid var(--bg);
   border-radius: var(--r-pill);
-  background: var(--warn);
+  background: var(--text);
   color: var(--bg);
   font-size: var(--fs-label);
   font-weight: 600;
@@ -98,42 +99,48 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.nav { gap: 0; }
+.nav { gap: 2px; }
 .nav-item {
   min-height: 40px;
-  margin: 0 8px;
+  margin: 0 12px;
   width: auto;
-  padding: 8px 10px;
-  border-radius: var(--r-md);
-  font-size: var(--fs-subtitle);
-  font-weight: 400;
-  color: var(--text);
+  padding: 8px 12px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--text-2);
 }
 .nav-item-label { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.nav-item svg { width: 22px; height: 22px; flex-shrink: 0; color: var(--disabled); }
+.nav-item svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--text-muted); }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
-/* Where you are: resume.io's light-blue wash, blue label and blue icon. The
- * weight changes too, so the state never rests on colour alone. */
+/* Where you are: a white pill on the tinted rail, the label in ink and one
+ * step heavier, the icon in the action colour. The fill and the weight carry
+ * the state; the blue icon is the accent on top of them. */
 .nav-item[aria-current="page"],
 .nav-item[aria-current="page"]:hover {
-  background: var(--action-subtle);
-  color: var(--action);
-  box-shadow: none;
-  font-weight: 500;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--e1);
+  font-weight: 600;
 }
 .nav-item[aria-current="page"] svg { color: var(--action); }
 /* The rule above clears v3's inset bar; keyboard focus still gets the ring. */
 .nav-item[aria-current="page"]:focus-visible { box-shadow: var(--focus-ring); }
-.nav-item[aria-current="page"] .count { background: var(--action); color: var(--action-ink); }
+/* Counts are quiet figures; only a queue that needs the user (.notif) takes
+ * the highlight. */
+.nav-item .count { background: var(--surface-3); color: var(--text-2); font-weight: 600; }
+.nav-item[aria-current="page"] .count { background: var(--text); color: var(--bg); }
+.nav-item.notif .count { background: var(--brand-mark); color: var(--brand-plane); }
 .nav-group { margin-top: 8px; padding-top: 8px; border-top: 0; }
-.main-inner { max-width: 1440px; margin: 0 auto; padding: 24px 40px 80px; }
-/* The workspace's header row: white over the scrolling page, no hairline. */
+.main-inner { max-width: 1440px; margin: 0 auto; padding: 16px 32px 80px; }
+/* The workspace's header row: the ground itself, opaque, over the scrolling
+ * page. No blur and no hairline. */
 .topbar {
-  min-height: 72px;
-  padding: 12px 40px 12px 24px;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  -webkit-backdrop-filter: saturate(1.2) blur(16px);
-  backdrop-filter: saturate(1.2) blur(16px);
+  min-height: 68px;
+  padding: 12px 32px 12px 24px;
+  background: var(--bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border-bottom: 0;
 }
 .crumbs { font-size: var(--fs-meta); color: var(--text-muted); }
@@ -141,11 +148,12 @@
 .search {
   height: var(--control-md);
   width: 255px;
-  background: var(--surface-2);
-  border: 1px solid var(--rule);
+  background: var(--surface);
+  border: 0;
   border-radius: var(--r-pill);
+  box-shadow: var(--e1);
 }
-.search:hover { border-color: color-mix(in srgb, var(--text) 24%, transparent); }
+.search:hover { box-shadow: var(--e2); }
 .search kbd { border-radius: 6px; background: var(--surface-2); border-color: transparent; }
 /* The app topbar (.main > .topbar) never grows wider than its column. The
  * page name and the buttons keep their size; the search pill is the one
@@ -164,16 +172,16 @@
 .main > .topbar > .top-actions > .search { flex-shrink: 1; min-width: 0; }
 .search .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-btn { background: transparent; border-color: transparent; border-radius: 50%; }
-.icon-btn:hover { background: var(--surface-glass); border-color: color-mix(in srgb, var(--text) 12%, transparent); }
+.icon-btn:hover { background: var(--surface); border-color: transparent; }
 .top-actions { gap: 8px; }
-.avatar { background: var(--surface-3); color: var(--text-2); }
+.avatar { background: var(--brand-plane); color: var(--brand-mark); font-weight: 600; }
 /* No align-items here: v3.css sets flex-end, and below 1100px stacks the
    header and starts it on the left; repeating flex-end here (later in the
    cascade) pushed a stacked header against the right edge. */
 .page-h { gap: 24px; margin-bottom: 28px; }
 .page-h-copy { flex: 1; min-width: min(100%, 240px); }
-.page-h h1 { max-width: 24ch; font-size: var(--fs-display); font-weight: 600; line-height: var(--lh-display); margin: 0; text-wrap: balance; }
-/* Eyebrow: sentence case, muted, led by a small light-blue swatch. */
+.page-h h1 { max-width: 24ch; font-size: var(--fs-display); font-weight: 600; line-height: var(--lh-display); letter-spacing: var(--ls-display); margin: 0; text-wrap: balance; }
+/* Eyebrow: sentence case, muted, led by a small yellow swatch. */
 .page-h .eyebrow {
   margin-bottom: 12px;
   padding: 0;
@@ -187,24 +195,28 @@
   width: 10px;
   height: 10px;
   flex-shrink: 0;
-  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
-  border-radius: 3px;
+  border: 0;
+  border-radius: 50%;
   background: var(--brand-mark);
 }
 .page-h .eyebrow:has(.dot)::before { display: none; }
 .page-h .sub { text-align: left; max-width: 64ch; margin: 10px 0 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-muted); }
-/* Buttons follow resume.io: the primary action is a flat blue block with
- * 4px corners; the secondary one is white with a hairline; `violet` — the
- * stronger of two adjacent CTAs — is the light-blue highlight. */
+/* Buttons are flat pills. The primary action is the action colour; the
+ * secondary one is a white pill with a hairline; `violet` — the stronger of
+ * two adjacent CTAs — is the sunny yellow highlight with ink on it. */
 .btn {
   min-height: var(--control-md);
-  padding: 8px 18px;
+  padding: 8px 20px;
   justify-content: center;
   border-radius: var(--r-control);
   border: 1px solid var(--rule-strong);
   background: var(--surface);
-  font-weight: 500;
+  font-weight: 600;
   box-shadow: none;
+  transition:
+    background var(--dur-hover) var(--ease-out),
+    border-color var(--dur-hover) var(--ease-out),
+    transform var(--dur-hover) var(--ease-out);
 }
 .btn:hover { background: var(--surface-2); border-color: color-mix(in srgb, var(--text) 24%, transparent); }
 .btn.primary {
@@ -222,7 +234,7 @@
 }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn.ghost:hover { background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); }
-.btn:active { transform: scale(0.98); }
+.btn:active { transform: scale(0.97); }
 .tag { border-radius: var(--r-pill); }
 .workspace-skip {
   position: fixed;
@@ -238,44 +250,48 @@
 .workspace-skip:focus { transform: translateY(0); }
 /* Empty states are invitations: a sticker tile, one line, one action. */
 .workspace-empty { min-height: 260px; }
-.workspace-empty-icon { display: grid; place-items: center; width: 60px; height: 60px; background: var(--tile-mint); color: var(--tile-ink); border-radius: 20px; margin-bottom: 8px; }
-/* Metrics: separate glass cards rather than one divided box. */
-.workspace-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 32px; }
-.workspace-metric { min-width: 0; padding: 18px 20px; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--surface-glass); }
+.workspace-empty-icon { display: grid; place-items: center; width: 60px; height: 60px; background: var(--tile-clay); color: var(--tile-ink); border-radius: 20px; margin-bottom: 8px; }
+/* Metrics: flat white tiles fitted side by side, the figure in the display
+ * face. No border and no icon; the gap is the only divider. */
+.workspace-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 32px; }
+.workspace-metric { min-width: 0; padding: 18px 20px; border: 0; border-radius: var(--r-md); background: var(--surface); }
 .workspace-metric dt { color: var(--text-muted); font-size: var(--fs-meta); }
-.workspace-metric dd { margin: 8px 0 0; font-size: var(--fs-stat); letter-spacing: -0.04em; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.workspace-metric dd { margin: 8px 0 0; font-family: var(--font-display); font-size: var(--fs-stat); letter-spacing: -0.04em; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .workspace-metric p { margin: 6px 0 0; font-size: var(--fs-label); color: var(--text-muted); }
-.stat { border-radius: var(--r-md); background: var(--surface-glass); }
-.stat.hero { box-shadow: 0 16px 40px -18px rgba(17, 18, 18, 0.5); }
+.stat { border-radius: var(--r-md); background: var(--surface); }
+.stat.hero { box-shadow: none; }
 
 /* Applications: recessed stage columns, paper cards that lift. */
 .pipeline-grid { gap: 14px; align-items: start; }
-.pipe-col { background: var(--surface-2); border: 0; border-radius: var(--r-lg); min-height: 300px; padding: 10px; }
+.pipe-col { background: var(--surface-2); border: 0; border-radius: var(--r-lg); min-height: 300px; padding: 8px; }
 html[data-theme='dark'] .pipe-col { background: var(--surface); }
+html[data-theme='dark'] .pipe-col .pipe-card { background: var(--surface-2); }
 .pipe-head { margin: 0 0 10px; padding: 8px 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent); }
 .pipe-head .name { margin: 0; font-size: var(--fs-meta); font-weight: 600; }
 .pipe-head .count { background: var(--surface); border: 1px solid var(--rule); color: var(--text-2); border-radius: var(--r-pill); min-width: 26px; text-align: center; padding: 2px 8px; }
-.pipe-card { padding: 16px; border-radius: var(--r-md); border-color: color-mix(in srgb, var(--text) 8%, transparent); box-shadow: var(--e1); }
+.pipe-card { padding: 16px; border-radius: var(--r-md); border-color: transparent; box-shadow: none; }
 .pipe-card:hover { box-shadow: var(--e2); }
 .pipe-card .co { font-size: var(--fs-meta); font-weight: 600; }
 .pipe-card .role { margin-top: 6px; line-height: 1.5; }
 .pipe-card .when { padding-top: 12px; border-top: 1px solid var(--rule); }
 .pipe-empty { padding: 28px 10px; line-height: 1.6; }
 
-/* Resume library: create cards carry sticker tiles; the recommended path gets
- * the ink border skillry.dev gives its "most popular" plan. The resume paper
- * itself remains document typography. */
+/* Resume library: create cards carry sticker tiles; the recommended path is
+ * the yellow highlight with cobalt ink and a cobalt icon tile. The resume
+ * paper itself remains document typography. */
 .rb-create { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .rb-create-card { flex-direction: column; padding: 24px; min-height: 220px; background: var(--surface); border-radius: var(--r-lg); }
 .rb-create-card:hover { box-shadow: var(--e-float); }
-.rb-create-card.primary { background: var(--surface); border: 2px solid var(--text); box-shadow: none; }
+.rb-create-card.primary { background: var(--brand-mark); border: 0; color: var(--brand-plane); box-shadow: none; }
+.rb-create-card.primary :is(.rb-create-title, .rb-create-desc, .rb-create-arrow) { color: var(--brand-plane); }
+.rb-create-card.primary .rb-create-ic { background: var(--brand-plane); color: var(--brand-mark); }
 .rb-create-card.primary:focus-visible { box-shadow: var(--focus-ring); }
 .rb-create-card.primary::before { display: none; }
 .rb-create-card .rb-create-arrow { position: absolute; right: 22px; top: 24px; }
 .rb-create-ic { width: 46px; height: 46px; border-radius: 15px; }
 .rb-create-ic.ic-pen { background: var(--tile-clay); color: var(--tile-ink); }
 .rb-create-ic.ic-file { background: var(--tile-sky); color: var(--tile-ink); }
-.rb-create-ic.ic-link { background: var(--tile-sage); color: var(--tile-ink); }
+.rb-create-ic.ic-link { background: var(--tile-lilac); color: var(--tile-ink); }
 .rb-create-desc { max-width: 34ch; margin-top: 9px; }
 .rb-section-head { margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--rule); }
 .rb-card { border-radius: var(--r-lg); box-shadow: none; }
@@ -358,7 +374,7 @@ html[data-theme='dark'] .pipe-col { background: var(--surface); }
   .rb-create { grid-template-columns: 1fr; }
   .rb-create-card { min-height: 0; flex-direction: row; gap: 16px; padding: 20px; }
   .rb-create-card .rb-create-arrow { position: static; }
-  .v3-mobile-nav { box-shadow: 0 -8px 24px -16px rgba(18, 19, 19, 0.3); }
+  .v3-mobile-nav { box-shadow: 0 -1px 0 var(--rule); }
   .pipeline-grid { gap: 12px; }
   .btn { min-height: 44px; }
 }

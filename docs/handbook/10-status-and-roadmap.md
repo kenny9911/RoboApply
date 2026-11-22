@@ -1,15 +1,15 @@
 # 10 · Status and roadmap
 
-As of 2026-11-03 (main @ b89d5256); updated 2026-11-21 for PRs #17, #18 and #15 and the open branches (main @ 5a9ee9dd).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-21 for PRs #17, #18 and #15, and 2026-11-22 for Pulse, PRs #21 and #22 and the open branches (main @ 62eb63a1).
 
 Where the project stands, what blocks a full launch, and what to work on next. "Verified" means checked against the code or git on 2026-11-03; "doc only" means taken from a plan or carry-over list and not re-checked; "last known (date)" means from the owner's earlier session notes.
 
 ## 1. Summary
 
-- RoboApply (international, Taiwan included) is live at www.roboapply.io from `main`. `origin/main` is at `368bf7c7` (PR #17, 2026-11-13); Vercel auto-deploys `main`, and the owner's notes say it was deployed 2026-11-13 (not checked against Vercel here).
+- RoboApply (international, Taiwan included) is live at www.roboapply.io from `main`. `origin/main` is at `62eb63a1` (2026-11-22: Pulse, PRs #21 and #22); Vercel auto-deploys `main`. The owner's notes say PR #17 was deployed 2026-11-13; later deploys were not checked against Vercel here.
 - The jobright-style product (feed, job detail, fit scoring, tailoring, Assistant, tracker, practice, billing UI, admin console) is merged and deployed, but several capabilities are **dark in production for lack of configuration, not code**: crons never run (`CRON_SECRET` unset), Stripe cannot charge, web push is off, original resume files are not stored, mail goes out from a `robohire.io` sender, and voice practice depends on a worker with no production host.
 - GoApply (mainland) shares the codebase and has full feature parity but is **closed** in production (`ALLOWED_BRANDS=roboapply`) and has no mainland deployment; its launch waits on legal filings.
-- Three branches are open and unmerged on 2026-11-21: `feat/brand-pulse`, `fix/next-16.4.5-security` and `perf/page-weight-dead-code` (section 3); every other branch is merged into `main` (checked with `git branch -a --no-merged origin/main`).
+- Apart from this handbook's own branch (`docs/handbook`, PR #12), one branch is open and unmerged on 2026-11-22: `perf/page-weight-dead-code` (section 3); every other branch is merged into `main` (checked with `git branch -r --no-merged origin/main`).
 
 ## 2. What is shipped on main
 
@@ -32,6 +32,7 @@ Where the project stands, what blocks a full launch, and what to work on next. "
 | 2026-10-31 | Admin read-only "view as"; add-resume nudge on `/jobs`; `OPENROUTER_BASE_URL`; npm audit fixes (body-parser, multer, zod, undici, fast-uri); Next 16.4.1 security; AI-first resume hub; **Paper design system** (replaces Clarity) | merges `c3f5d2aa`, `8dbb2a24`, `0666dde7`, `e9d5449d`, `ebfc5375`, `2fa9a39b`, `b89d5256` |
 | 2026-11-13 | **PR #17: resume.io clone with the agent-driven redesign** (also carries PRs #13, #14, #16): Desk design system, `/dashboard` home with the agent desk, Ready to apply folded into Applications (Getting ready · Sent), two-screen resume-first onboarding, one-tap Prepare application, Assistant tools that add to the list and prepare, resume editor tabs, Paper job detail and fit-filter follow-ups | merge `368bf7c7` |
 | 2026-11-18 | **PR #18**: opt-in weekly preparation of the list, first-class target companies in the job search, a `/pay` pay check built from what postings state. **PR #15**: a visit record and the `/admin/visitors` report of visitors and sign-ups, privacy-notice updates (its docs say schema SCHEMA-9 was applied to the production database) | merges `7d882cf1`, `5a9ee9dd` |
+| 2026-11-22 | **Pulse**, RoboApply's own design system, replaces Desk (merged directly from `feat/brand-pulse`, no PR). **PR #21**: `next` 16.4.5 for the 2026-11-03 security release (seven moderate advisories). **PR #22**: the LLM gateway, `/admin/llm` (named provider entries and a model per functionality area; see [06](06-ai-and-llm-stack.md)) | merges `f92c735e`, `35e39bb6`, `1780ea4c`, `62eb63a1` |
 
 PR numbers after #5 are not in the commit messages: the branches were merged locally with plain `git merge` and pushed, and GitHub then marked the PRs merged (all on 2026-10-31): #6 prep brief must-haves as a list, #7 `google/gemini-3.8-flash` with the Gemini thinking reserve (opened 2026-10-13), #8 admin view-as, #9 AI-first resume hub, #10 Paper design system, #11 Next 16.4.1 security. Checked with `gh pr list --state all` on 2026-11-03.
 
@@ -41,7 +42,7 @@ PR numbers after #5 are not in the commit messages: the branches were merged loc
 - Job feed from employer boards (Greenhouse, Lever, Ashby, Workable, Recruitee, Personio, SmartRecruiters and others), Taiwan open data and 事求人, metered providers within budgets; hybrid retrieval, scorer v4 fit with a requirement checklist; job detail; natural-language search; saved filters; tracker. **Note:** the feed is stocked by crons, which do not run in production (section 4); what production shows is what earlier writes left and what on-demand paths fetch. Unverified how fresh production's feed is.
 - Assistant (copilot, tool-streaming through OpenRouter), practice interviews in text and voice with planned interviewers, reports and coaching.
 - Billing UI and plans (USD) with refunds and withdrawal flows; payments cannot be taken until Stripe is configured.
-- Admin console: users (with view-as), credits, payments, sources, system health, reports.
+- Admin console: users (with view-as), credits, payments, sources, system health, reports, visitors, the LLM gateway.
 - Browser extension (autofill that stops before Submit; ruling D1). Store listing status unverified.
 
 The product never submits an application for the user (D1); auto-apply was removed in WP-75 (the V1 submitter crons are gone from `server/src/cron/handlers.ts`).
@@ -50,9 +51,7 @@ The product never submits an application for the user (D1); auto-apply was remov
 
 | Item | State |
 |---|---|
-| Next.js security release of 2026-11-03 | Seven moderate advisories. The fix, `next` 16.4.5, is on `fix/next-16.4.5-security` (PR #21, opened 2026-11-20, not merged); `main` still pins 16.4.1. Check the vercel/next.js repository advisory feed, not `npm audit`, which has lagged about a week. |
 | Leftover worktrees | Eight under `.claude/worktrees/`, all clean and merged. Remove only after checking each is clean and its commits are on `main` (an earlier blanket cleanup deleted uncommitted work). |
-| `feat/brand-pulse` (11 commits ahead, 2026-11-20, not merged) | **Pulse**, RoboApply's own brand replacing Desk: blue-black ink, electric blue, a cobalt field and a yellow highlight, flat tiles, Space Grotesk over DM Sans, a three.js scene on the home page. Keeps Desk's layout and token names. When it merges, chapters 01, 03 and 08 and the handbook index must say Pulse instead of Desk. |
 | `perf/page-weight-dead-code` (6 commits ahead, 2026-11-18, not merged) | Page-weight and dead-code clean-up (unused re-exports). |
 | Stale session notes | Notes for the Paper redesign, resume hub and Next 16.4.1 called them unmerged; all three merged on 2026-10-31, and the resume.io clone on 2026-11-13. |
 
@@ -89,7 +88,7 @@ The full lists, numbered: "Owner steps still open" (42 steps) in [`docs/jobright
 | Task | Pointer | Status |
 |---|---|---|
 | Add tests that pin the deploy invariants (`"type": "module"`, `server/**` in `includeFiles`, `'/'` in the proxy matcher, no file logging under `VERCEL`). No test covers them today. | `__tests__/deploy/`, `proxy.ts`, `vercel.json`, `LoggerService.ts` | verified missing |
-| Admin UI (or a reviewed script) for the `llm_stack.production` override: `saveLlmStack` has no caller, so production model changes are raw DB writes. | `server/src/lib/llm/llmStackConfigResolver.ts`, `server/src/roboapply/v2/routes/admin.ts` | verified missing |
+| Admin UI (or a reviewed script) for the per-key fields of the `llm_stack.production` override (`defaultModel`, `fallbackModel`, `purposes.*`): the LLM gateway (PR #22) edits only area assignments and provider entries, so other production model changes are still raw DB writes. Its own open items (per-area fallbacks and budgets, capability checks) are under "Not done" in [`docs/llm-gateway.md`](../llm-gateway.md). | `server/src/lib/llm/llmStackConfigResolver.ts`, `server/src/lib/llm/gatewayAdmin.ts` | partly done (2026-11-22) |
 | Fix stale docs: README (DB "shared with RoboHire", "7 cron jobs", "On the `feat/jobright-clone` branch"), AGENTS.md (`schema.prisma` is now a folder; "work in progress on feat/practice-prep" is merged), `.env.example` DB header, `prisma.config.ts` and `server/src/app.ts` headers, ENGINEERING_PLAN §3/§4/§7, HANDOFF "nothing is on main". | those files | verified stale |
 | Additive schema requests from the market wave: `RAUserUiState.prevFeedVisitAt` ("New" chips stable within a sitting), `RAJob.sourceScope` (Taiwan closure by absence), optional `RAJob.liveCheckedAt`, `RAJob.workShifts`, `RAH1bEmployerStat.asOf`, `RAJob.taxonomySource`. Each needs owner review of the SQL. | `requests/waveM5-carryover.md` "Owner decisions / schema" 18–22 | verified: none of these columns exist |
 | Durable company-style cache for practice prep (today an in-memory TTL cache per instance). | `server/src/interview-engine/prep/companyStyle.ts`, `cache.ts`; `PREP_AGENTS.md` "Open items" | verified per-instance |

@@ -18,10 +18,12 @@ import {
   emptyLlmStackBlob,
   getActiveEnvironment,
   isDbConfigDisabled,
+  LLM_AREAS,
   MODEL_ENV,
   PURPOSE_KEYS,
   parseLlmStackBlob,
   type ConfigEnvironment,
+  type LlmArea,
   type LlmStackBrand,
   type LlmStackConfigBlob,
 } from './llmStackConfigSchema.js';
@@ -116,6 +118,8 @@ export function diffLlmStack(prev: LlmStackConfigBlob | null, next: LlmStackConf
   cmp('defaultModel', before.defaultModel, next.defaultModel);
   cmp('fallbackModel', before.fallbackModel, next.fallbackModel);
   for (const k of PURPOSE_KEYS) cmp(`purposes.${k}`, before.purposes[k], next.purposes[k]);
+  const routeLabel = (r: LlmStackConfigBlob['routes'][LlmArea]) => (r ? `${r.providerId}/${r.model}` : null);
+  for (const area of LLM_AREAS) cmp(`routes.${area}`, routeLabel(before.routes[area]), routeLabel(next.routes[area]));
   for (const k of ['retryAttempts', 'retryBaseMs', 'retryMaxMs', 'timeoutMs'] as const) {
     cmp(`tuning.${k}`, before.tuning[k], next.tuning[k]);
   }

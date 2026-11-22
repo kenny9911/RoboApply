@@ -1,6 +1,6 @@
 # Codebase map
 
-As of 2026-11-03 (main @ b89d5256); updated 2026-11-15 for PR #17 (main @ 368bf7c7).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-15 for PR #17 (main @ 368bf7c7) and 2026-11-22 for Pulse and the LLM gateway (main @ 62eb63a1).
 
 A guided tour of the source tree: what each directory is for, the conventions the code actually follows, and where to look for common tasks. For how the pieces talk to each other at runtime, read [02-architecture.md](02-architecture.md) first; models are in [05-data-model.md](05-data-model.md) and the gates in [08-testing-and-quality-gates.md](08-testing-and-quality-gates.md).
 
@@ -44,7 +44,7 @@ Routing rules that are easy to break:
 | [`components/v3/`](../../components/v3) | The app shell and design primitives. `v3/shell/` holds `HybridShell` (the frame), `Sidebar`, `MobileNav`, `CommandPalette`, and [`destinations.ts`](../../components/v3/shell/destinations.ts), the single per-brand navigation list every nav surface reads. `v3/primitives/` holds `Btn`, `Sheet`, `Modal`, `Tabs`, `FitMeter`, `EmptyState`, ... Other `v3/` folders are earlier screens still in use (resume editor, account, admin). |
 | `components/ui/`, `components/auth/`, `components/landing/`, `components/job-search/`, `AuthGate.tsx` | Older generic pieces, auth screens, landing helpers, the developer API key workspace, and the client-side session gate. |
 
-Design rules (the Desk design system since PR #17, November 2026: resume.io's layout, navy ink, one blue action colour, Inter) are in [docs/design-system.md](../design-system.md) and enforced by `npm run check:design`.
+Design rules (the Pulse design system since 2026-11-22: RoboApply's own brand on Desk's resume.io layout, blue-black ink, electric-blue actions, a cobalt plane, a yellow highlight, Space Grotesk over DM Sans) are in [docs/design-system.md](../design-system.md) and enforced by `npm run check:design`.
 
 ### `hooks/`
 
@@ -193,7 +193,7 @@ Paths starting with `features/`, `platform/`, `services/`, `roboapply/`, `interv
 | Credits and billing | `platform/credits/`, `platform/billing/` (plans, rails, Stripe), `features/credits/`, `features/billing-cn/`, `roboapply/routes/billing.ts`, `roboapply/routes/stripeWebhook.ts`, `roboapply/services/RoboApplyBillingService.ts`; market rules in [docs/jobright-clone/market/](../jobright-clone/market) |
 | Practice interview setup | `interview-engine/prep/` and `skills/`, `interview-engine/routes/externalRoutes.ts` (`/practice`), `sessions/InterviewSessionService.ts`; UI `app/(auth)/practice/`, `components/features/practice/`; [PREP_AGENTS.md](../interview-practice/PREP_AGENTS.md) |
 | Voice interview runtime | `interview-agent/src/`, `interview-engine/providers/`, `interview-engine/livekit/`, `interview-engine/parley/` |
-| LLM model selection | `server/src/lib/llm/llmModels.ts`, `llmStackConfigSchema.ts` (purpose keys, AppConfig keys), `llmStackConfigResolver.ts`, `services/llm/LLMService.ts`, `services/llm/providerPrefixes.ts`, `platform/llm/brandPolicy.ts`; `npm run verify:llm`; costs in `server/src/lib/modelCostTable.ts` and [docs/LLM_COSTS.md](../LLM_COSTS.md) |
+| LLM model selection | `server/src/lib/llm/llmModels.ts`, `llmStackConfigSchema.ts` (purpose keys, AppConfig keys), `llmStackConfigResolver.ts`, `services/llm/LLMService.ts`, `services/llm/providerPrefixes.ts`, `platform/llm/brandPolicy.ts`; the admin LLM gateway in `lib/llm/gatewayProviders.ts`, `gatewayAdmin.ts`, `roboapply/v2/routes/adminLlm.ts` and `components/v3/admin/LlmGatewayConsole.tsx` ([docs/llm-gateway.md](../llm-gateway.md)); `npm run verify:llm`; costs in `server/src/lib/modelCostTable.ts` and [docs/LLM_COSTS.md](../LLM_COSTS.md) |
 | The Assistant (copilot) | `features/copilot/` (`CopilotService.ts`, `tools/`), UI `components/features/copilot/` |
 | Email templates | `platform/email/templates/` (`registry.ts`, `_shell.ts`, per-area folders), strings in `server/src/i18n/email/`, transports in `platform/email/transports/` |
 | Feature flags | `platform/flags.ts` (resolver, `requireFlag`), registry defaults in `platform/brand/registry.ts`, client `lib/flags.ts` |

@@ -1,6 +1,6 @@
 # Feature guide: interviews, billing and the platform around them
 
-As of 2026-11-03 (main @ b89d5256).
+As of 2026-11-03 (main @ b89d5256); the LLM stack settings note updated 2026-11-22 for the LLM gateway (main @ 62eb63a1).
 
 A map for engineers. Each section says what the feature does for the user, how a request flows end to end, where the code is, which tables and providers it touches, and what is easy to break. It points to the deeper specs instead of repeating them. Paths are relative to this file.
 
@@ -258,7 +258,7 @@ Older audit rows written before `RAAdminAuditLog` existed stay in `SeekerActivit
 
 ### LLM stack settings
 
-Effective model settings come from AppConfig `llm_stack.*`, resolved by [`lib/llm/llmStackConfigResolver.ts`](../../server/src/lib/llm/llmStackConfigResolver.ts) (a save writes an `AdminAdjustment` row). Verified: nothing in this repo calls `saveLlmStack`, so there is no admin UI or route that writes `llm_stack` in RoboApply; changes are made in the database or from RoboHire's admin.
+Effective model settings come from AppConfig `llm_stack.*`, resolved by [`lib/llm/llmStackConfigResolver.ts`](../../server/src/lib/llm/llmStackConfigResolver.ts) (a save writes an `AdminAdjustment` row). Since 2026-11-22 the admin **LLM gateway** page (`/admin/llm`; [`components/v3/admin/LlmGatewayConsole.tsx`](../../components/v3/admin/LlmGatewayConsole.tsx), route [`roboapply/v2/routes/adminLlm.ts`](../../server/src/roboapply/v2/routes/adminLlm.ts)) saves named provider entries (`llm_providers.{env}`, keys encrypted) and assigns a provider and model to each functionality area; each save writes an `AdminAdjustment` row. The per-key fields of the blob still have no UI and are edited in the database. Design and rules: [`docs/llm-gateway.md`](../llm-gateway.md).
 
 ---
 

@@ -104,7 +104,7 @@ export function CancelSubscription({ periodEnd, onCancelled }: CancelSubscriptio
             <legend className={styles.legend}>{t('survey.title')}</legend>
             <div className={styles.actions} role="group">
               {SURVEY_REASONS.map((r) => (
-                <Btn key={r} variant={reason === r ? 'violet' : 'default'} aria-pressed={reason === r} onClick={() => setReason(r)}>
+                <Btn key={r} className={reason === r ? styles.reasonOn : undefined} aria-pressed={reason === r} onClick={() => setReason(r)}>
                   {t(`survey.${r}`)}
                 </Btn>
               ))}
@@ -121,7 +121,7 @@ export function CancelSubscription({ periodEnd, onCancelled }: CancelSubscriptio
               onChange={(e) => setNote(e.target.value)}
             />
             <div className={styles.actions}>
-              <Btn disabled={survey.isPending || (!reason && !note.trim())} onClick={() => survey.mutate({ reason: reason ?? undefined, note })}>
+              <Btn variant="primary" disabled={survey.isPending || (!reason && !note.trim())} onClick={() => survey.mutate({ reason: reason ?? undefined, note })}>
                 {t('survey.send')}
               </Btn>
             </div>

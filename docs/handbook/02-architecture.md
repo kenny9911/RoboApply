@@ -1,6 +1,6 @@
 # System architecture
 
-As of 2026-11-03 (main @ b89d5256).
+As of 2026-11-03 (main @ b89d5256); the AppConfig list updated 2026-11-22 for the LLM gateway (main @ 62eb63a1).
 
 This chapter explains how the pieces fit together at runtime: what runs where, how a request travels, how one deployment serves two brands, how sessions work, what runs in the background and how configuration is layered. For the full design record of the dual-brand product see [docs/jobright-clone/ARCHITECTURE.md](../jobright-clone/ARCHITECTURE.md) (about 3,000 lines; this chapter links into it rather than repeating it). Related handbook chapters: [03-codebase-map.md](03-codebase-map.md), [04-local-development.md](04-local-development.md), [05-data-model.md](05-data-model.md), [09-deployment-and-operations.md](09-deployment-and-operations.md).
 
@@ -181,7 +181,7 @@ Three legacy crons (`billing-renewal-reminder`, `account-purge`, `interview-clea
 From most static to most dynamic:
 
 1. **Environment.** Locally `app.ts` loads `.env` first and `.env.local` second, both with `override: false` (only when `VERCEL` is unset). So the shell wins over both, and a variable set in `.env` wins over the same name in `.env.local`: `.env.local` only adds names `.env` does not set. Vercel project env in production. [`.env.example`](../../.env.example) documents every variable and `__tests__/deploy/envExample.test.ts` checks it. GoApply reads through `brandEnv` (section 3).
-2. **AppConfig rows** (`AppConfig { key, value }`, admin-editable; most readers cache for about 30 s). Examples from the code: `llm_stack.{production|development}` and `llm_stack.goapply.{env}` (per-purpose model overrides; `override ?? env`, disabled entirely by `LLM_SETTINGS_DB_DISABLED=true`), `credits.catalog.v1`, `match.calibration.v1`, `jobs.providerQuota.v1`, `jobs.careerSeeds.v1`, `tw.payRule.v1`, `fx.reference`, `cn.jobs.employerBlacklist.v1`. In production the `llm_stack.production` row wins over the Vercel env for model choice, which surprises people debugging "the env says X".
+2. **AppConfig rows** (`AppConfig { key, value }`, admin-editable; most readers cache for about 30 s). Examples from the code: `llm_stack.{production|development}` and `llm_stack.goapply.{env}` (per-purpose model overrides and, since the LLM gateway, per-area assignments; `override ?? env`, disabled entirely by `LLM_SETTINGS_DB_DISABLED=true`), `llm_providers.{env}` (the gateway's provider entries), `credits.catalog.v1`, `match.calibration.v1`, `jobs.providerQuota.v1`, `jobs.careerSeeds.v1`, `tw.payRule.v1`, `fx.reference`, `cn.jobs.employerBlacklist.v1`. In production the `llm_stack.production` row wins over the Vercel env for model choice, which surprises people debugging "the env says X".
 3. **Capability flags** (section 3), including per-user `RAEntitlementOverride` rows set from the admin console.
 
 **Startup assertions** ([`platform/startup.ts`](../../server/src/platform/startup.ts), run once at import of `app.ts`). The API refuses to boot (off Vercel `exit(1)`; on Vercel the throw fails module init, so every request errors) when:

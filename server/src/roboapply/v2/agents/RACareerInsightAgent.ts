@@ -29,6 +29,7 @@
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { logger } from '../../../services/LoggerService.js';
 import { llmService } from '../../../services/llm/LLMService.js';
+import { getInsightsModel } from '../../../lib/llm/llmTaskSettings.js';
 import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
 // ─── Public types (mirror BE1's RA models — shapes only, no Prisma import)
@@ -118,7 +119,9 @@ const ENV_MODEL = 'RA_V2_CAREER_INSIGHT_MODEL';
  * stack rather than a vendor literal.
  */
 export function pickCareerInsightModel(): string {
-  return process.env[ENV_MODEL]?.trim() || llmService.getModel();
+  // The Insights area (LLM gateway), else RA_V2_CAREER_INSIGHT_MODEL (the
+  // `insights` stack key reads that variable), else the default model.
+  return getInsightsModel() || process.env[ENV_MODEL]?.trim() || llmService.getModel();
 }
 
 const VALID_ACTIONS = new Set<RARecommendationAction>([

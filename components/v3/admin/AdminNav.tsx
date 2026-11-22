@@ -36,6 +36,7 @@ export const ADMIN_AREAS: readonly AdminArea[] = [
   { id: 'overview', href: '/admin', owner: 'WP-74' },
   { id: 'visitors', href: '/admin/visitors', owner: 'GROW' },
   { id: 'system', href: '/admin/system', owner: 'WP-74' },
+  { id: 'llm', href: '/admin/llm', owner: 'LLM gateway' },
   { id: 'reports', href: '/admin/reports', owner: 'WP-74' },
   { id: 'inviteRewards', href: '/admin/reports/invites', owner: 'WP-60' },
   { id: 'credits', href: '/admin/credits', owner: 'WP-21b' },

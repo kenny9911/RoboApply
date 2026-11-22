@@ -1,6 +1,6 @@
 # 06 · AI and the LLM stack
 
-As of 2026-11-03 (main @ b89d5256).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-22 for the LLM gateway (PR #22, main @ 62eb63a1).
 
 Every text model call in the API goes through one service, `LLMService`. A call picks its model from a **task key**. The task key resolves through admin DB override → env var, per brand. The selector string decides the provider by its prefix, and a brand policy can refuse the route. Most production incidents in this area came from a model choice that was legal in one of those layers and illegal in another, so read §7 before changing any model.
 
@@ -10,6 +10,7 @@ Every text model call in the API goes through one service, `LLMService`. A call 
 |---|---|
 | The service, providers, retries, fallback | [`server/src/services/llm/`](../../server/src/services/llm/) (`LLMService.ts`, `*Provider.ts`, `fallbackRouting.ts`, `withRetry.ts`, `toolStreaming.ts`, `reasoningEffort.ts`, `providerPrefixes.ts`) |
 | Model settings: task keys, env names, DB blob | [`server/src/lib/llm/`](../../server/src/lib/llm/) (`llmTaskSettings.ts`, `llmModels.ts`, `llmStackConfigSchema.ts`, `llmStackConfigResolver.ts`, `llmSelector.ts`, `systemCredentials.ts`) |
+| The admin LLM gateway (provider entries, area assignments) | `server/src/lib/llm/gatewayProviders.ts`, `gatewayAdmin.ts`; route `server/src/roboapply/v2/routes/adminLlm.ts`; page `/admin/llm` ([`docs/llm-gateway.md`](../llm-gateway.md)) |
 | Brand routing policy, egress, content safety | [`server/src/platform/llm/`](../../server/src/platform/llm/) |
 | Agent base class | [`server/src/agents/BaseAgent.ts`](../../server/src/agents/BaseAgent.ts) |
 | Embeddings | [`server/src/platform/embeddings/`](../../server/src/platform/embeddings/) |
@@ -30,11 +31,12 @@ A **selector** is `<routing-prefix>/<model>`. The first segment is a routing hin
 | `deepseek/deepseek-v4-pro` | DeepSeek direct (mainland host) | `deepseek-v4-pro` |
 | `anthropic/claude-sonnet-4-6` | Anthropic direct | `claude-sonnet-4-6` (Anthropic ids are dashed; OpenRouter slugs are dotted, and `AnthropicProvider` does not translate) |
 | `qwen/…` | DashScope only on GoApply's own (domestic) profile; elsewhere an OpenRouter slug. `dashscope/…` is unambiguous. | |
+| `<type>@<entry>/<model>`, for example `newapi@aigw/gpt-6.1-sol` | A provider entry saved on the LLM gateway page (§3), with the entry's own key and base URL, under every provider mode | `<model>` |
 | `vendor/model` with an unknown prefix, or a bare id | The **provider mode**: `LLM_PROVIDER`, default `openrouter`. Mode `direct` sends `vendor/model` to OpenRouter and a bare id to the default model's provider. | |
 
 The rule lives in `resolveSelectorRoute()`; both `LLMService` and the tooling use it. `parseLlmSelector()` ([`llmSelector.ts`](../../server/src/lib/llm/llmSelector.ts)) is the per-call `llm` override some agents accept.
 
-**API keys** resolve per provider as user BYOK (where the brand allows it) → `SystemLLMKey` DB row (encrypted with `FIELD_ENCRYPTION_KEY`) → env (`OPENROUTER_API_KEY`, `GOOGLE_API_KEY`/`GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …); see [`systemCredentials.ts`](../../server/src/lib/llm/systemCredentials.ts). If a `SystemLLMKey` row exists, rotating the env key changes nothing. A row that cannot be decrypted is logged and falls back to env.
+**API keys** resolve per provider as user BYOK (where the brand allows it) → `SystemLLMKey` DB row (encrypted with `FIELD_ENCRYPTION_KEY`) → env (`OPENROUTER_API_KEY`, `GOOGLE_API_KEY`/`GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …); see [`systemCredentials.ts`](../../server/src/lib/llm/systemCredentials.ts). If a `SystemLLMKey` row exists, rotating the env key changes nothing. A row that cannot be decrypted is logged and falls back to env. A gateway selector (`<type>@<entry>`) takes the entry's key and base URL instead (`resolveProviderCredential`); a user's BYOK key of the same provider type still replaces it.
 
 ## 3. How a call picks its model
 
@@ -53,13 +55,15 @@ The rule lives in `resolveSelectorRoute()`; both `LLMService` and the tooling us
 | `interview` | Blueprint, scoring, coaching, text mock interviewer |
 | `copilot` | The Assistant (streamed, with tool calls) |
 
+Since the LLM gateway (2026-11-22) three call sites read a key of their own first and fall back to the one they used before: file OCR reads `vision`, else `extract`; interview report scoring reads `evaluation`, else `interview`; the career and cross-bank insights read `insights` (env `RA_V2_CAREER_INSIGHT_MODEL`).
+
 A task with no model inherits the default model (`LLM_MODEL`). This happens through `getTaskModelOrDefault`, or when an agent passes `undefined` and `LLMService` falls back to the default. There is no hard-coded model default: if neither the task model nor `LLM_MODEL` is set, the call throws. Only the provider mode has a code default (`openrouter`).
 
 ### Precedence
 
 For RoboApply, each key resolves to the first set value of:
 
-1. the admin override blob, `AppConfig` row `llm_stack.{env}` (`env` is `production` when `NODE_ENV=production`, else `development`);
+1. the admin override blob, `AppConfig` row `llm_stack.{env}` (`env` is `production` when `NODE_ENV=production`, else `development`): first the assignment of the key's functionality area (`routes.<area>`, set on the LLM gateway page), then the key's own per-key value;
 2. the env var (`LLM_*`).
 
 For GoApply, per key: its own blob `llm_stack.goapply.{env}` → `CN_<NAME>` → RoboApply's blob → `<NAME>`. RoboApply never reads a `CN_` value or GoApply's blob. Retry and timeout tuning (`LLM_RETRY_*`, `LLM_TIMEOUT_MS`) is shared and comes from RoboApply's blob or env.
@@ -67,8 +71,17 @@ For GoApply, per key: its own blob `llm_stack.goapply.{env}` → `CN_<NAME>` →
 **The blob cache** ([`llmStackConfigResolver.ts`](../../server/src/lib/llm/llmStackConfigResolver.ts)) holds one snapshot per brand with a 30 s TTL. The hot path reads it synchronously. A cold cache returns an all-null blob, so the call uses the env value, and a background fetch warms it. A DB error keeps the last blob for 10 s. Consequences:
 
 - A fresh serverless instance serves its first calls, and runs its boot checks, on **env values**. Warm instances use the blob. Production config therefore has to be valid in **both** places.
-- `warmupLlmStack()` and `saveLlmStack()` exist but nothing calls them. There is no RoboApply admin UI for the blob; the owner edits the `AppConfig` row directly (which also skips the `AdminAdjustment` audit that `saveLlmStack` writes).
+- The LLM gateway page calls `saveLlmStack()` for the area assignments and writes an `AdminAdjustment` row. The per-key fields (`defaultModel`, `fallbackModel`, `purposes.*`) still have no UI: the owner edits the `AppConfig` row directly, which skips that audit. `warmupLlmStack()` still has no caller.
 - `LLM_SETTINGS_DB_DISABLED=true` ignores the blob entirely.
+
+### The LLM gateway (`/admin/llm`)
+
+Added 2026-11-22 (PR #22); the full design and its rules are in [`docs/llm-gateway.md`](../llm-gateway.md).
+
+- **Provider entries.** An admin saves up to 16 named entries: a type (OpenAI-compatible `newapi`, OpenAI, Anthropic, Google, DeepSeek, Moonshot, MiniMax, OpenRouter, Ollama), an optional API base URL, a key (stored encrypted in `AppConfig` `llm_providers.{env}` and never returned) and a model list fetched with that key.
+- **Functionality areas.** Default, Match resume, Parse resume, Visual, Evaluation, Insights, Writing, Assistant and Job details each own a set of model keys (`AREA_MODEL_KEYS` in `llmStackConfigSchema.ts`) and are assigned one entry and one model, or left to inherit. The live voice interview and the global fallback model are not assignable.
+- **Unassigned means unchanged.** With no assignment every key resolves as before. An entry that is removed, turned off, keyless or undecryptable makes its areas resolve as if unassigned, and an entry cannot be removed while an area of either brand uses it.
+- **Same guards.** The Assistant area refuses an entry type that cannot stream tool calls; brand policy is judged on the entry's host; changes reach new requests within about 30 s.
 
 To see what actually resolves, run `npx tsx scripts/verify-llm-brand.ts` (flags: `--brand`, `--db` to include the blob, `--probe` to send a 1-token call, `--require-priced`). `--db` and `--probe` touch the database and providers. The owner's notes say tsx scripts fail inside the Claude Code Bash sandbox, so run them outside it.
 
@@ -188,7 +201,7 @@ From the owner's notes, October 2026:
 
 ## 11. Changing a model safely
 
-1. **Decide the layer.** In production, change the blob (`AppConfig` `llm_stack.production`, and `llm_stack.goapply.production` if GoApply has its own) **and** the Vercel env var to the same value. Cold instances read env, warm ones read the blob. Record what you changed; a direct row edit leaves no `AdminAdjustment`.
+1. **Decide the layer.** If the key's area is assigned on the LLM gateway page, that assignment wins over the per-key value: change it there. Otherwise, in production, change the blob (`AppConfig` `llm_stack.production`, and `llm_stack.goapply.production` if GoApply has its own) **and** the Vercel env var to the same value. Cold instances read env, warm ones read the blob. Record what you changed; a direct row edit leaves no `AdminAdjustment`.
 2. **Check the selector routes where you think.** Use a `google/` or `openrouter/` prefix explicitly. Run `npx tsx scripts/verify-llm-brand.ts --brand roboapply` (add `--db` for the blob, outside the sandbox).
 3. **Copilot.** If you touch `LLM_MODEL` or `LLM_COPILOT_MODEL`, make sure the copilot route is still a tool-streaming provider allowed for RoboApply. Simulate the boot check with production-like env: a tsx script that sets the env, imports `assertCopilotModelSupportsTools` from `server/src/services/llm/LLMService.ts` and prints `assertCopilotModelSupportsTools({ throwOnError: false })`. Every entry must be `ok: true`.
 4. **Interview.** If the change reaches `LLM_INTERVIEW_MODEL` or `LLM_INTERVIEW_LIVE_MODEL`, the live selector must be in `ALIGNED_INTERVIEW_MODELS`; probe it with `npm run verify:llm` in `interview-agent/`.
@@ -201,5 +214,5 @@ From the owner's notes, October 2026:
 
 - The `raModels.ts` routing trap in older notes and briefs is obsolete; the file was deleted on 2026-08-29.
 - ARCHITECTURE §1.8 says the GoApply blob is looked up under `llm.stack.<brandId>`; the code uses `llm_stack.goapply.{env}`. The same section says `check:llm-costs` must cover every `CN_*` model; the script only checks the doc is in sync.
-- `llmStackConfigResolver.ts` describes "invalidate-on-save so admin edits land within ~1s", and `withRetry.ts` mentions an admin page at `/product/admin/llm-settings`. Nothing in RoboApply calls `saveLlmStack`, and there is no such page here (RoboHire heritage).
+- `llmStackConfigResolver.ts` describes "invalidate-on-save so admin edits land within ~1s", and `withRetry.ts`, `providerTuning.ts` and `ResumeMatchAgent.ts` mention an admin page at `/product/admin/llm-settings` (RoboHire heritage). RoboApply's page is `/admin/llm`, and it edits only provider entries and area assignments.
 - `fallbackRouting.ts` lists `anthropic/claude-sonnet-4-6` as an auto-fallback hop and notes it was unverified (Anthropic key out of credit on 2026-10-09).

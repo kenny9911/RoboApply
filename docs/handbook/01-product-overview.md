@@ -1,6 +1,6 @@
 # 01 · Product overview
 
-As of 2026-11-03 (main @ b89d5256); updated 2026-11-15 for PR #17 (main @ 368bf7c7).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-15 for PR #17 (main @ 368bf7c7) and 2026-11-22 for Pulse (main @ 62eb63a1).
 
 ## What RoboApply is
 
@@ -50,7 +50,7 @@ The July 2026 overhaul rulings ([`../roboapply/OVERHAUL_RULINGS.md`](../roboappl
 - Plain-language corrections: the tracker columns (C1: Saved · Applied · First call · Interviewing · Final round · Offer · Rejected), one fit ladder (C2: Great fit · Good fit · Possible · Unlikely), no numeric threshold control (C3), "fit" not "match" in UI copy (C4), the score is never the headline and always carries "This is not your chance of getting hired." (C5), the published rubric 35/30/15/10/10 (C6), "Not interested" instead of "Pass" (C7).
 - Its colour and type rulings (R3, R4) are superseded by the current design system.
 
-**Design direction.** The current system is **Desk** ([`../design-system.md`](../design-system.md)), adopted November 2026 as a clone of resume.io's web app (teardown and measured tokens in [`../resume-io/TEARDOWN.md`](../resume-io/TEARDOWN.md)): white canvas with cool grey recesses, navy ink, one blue for every action, Inter, and a goal dashboard as the signed-in home. It keeps RoboApply's own name, wording and artwork. Desk replaced "Paper" (skillry.dev, October 2026), which replaced "Clarity" (September 2026); all three share the same token names, so each restyle needed no markup rewrite. GoApply swaps the action to jade and the highlighter to mint (`styles/brands/goapply.css`). Source of truth: `app/globals.css`, `styles/tokens.css`, `styles/workspace.css`. Gate: `npm run check:design`. The `roboapply-design` skill encodes the rules for agents.
+**Design direction.** The current system is **Pulse** ([`../design-system.md`](../design-system.md)), RoboApply's own brand, drawn 2026-11-19 and merged 2026-11-22: blue-black ink on a cool-white ground, an electric-blue action, a cobalt plane, one sunny yellow highlight, flat tiles and pill controls, Space Grotesk headlines over DM Sans, no gradients and no shadows at rest, and a three.js scene on the home page (`components/features/marketing/HeroScene.tsx`). Pulse replaced **Desk**, the November 2026 clone of resume.io's web app (teardown and measured tokens in [`../resume-io/TEARDOWN.md`](../resume-io/TEARDOWN.md)), and keeps Desk's layout, components and the goal dashboard as the signed-in home. Desk replaced "Paper" (skillry.dev, October 2026), which replaced "Clarity" (September 2026); all four share the same token names, so each restyle needed no markup rewrite. GoApply keeps the same ground, type and shapes and swaps the action to deep jade and the highlight to mint on a jade plane (`styles/brands/goapply.css`). Source of truth: `app/globals.css`, `styles/tokens.css`, `styles/workspace.css`. Gate: `npm run check:design`. The `roboapply-design` skill encodes the rules for agents.
 
 Order of precedence when documents disagree: D1–D6, then the parity plan and market strategy, then `docs/jobright-clone/TASK_PLAN.md` §1–2, then [`PRODUCT_PLAN.md`](../jobright-clone/PRODUCT_PLAN.md), then [`ARCHITECTURE.md`](../jobright-clone/ARCHITECTURE.md), then the catalog ([`../jobright-clone/README.md`](../jobright-clone/README.md) "How to read them").
 

@@ -4005,6 +4005,10 @@
           "sub": "Jobquellen, Hintergrundaufgaben, E-Mails, Assistent und Kosten, live gezählt.",
           "title": "System"
         },
+        "llm": {
+          "title": "LLM-Gateway",
+          "sub": "KI-Anbieter, ihre Modelle und welches Modell für welche Aufgabe genutzt wird."
+        },
         "visitors": {
           "title": "Besucher und Registrierungen",
           "sub": "Wer kam, woher, und wie viele ein Konto erstellt haben."
@@ -4517,6 +4521,215 @@
           "off": "Nicht verbunden",
           "rapidapi": "Suchdienst",
           "syndication": "Aus dem Stellen-Feed der Quelle gelesen"
+        }
+      },
+      "llm": {
+        "eyebrow": "Admin",
+        "title": "LLM-Gateway",
+        "sub": "Speichere KI-Anbieter einmal und wähle dann Anbieter und Modell für jede Aufgabe. Eine Änderung gilt nach etwa 30 Sekunden für neue Anfragen.",
+        "loading": "Wird geladen…",
+        "refresh": "Aktualisieren",
+        "refreshing": "Wird aktualisiert…",
+        "cancel": "Abbrechen",
+        "environment": {
+          "production": "Einstellungen für Produktion",
+          "development": "Einstellungen für Entwicklung"
+        },
+        "dbDisabled": "Gespeicherte Einstellungen sind auf diesem Server ausgeschaltet (LLM_SETTINGS_DB_DISABLED). Du kannst sie weiter bearbeiten, aber jede Anfrage nutzt die Umgebungsvariablen, bis das wieder eingeschaltet ist.",
+        "encryptionMissing": "Auf diesem Server fehlt FIELD_ENCRYPTION_KEY, daher kann kein API-Schlüssel gespeichert werden. Setz ihn, bevor du einen Anbieter hinzufügst.",
+        "types": {
+          "newapi": "OpenAI-kompatibel"
+        },
+        "providers": {
+          "title": "Anbieter",
+          "sub": "Jeder Anbieter ist ein Endpunkt mit einem API-Schlüssel. Füg denselben Dienst zweimal hinzu, um zwei Konten oder zwei Gateways zu nutzen.",
+          "add": "Anbieter hinzufügen",
+          "empty": "Noch kein Anbieter. Füg einen hinzu und weise ihn dann unten einem Bereich zu.",
+          "full": "Du hast die Höchstzahl von {max} Anbietern erreicht. Entferne einen, um einen weiteren hinzuzufügen.",
+          "noUrl": "Keine URL",
+          "off": "Aus",
+          "ready": "Bereit",
+          "keyUnreadable": "Schlüssel nicht lesbar",
+          "keyUnreadableHelp": "Der gespeicherte Schlüssel wurde mit einem anderen FIELD_ENCRYPTION_KEY verschlüsselt und kann hier nicht gelesen werden. Bereiche, die diesem Anbieter zugewiesen sind, nutzen ihr geerbtes Modell, bis du den Schlüssel erneut eingibst.",
+          "key": "API-Schlüssel",
+          "noKey": "Keiner",
+          "models": "Modelle",
+          "modelCount": "{count, plural, one {{n} Modell} other {{n} Modelle}}",
+          "modelsNever": "Noch nicht abgerufen",
+          "fetchedAt": "Liste abgerufen",
+          "edit": "Bearbeiten",
+          "fetchModels": "Modelle abrufen",
+          "refreshModels": "Modelle aktualisieren",
+          "fetching": "Wird abgerufen…",
+          "showModels": "Modelle anzeigen",
+          "hideModels": "Modelle ausblenden",
+          "turnOff": "Ausschalten",
+          "turnOn": "Einschalten",
+          "remove": "Entfernen",
+          "removeConfirm": "{name} entfernen"
+        },
+        "form": {
+          "addTitle": "Anbieter hinzufügen",
+          "editTitle": "Anbieter bearbeiten",
+          "name": "Name",
+          "nameHint": "Wird in den Bereichslisten angezeigt, zum Beispiel „OpenRouter (Haupt)“.",
+          "type": "Typ",
+          "typeHint": "Die API, die der Endpunkt spricht. Wähl OpenAI-kompatibel für ein Gateway oder einen Proxy.",
+          "typeHintNoTools": "Dieser Typ kann hier keine Tool-Aufrufe streamen und deshalb den Bereich Assistent nicht bedienen.",
+          "baseUrl": "API-Basis-URL",
+          "baseUrlRequired": "Pflichtfeld. Gib den Versionspfad an, zum Beispiel https://gateway.example.com/v1, aber keinen Endpunkt wie /chat/completions.",
+          "baseUrlOptional": "Leer lassen, um {url} zu verwenden.",
+          "apiKey": "API-Schlüssel",
+          "apiKeyHint": "Wird verschlüsselt gespeichert. Nach dem Speichern wird er nie wieder angezeigt.",
+          "apiKeyKeep": "Leer lassen, um den gespeicherten Schlüssel zu behalten. Bei einer URL auf einem anderen Host brauchst du den Schlüssel erneut.",
+          "notes": "Notizen (optional)",
+          "enabled": "Diesen Anbieter verwenden",
+          "save": "Anbieter speichern",
+          "saving": "Wird gespeichert…",
+          "test": "Ohne Speichern testen",
+          "testing": "Wird getestet…",
+          "saveHint": "Beim Speichern wird mit diesem Schlüssel auch die Modellliste des Anbieters abgerufen."
+        },
+        "modelList": {
+          "ok": "{count, plural, one {Der Anbieter listet {n} Modell.} other {Der Anbieter listet {n} Modelle.}}",
+          "okTruncated": "Der Anbieter listet mehr als {n} Modelle; die ersten {n} werden behalten. Gib jede andere Modell-ID von Hand ein.",
+          "invalid_base_url": "Diese Basis-URL kann nicht verwendet werden. Prüf die Adresse; nur ein selbst gehosteter Typ darf auf einen privaten Host zeigen.",
+          "key_required": "Gib einen API-Schlüssel ein, um die Modelle beim Anbieter abzufragen.",
+          "auth_rejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
+          "not_supported": "Dieser Endpunkt hat keine Modellliste. Prüf die Basis-URL oder gib Modell-IDs von Hand ein.",
+          "rate_limited": "Der Anbieter begrenzt die Anfragen. Versuch es in einer Minute erneut.",
+          "timeout": "Der Anbieter hat nicht innerhalb von 8 Sekunden geantwortet.",
+          "unreachable": "Der Anbieter war nicht erreichbar. Prüf die Basis-URL.",
+          "invalid_response": "Der Anbieter hat geantwortet, aber nicht mit einer Modellliste.",
+          "response_too_large": "Die Modellliste des Anbieters ist zu groß zum Lesen.",
+          "provider_error": "Der Anbieter hat einen Fehler zurückgegeben."
+        },
+        "areas": {
+          "title": "Funktionsbereiche",
+          "sub": "Weise einem Bereich einen Anbieter und ein Modell zu oder lass ihn erben. Ein Bereich, den du nicht anfasst, funktioniert genau wie bisher.",
+          "brand": "Website",
+          "goapplyNote": "{site} nutzt die Zuweisung von {shared} für jeden Bereich, den es nicht selbst zuweist.",
+          "noProviders": "Füg oben einen Anbieter hinzu, um einen Bereich zuzuweisen.",
+          "assigned": "Zugewiesen",
+          "notInEffect": "Nicht wirksam",
+          "inherits": "Erbt",
+          "provider": "Anbieter",
+          "inheritOption": "Nicht zugewiesen (erben)",
+          "providerOff": "{name} (aus)",
+          "model": "Modell",
+          "save": "Speichern",
+          "clear": "Zuweisung löschen",
+          "modelHint": "Wähl ein Modell aus der Liste des Anbieters oder gib eine Modell-ID ein, die er nicht listet.",
+          "noModelList": "Dieser Anbieter hat noch keine Modellliste. Ruf oben seine Modelle ab oder gib eine Modell-ID ein.",
+          "needsTools": "Dieser Bereich ruft Tools auf, daher muss das Modell Tool-Aufrufe unterstützen.",
+          "needsImages": "Dieser Bereich liest Bilder, daher muss das Modell Bildeingaben akzeptieren.",
+          "toolsBlocked": "Dieser Anbietertyp kann hier keine Tool-Aufrufe streamen. Wähl für diesen Bereich einen OpenAI-kompatiblen Anbieter.",
+          "modelNotListed": "Dieses Modell steht nicht in der abgerufenen Liste des Anbieters. Es wird so verwendet, wie du es eingegeben hast.",
+          "now": "Was Anfragen jetzt nutzen",
+          "colSetting": "Verwendet für",
+          "colModel": "Modell",
+          "colSource": "Stammt von"
+        },
+        "routeStatus": {
+          "provider_missing": "Der zugewiesene Anbieter wurde entfernt, daher nutzt dieser Bereich sein geerbtes Modell.",
+          "provider_disabled": "Der zugewiesene Anbieter ist ausgeschaltet, daher nutzt dieser Bereich sein geerbtes Modell.",
+          "provider_key_missing": "Der zugewiesene Anbieter hat keinen API-Schlüssel, daher nutzt dieser Bereich sein geerbtes Modell.",
+          "provider_key_unreadable": "Der Schlüssel des zugewiesenen Anbieters kann auf diesem Server nicht gelesen werden, daher nutzt dieser Bereich sein geerbtes Modell."
+        },
+        "area": {
+          "default": {
+            "title": "Standard",
+            "sub": "Jede Aufgabe, die kein eigenes Modell hat."
+          },
+          "matchResume": {
+            "title": "Lebenslauf abgleichen",
+            "sub": "Bewerten, wie gut ein Lebenslauf zu einem Job passt."
+          },
+          "parseResume": {
+            "title": "Lebenslauf auslesen",
+            "sub": "Den Text eines Lebenslaufs in strukturierte Angaben umwandeln."
+          },
+          "visual": {
+            "title": "Visuell",
+            "sub": "Bilder und gescannte Seiten lesen (OCR)."
+          },
+          "evaluation": {
+            "title": "Auswertung",
+            "sub": "Ein abgeschlossenes Übungsinterview bewerten und den Bericht dazu schreiben."
+          },
+          "insights": {
+            "title": "Einblicke",
+            "sub": "Die wöchentliche Karrierezusammenfassung und Suchzusammenfassungen."
+          },
+          "writing": {
+            "title": "Schreiben",
+            "sub": "Anschreiben, Kontaktnachrichten und Überarbeitungen von Lebensläufen."
+          },
+          "assistant": {
+            "title": "Assistent",
+            "sub": "Der Chat-Assistent, das Onboarding und das Erkennen, was jemand möchte."
+          },
+          "jobs": {
+            "title": "Jobdetails",
+            "sub": "Details und Tags zu Stellenanzeigen ergänzen."
+          }
+        },
+        "setting": {
+          "defaultModel": "Standardmodell",
+          "matching": "Passungswert",
+          "matchResume": "Abgleichbericht",
+          "matchScreen": "Abgleich-Vorauswahl",
+          "prematchFilter": "Vorfilter für den Abgleich",
+          "extract": "Lebenslauftext",
+          "resumeTag": "Lebenslauf-Tags",
+          "vision": "Bilder und Scans",
+          "evaluation": "Interviewbericht",
+          "insights": "Einblicke",
+          "writing": "Längere Texte",
+          "rewrite": "Lebenslauf überarbeiten",
+          "copilot": "Assistent-Chat",
+          "onboarding": "Onboarding",
+          "intentParser": "Suchabsicht",
+          "enrich": "Jobanreicherung",
+          "jobTag": "Job-Tags",
+          "quickJob": "Schnelles Job-Lesen"
+        },
+        "source": {
+          "assigned": "Zuweisung dieses Bereichs",
+          "override": "Eine gespeicherte Überschreibung pro Einstellung",
+          "shared": "Einstellung von {shared}",
+          "env": "Umgebungsvariable {name}",
+          "noneDefault": "Nichts ist konfiguriert",
+          "noDefault": "nichts konfiguriert",
+          "fallback": {
+            "default": "Nichts ist konfiguriert",
+            "matchResume": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "parseResume": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "visual": "Kein eigenes Modell; nutzt das Modell für Lebenslauf auslesen",
+            "evaluation": "Kein eigenes Modell; nutzt das Interviewmodell",
+            "insights": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "writing": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "assistant": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "jobs": "Kein eigenes Modell; nutzt das Standardmodell ({model})"
+          }
+        },
+        "errors": {
+          "generic": "Das hat nicht geklappt. Versuch es erneut.",
+          "invalid_name": "Gib einen Namen mit höchstens 60 Zeichen ein.",
+          "duplicate_name": "Ein anderer Anbieter hat bereits diesen Namen.",
+          "invalid_type": "Wähl einen Anbietertyp.",
+          "invalid_base_url": "Diese Basis-URL kann nicht verwendet werden. Gib die API-Basis-URL ohne Endpunkt wie /chat/completions ein; nur ein selbst gehosteter Typ darf auf einen privaten Host zeigen.",
+          "key_required": "Gib einen API-Schlüssel ein.",
+          "key_required_for_new_url": "Der Endpunkt hat sich geändert. Gib den API-Schlüssel erneut ein, damit der gespeicherte Schlüssel nicht an einen anderen Host gesendet wird.",
+          "too_many_providers": "Die Höchstzahl an Anbietern ist gespeichert. Entferne zuerst einen.",
+          "not_found": "Dieser Anbieter existiert nicht mehr. Lad die Seite neu.",
+          "invalid_notes": "Notizen dürfen höchstens 2.000 Zeichen lang sein.",
+          "encryption_unavailable": "Dieser Server kann keine API-Schlüssel speichern: FIELD_ENCRYPTION_KEY ist nicht gesetzt.",
+          "invalid_area": "Dieser Bereich ist unbekannt. Lad die Seite neu.",
+          "invalid_route": "Wähl einen Anbieter und ein Modell.",
+          "unknown_provider": "Dieser Anbieter existiert nicht mehr. Lad die Seite neu.",
+          "tools_unsupported": "Dieser Anbietertyp kann keine Tool-Aufrufe streamen, die dieser Bereich braucht.",
+          "provider_in_use": "Dieser Anbieter ist noch einem Bereich zugewiesen. Weise den Bereich neu zu oder lösche die Zuweisung zuerst."
         }
       },
       "visitors": {

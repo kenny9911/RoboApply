@@ -33,7 +33,7 @@
 // sender; pay is the posting's own figure or "Pay not listed"; no emoji in
 // subjects; no "you're missing out" wording.
 
-import { button, escapeHtml, heading, paragraph, safeUrl } from '../_shell.js';
+import { BODY_ACCENT, button, escapeHtml, heading, paragraph, safeUrl } from '../_shell.js';
 import { defineEmailTemplate, type EmailTemplate, type TemplateBody, type TemplateContext } from '../registry.js';
 import type { EmailTranslator } from '../../i18n.js';
 
@@ -379,7 +379,7 @@ export const welcomeEmail = defineEmailTemplate<WelcomeParams>({
     const three = steps.slice(0, 3);
     const html = three
       .map(([label, href], i) =>
-        `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">${i + 1}. <a href="${escapeHtml(safeUrl(abs(ctx.origin, href)))}" style="color:#5b5bd6;font-weight:600;">${escapeHtml(label)}</a></p>`,
+        `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">${i + 1}. <a href="${escapeHtml(safeUrl(abs(ctx.origin, href)))}" style="color:${BODY_ACCENT};font-weight:600;">${escapeHtml(label)}</a></p>`,
       )
       .join('');
     const text = three.map(([label, href], i) => `${i + 1}. ${label}: ${abs(ctx.origin, href)}`).join('\n');

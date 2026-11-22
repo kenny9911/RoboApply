@@ -1,5 +1,5 @@
 /* components/features/credits — billing and credits UI (WP-21b).
-   Clarity tokens only; light/dark come from the token block in app/globals.css,
+   Pulse tokens only; light/dark come from the token block in app/globals.css,
    brand identity from styles/brands/<brand>.css. Every control is ≥44 px tall
    on touch screens. */
 
@@ -367,6 +367,13 @@
 .badge:hover {
   border-color: var(--rule-strong);
 }
+/* In the rail the badge is a white tile on the rail's margins. */
+:global(.side) .badge {
+  margin: var(--sp-3) 12px 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
 
 .badge:focus-visible {
   outline: 2px solid var(--action);
@@ -523,4 +530,14 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* A chosen survey reason: the selected-chip look (wash, action edge, heavier
+   label), so the state never rests on colour alone. */
+:global(.btn).reasonOn,
+:global(.btn).reasonOn:hover {
+  background: var(--action-subtle);
+  border-color: var(--action);
+  color: var(--text);
+  font-weight: 600;
 }

@@ -140,7 +140,6 @@
   background: var(--action);
   color: var(--action-ink);
   font-weight: 600;
-  box-shadow: 0 4px 12px -4px rgba(18, 19, 19, 0.4);
 }
 
 /* ── Checkbox rows ────────────────────────────────────────────────────── */
