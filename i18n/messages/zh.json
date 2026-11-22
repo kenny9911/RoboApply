@@ -4697,29 +4697,45 @@
         },
         "areas": {
           "title": "功能区域",
-          "sub": "为区域分配服务商和模型，或留空以继承。你没有改动的区域会照常运行。",
+          "sub": "为区域分配服务商、模型和推理强度，需要时再加上备用模型。未分配的区域使用“默认”区域的分配；“默认”也未分配时，区域保持现在的设置。",
           "brand": "站点",
-          "goapplyNote": "{site} 中没有自行分配的区域，使用 {shared} 的分配。",
+          "goapplyNote": "{site} 先读取自己的区域和自己的“默认”。两者都没有时，使用 {shared} 的。",
           "noProviders": "请先在上方添加服务商，再分配区域。",
           "assigned": "已分配",
           "notInEffect": "未生效",
           "inherits": "继承",
           "provider": "服务商",
-          "inheritOption": "未分配（继承）",
+          "inheritOption": "未分配（使用默认）",
           "providerOff": "{name}（已关闭）",
           "model": "模型",
           "save": "保存",
           "clear": "清除分配",
           "modelHint": "从该服务商的列表中选择模型，或输入列表里没有的模型 ID。",
           "noModelList": "该服务商还没有模型列表。请先在上方获取模型，或输入模型 ID。",
-          "needsTools": "该区域会调用工具，所以模型必须支持工具调用。",
+          "needsTools": "该区域会调用工具，所以它的模型和每个备用模型都必须支持工具调用。",
           "needsImages": "该区域会读取图片，所以模型必须支持图片输入。",
-          "toolsBlocked": "这里该服务商类型无法流式返回工具调用。请为此区域选择 OpenAI 兼容的服务商。",
+          "toolsBlocked": "这里选择的某个服务商类型无法流式返回工具调用。请为此区域的模型和备用模型选择 OpenAI 兼容的服务商。",
           "modelNotListed": "该模型不在已获取的服务商列表中，将按输入的内容使用。",
           "now": "当前请求使用的设置",
           "colSetting": "用于",
           "colModel": "模型",
-          "colSource": "来源"
+          "colSource": "来源",
+          "inheritOptionDefault": "未分配（使用环境变量）",
+          "usesDefault": "使用默认",
+          "chooseProvider": "选择服务商",
+          "effort": "推理强度",
+          "effortHint": "推理强度会随每个发往该模型的请求一起发送，并换算成服务商支持的最接近档位。“服务商默认”不发送任何值，此时使用环境变量中的强度或服务商自己的默认值。",
+          "fallbacks": "备用模型",
+          "fallbacksHint": "上面的模型失败时按顺序尝试：密钥被拒或额度用完、服务中断或触发限流、接口不提供该模型。最多 {max} 个。之后仍会尝试备用模型设置（LLM_FALLBACK_MODEL）。",
+          "fallbackN": "备用 {n}",
+          "addFallback": "添加备用模型",
+          "fallbacksFull": "此区域的备用模型已达上限（{max} 个）。",
+          "moveUp": "上移",
+          "moveDown": "下移",
+          "removeFallback": "移除",
+          "moveUpLabel": "上移备用 {n}",
+          "moveDownLabel": "下移备用 {n}",
+          "removeFallbackLabel": "移除备用 {n}"
         },
         "routeStatus": {
           "provider_missing": "已分配的服务商已被移除，所以该区域使用其继承的模型。",
@@ -4730,7 +4746,7 @@
         "area": {
           "default": {
             "title": "默认",
-            "sub": "所有没有专属模型的工作。"
+            "sub": "所有未分配的区域都使用这个模型、它的备用模型和推理强度。"
           },
           "matchResume": {
             "title": "简历匹配",
@@ -4796,13 +4812,16 @@
             "default": "尚未配置",
             "matchResume": "没有专属模型，使用默认模型（{model}）",
             "parseResume": "没有专属模型，使用默认模型（{model}）",
-            "visual": "没有专属模型，使用简历解析的模型",
-            "evaluation": "没有专属模型，使用面试模型",
+            "visual": "没有专属模型，使用默认模型（{model}）",
+            "evaluation": "没有专属模型，使用默认模型（{model}）",
             "insights": "没有专属模型，使用默认模型（{model}）",
             "writing": "没有专属模型，使用默认模型（{model}）",
             "assistant": "没有专属模型，使用默认模型（{model}）",
             "jobs": "没有专属模型，使用默认模型（{model}）"
-          }
+          },
+          "default": "“默认”区域的分配",
+          "sharedArea": "{shared} 为此区域的分配",
+          "sharedDefault": "{shared} 的“默认”区域"
         },
         "errors": {
           "generic": "操作未成功，请重试。",
@@ -4820,7 +4839,19 @@
           "invalid_route": "请选择服务商和模型。",
           "unknown_provider": "该服务商已不存在。请刷新页面。",
           "tools_unsupported": "该服务商类型无法流式返回工具调用，而此区域需要这一能力。",
-          "provider_in_use": "仍有区域分配给该服务商。请先重新分配或清除该区域。"
+          "provider_in_use": "仍有区域在模型或备用模型中使用该服务商。请先修改或清除该区域。",
+          "invalid_effort": "请选择推理强度。",
+          "invalid_fallback": "请为每个备用模型选择服务商和模型。",
+          "duplicate_fallback": "同一区域中每个模型只能出现一次。",
+          "too_many_fallbacks": "一个区域最多可设置 {max} 个备用模型。"
+        },
+        "effort": {
+          "provider": "服务商默认",
+          "minimal": "最低",
+          "low": "低",
+          "medium": "中",
+          "high": "高",
+          "max": "最高"
         }
       },
       "visitors": {

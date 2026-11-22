@@ -1,8 +1,8 @@
-// The LLM gateway page (/admin/llm): provider entries and the provider and
-// model each functionality area uses. An admin sees every area with what its
-// requests resolve to now and where that comes from, adds a provider (the key
-// is sent once and never shown again), and assigns an area. The API wrapper is
-// mocked; nothing reaches the network.
+// The LLM gateway page (/admin/llm): provider entries and the provider, model,
+// reasoning effort and fallback models each functionality area uses. An admin
+// sees every area with what its requests resolve to now and where that comes
+// from, adds a provider (the key is sent once and never shown again), and
+// assigns an area. The API wrapper is mocked; nothing reaches the network.
 
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,8 +45,9 @@ const SETTINGS: Record<string, string[]> = {
 
 function area(name: (typeof LLM_AREAS)[number], over: Partial<LlmAreaView> = {}): LlmAreaView {
   return {
-    area: name, route: null, routeStatus: null, modelListed: null, needsTools: name === 'assistant', needsImages: name === 'visual',
-    keys: SETTINGS[name].map((key) => ({ key, envName: `LLM_${key.toUpperCase()}`, effective: null, source: 'none' as const, providerId: null, providerType: null, model: null })),
+    area: name, route: null, routeStatus: null, modelListed: null, fallbackStatus: [], fallbackListed: [], inheritsDefault: false,
+    needsTools: name === 'assistant', needsImages: name === 'visual',
+    keys: SETTINGS[name].map((key) => ({ key, envName: `LLM_${key.toUpperCase()}`, effective: null, source: 'none' as const, via: 'none' as const, shared: false, providerId: null, providerType: null, model: null })),
     ...over,
   };
 }
@@ -54,6 +55,7 @@ function area(name: (typeof LLM_AREAS)[number], over: Partial<LlmAreaView> = {})
 function overview(over: Partial<LlmGatewayOverview> = {}): LlmGatewayOverview {
   return {
     environment: 'production', brand: 'roboapply', dbDisabled: false, encryptionReady: true, maxProviders: 16,
+    maxFallbacks: 3, efforts: ['provider', 'minimal', 'low', 'medium', 'high', 'max'], defaultEffort: 'medium',
     providerTypes: [
       { type: 'newapi', baseUrl: 'required', defaultBaseUrl: null, tools: true },
       { type: 'google', baseUrl: 'optional', defaultBaseUrl: 'https://generativelanguage.googleapis.com', tools: false },
@@ -62,11 +64,11 @@ function overview(over: Partial<LlmGatewayOverview> = {}): LlmGatewayOverview {
     providers: [AIGW, GEMINI],
     areas: LLM_AREAS.map((name) =>
       name === 'default'
-        ? area(name, { keys: [{ key: 'defaultModel', envName: 'LLM_MODEL', effective: 'google/gemini-3.8-flash', source: 'env', providerId: null, providerType: 'google', model: 'gemini-3.8-flash' }] })
+        ? area(name, { keys: [{ key: 'defaultModel', envName: 'LLM_MODEL', effective: 'google/gemini-3.8-flash', source: 'env', via: 'env', shared: false, providerId: null, providerType: 'google', model: 'gemini-3.8-flash' }] })
         : name === 'matchResume'
           ? area(name, {
-              route: { providerId: 'aigw', model: 'gpt-6.1-sol' }, routeStatus: 'ok', modelListed: true,
-              keys: SETTINGS.matchResume.map((key) => ({ key, envName: 'LLM_MATCHING_MODEL', effective: 'newapi@aigw/gpt-6.1-sol', source: 'override' as const, providerId: 'aigw', providerType: 'newapi', model: 'gpt-6.1-sol' })),
+              route: { providerId: 'aigw', model: 'gpt-6.1-sol', effort: 'medium', fallbacks: [] }, routeStatus: 'ok', modelListed: true,
+              keys: SETTINGS.matchResume.map((key) => ({ key, envName: 'LLM_MATCHING_MODEL', effective: 'newapi@aigw:matchresume/gpt-6.1-sol', source: 'override' as const, via: 'area' as const, shared: false, providerId: 'aigw', providerType: 'newapi', model: 'gpt-6.1-sol' })),
             })
           : area(name),
     ),
@@ -77,6 +79,8 @@ function overview(over: Partial<LlmGatewayOverview> = {}): LlmGatewayOverview {
 }
 
 const card = (title: string) => screen.getByRole('heading', { level: 3, name: title }).closest('li') as HTMLElement;
+/** A fallback row inside a card ("Fallback 1", …). */
+const row = (scope: HTMLElement, n: number) => within(scope).getByText(`Fallback ${n}`).closest('li') as HTMLElement;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -99,7 +103,9 @@ describe('the LLM gateway page', () => {
     const def = within(card('Default'));
     expect(def.getByText('Inherits')).toBeInTheDocument();
     expect(def.getByText('Environment variable LLM_MODEL')).toBeInTheDocument();
-    expect(within(card('Visual')).getByText('No model of its own; uses the Parse resume model')).toBeInTheDocument();
+    // With nothing set, an area uses the default model, never another area's.
+    expect(within(card('Visual')).getByText('No model of its own; uses the default model (google/gemini-3.8-flash)')).toBeInTheDocument();
+    expect(within(card('Evaluation')).getByText('No model of its own; uses the default model (google/gemini-3.8-flash)')).toBeInTheDocument();
     expect(within(card('Insights')).getByText('No model of its own; uses the default model (google/gemini-3.8-flash)')).toBeInTheDocument();
     // next-intl prints an unknown key as its dotted path: none may show.
     expect(document.body.textContent).not.toMatch(/admin\.console\.llm\./);
@@ -149,18 +155,20 @@ describe('the LLM gateway page', () => {
     expect(await form.findByText('Another provider already has this name.')).toBeInTheDocument();
   });
 
-  it('assigns an area to a provider and one of its models, and clears it again', async () => {
+  it('assigns an area to a provider and one of its models at Medium effort, and clears it again', async () => {
     api.saveRoutes.mockResolvedValue(overview());
     renderWithBrand(<LlmGatewayConsole />);
     const insights = within(await waitFor(() => card('Insights')));
     const save = insights.getByRole('button', { name: 'Save' });
     expect(save).toBeDisabled();
     expect(insights.getByLabelText('Model')).toBeDisabled();
+    expect(insights.queryByText('Fallback models')).not.toBeInTheDocument(); // only for an assignment
     fireEvent.change(insights.getByLabelText('Provider'), { target: { value: 'aigw' } });
     expect(save).toBeDisabled(); // a provider alone is not an assignment
+    expect(insights.getByLabelText('Reasoning effort')).toHaveValue('medium');
     fireEvent.change(insights.getByLabelText('Model'), { target: { value: 'gemini-3.8-flash' } });
     fireEvent.click(save);
-    await waitFor(() => expect(api.saveRoutes).toHaveBeenCalledWith('roboapply', { insights: { providerId: 'aigw', model: 'gemini-3.8-flash' } }));
+    await waitFor(() => expect(api.saveRoutes).toHaveBeenCalledWith('roboapply', { insights: { providerId: 'aigw', model: 'gemini-3.8-flash', effort: 'medium', fallbacks: [] } }));
 
     const match = within(card('Match resume'));
     fireEvent.change(match.getByLabelText('Provider'), { target: { value: '' } });
@@ -168,13 +176,105 @@ describe('the LLM gateway page', () => {
     await waitFor(() => expect(api.saveRoutes).toHaveBeenCalledWith('roboapply', { matchResume: null }));
   });
 
-  it('does not let the Assistant be assigned to a provider type that cannot stream tool calls', async () => {
+  it('sets the reasoning effort, and adds, orders and removes fallback models', async () => {
+    api.saveRoutes.mockResolvedValue(overview());
     renderWithBrand(<LlmGatewayConsole />);
-    const assistant = within(await waitFor(() => card('Assistant')));
+    const matchEl = await waitFor(() => card('Match resume'));
+    const match = within(matchEl);
+    expect(match.getAllByLabelText('Reasoning effort')[0]).toHaveValue('medium');
+    fireEvent.change(match.getAllByLabelText('Reasoning effort')[0], { target: { value: 'high' } });
+
+    fireEvent.click(match.getByRole('button', { name: 'Add fallback model' }));
+    const first = within(row(matchEl, 1));
+    const save = match.getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled(); // a fallback needs a provider and a model
+    fireEvent.change(first.getByLabelText('Provider'), { target: { value: 'gemini' } });
+    fireEvent.change(first.getByLabelText('Model'), { target: { value: 'gemini-3.8-flash' } });
+    fireEvent.change(first.getByLabelText('Reasoning effort'), { target: { value: 'provider' } });
+
+    fireEvent.click(match.getByRole('button', { name: 'Add fallback model' }));
+    const second = within(row(matchEl, 2));
+    fireEvent.change(second.getByLabelText('Provider'), { target: { value: 'aigw' } });
+    fireEvent.change(second.getByLabelText('Model'), { target: { value: 'gemini-3.8-flash' } });
+    // Move the second above the first.
+    fireEvent.click(match.getByRole('button', { name: 'Move fallback 2 up' }));
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await waitFor(() => expect(api.saveRoutes).toHaveBeenCalledWith('roboapply', {
+      matchResume: {
+        providerId: 'aigw', model: 'gpt-6.1-sol', effort: 'high',
+        fallbacks: [
+          { providerId: 'aigw', model: 'gemini-3.8-flash', effort: 'medium' },
+          { providerId: 'gemini', model: 'gemini-3.8-flash', effort: 'provider' },
+        ],
+      },
+    }));
+
+    fireEvent.click(match.getByRole('button', { name: 'Remove fallback 1' }));
+    expect(match.queryByText('Fallback 2')).not.toBeInTheDocument();
+    fireEvent.click(match.getByRole('button', { name: 'Add fallback model' }));
+    fireEvent.click(match.getByRole('button', { name: 'Add fallback model' }));
+    expect(match.getByRole('button', { name: 'Add fallback model' })).toBeDisabled();
+    expect(match.getByText('This area has the most fallback models it can take (3).')).toBeInTheDocument();
+  });
+
+  it('refuses the same model twice in one area', async () => {
+    renderWithBrand(<LlmGatewayConsole />);
+    const matchEl = await waitFor(() => card('Match resume'));
+    fireEvent.click(within(matchEl).getByRole('button', { name: 'Add fallback model' }));
+    const first = within(row(matchEl, 1));
+    fireEvent.change(first.getByLabelText('Provider'), { target: { value: 'aigw' } });
+    fireEvent.change(first.getByLabelText('Model'), { target: { value: 'gpt-6.1-sol' } });
+    expect(within(matchEl).getByText('Each model can be used once in an area.')).toBeInTheDocument();
+    expect(within(matchEl).getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('does not let the Assistant use a provider type that cannot stream tool calls, for its model or a fallback', async () => {
+    renderWithBrand(<LlmGatewayConsole />);
+    const assistantEl = await waitFor(() => card('Assistant'));
+    const assistant = within(assistantEl);
     fireEvent.change(assistant.getByLabelText('Provider'), { target: { value: 'gemini' } });
     fireEvent.change(assistant.getByLabelText('Model'), { target: { value: 'gemini-3.8-flash' } });
-    expect(assistant.getByText(/cannot stream tool calls here/)).toBeInTheDocument();
+    expect(assistant.getByText(/cannot stream tool calls\./)).toBeInTheDocument();
     expect(assistant.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    fireEvent.change(assistant.getAllByLabelText('Provider')[0], { target: { value: 'aigw' } });
+    fireEvent.change(assistant.getAllByLabelText('Model')[0], { target: { value: 'gpt-6.1-sol' } });
+    expect(assistant.getByRole('button', { name: 'Save' })).toBeEnabled();
+    fireEvent.click(assistant.getByRole('button', { name: 'Add fallback model' }));
+    const first = within(row(assistantEl, 1));
+    fireEvent.change(first.getByLabelText('Provider'), { target: { value: 'gemini' } });
+    fireEvent.change(first.getByLabelText('Model'), { target: { value: 'gemini-3.8-flash' } });
+    expect(assistant.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('says when an unassigned area runs on the Default area', async () => {
+    api.overview.mockResolvedValue(overview({
+      areas: overview().areas.map((a) => (a.area === 'writing'
+        ? { ...a, inheritsDefault: true, keys: a.keys.map((k) => ({ ...k, effective: 'newapi@aigw:default/gpt-6.1-sol', source: 'override' as const, via: 'default' as const, providerId: 'aigw', providerType: 'newapi', model: 'gpt-6.1-sol' })) }
+        : a)),
+    }));
+    renderWithBrand(<LlmGatewayConsole />);
+    const writing = within(await waitFor(() => card('Writing')));
+    expect(writing.getByText('Uses Default')).toBeInTheDocument();
+    expect(writing.getAllByText("The Default area's assignment")).toHaveLength(2);
+    expect(writing.getByRole('option', { name: 'Not assigned (use Default)' })).toBeInTheDocument();
+    expect(within(card('Default')).getByRole('option', { name: 'Not assigned (use the environment)' })).toBeInTheDocument();
+  });
+
+  it('shows a saved fallback that cannot be used right now', async () => {
+    api.overview.mockResolvedValue(overview({
+      areas: overview().areas.map((a) => (a.area === 'matchResume'
+        ? { ...a, route: { ...a.route!, fallbacks: [{ providerId: 'gemini', model: 'gemini-3.8-flash', effort: 'low' }] }, fallbackStatus: ['provider_disabled' as const], fallbackListed: [true] }
+        : a)),
+    }));
+    renderWithBrand(<LlmGatewayConsole />);
+    const matchEl = await waitFor(() => card('Match resume'));
+    const first = within(row(matchEl, 1));
+    expect(first.getByLabelText('Provider')).toHaveValue('gemini');
+    expect(first.getByLabelText('Reasoning effort')).toHaveValue('low');
+    expect(first.getByText(en.admin.console.llm.routeStatus.provider_disabled)).toBeInTheDocument();
+    expect(within(matchEl).getByRole('button', { name: 'Save' })).toBeDisabled(); // nothing changed yet
   });
 
   it('says when an assignment is not in effect, and when saved settings are switched off', async () => {
@@ -193,7 +293,7 @@ describe('the LLM gateway page', () => {
     renderWithBrand(<LlmGatewayConsole />);
     fireEvent.change(await screen.findByLabelText('Site'), { target: { value: 'goapply' } });
     await waitFor(() => expect(api.overview).toHaveBeenCalledWith('goapply'));
-    expect(await screen.findByText("GoApply uses RoboApply's assignment for any area it does not assign itself.")).toBeInTheDocument();
+    expect(await screen.findByText("GoApply reads its own areas and its own Default first. Where it has neither, it uses RoboApply's.")).toBeInTheDocument();
   });
 
   it('is for admins only', async () => {

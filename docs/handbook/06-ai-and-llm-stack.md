@@ -1,6 +1,6 @@
 # 06 · AI and the LLM stack
 
-As of 2026-11-03 (main @ b89d5256); updated 2026-11-22 for the LLM gateway (PR #22, main @ 62eb63a1).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-22 for the LLM gateway (PR #22, main @ 62eb63a1) and 2026-11-23 for its per-area fallbacks, reasoning effort and Default inheritance.
 
 Every text model call in the API goes through one service, `LLMService`. A call picks its model from a **task key**. The task key resolves through admin DB override → env var, per brand. The selector string decides the provider by its prefix, and a brand policy can refuse the route. Most production incidents in this area came from a model choice that was legal in one of those layers and illegal in another, so read §7 before changing any model.
 
@@ -31,7 +31,7 @@ A **selector** is `<routing-prefix>/<model>`. The first segment is a routing hin
 | `deepseek/deepseek-v4-pro` | DeepSeek direct (mainland host) | `deepseek-v4-pro` |
 | `anthropic/claude-sonnet-4-6` | Anthropic direct | `claude-sonnet-4-6` (Anthropic ids are dashed; OpenRouter slugs are dotted, and `AnthropicProvider` does not translate) |
 | `qwen/…` | DashScope only on GoApply's own (domestic) profile; elsewhere an OpenRouter slug. `dashscope/…` is unambiguous. | |
-| `<type>@<entry>/<model>`, for example `newapi@aigw/gpt-6.1-sol` | A provider entry saved on the LLM gateway page (§3), with the entry's own key and base URL, under every provider mode | `<model>` |
+| `<type>@<entry>/<model>`, for example `newapi@aigw/gpt-6.1-sol` | A provider entry saved on the LLM gateway page (§3), with the entry's own key and base URL, under every provider mode. An area's assignment adds the area as a route tag, `newapi@aigw:writing/gpt-6.1-sol`, which only tells `LLMService` whose effort and fallbacks apply | `<model>` |
 | `vendor/model` with an unknown prefix, or a bare id | The **provider mode**: `LLM_PROVIDER`, default `openrouter`. Mode `direct` sends `vendor/model` to OpenRouter and a bare id to the default model's provider. | |
 
 The rule lives in `resolveSelectorRoute()`; both `LLMService` and the tooling use it. `parseLlmSelector()` ([`llmSelector.ts`](../../server/src/lib/llm/llmSelector.ts)) is the per-call `llm` override some agents accept.
@@ -55,7 +55,7 @@ The rule lives in `resolveSelectorRoute()`; both `LLMService` and the tooling us
 | `interview` | Blueprint, scoring, coaching, text mock interviewer |
 | `copilot` | The Assistant (streamed, with tool calls) |
 
-Since the LLM gateway (2026-11-22) three call sites read a key of their own first and fall back to the one they used before: file OCR reads `vision`, else `extract`; interview report scoring reads `evaluation`, else `interview`; the career and cross-bank insights read `insights` (env `RA_V2_CAREER_INSIGHT_MODEL`).
+Since the LLM gateway (2026-11-22) three call sites read a key of their own: file OCR reads `vision`, interview report scoring reads `evaluation`, the career and cross-bank insights read `insights` (env `RA_V2_CAREER_INSIGHT_MODEL`). Since 2026-11-23 none of them borrows another task's model when nothing is set (OCR used to take `extract`, scoring `interview`): they end on the default model like every other key.
 
 A task with no model inherits the default model (`LLM_MODEL`). This happens through `getTaskModelOrDefault`, or when an agent passes `undefined` and `LLMService` falls back to the default. There is no hard-coded model default: if neither the task model nor `LLM_MODEL` is set, the call throws. Only the provider mode has a code default (`openrouter`).
 
@@ -63,8 +63,9 @@ A task with no model inherits the default model (`LLM_MODEL`). This happens thro
 
 For RoboApply, each key resolves to the first set value of:
 
-1. the admin override blob, `AppConfig` row `llm_stack.{env}` (`env` is `production` when `NODE_ENV=production`, else `development`): first the assignment of the key's functionality area (`routes.<area>`, set on the LLM gateway page), then the key's own per-key value;
-2. the env var (`LLM_*`).
+1. the admin override blob, `AppConfig` row `llm_stack.{env}` (`env` is `production` when `NODE_ENV=production`, else `development`), the LLM gateway first: the assignment of the key's functionality area (`routes.<area>`, set on the LLM gateway page), else, for an unassigned area, the Default area's assignment (except `copilot` on a Default entry that cannot stream tools), then the key's own per-key value;
+2. the env var (`LLM_*`);
+3. at the call site, the default model.
 
 For GoApply, per key: its own blob `llm_stack.goapply.{env}` → `CN_<NAME>` → RoboApply's blob → `<NAME>`. RoboApply never reads a `CN_` value or GoApply's blob. Retry and timeout tuning (`LLM_RETRY_*`, `LLM_TIMEOUT_MS`) is shared and comes from RoboApply's blob or env.
 
@@ -76,12 +77,13 @@ For GoApply, per key: its own blob `llm_stack.goapply.{env}` → `CN_<NAME>` →
 
 ### The LLM gateway (`/admin/llm`)
 
-Added 2026-11-22 (PR #22); the full design and its rules are in [`docs/llm-gateway.md`](../llm-gateway.md).
+Added 2026-11-22 (PR #22); per-area fallbacks, reasoning effort and Default inheritance added 2026-11-23. The full design and its rules are in [`docs/llm-gateway.md`](../llm-gateway.md).
 
 - **Provider entries.** An admin saves up to 16 named entries: a type (OpenAI-compatible `newapi`, OpenAI, Anthropic, Google, DeepSeek, Moonshot, MiniMax, OpenRouter, Ollama), an optional API base URL, a key (stored encrypted in `AppConfig` `llm_providers.{env}` and never returned) and a model list fetched with that key.
-- **Functionality areas.** Default, Match resume, Parse resume, Visual, Evaluation, Insights, Writing, Assistant and Job details each own a set of model keys (`AREA_MODEL_KEYS` in `llmStackConfigSchema.ts`) and are assigned one entry and one model, or left to inherit. The live voice interview and the global fallback model are not assignable.
-- **Unassigned means unchanged.** With no assignment every key resolves as before. An entry that is removed, turned off, keyless or undecryptable makes its areas resolve as if unassigned, and an entry cannot be removed while an area of either brand uses it.
-- **Same guards.** The Assistant area refuses an entry type that cannot stream tool calls; brand policy is judged on the entry's host; changes reach new requests within about 30 s.
+- **Functionality areas.** Default, Match resume, Parse resume, Visual, Evaluation, Insights, Writing, Assistant and Job details each own a set of model keys (`AREA_MODEL_KEYS` in `llmStackConfigSchema.ts`) and are assigned an entry, a model, a reasoning effort (Medium unless set) and up to three ordered fallback models. The live voice interview and the global fallback model are not assignable.
+- **Unassigned uses Default.** An unassigned area runs on the Default area's model, fallbacks and effort, before any per-key setting or env value. With Default unassigned too, an area keeps the setting it has. An entry that is removed, turned off, keyless or undecryptable makes its areas resolve as if unassigned, and an entry cannot be removed while an area of either brand uses it for its model or a fallback.
+- **Effort.** Sent with every request on the route, mapped to the nearest level the provider takes; "Provider default" sends none of the gateway's own. A model that refuses the field gets the request again without it.
+- **Same guards.** The Assistant area refuses an entry type that cannot stream tool calls, for its model and its fallbacks; brand policy is judged on the entry's host; changes reach new requests within about 30 s.
 
 To see what actually resolves, run `npx tsx scripts/verify-llm-brand.ts` (flags: `--brand`, `--db` to include the blob, `--probe` to send a 1-token call, `--require-priced`). `--db` and `--probe` touch the database and providers. The owner's notes say tsx scripts fail inside the Claude Code Bash sandbox, so run them outside it.
 
@@ -89,14 +91,15 @@ To see what actually resolves, run `npx tsx scripts/verify-llm-brand.ts` (flags:
 
 [`fallbackRouting.ts`](../../server/src/services/llm/fallbackRouting.ts) and `LLMService.buildFallbackCandidates`:
 
-- **Transient errors** (429, 5xx, timeouts, empty output) are retried on the same route by `withLLMRetry`: 3 attempts by default, 800 ms base, 6 s max (`LLM_RETRY_ATTEMPTS`/`_BASE_MS`/`_MAX_MS`). If a fallback model is configured, transient failures also try it.
-- **Credential failures** (401, 402, billing text, non-moderation 403, missing key) are never retried. They open a **10-minute in-process circuit** for that provider and key fingerprint, then try:
-  1. the configured fallback (`fallbackModel` in the blob, else `LLM_FALLBACK_MODEL`);
-  2. unless `LLM_FALLBACK_AUTO=false`, `AUTO_FALLBACK_PREFERENCE`: `google/gemini-3.8-flash` → `anthropic/claude-sonnet-4-6` → `deepseek/deepseek-v4-flash` → `openai/gpt-6-luna`. These are direct providers only, never OpenRouter. A hop is skipped if its provider has no key, has an open circuit, is refused by the brand policy, or (for the Assistant) cannot stream tools.
+- **Transient errors** (429, 5xx, timeouts, empty output) are retried on the same route by `withLLMRetry`: 3 attempts by default, 800 ms base, 6 s max (`LLM_RETRY_ATTEMPTS`/`_BASE_MS`/`_MAX_MS`). If the call's gateway area has fallback models, or a fallback model is configured, transient failures try them instead. An area with fallbacks also moves on when the endpoint does not serve its model (404, "no available channel").
+- **Credential failures** (401, 402, billing text, non-moderation 403, missing key) are never retried. They open a **10-minute in-process circuit** for that provider (a gateway entry counts as one provider for all its areas) and key fingerprint, then try:
+  1. the fallback models of the call's gateway area, in order, each with its own effort;
+  2. the configured fallback (`fallbackModel` in the blob, else `LLM_FALLBACK_MODEL`);
+  3. unless `LLM_FALLBACK_AUTO=false`, `LLM_AUTO_FALLBACK_MODELS` (comma-separated, `CN_` override for GoApply), then the brand's default model. No model is named in code: the hard-coded `AUTO_FALLBACK_PREFERENCE` list was removed on 2026-11-23, so production has no auto route beyond the default model until that variable or area fallbacks are set. A hop is skipped if its provider has no key, has an open circuit, is the one that failed, is refused by the brand policy, or (for the Assistant) cannot stream tools.
 - With no route left the call throws `LLMUnavailableError` (`code: 'llm_unavailable'`, no HTTP status). The interview control plane maps it to 503; elsewhere, check the route's error handler. It deliberately carries no 401, so the browser does not read it as "session expired".
 - Per-request 403s (moderation "flagged", region blocks) don't open the circuit.
 
-Practical effect: a dead OpenRouter key makes one burst of errors, then calls quietly run on Google direct for 10 minutes at a time. The Assistant is the exception: Google cannot serve it, so it fails.
+Practical effect: a dead OpenRouter key makes one burst of errors, then calls quietly run on the next configured route (an area fallback, the fallback model, the auto list or the default model, Google direct in production) for 10 minutes at a time. The Assistant is the exception: Google cannot serve it, so without a tool-capable fallback it fails.
 
 ## 5. Brand policy
 
@@ -215,4 +218,4 @@ From the owner's notes, October 2026:
 - The `raModels.ts` routing trap in older notes and briefs is obsolete; the file was deleted on 2026-08-29.
 - ARCHITECTURE §1.8 says the GoApply blob is looked up under `llm.stack.<brandId>`; the code uses `llm_stack.goapply.{env}`. The same section says `check:llm-costs` must cover every `CN_*` model; the script only checks the doc is in sync.
 - `llmStackConfigResolver.ts` describes "invalidate-on-save so admin edits land within ~1s", and `withRetry.ts`, `providerTuning.ts` and `ResumeMatchAgent.ts` mention an admin page at `/product/admin/llm-settings` (RoboHire heritage). RoboApply's page is `/admin/llm`, and it edits only provider entries and area assignments.
-- `fallbackRouting.ts` lists `anthropic/claude-sonnet-4-6` as an auto-fallback hop and notes it was unverified (Anthropic key out of credit on 2026-10-09).
+- Notes and briefs from before 2026-11-23 describe a hard-coded auto-fallback list in `fallbackRouting.ts` (`google/gemini-3.8-flash` → `anthropic/claude-sonnet-4-6` → …). It was removed; the list is `LLM_AUTO_FALLBACK_MODELS` now (§4).

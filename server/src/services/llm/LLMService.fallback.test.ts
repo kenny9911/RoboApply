@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   calls: [] as Array<{ provider: string; model: string | undefined; maxTokens?: number; responseFormat?: string; temperature?: number }>,
   providerMode: 'openrouter',
+  defaultModel: 'openrouter/openai/default-model',
   fallbackModel: 'openrouter/google/fallback-model' as string,
   /** Platform keys by provider type; a missing entry means "no key". */
   keys: {} as Record<string, string>,
@@ -48,9 +49,14 @@ vi.mock('../../lib/llm/systemCredentials.js', () => ({
 
 vi.mock('../../lib/llm/llmModels.js', () => ({
   // What lib/llm resolves for RoboApply: the configured provider mode and default model.
-  getLlmRoutingDefaults: () => ({ profile: 'global', providerMode: state.providerMode, model: 'openrouter/openai/default-model' }),
+  getLlmRoutingDefaults: () => ({ profile: 'global', providerMode: state.providerMode, model: state.defaultModel }),
   getFallbackModelSetting: () => state.fallbackModel,
+  // No LLM gateway area routes here (gateway.test.ts covers them).
+  gatewayRouteProfile: () => null,
 }));
+
+/** The auto-fallback list these tests configure: the order the code once hard-coded, now read from the env. */
+const AUTO_LIST = 'google/gemini-3.8-flash, anthropic/claude-sonnet-4-6, deepseek/deepseek-v4-flash, openai/gpt-6-luna';
 
 function makeProvider(name: string) {
   return class {
@@ -93,6 +99,7 @@ describe('LLMService fallback routing', () => {
   beforeEach(() => {
     state.calls.length = 0;
     state.providerMode = 'openrouter';
+    state.defaultModel = 'openrouter/openai/default-model';
     state.fallbackModel = 'openrouter/google/fallback-model';
     state.keys = { ...ALL_KEYS };
     state.behavior = { deepseek: err('503 Service unavailable', { status: 503 }) };
@@ -102,12 +109,38 @@ describe('LLMService fallback routing', () => {
     vi.clearAllMocks();
     delete process.env.MOCK_LLM;
     delete process.env.LLM_FALLBACK_AUTO;
+    process.env.LLM_AUTO_FALLBACK_MODELS = AUTO_LIST;
   });
 
   afterEach(() => {
     delete process.env.MOCK_LLM;
     delete process.env.LLM_FALLBACK_AUTO;
+    delete process.env.LLM_AUTO_FALLBACK_MODELS;
     vi.useRealTimers();
+  });
+
+  it('names no model in code: without LLM_AUTO_FALLBACK_MODELS a dead key moves only to the default model', async () => {
+    delete process.env.LLM_AUTO_FALLBACK_MODELS;
+    state.fallbackModel = '';
+    state.defaultModel = 'anthropic/claude-sonnet-4-6';
+    state.behavior = { openrouter: err('401 User not found.', { status: 401 }) };
+
+    const result = await new LLMService().chatWithUsage(msgs, { model: 'openrouter/openai/gpt-6-luna' });
+
+    expect(state.calls.map((c) => `${c.provider}/${c.model}`)).toEqual(['openrouter/openai/gpt-6-luna', 'anthropic/claude-sonnet-4-6']);
+    expect(result.content).toBe('anthropic response');
+  });
+
+  it('without LLM_AUTO_FALLBACK_MODELS and with the default model on the dead provider, nothing else is tried', async () => {
+    delete process.env.LLM_AUTO_FALLBACK_MODELS;
+    state.fallbackModel = '';
+    state.behavior = { openrouter: err('401 User not found.', { status: 401 }) };
+
+    const caught = await new LLMService().chat(msgs, { model: 'openrouter/openai/gpt-6-luna' }).catch((e: unknown) => e);
+
+    expect(routing.isLLMUnavailableError(caught)).toBe(true);
+    expect(state.calls.map((c) => c.provider)).toEqual(['openrouter']);
+    expect((caught as Error).message).toContain('LLM_AUTO_FALLBACK_MODELS');
   });
 
   it('routes an explicit OpenRouter fallback away from a native task provider', async () => {
@@ -203,7 +236,7 @@ describe('LLMService fallback routing', () => {
     expect(loggerMock.warn).toHaveBeenCalledWith('LLM_SERVICE', expect.stringContaining('Auto-selected LLM fallback route'), expect.anything());
   });
 
-  it('skips auto candidates without a key and never auto-selects openrouter', async () => {
+  it('skips auto candidates without a key, and the provider that failed', async () => {
     state.fallbackModel = '';
     state.keys = { openrouter: 'or-key', openai: 'o-key' };
     state.behavior = { openrouter: err('401 User not found.', { status: 401 }) };
@@ -370,8 +403,10 @@ describe('LLMService fallback routing', () => {
       expect((e as unknown as { status?: number }).status).toBeUndefined();
       expect(e.message).toContain('"openrouter" rejected its API key (401 User not found.)');
       expect(e.message).toContain('set LLM_FALLBACK_MODEL');
-      // Only the auto routes this brand may use are suggested (no DeepSeek for RoboApply).
-      expect(e.message).toContain('google, anthropic, openai');
+      expect(e.message).toContain('add fallback models to the area in the LLM gateway');
+      // Only the auto routes this brand may use are suggested (no DeepSeek for
+      // RoboApply), never the provider that just failed.
+      expect(e.message).toContain('google, anthropic, openai)');
     });
 
     it('respects LLM_FALLBACK_AUTO=false', async () => {

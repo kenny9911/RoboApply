@@ -4606,29 +4606,45 @@
         },
         "areas": {
           "title": "기능 영역",
-          "sub": "영역마다 제공업체와 모델을 지정하거나, 지정하지 않고 상속받게 둘 수 있어요. 건드리지 않은 영역은 지금과 똑같이 동작해요.",
+          "sub": "영역마다 제공업체, 모델, 추론 강도를 지정하고, 원하면 대체 모델도 추가하세요. 지정하지 않은 영역은 기본 영역의 지정을 써요. 기본도 지정하지 않았다면 지금 설정을 그대로 유지해요.",
           "brand": "사이트",
-          "goapplyNote": "{site}는 자체 지정이 없는 영역에 {shared}의 지정을 사용해요.",
+          "goapplyNote": "{site}는 먼저 자체 영역과 자체 기본을 읽어요. 둘 다 없으면 {shared}의 것을 사용해요.",
           "noProviders": "영역을 지정하려면 위에서 제공업체를 추가해 주세요.",
           "assigned": "지정됨",
           "notInEffect": "적용 안 됨",
           "inherits": "상속",
           "provider": "제공업체",
-          "inheritOption": "지정 안 함(상속)",
+          "inheritOption": "지정 안 함(기본 사용)",
           "providerOff": "{name}(꺼짐)",
           "model": "모델",
           "save": "저장",
           "clear": "지정 해제",
           "modelHint": "제공업체의 목록에서 모델을 고르거나, 목록에 없는 모델 ID를 직접 입력하세요.",
           "noModelList": "이 제공업체는 아직 모델 목록이 없어요. 위에서 모델을 가져오거나 모델 ID를 입력해 주세요.",
-          "needsTools": "이 영역은 도구를 호출하므로 모델이 도구 호출을 지원해야 해요.",
+          "needsTools": "이 영역은 도구를 호출하므로 모델과 모든 대체 모델이 도구 호출을 지원해야 해요.",
           "needsImages": "이 영역은 이미지를 읽으므로 모델이 이미지 입력을 지원해야 해요.",
-          "toolsBlocked": "이 제공업체 유형은 여기서 도구 호출을 스트리밍할 수 없어요. 이 영역에는 OpenAI 호환 제공업체를 고르세요.",
+          "toolsBlocked": "여기서 고른 제공업체 유형 중에 도구 호출을 스트리밍할 수 없는 것이 있어요. 이 영역의 모델과 대체 모델에는 OpenAI 호환 제공업체를 고르세요.",
           "modelNotListed": "이 모델은 가져온 제공업체 목록에 없어요. 입력한 그대로 사용해요.",
           "now": "지금 요청이 사용하는 것",
           "colSetting": "용도",
           "colModel": "모델",
-          "colSource": "출처"
+          "colSource": "출처",
+          "inheritOptionDefault": "지정 안 함(환경 변수 사용)",
+          "usesDefault": "기본 사용",
+          "chooseProvider": "제공업체 선택",
+          "effort": "추론 강도",
+          "effortHint": "추론 강도는 그 모델로 가는 모든 요청에 함께 보내지고, 제공업체가 받는 가장 가까운 단계로 맞춰져요. ‘제공업체 기본값’은 아무것도 보내지 않으므로 환경 변수 값이나 제공업체 자체 기본값이 적용돼요.",
+          "fallbacks": "대체 모델",
+          "fallbacksHint": "위 모델이 실패하면 순서대로 시도해요. 키가 거부되거나 크레딧이 없을 때, 장애나 사용량 제한이 있을 때, 엔드포인트가 그 모델을 제공하지 않을 때가 해당돼요. 최대 {max}개까지예요. 그다음에도 대체 모델 설정(LLM_FALLBACK_MODEL)은 계속 시도돼요.",
+          "fallbackN": "대체 {n}",
+          "addFallback": "대체 모델 추가",
+          "fallbacksFull": "이 영역의 대체 모델이 최대 개수({max}개)에 도달했어요.",
+          "moveUp": "위로",
+          "moveDown": "아래로",
+          "removeFallback": "삭제",
+          "moveUpLabel": "대체 {n}을 위로 이동",
+          "moveDownLabel": "대체 {n}을 아래로 이동",
+          "removeFallbackLabel": "대체 {n} 삭제"
         },
         "routeStatus": {
           "provider_missing": "지정된 제공업체가 삭제돼서 이 영역은 상속받은 모델을 사용해요.",
@@ -4639,7 +4655,7 @@
         "area": {
           "default": {
             "title": "기본",
-            "sub": "자체 모델이 없는 모든 작업이에요."
+            "sub": "지정하지 않은 모든 영역이 이 모델과 대체 모델, 추론 강도를 써요."
           },
           "matchResume": {
             "title": "이력서 매칭",
@@ -4705,13 +4721,16 @@
             "default": "설정된 것이 없어요",
             "matchResume": "자체 모델이 없어서 기본 모델({model})을 써요",
             "parseResume": "자체 모델이 없어서 기본 모델({model})을 써요",
-            "visual": "자체 모델이 없어서 이력서 파싱 모델을 써요",
-            "evaluation": "자체 모델이 없어서 면접 모델을 써요",
+            "visual": "자체 모델이 없어서 기본 모델({model})을 써요",
+            "evaluation": "자체 모델이 없어서 기본 모델({model})을 써요",
             "insights": "자체 모델이 없어서 기본 모델({model})을 써요",
             "writing": "자체 모델이 없어서 기본 모델({model})을 써요",
             "assistant": "자체 모델이 없어서 기본 모델({model})을 써요",
             "jobs": "자체 모델이 없어서 기본 모델({model})을 써요"
-          }
+          },
+          "default": "기본 영역에 지정된 값",
+          "sharedArea": "{shared}가 이 영역에 지정한 값",
+          "sharedDefault": "{shared}의 기본 영역"
         },
         "errors": {
           "generic": "처리하지 못했어요. 다시 시도해 주세요.",
@@ -4729,7 +4748,19 @@
           "invalid_route": "제공업체와 모델을 골라 주세요.",
           "unknown_provider": "이 제공업체는 더 이상 없어요. 페이지를 새로고침해 주세요.",
           "tools_unsupported": "이 제공업체 유형은 이 영역에 필요한 도구 호출 스트리밍을 지원하지 않아요.",
-          "provider_in_use": "아직 이 제공업체에 지정된 영역이 있어요. 먼저 그 영역을 다시 지정하거나 해제해 주세요."
+          "provider_in_use": "아직 이 제공업체를 모델이나 대체 모델로 쓰는 영역이 있어요. 먼저 그 영역을 바꾸거나 해제해 주세요.",
+          "invalid_effort": "추론 강도를 골라 주세요.",
+          "invalid_fallback": "대체 모델마다 제공업체와 모델을 골라 주세요.",
+          "duplicate_fallback": "한 영역에서 같은 모델은 한 번만 쓸 수 있어요.",
+          "too_many_fallbacks": "한 영역에는 대체 모델을 최대 {max}개까지 둘 수 있어요."
+        },
+        "effort": {
+          "provider": "제공업체 기본값",
+          "minimal": "최소",
+          "low": "낮음",
+          "medium": "보통",
+          "high": "높음",
+          "max": "최대"
         }
       },
       "visitors": {

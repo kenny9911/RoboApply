@@ -44,19 +44,47 @@ export interface LlmProviderEntry {
   updatedAt: string;
 }
 
-export interface LlmAreaRoute {
+/**
+ * Reasoning effort of one model of an assignment. `provider` sends none of the
+ * gateway's own (the call keeps its env effort, else the provider's default);
+ * the others are mapped to the nearest level the provider takes.
+ */
+export const LLM_EFFORTS = ['provider', 'minimal', 'low', 'medium', 'high', 'max'] as const;
+export type LlmEffort = (typeof LLM_EFFORTS)[number];
+
+/** One model on a provider entry, with the effort sent to it. */
+export interface LlmRouteTarget {
   providerId: string;
   model: string;
+  effort: LlmEffort;
+}
+
+/** An area's assignment: its model, then up to `maxFallbacks` ordered fallback models. */
+export interface LlmAreaRoute extends LlmRouteTarget {
+  fallbacks: LlmRouteTarget[];
+}
+
+/** What a save sends for one area (a missing effort is the overview's `defaultEffort`). */
+export interface LlmAreaRouteInput {
+  providerId: string;
+  model: string;
+  effort?: LlmEffort;
+  fallbacks?: { providerId: string; model: string; effort?: LlmEffort }[];
 }
 
 export type LlmAreaRouteStatus = 'ok' | 'provider_missing' | 'provider_disabled' | 'provider_key_missing' | 'provider_key_unreadable';
 export type LlmSettingSource = 'override' | 'env' | 'shared' | 'none';
+/** Where a key's value comes from: its area, the Default area, a per-key setting, the env, RoboApply's settings, nothing. */
+export type LlmKeyVia = 'area' | 'default' | 'override' | 'env' | 'shared' | 'none';
 
 export interface LlmKeyResolution {
   key: string;
   envName: string;
   effective: string | null;
   source: LlmSettingSource;
+  via: LlmKeyVia;
+  /** An assignment of RoboApply's, read by GoApply. */
+  shared: boolean;
   providerId: string | null;
   providerType: string | null;
   model: string | null;
@@ -67,8 +95,12 @@ export interface LlmAreaView {
   route: LlmAreaRoute | null;
   routeStatus: LlmAreaRouteStatus | null;
   modelListed: boolean | null;
+  fallbackStatus: LlmAreaRouteStatus[];
+  fallbackListed: (boolean | null)[];
   needsTools: boolean;
   needsImages: boolean;
+  /** Unassigned, and its calls run on the Default area's assignment. */
+  inheritsDefault: boolean;
   keys: LlmKeyResolution[];
 }
 
@@ -78,6 +110,9 @@ export interface LlmGatewayOverview {
   dbDisabled: boolean;
   encryptionReady: boolean;
   maxProviders: number;
+  maxFallbacks: number;
+  efforts: LlmEffort[];
+  defaultEffort: LlmEffort;
   providerTypes: LlmProviderTypeInfo[];
   providers: LlmProviderEntry[];
   areas: LlmAreaView[];
@@ -124,7 +159,7 @@ const entry = (id: string) => `${BASE}/providers/${encodeURIComponent(id)}`;
 export const adminLlmApi = {
   overview: (brand: LlmGatewayBrand) => roboApi.get<LlmGatewayOverview>(`${BASE}${brandQuery(brand)}`),
 
-  saveRoutes: (brand: LlmGatewayBrand, routes: Partial<Record<LlmArea, LlmAreaRoute | null>>) =>
+  saveRoutes: (brand: LlmGatewayBrand, routes: Partial<Record<LlmArea, LlmAreaRouteInput | null>>) =>
     roboApi.put<LlmGatewayOverview>(`${BASE}/routes${brandQuery(brand)}`, { routes }),
 
   createProvider: (brand: LlmGatewayBrand, input: LlmProviderInput) =>

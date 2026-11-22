@@ -18,10 +18,12 @@
  *   GoApply     llm_stack.goapply.{env} blob  ??  CN_<NAME>
  *               ??  llm_stack.{env} blob (RoboApply's)  ??  <NAME>
  *
- * "The blob" is, for a key, the assignment of the functionality area that owns
- * it (the LLM gateway: a provider entry and a model, see `areaRouteSelector`),
- * else the key's own override. An area assignment is therefore an admin
- * override like any other, in the same place in the order above.
+ * "The blob" is, for a key, the LLM gateway first: the assignment of the
+ * functionality area that owns it (a provider entry and a model, see
+ * `areaRouteSelector`), else, for an unassigned area, the Default area's
+ * assignment (`inheritedDefaultSelector`). Only then the key's own saved
+ * override. The env comes after the blob, and a key with no value anywhere
+ * uses the default model at the call site. No model is chosen in code.
  *
  * So a China-specific model is an optional override: with no `CN_LLM_*` and
  * no GoApply blob, every model key and the provider mode resolve to the same
@@ -53,7 +55,11 @@ import {
   DEFAULT_PROVIDER_MODE,
   normalizeProviderType,
   pinDomesticSelector,
+  providerBaseType,
+  providerEntryId,
   providerEntrySelector,
+  providerRouteTag,
+  providerStreamsTools,
   qualifySelector,
   resolveSelectorRoute,
 } from '../../services/llm/providerPrefixes.js';
@@ -61,10 +67,15 @@ import { contextlessLlmBrand, effectiveLlmProfile } from './llmBrand.js';
 import { getGatewayProviderSync } from './gatewayProviders.js';
 import { getLlmStackSync } from './llmStackConfigResolver.js';
 import {
+  DEFAULT_GATEWAY_EFFORT,
   MODEL_ENV,
+  MODEL_KEYS_NEEDING_TOOLS,
   PURPOSE_KEYS,
   areaOfModelKey,
+  areaOfRouteTag,
+  areaRouteTag,
   isDbConfigDisabled,
+  type GatewayEffort,
   type LlmArea,
   type LlmStackConfigBlob,
   type ModelKey,
@@ -106,20 +117,40 @@ type BlobPick = (blob: LlmStackConfigBlob) => string | null | undefined;
 const PICK_PROVIDER: BlobPick = (blob) => blob.provider;
 
 /**
- * The selector an area assignment stands for: `<type>@<entry>/<model>`, which
- * pins the provider entry (providerPrefixes.ts). Undefined when the area is
- * not assigned, or its entry cannot be used right now (removed, disabled, no
- * readable key, or the provider cache is still cold): the key then resolves as
- * if the area did not exist, so a broken entry never blacks out an area.
+ * The selector an area assignment stands for: `<type>@<entry>:<area>/<model>`,
+ * which pins the provider entry and names the area whose effort and fallbacks
+ * apply (providerPrefixes.ts). Undefined when the area is not assigned, or its
+ * entry cannot be used right now (removed, disabled, no readable key, or the
+ * provider cache is still cold): the key then resolves as if the area did not
+ * exist, so a broken entry never blacks out an area.
  */
 export function areaRouteSelector(blob: LlmStackConfigBlob, area: LlmArea | null): string | undefined {
   const route = area ? blob.routes?.[area] : null;
-  if (!route) return undefined;
+  if (!route || !area) return undefined;
   const entry = getGatewayProviderSync(route.providerId);
-  return entry ? providerEntrySelector(entry.type, entry.id, route.model) : undefined;
+  return entry ? providerEntrySelector(entry.type, entry.id, route.model, areaRouteTag(area)) : undefined;
 }
 
-/** A model key's admin value in one blob: its area's assignment, else its own override. */
+/**
+ * The Default area's selector, for a key of an UNASSIGNED area (an unassigned
+ * area uses the Default model, its fallbacks and its effort). Not for the
+ * Default key itself, a key outside every area (the voice interview model, the
+ * fallback model), or a key that streams tool calls when the Default entry's
+ * type cannot.
+ */
+function inheritedDefaultSelector(blob: LlmStackConfigBlob, key: ModelKey): string | undefined {
+  const area = areaOfModelKey(key);
+  if (!area || area === 'default') return undefined;
+  const selector = areaRouteSelector(blob, 'default');
+  if (!selector) return undefined;
+  if (MODEL_KEYS_NEEDING_TOOLS.includes(key)) {
+    const entry = getGatewayProviderSync(blob.routes.default?.providerId ?? '');
+    if (!entry || !providerStreamsTools(entry.type)) return undefined;
+  }
+  return selector;
+}
+
+/** A model key's admin value in one blob: its area's assignment, else the Default area's, else its own override. */
 function pickModel(key: ModelKey): BlobPick {
   const area = areaOfModelKey(key);
   const own: BlobPick =
@@ -128,7 +159,90 @@ function pickModel(key: ModelKey): BlobPick {
       : key === 'fallbackModel'
         ? (blob) => blob.fallbackModel
         : (blob) => blob.purposes[key as PurposeKey];
-  return (blob) => areaRouteSelector(blob, area) ?? own(blob);
+  return (blob) => areaRouteSelector(blob, area) ?? inheritedDefaultSelector(blob, key) ?? own(blob);
+}
+
+/**
+ * A model key's value in one blob, in the resolver's order (its area, the
+ * Default area, its own override). For readers that hold a blob of their own,
+ * such as the disclosures' snapshot, so they never re-implement the order.
+ */
+export function blobModelSelector(blob: LlmStackConfigBlob, key: ModelKey): string | undefined {
+  return clean(pickModel(key)(blob));
+}
+
+/**
+ * The fallback selectors of the area assignment a selector stands for, in one
+ * blob (`newapi@aigw:writing/…` → the Writing area's fallbacks, as
+ * `<type>@<entry>/<model>`). Empty for any other selector, and for a fallback
+ * whose entry cannot be used.
+ */
+export function blobAreaFallbackSelectors(blob: LlmStackConfigBlob, selector: string): string[] {
+  const slash = selector.indexOf('/');
+  const head = slash > 0 ? selector.slice(0, slash) : '';
+  const area = areaOfRouteTag(providerRouteTag(head));
+  const route = area ? blob.routes?.[area] : null;
+  if (!route || route.providerId !== providerEntryId(head) || route.model !== selector.slice(slash + 1)) return [];
+  return (route.fallbacks ?? []).flatMap((f) => {
+    const entry = getGatewayProviderSync(f.providerId);
+    return entry ? [providerEntrySelector(entry.type, entry.id, f.model)] : [];
+  });
+}
+
+/* ── What a gateway route carries besides its model (LLMService reads it) ───── */
+
+/** One model of a route's chain, on a provider entry. */
+export interface GatewayRouteHop {
+  /** `<type>@<entry>`: the entry the hop is sent to. */
+  providerType: string;
+  model: string;
+  /** The selector, for logs. */
+  selector: string;
+  effort: GatewayEffort;
+}
+
+export interface GatewayRouteProfile {
+  area: LlmArea;
+  /** The brand whose settings hold the assignment (GoApply may run on RoboApply's). */
+  brand: BrandId;
+  /** The effort sent with the route's own model. */
+  effort: GatewayEffort;
+  /** The fallbacks still usable, in order (one on a removed, disabled or keyless entry is skipped). */
+  fallbacks: GatewayRouteHop[];
+}
+
+/**
+ * The area assignment a route stands for, found from the route LLMService
+ * resolved (`<type>@<entry>:<area>` and the model id): its effort and its
+ * fallbacks. The brand's own settings are read first, then the shared stack's
+ * (the assignment a GoApply call may have inherited). Null for any other route,
+ * for a stale one (the assignment changed since the selector was read), and when
+ * saved settings are ignored (LLM_SETTINGS_DB_DISABLED).
+ */
+export function gatewayRouteProfile(providerType: string, model: string, brand?: LlmBrandArg): GatewayRouteProfile | null {
+  if (isDbConfigDisabled()) return null;
+  const area = areaOfRouteTag(providerRouteTag(providerType));
+  const entryId = providerEntryId(providerType);
+  if (!area || !entryId) return null;
+  const b = llmBrand(brand);
+  const brands: BrandId[] = b.id === SHARED_STACK_BRAND ? [b.id] : [b.id, SHARED_STACK_BRAND];
+  for (const id of brands) {
+    const route = getLlmStackSync(id).routes?.[area];
+    if (!route || route.providerId !== entryId || route.model !== model) continue;
+    const fallbacks: GatewayRouteHop[] = [];
+    for (const target of route.fallbacks ?? []) {
+      const entry = getGatewayProviderSync(target.providerId);
+      if (!entry) continue;
+      fallbacks.push({
+        providerType: `${providerBaseType(entry.type)}@${entry.id}`,
+        model: target.model,
+        selector: providerEntrySelector(entry.type, entry.id, target.model),
+        effort: target.effort ?? DEFAULT_GATEWAY_EFFORT,
+      });
+    }
+    return { area, brand: id, effort: route.effort ?? DEFAULT_GATEWAY_EFFORT, fallbacks };
+  }
+  return null;
 }
 
 function blobValue(brandId: BrandId, pick: BlobPick | null): string | undefined {

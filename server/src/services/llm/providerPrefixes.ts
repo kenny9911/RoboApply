@@ -63,12 +63,12 @@ export type LlmSelectorProfile = 'global' | 'domestic_cn';
 export function resolveProviderPrefix(prefix: string, profile: LlmSelectorProfile = 'global'): string | null {
   const lower = (prefix || '').trim().toLowerCase();
   if (!lower) return null;
-  // `<type>@<entry>`: a named provider entry of the LLM gateway (see below).
+  // `<type>@<entry>[:<route>]`: a named provider entry of the LLM gateway (see below).
   const at = lower.indexOf('@');
   if (at >= 0) {
     const base = at > 0 ? resolveProviderPrefix(lower.slice(0, at), profile) : null;
-    const entry = lower.slice(at + 1);
-    return base && !base.includes('@') && PROVIDER_ENTRY_ID_RE.test(entry) ? `${base}@${entry}` : null;
+    const ref = splitEntryRef(lower.slice(at + 1));
+    return base && !base.includes('@') && ref ? `${base}@${lower.slice(at + 1)}` : null;
   }
   if (DOMESTIC_ONLY_PREFIXES.has(lower) && profile !== 'domestic_cn') return null;
   const providerType = PROVIDER_PREFIX_ALIASES[lower] ?? lower;
@@ -85,12 +85,31 @@ export function resolveProviderPrefix(prefix: string, profile: LlmSelectorProfil
 //   newapi@aigw/gpt-6.1-sol             the "aigw" entry, an OpenAI-compatible gateway
 //   openrouter@backup/google/gemini-3   a second OpenRouter account
 //
+// A functionality area's assignment adds the area as a route tag after a colon,
+// `newapi@aigw:visual/gpt-6.1-sol`, so a call made with it can find that area's
+// reasoning effort and fallback models (lib/llm/llmModels.ts
+// gatewayRouteProfile). The tag changes nothing about where the call goes: the
+// entry, its key and its policy are the same with and without it.
+//
 // Code that needs the client, the policy or the capability of a route asks for
 // its base type (`providerBaseType`); the credential resolver is the one place
 // that reads the entry (lib/llm/systemCredentials.ts).
 
 /** An entry id: a lowercase slug, at most 40 characters. */
 export const PROVIDER_ENTRY_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/** A route tag: lowercase letters and digits (an area name, lowercased). */
+export const PROVIDER_ROUTE_TAG_RE = /^[a-z][a-z0-9]{0,31}$/;
+
+/** `aigw` or `aigw:visual` → its parts; null when either part is malformed. */
+function splitEntryRef(ref: string): { entry: string; tag: string | null } | null {
+  const colon = ref.indexOf(':');
+  const entry = colon >= 0 ? ref.slice(0, colon) : ref;
+  const tag = colon >= 0 ? ref.slice(colon + 1) : null;
+  if (!PROVIDER_ENTRY_ID_RE.test(entry)) return null;
+  if (tag !== null && !PROVIDER_ROUTE_TAG_RE.test(tag)) return null;
+  return { entry, tag };
+}
 
 /** `newapi@aigw` → `newapi`; a plain provider type is returned lowercased. */
 export function providerBaseType(providerType: string): string {
@@ -99,18 +118,58 @@ export function providerBaseType(providerType: string): string {
   return at >= 0 ? lower.slice(0, at) : lower;
 }
 
-/** `newapi@aigw` → `aigw`; null for a plain provider type. */
+/** `newapi@aigw` and `newapi@aigw:visual` → `aigw`; null for a plain provider type. */
 export function providerEntryId(providerType: string): string | null {
   const lower = (providerType || '').trim().toLowerCase();
   const at = lower.indexOf('@');
   if (at < 0) return null;
-  const entry = lower.slice(at + 1);
-  return PROVIDER_ENTRY_ID_RE.test(entry) ? entry : null;
+  return splitEntryRef(lower.slice(at + 1))?.entry ?? null;
 }
 
-/** The selector that sends `model` to a provider entry. */
-export function providerEntrySelector(type: string, entryId: string, model: string): string {
-  return `${providerBaseType(type)}@${entryId}/${model}`;
+/** `newapi@aigw:visual` → `visual`; null without a route tag. */
+export function providerRouteTag(providerType: string): string | null {
+  const lower = (providerType || '').trim().toLowerCase();
+  const at = lower.indexOf('@');
+  if (at < 0) return null;
+  return splitEntryRef(lower.slice(at + 1))?.tag ?? null;
+}
+
+/**
+ * The provider a route is sent to, without its route tag: `newapi@aigw:visual`
+ * → `newapi@aigw`, `OpenRouter` → `openrouter`. Circuit breakers and "same
+ * provider" checks use it, so every area on one entry shares that entry's state.
+ */
+export function providerEntryRef(providerType: string): string {
+  const lower = (providerType || '').trim().toLowerCase();
+  const entry = providerEntryId(lower);
+  return entry ? `${providerBaseType(lower)}@${entry}` : lower;
+}
+
+/** The selector that sends `model` to a provider entry, tagged with a route when given. */
+export function providerEntrySelector(type: string, entryId: string, model: string, routeTag?: string | null): string {
+  return `${providerBaseType(type)}@${entryId}${routeTag ? `:${routeTag}` : ''}/${model}`;
+}
+
+/* ── Tool streaming capability (a leaf here so the model seam can use it) ──── */
+
+/** Provider types whose tool calls stream over the OpenAI protocol (toolStreaming.ts). */
+export const TOOL_STREAMING_PROVIDER_TYPES: ReadonlySet<string> = new Set([
+  'openrouter',
+  'openai',
+  'deepseek',
+  'kimi',
+  'moonshot',
+  'minimax',
+  'ollama',
+  'newapi',
+  'qwen',
+  'glm',
+  'doubao',
+]);
+
+/** A provider entry (`newapi@aigw`) streams tools when its type does. */
+export function providerStreamsTools(providerType: string): boolean {
+  return TOOL_STREAMING_PROVIDER_TYPES.has(providerBaseType(providerType || ''));
 }
 
 /** Normalize a configured provider name (`LLM_PROVIDER`, `CN_LLM_PROVIDER`) to its provider type. */
