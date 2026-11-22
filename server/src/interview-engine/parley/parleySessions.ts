@@ -12,7 +12,9 @@
 //   connect (POST /sessions/:id/connection)
 //           created → live claim, then POST {parley}/v1/sessions; the handle
 //           (Parley id + client token) is kept in liveMetrics.parley so a
-//           reconnect reuses the same conversation
+//           reconnect reuses the same conversation. When Parley cannot start
+//           the conversation (node down, a refusal, no config) the session
+//           moves to LiveKit for good and connects there instead
 //   end     candidate End → POST {parley}/end {closing:false}, GET the final
 //           transcript, ingest it, finalize (no webhook needed on this path)
 //   other ends (time up, candidate hung up, network loss) → Parley's signed
@@ -77,9 +79,10 @@ export function closingLineFor(language: string): string {
   return CLOSING_LINES[language] ?? CLOSING_LINES[language.split('-')[0]] ?? CLOSING_LINES.en;
 }
 
-/** Connect → Parley unavailable (unreachable node, bad agent, …). Mapped to
- *  503 `worker_unavailable`, which the practice page shows as "interviewer
- *  unavailable" with a Retry. */
+/** Connect → Parley unavailable for a session that cannot move to LiveKit (its
+ *  conversation already exists on Parley, or another connect is still creating
+ *  it). Mapped to 503 `worker_unavailable`, which the practice page shows as
+ *  "interviewer unavailable" with a Retry. */
 export class ParleyUnavailableError extends Error {
   readonly code = 'worker_unavailable';
   constructor(message: string) {
@@ -135,6 +138,36 @@ async function saveParleyHandle(sessionId: string, handle: ParleyHandle): Promis
   );
 }
 
+/**
+ * Parley could not start this session's conversation, so the session moves to
+ * LiveKit for good: the pilot must never cost a candidate an interview LiveKit
+ * can run. One statement drops control.transport (leaving a parleyFallback
+ * note) and, from 'live', hands the connect claim back, so no concurrent
+ * connect ever sees a half-moved row. It applies only while no Parley
+ * conversation exists (no stored handle). True when the row moved.
+ */
+async function moveToLiveKit(session: InterviewSession, from: 'created' | 'live', reason: string): Promise<boolean> {
+  const moved = await prisma.$executeRawUnsafe(
+    `UPDATE "InterviewSession"
+        SET status = 'created',
+            "startedAt" = CASE WHEN $3::boolean THEN "startedAt" ELSE NULL END,
+            "participantIdentity" = $4,
+            "liveMetrics" = jsonb_set(COALESCE("liveMetrics", '{}'::jsonb), '{control}',
+                              COALESCE("liveMetrics"->'control', '{}'::jsonb) - 'transport')
+                            || jsonb_build_object('parleyFallback', $5::jsonb),
+            "updatedAt" = now()
+      WHERE id = $1 AND status = $2 AND "liveMetrics"->'parley' IS NULL`,
+    session.id,
+    from,
+    // The claim keeps a startedAt that was already set and stamps one that
+    // wasn't; restoring by flag avoids sending a Date through raw SQL.
+    session.startedAt != null,
+    session.participantIdentity ?? null,
+    JSON.stringify({ at: new Date().toISOString(), reason }),
+  );
+  return moved === 1;
+}
+
 // ─── Create (connect step) ──────────────────────────────────────────────────
 
 /** The per-session overrides Parley receives: RoboApply's generated prompt,
@@ -184,22 +217,40 @@ export interface ParleyConnection {
  * creates the Parley session; everyone else (reconnects, a second tab, a
  * StrictMode double call) gets the stored handle — posting a new WebRTC offer
  * to the same Parley session resumes the conversation.
+ *
+ * Null when the session has moved to LiveKit instead (Parley could not start
+ * the conversation; see moveToLiveKit): the caller connects it there.
  */
-export async function getParleyConnection(session: InterviewSession, voice: ResolvedVoice): Promise<ParleyConnection> {
+export async function getParleyConnection(session: InterviewSession, voice: ResolvedVoice): Promise<ParleyConnection | null> {
+  let handle: ParleyHandle | null = readParleyHandle(session.liveMetrics);
   const cfg = getParleyConfig();
-  if (!cfg) throw new ParleyUnavailableError('Parley is not configured (PARLEY_URL / PARLEY_API_KEY / PARLEY_WEBHOOK_SECRET / PARLEY_AGENT_ID).');
+  if (!cfg) {
+    // Unconfigured since the session was created: one that never reached
+    // Parley runs on LiveKit instead.
+    if (!handle && session.status === 'created' && (await moveToLiveKit(session, 'created', 'not_configured'))) {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'parley not configured — session moved to LiveKit', { sessionId: session.id });
+      return null;
+    }
+    throw new ParleyUnavailableError('Parley is not configured (PARLEY_URL / PARLEY_API_KEY / PARLEY_WEBHOOK_SECRET / PARLEY_AGENT_ID).');
+  }
   const identity = `candidate-${session.id}`;
 
-  let handle: ParleyHandle | null = readParleyHandle(session.liveMetrics);
   if (!handle && session.status === 'created') {
     const startedAt = session.startedAt ?? new Date();
     const claim = await prisma.interviewSession.updateMany({
       where: { id: session.id, status: 'created' },
       data: { status: 'live', startedAt, participantIdentity: identity },
     });
-    if (claim.count === 1) handle = await createHandle(cfg, session, startedAt);
+    if (claim.count === 1) {
+      handle = await createHandle(cfg, session, startedAt);
+      if (!handle) return null;
+    }
   }
-  if (!handle) handle = await waitForHandle(session.id);
+  if (!handle) {
+    const waited = await waitForHandle(session.id);
+    if (waited === 'livekit') return null;
+    handle = waited;
+  }
   if (!handle) throw new ParleyUnavailableError('Parley session is still being created; retry.');
 
   return {
@@ -219,7 +270,9 @@ export async function getParleyConnection(session: InterviewSession, voice: Reso
   };
 }
 
-async function createHandle(cfg: ParleyConfig, session: InterviewSession, startedAt: Date): Promise<ParleyHandle> {
+/** The claim winner creates the Parley conversation. Null when Parley could
+ *  not, and the session moved to LiveKit instead. */
+async function createHandle(cfg: ParleyConfig, session: InterviewSession, startedAt: Date): Promise<ParleyHandle | null> {
   const control = readSessionControl(session.liveMetrics);
   const input: ParleyCreateSessionInput = {
     ...buildParleySessionInput(session),
@@ -241,23 +294,35 @@ async function createHandle(cfg: ParleyConfig, session: InterviewSession, starte
     });
     return handle;
   } catch (err) {
+    // Hand the claim back with the session moved to LiveKit, so this connect
+    // and any concurrent one carry on in a LiveKit room.
+    const moved = await moveToLiveKit(session, 'live', err instanceof ParleyApiError ? err.code : 'error').catch(() => false);
+    const detail = {
+      sessionId: session.id, startedAt: startedAt.toISOString(),
+      status: err instanceof ParleyApiError ? err.status : undefined,
+      code: err instanceof ParleyApiError ? err.code : undefined,
+      error: err instanceof Error ? err.message : String(err),
+    };
+    // The interview still happens on LiveKit, so this is a warning; an error
+    // only when the candidate is left without one.
+    if (moved) {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'parley session create failed — moved to LiveKit', detail);
+      return null;
+    }
+    logger.error('INTERVIEW_ENGINE_SESSION', 'parley session create failed', detail);
     // Give the claim back so the candidate's Retry starts over cleanly instead
     // of finding a 'live' session with no conversation behind it.
     await prisma.interviewSession.updateMany({
       where: { id: session.id, status: 'live' },
       data: { status: 'created', startedAt: session.startedAt ?? null, participantIdentity: session.participantIdentity ?? null },
     }).catch(() => { /* the sweep will expire it */ });
-    logger.error('INTERVIEW_ENGINE_SESSION', 'parley session create failed', {
-      sessionId: session.id, startedAt: startedAt.toISOString(),
-      status: err instanceof ParleyApiError ? err.status : undefined,
-      code: err instanceof ParleyApiError ? err.code : undefined,
-      error: err instanceof Error ? err.message : String(err),
-    });
     throw new ParleyUnavailableError(err instanceof Error ? err.message : 'Parley session create failed');
   }
 }
 
-async function waitForHandle(sessionId: string): Promise<ParleyHandle | null> {
+/** A claim loser waits for the winner's handle, or for the winner to move the
+ *  session to LiveKit ('livekit'). Null when neither happens in time. */
+async function waitForHandle(sessionId: string): Promise<ParleyHandle | 'livekit' | null> {
   const deadline = Date.now() + HANDLE_WAIT_MS;
   while (Date.now() < deadline) {
     const row = await prisma.interviewSession.findUnique({
@@ -265,6 +330,7 @@ async function waitForHandle(sessionId: string): Promise<ParleyHandle | null> {
       select: { liveMetrics: true, status: true },
     }).catch(() => null);
     if (!row || (row.status !== 'live' && row.status !== 'created')) return null;
+    if (!isParleySession(row)) return 'livekit';
     const handle = readParleyHandle(row.liveMetrics);
     if (handle) return handle;
     await new Promise((r) => setTimeout(r, HANDLE_POLL_MS));

@@ -1,6 +1,7 @@
 // @vitest-environment node
 // Parley pilot transport: transcript mapping, per-session input, the connect
-// claim (and its rollback), the End drain, and webhook routing.
+// claim (its rollback and the move to LiveKit), the End drain, and webhook
+// routing.
 // Run: npx vitest run server/src/interview-engine/parley/parleySessions.test.ts
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -188,18 +189,97 @@ describe('parley sessions', () => {
       expect(conn.parley.clientToken).toBe('ct_1');
     });
 
-    it('gives the claim back and reports worker_unavailable when Parley refuses', async () => {
-      m.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 1 });
+    it('moves the session to LiveKit when Parley cannot start it, handing the claim back in the same statement', async () => {
+      m.updateMany.mockResolvedValueOnce({ count: 1 });
       m.create.mockRejectedValueOnce(new ParleyApiError(0, 'unreachable', 'Parley unreachable'));
+      m.executeRaw.mockResolvedValueOnce(1);
+      expect(await getParleyConnection(session(), VOICE)).toBeNull();
+      const [sql, ...params] = m.executeRaw.mock.calls[0];
+      expect(sql).toContain('parleyFallback');
+      expect(params.slice(0, 4)).toEqual(['iv_1', 'live', false, null]);
+      expect(JSON.parse(params[4] as string)).toMatchObject({ reason: 'unreachable' });
+      // No separate give-back: the move already set the row to 'created'.
+      expect(m.updateMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives the claim back and reports worker_unavailable when the session cannot move', async () => {
+      m.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 1 });
+      m.create.mockRejectedValueOnce(new ParleyApiError(503, 'at_capacity', 'busy'));
+      m.executeRaw.mockResolvedValueOnce(0);
       const err = await getParleyConnection(session(), VOICE).catch((e) => e);
       expect(err).toBeInstanceOf(ParleyUnavailableError);
       expect(err.code).toBe('worker_unavailable');
       expect(m.updateMany.mock.calls[1][0]).toMatchObject({ where: { id: 'iv_1', status: 'live' }, data: { status: 'created', startedAt: null } });
     });
 
-    it('is unavailable when Parley is not configured', async () => {
+    it('a claim loser follows the winner to LiveKit', async () => {
+      m.updateMany.mockResolvedValueOnce({ count: 0 });
+      m.findUnique
+        .mockResolvedValueOnce({ status: 'live', liveMetrics: { control: { transport: 'parley' } } })
+        .mockResolvedValueOnce({ status: 'created', liveMetrics: { control: {}, parleyFallback: { reason: 'unreachable' } } });
+      expect(await getParleyConnection(session(), VOICE)).toBeNull();
+      expect(m.create).not.toHaveBeenCalled();
+    });
+
+    it('moves a session that never reached Parley to LiveKit when Parley is not configured', async () => {
       delete process.env.PARLEY_URL;
-      await expect(getParleyConnection(session(), VOICE)).rejects.toBeInstanceOf(ParleyUnavailableError);
+      m.executeRaw.mockResolvedValueOnce(1);
+      expect(await getParleyConnection(session(), VOICE)).toBeNull();
+      expect(m.executeRaw.mock.calls[0].slice(1, 3)).toEqual(['iv_1', 'created']);
+      expect(m.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('is unavailable when Parley is not configured and the conversation is already on Parley', async () => {
+      delete process.env.PARLEY_URL;
+      await expect(
+        getParleyConnection(session({ status: 'live', liveMetrics: { control: { transport: 'parley' }, parley: HANDLE } }), VOICE),
+      ).rejects.toBeInstanceOf(ParleyUnavailableError);
+      expect(m.executeRaw).not.toHaveBeenCalled();
+    });
+
+    it('the real move SQL drops only the transport, keeps other keys and never touches a session already on Parley', async () => {
+      m.updateMany.mockResolvedValueOnce({ count: 1 });
+      m.create.mockRejectedValueOnce(new ParleyApiError(0, 'unreachable', 'Parley unreachable'));
+      m.executeRaw.mockResolvedValueOnce(1);
+      await getParleyConnection(session(), VOICE);
+      const sql = m.executeRaw.mock.calls[0][0] as string;
+
+      const { PGlite } = await import('@electric-sql/pglite');
+      const db = new PGlite();
+      try {
+        await db.exec(`CREATE TABLE "InterviewSession" (
+          id text primary key, status text, "startedAt" timestamp(3), "participantIdentity" text,
+          "liveMetrics" jsonb, "updatedAt" timestamp(3))`);
+        await db.exec(`INSERT INTO "InterviewSession" VALUES
+          ('claimed', 'live', '2026-11-22 18:02:09.644', 'candidate-claimed',
+           '{"control":{"transport":"parley","callbackBaseUrl":"https://x"},"client":{"n":3}}', '2026-11-22 18:00:00'),
+          ('onParley', 'live', '2026-11-22 18:02:09.644', 'candidate-onParley',
+           '{"control":{"transport":"parley"},"parley":{"sessionId":"ses_1"}}', '2026-11-22 18:00:00'),
+          ('unclaimed', 'created', NULL, NULL, '{"control":{"transport":"parley"}}', '2026-11-22 18:00:00')`);
+        const note = JSON.stringify({ at: '2026-11-22T18:02:10.000Z', reason: 'unreachable' });
+        const run = async (id: string, from: string, keepStarted: boolean, identity: string | null) =>
+          (await db.query(sql, [id, from, keepStarted, identity, note])).affectedRows;
+
+        expect(await run('claimed', 'live', false, null)).toBe(1);
+        expect(await run('onParley', 'live', false, null)).toBe(0);
+        expect(await run('unclaimed', 'live', false, null)).toBe(0);
+        expect(await run('unclaimed', 'created', false, null)).toBe(1);
+
+        const rows = Object.fromEntries(
+          (await db.query<{ id: string; status: string; startedAt: Date | null; participantIdentity: string | null; liveMetrics: Record<string, unknown> }>(
+            `SELECT id, status, "startedAt", "participantIdentity", "liveMetrics" FROM "InterviewSession"`,
+          )).rows.map((r) => [r.id, r]),
+        );
+        expect(rows.claimed).toMatchObject({
+          status: 'created', startedAt: null, participantIdentity: null,
+          liveMetrics: { control: { callbackBaseUrl: 'https://x' }, client: { n: 3 }, parleyFallback: { reason: 'unreachable' } },
+        });
+        expect(rows.claimed.liveMetrics.control).not.toHaveProperty('transport');
+        expect(rows.onParley).toMatchObject({ status: 'live', participantIdentity: 'candidate-onParley', liveMetrics: { control: { transport: 'parley' } } });
+        expect(rows.unclaimed).toMatchObject({ status: 'created', liveMetrics: { control: {}, parleyFallback: { reason: 'unreachable' } } });
+      } finally {
+        await db.close();
+      }
     });
   });
 
