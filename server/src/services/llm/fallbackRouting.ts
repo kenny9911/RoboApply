@@ -23,13 +23,14 @@ export const CIRCUIT_OPEN_MS = 10 * 60 * 1000;
 /**
  * The extra routes a CREDENTIAL failure (dead key, no credit, no key) may move
  * to, after the area's own fallbacks and the configured fallback model. No
- * model is named in code: the list is this variable (comma-separated
- * selectors, `CN_` override for GoApply), then the brand's default model. A
- * route is skipped when its provider is the one that failed, has no key, has
- * an open circuit, or is refused by the brand policy. Price every selector set
- * here in server/src/lib/modelCostTable.ts.
+ * model is named in code: the list is the saved setting `autoFallbackModels`
+ * (the LLM stack row), else this variable (comma-separated selectors, `CN_`
+ * override for GoApply), then the brand's default model (llmModels.ts
+ * getAutoFallbackSetting). A route is skipped when its provider is the one
+ * that failed, has no key, has an open circuit, or is refused by the brand
+ * policy. Price every selector set there in server/src/lib/modelCostTable.ts.
  */
-export const AUTO_FALLBACK_ENV = 'LLM_AUTO_FALLBACK_MODELS';
+export { AUTO_FALLBACK_ENV } from '../../lib/llm/llmStackConfigSchema.js';
 
 /** `a, b c` → ['a', 'b', 'c']: a selector list from one variable. */
 export function parseFallbackList(raw: string | null | undefined): string[] {

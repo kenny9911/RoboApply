@@ -575,6 +575,64 @@ describe('effort and fallback models of an assignment', () => {
   });
 });
 
+describe('the auto-fallback list', () => {
+  it('is read from the saved settings first, then the env, per brand', async () => {
+    expect(models.resolveAutoFallbackSetting('roboapply')).toEqual({ value: undefined, source: 'none' });
+    process.env.LLM_AUTO_FALLBACK_MODELS = 'openrouter/openai/gpt-6-luna';
+    expect(models.resolveAutoFallbackSetting('roboapply')).toEqual({ value: 'openrouter/openai/gpt-6-luna', source: 'env' });
+    // GoApply reads RoboApply's when it sets none of its own.
+    expect(models.resolveAutoFallbackSetting('goapply')).toEqual({ value: 'openrouter/openai/gpt-6-luna', source: 'shared' });
+
+    await resolver.saveLlmStack('development', { ...schema.emptyLlmStackBlob(), autoFallbackModels: 'anthropic/claude-sonnet-4-6, openrouter/openai/gpt-6-luna' }, 'admin_1', 'seed');
+    await warm();
+    expect(models.resolveAutoFallbackSetting('roboapply')).toEqual({ value: 'anthropic/claude-sonnet-4-6, openrouter/openai/gpt-6-luna', source: 'override' });
+    expect(models.getAutoFallbackSetting('goapply')).toBe('anthropic/claude-sonnet-4-6, openrouter/openai/gpt-6-luna');
+    // Behind the domestic-only wall GoApply uses only a list of its own.
+    process.env.CN_LLM_DOMESTIC_ONLY = 'true';
+    expect(models.resolveAutoFallbackSetting('goapply')).toEqual({ value: undefined, source: 'none' });
+    process.env.LLM_SETTINGS_DB_DISABLED = 'true';
+    expect(models.getAutoFallbackSetting('roboapply')).toBe('openrouter/openai/gpt-6-luna');
+  });
+
+  it('a blob saved before the field existed reads as unset, and the audit names a change to it', () => {
+    expect(schema.parseLlmStackBlob(JSON.stringify({ provider: null, defaultModel: null, fallbackModel: null, purposes: {}, tuning: {} }))?.autoFallbackModels).toBeNull();
+    const before = schema.emptyLlmStackBlob();
+    const after = { ...before, autoFallbackModels: 'openrouter/openai/gpt-6-luna' };
+    expect(resolver.diffLlmStack(before, after)).toEqual(['autoFallbackModels: (inherit) → openrouter/openai/gpt-6-luna']);
+    // An effort or a fallback change of an assignment is audited too.
+    const routed = { ...before, routes: { ...before.routes, writing: { providerId: 'aigw', model: 'w1', effort: 'medium' as const, fallbacks: [] } } };
+    const edited = { ...routed, routes: { ...routed.routes, writing: { ...routed.routes.writing!, effort: 'high' as const, fallbacks: [{ providerId: 'b', model: 'w2', effort: 'low' as const }] } } };
+    expect(resolver.diffLlmStack(routed, edited)).toEqual(['routes.writing: aigw/w1 (medium) → aigw/w1 (high) then b/w2 (low)']);
+  });
+
+  it('a dead key moves to the saved list before the env one', async () => {
+    await addProvider();
+    await addProvider({ name: 'Backup', baseUrl: 'https://backup.example.com/v1' });
+    await addProvider({ name: 'Other', baseUrl: 'https://other.example.com/v1' });
+    process.env.LLM_AUTO_FALLBACK_MODELS = 'newapi@other/o1';
+    await resolver.saveLlmStack('development', { ...schema.emptyLlmStackBlob(), autoFallbackModels: 'newapi@backup/b1' }, 'admin_1', 'seed');
+    await admin.saveGatewayRoutes('roboapply', { writing: { providerId: 'aigw', model: 'w1' } }, 'admin_1');
+    await warm();
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const req = url instanceof Request ? url : new Request(String(url), init);
+      const host = new URL(req.url).host;
+      seen.push(host);
+      return host === 'aigw.example.com'
+        ? new Response(JSON.stringify({ error: { message: 'Invalid API key' } }), { status: 401, headers: { 'content-type': 'application/json' } })
+        : new Response(
+            JSON.stringify({ id: 'c1', object: 'chat.completion', model: 'b1', choices: [{ index: 0, message: { role: 'assistant', content: 'from backup' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+    }));
+    const { llmService } = await import('../../services/llm/LLMService.js');
+    (await import('../../services/llm/fallbackRouting.js')).resetCircuits();
+    const result = await llmService.chatWithUsage([{ role: 'user', content: 'ping' }], { model: tasks.getTaskModel('writing', 'roboapply'), brand: 'roboapply' });
+    expect(result.content).toBe('from backup');
+    expect(seen).toEqual(['aigw.example.com', 'backup.example.com']);
+  });
+});
+
 describe('disclosures of gateway routes', () => {
   it('list an unassigned area on the Default model, and every fallback model a request can reach', async () => {
     await addProvider();
@@ -591,6 +649,21 @@ describe('disclosures of gateway routes', () => {
     ]));
     // Matching has an env model, but runs on the Default area now: that env model is not a destination.
     expect(rows.some((r) => r.model === 'openai/gpt-6-luna')).toBe(false);
+  });
+
+  it('list the auto-fallback models, from the saved settings first', async () => {
+    process.env.LLM_AUTO_FALLBACK_MODELS = 'openrouter/x-ai/grok-5';
+    await resolver.saveLlmStack('development', { ...schema.emptyLlmStackBlob(), autoFallbackModels: 'anthropic/claude-sonnet-4-6' }, 'admin_1', 'seed');
+    await warm();
+    const { loadAiStackSnapshot, configuredModels } = await import('../../features/compliance/disclosures.js');
+    const { getBrand } = await import('../../platform/brand/registry.js');
+    await loadAiStackSnapshot(process.env);
+    const rows = configuredModels(getBrand('roboapply'));
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ task: 'fallback', vendor: 'anthropic', model: 'claude-sonnet-4-6', region: 'US', source: 'override' }),
+    ]));
+    // The env list is not used while a saved one exists.
+    expect(rows.some((r) => r.model === 'x-ai/grok-5')).toBe(false);
   });
 });
 
