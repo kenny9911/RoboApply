@@ -117,8 +117,14 @@ export function diffLlmStack(prev: LlmStackConfigBlob | null, next: LlmStackConf
   cmp('provider', before.provider, next.provider);
   cmp('defaultModel', before.defaultModel, next.defaultModel);
   cmp('fallbackModel', before.fallbackModel, next.fallbackModel);
+  cmp('autoFallbackModels', before.autoFallbackModels, next.autoFallbackModels);
   for (const k of PURPOSE_KEYS) cmp(`purposes.${k}`, before.purposes[k], next.purposes[k]);
-  const routeLabel = (r: LlmStackConfigBlob['routes'][LlmArea]) => (r ? `${r.providerId}/${r.model}` : null);
+  // An assignment with its effort and its fallbacks, so changing either is audited too.
+  const routeLabel = (r: LlmStackConfigBlob['routes'][LlmArea]) =>
+    r
+      ? `${r.providerId}/${r.model} (${r.effort})` +
+        (r.fallbacks?.length ? ` then ${r.fallbacks.map((f) => `${f.providerId}/${f.model} (${f.effort})`).join(', ')}` : '')
+      : null;
   for (const area of LLM_AREAS) cmp(`routes.${area}`, routeLabel(before.routes[area]), routeLabel(next.routes[area]));
   for (const k of ['retryAttempts', 'retryBaseMs', 'retryMaxMs', 'timeoutMs'] as const) {
     cmp(`tuning.${k}`, before.tuning[k], next.tuning[k]);

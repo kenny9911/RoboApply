@@ -139,11 +139,21 @@ export const MODEL_ENV: Record<ModelKey, string> = {
 };
 
 /**
+ * The auto-fallback list: comma-separated selectors a call may move to after a
+ * CREDENTIAL failure (dead key, no credit, no key), after its area's fallbacks
+ * and the fallback model (services/llm/fallbackRouting.ts). Read like every
+ * other setting, the database first: the blob's `autoFallbackModels`, then
+ * this variable (`CN_` override for GoApply). No model is named in code.
+ */
+export const AUTO_FALLBACK_ENV = 'LLM_AUTO_FALLBACK_MODELS';
+
+/**
  * Every model-selector env var a deployment can set, for both brands: the
  * unprefixed names (RoboApply's, and GoApply's fallback) and the `CN_`
  * overrides GoApply reads first. Cost-coverage checks (check:llm-costs,
  * verify-llm-brand) scan this list, so no model either brand can resolve
- * bills at the default tier unnoticed.
+ * bills at the default tier unnoticed. (The auto-fallback list holds several
+ * selectors; verify-llm-brand checks each of them separately.)
  */
 export const ALL_BRAND_MODEL_ENV_VARS: readonly string[] = [
   ...Object.values(MODEL_ENV),
@@ -303,6 +313,8 @@ export interface LlmStackConfigBlob {
   defaultModel: string | null;
   /** LLM_FALLBACK_MODEL override; null → env. */
   fallbackModel: string | null;
+  /** LLM_AUTO_FALLBACK_MODELS override (comma-separated selectors); null → env. */
+  autoFallbackModels: string | null;
   purposes: LlmStackPurposes;
   /** Area assignments; null → the area's keys resolve as if it did not exist. */
   routes: LlmStackRoutes;
@@ -328,6 +340,7 @@ export function emptyLlmStackBlob(): LlmStackConfigBlob {
     provider: null,
     defaultModel: null,
     fallbackModel: null,
+    autoFallbackModels: null,
     purposes: emptyPurposes(),
     routes: emptyRoutes(),
     tuning: emptyTuning(),
@@ -356,6 +369,7 @@ export function buildEnvDefaultsSnapshot(brandId: LlmStackBrand = 'roboapply'): 
     provider: envStr('LLM_PROVIDER'),
     defaultModel: envStr('LLM_MODEL'),
     fallbackModel: envStr('LLM_FALLBACK_MODEL'),
+    autoFallbackModels: envStr(AUTO_FALLBACK_ENV),
     purposes,
     routes: emptyRoutes(),
     tuning: {
@@ -392,6 +406,10 @@ export function validateLlmStackBlob(blob: unknown): ValidationError[] {
   if (!isNullableString(c.provider)) errors.push({ field: 'provider', message: 'provider must be a string or null' });
   if (!isNullableString(c.defaultModel)) errors.push({ field: 'defaultModel', message: 'defaultModel must be a string or null' });
   if (!isNullableString(c.fallbackModel)) errors.push({ field: 'fallbackModel', message: 'fallbackModel must be a string or null' });
+  // Optional: a blob saved before the field existed has none.
+  if (c.autoFallbackModels !== undefined && !isNullableString(c.autoFallbackModels)) {
+    errors.push({ field: 'autoFallbackModels', message: 'autoFallbackModels must be a string or null' });
+  }
 
   if (c.purposes == null || typeof c.purposes !== 'object') {
     errors.push({ field: 'purposes', message: 'purposes section is required' });
@@ -487,6 +505,7 @@ export function normalizeLlmStackBlob(input: unknown): LlmStackConfigBlob {
   base.provider = str(c.provider);
   base.defaultModel = str(c.defaultModel);
   base.fallbackModel = str(c.fallbackModel);
+  base.autoFallbackModels = str(c.autoFallbackModels);
   if (c.purposes && typeof c.purposes === 'object') {
     for (const k of PURPOSE_KEYS) base.purposes[k] = str(c.purposes[k]);
   }

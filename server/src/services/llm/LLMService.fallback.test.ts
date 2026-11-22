@@ -53,6 +53,8 @@ vi.mock('../../lib/llm/llmModels.js', () => ({
   getFallbackModelSetting: () => state.fallbackModel,
   // No LLM gateway area routes here (gateway.test.ts covers them).
   gatewayRouteProfile: () => null,
+  // The auto-fallback list as the env gives it (the saved setting is covered in gateway.test.ts).
+  getAutoFallbackSetting: () => process.env.LLM_AUTO_FALLBACK_MODELS,
 }));
 
 /** The auto-fallback list these tests configure: the order the code once hard-coded, now read from the env. */

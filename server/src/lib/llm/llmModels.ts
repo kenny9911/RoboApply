@@ -67,6 +67,7 @@ import { contextlessLlmBrand, effectiveLlmProfile } from './llmBrand.js';
 import { getGatewayProviderSync } from './gatewayProviders.js';
 import { getLlmStackSync } from './llmStackConfigResolver.js';
 import {
+  AUTO_FALLBACK_ENV,
   DEFAULT_GATEWAY_EFFORT,
   MODEL_ENV,
   MODEL_KEYS_NEEDING_TOOLS,
@@ -371,6 +372,36 @@ export function getProviderSetting(brand?: LlmBrandArg, env: EnvSource = process
 
 export const getDefaultModel = (brand?: LlmBrandArg, env: EnvSource = process.env): string | undefined =>
   getModelSetting('defaultModel', brand, env);
+
+/** What the auto-fallback list holds for a brand, and where it comes from. */
+export interface AutoFallbackResolution {
+  /** Comma-separated selectors (fallbackRouting.ts parseFallbackList), or undefined. */
+  value: string | undefined;
+  source: LlmSettingSource;
+}
+
+/**
+ * The auto-fallback list a credential failure moves to (fallbackRouting.ts),
+ * the database first: the brand's saved `autoFallbackModels`, then its own
+ * variable (`CN_LLM_AUTO_FALLBACK_MODELS` on GoApply, `LLM_AUTO_FALLBACK_MODELS`
+ * on RoboApply), then the shared stack's saved value and variable. Behind the
+ * domestic-only wall GoApply uses only its own: the brand policy would refuse
+ * most shared routes anyway, and a list is not judged entry by entry here.
+ */
+export function resolveAutoFallbackSetting(brand?: LlmBrandArg, env: EnvSource = process.env): AutoFallbackResolution {
+  const b = llmBrand(brand);
+  const pick: BlobPick = (blob) => blob.autoFallbackModels;
+  const override = blobValue(b.id, pick);
+  if (override) return { value: override, source: 'override' };
+  const own = brandOwnEnv(b, AUTO_FALLBACK_ENV, env);
+  if (own) return { value: own, source: 'env' };
+  if (b.id === SHARED_STACK_BRAND || llmDomesticOnlyApplies(b, env)) return { value: undefined, source: 'none' };
+  const shared = blobValue(SHARED_STACK_BRAND, pick) ?? clean(env[AUTO_FALLBACK_ENV]);
+  return shared ? { value: shared, source: 'shared' } : { value: undefined, source: 'none' };
+}
+
+export const getAutoFallbackSetting = (brand?: LlmBrandArg, env: EnvSource = process.env): string | undefined =>
+  resolveAutoFallbackSetting(brand, env).value;
 export const getFallbackModelSetting = (brand?: LlmBrandArg, env: EnvSource = process.env): string | undefined =>
   getModelSetting('fallbackModel', brand, env);
 

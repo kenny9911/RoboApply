@@ -18,6 +18,7 @@ import {
 import { resolveProviderCredential, type ProviderTuning } from '../../lib/llm/systemCredentials.js';
 import {
   gatewayRouteProfile,
+  getAutoFallbackSetting,
   getFallbackModelSetting,
   getLlmRoutingDefaults,
   getRetryAttempts,
@@ -29,7 +30,6 @@ import {
   type LlmSettingSource,
 } from '../../lib/llm/llmModels.js';
 import type { GatewayEffort } from '../../lib/llm/llmStackConfigSchema.js';
-import { brandEnv } from '../../platform/brand/brandEnv.js';
 import { gatewayEffortFor } from './reasoningEffort.js';
 import { contextlessLlmBrand, llmCallBrand, requireLlmCallBrand } from '../../lib/llm/llmBrand.js';
 import { getTaskModel, getTaskModelOrDefault, type LlmTask } from '../../lib/llm/llmTaskSettings.js';
@@ -671,11 +671,13 @@ export class LLMService {
 
   /**
    * The selectors a credential failure may move to after the configured ones:
-   * LLM_AUTO_FALLBACK_MODELS (GoApply: CN_ override, else the shared value),
-   * then the brand's default model. Every one is configuration.
+   * the auto-fallback list, the database first (`autoFallbackModels` in the
+   * LLM stack row, else LLM_AUTO_FALLBACK_MODELS; llmModels.ts
+   * getAutoFallbackSetting), then the brand's default model. Every one is
+   * configuration.
    */
   private autoFallbackSelectors(brand: ProductBrand, defaultModel?: string): string[] {
-    const list = parseFallbackList(brandEnv(brand, AUTO_FALLBACK_ENV));
+    const list = parseFallbackList(getAutoFallbackSetting(brand.id));
     if (defaultModel) list.push(defaultModel);
     return [...new Set(list)];
   }
@@ -930,7 +932,7 @@ export class LLMService {
       ? ` Fallback routes also failed: ${input.attempted.join(', ')}` +
         (input.lastError instanceof Error ? ` (last error: ${input.lastError.message.slice(0, 200)}).` : '.')
       : ` No fallback route is available: add fallback models to the area in the LLM gateway, or set ${fallbackEnv}` +
-        ` or ${brand.llmEnvPrefix}${AUTO_FALLBACK_ENV}` +
+        ` or the auto-fallback list (autoFallbackModels in the LLM settings, or ${brand.llmEnvPrefix}${AUTO_FALLBACK_ENV})` +
         (autoProviders.length ? ` (or configure an API key for one of: ${autoProviders.join(', ')}).` : '.');
     return new LLMUnavailableError({
       message: `LLM provider "${input.providerType}" ${what} for model "${input.model}".${tail}`,

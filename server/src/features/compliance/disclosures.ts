@@ -21,7 +21,7 @@ import { requirementsMet } from '../../platform/flags.js';
 import { getGatewayProviderSync } from '../../lib/llm/gatewayProviders.js';
 import { blobAreaFallbackSelectors, blobModelSelector } from '../../lib/llm/llmModels.js';
 import { getLlmStack } from '../../lib/llm/llmStackConfigResolver.js';
-import { MODEL_ENV, isDbConfigDisabled, type LlmStackBrand, type LlmStackConfigBlob, type ModelKey } from '../../lib/llm/llmStackConfigSchema.js';
+import { AUTO_FALLBACK_ENV, MODEL_ENV, isDbConfigDisabled, type LlmStackBrand, type LlmStackConfigBlob, type ModelKey } from '../../lib/llm/llmStackConfigSchema.js';
 import { normalizeProviderType, providerBaseType, providerEntryId, resolveProviderPrefix } from '../../services/llm/providerPrefixes.js';
 import { GOAPPLY_DIRECT_PROVIDERS, MAINLAND_LLM_HOST_SUFFIXES, extraDomesticHosts, hostOf, isMainlandLlmHost } from '../../platform/llm/brandPolicy.js';
 import { contentSafetyReadiness } from '../../platform/llm/contentSafety/config.js';
@@ -138,7 +138,12 @@ export async function loadAiStackSnapshot(
   }
 }
 
-type SettingKey = ModelKey | 'provider';
+/** A model key, the provider mode, or the auto-fallback list (several selectors). */
+type SettingKey = ModelKey | 'provider' | 'autoFallback';
+
+function envNameOf(key: SettingKey): string {
+  return key === 'provider' ? 'LLM_PROVIDER' : key === 'autoFallback' ? AUTO_FALLBACK_ENV : MODEL_ENV[key];
+}
 
 function overrideOf(env: EnvSource, brandId: LlmStackBrand, key: SettingKey): string | undefined {
   const blob = SNAPSHOTS.get(env)?.[brandId];
@@ -146,7 +151,7 @@ function overrideOf(env: EnvSource, brandId: LlmStackBrand, key: SettingKey): st
   // A model key's override is the LLM gateway first (its functionality area's
   // assignment, else the Default area's), then its own value: the order the
   // resolver uses (llmModels.ts).
-  const raw = key === 'provider' ? blob.provider : blobModelSelector(blob, key);
+  const raw = key === 'provider' ? blob.provider : key === 'autoFallback' ? blob.autoFallbackModels : blobModelSelector(blob, key);
   const t = typeof raw === 'string' ? raw.trim() : '';
   return t ? t : undefined;
 }
@@ -161,7 +166,7 @@ function areaFallbacksOf(env: EnvSource, brandId: LlmStackBrand, selector: strin
 function sharedSetting(key: SettingKey, env: EnvSource): ResolvedSetting | null {
   const override = overrideOf(env, DEFAULT_BRAND, key);
   if (override) return { value: override, stack: 'shared', source: 'override' };
-  const fromEnv = val(env, key === 'provider' ? 'LLM_PROVIDER' : MODEL_ENV[key]);
+  const fromEnv = val(env, envNameOf(key));
   return fromEnv ? { value: fromEnv, stack: 'shared', source: 'shared' } : null;
 }
 
@@ -170,7 +175,7 @@ function resolveSetting(brand: ProductBrand, key: SettingKey, env: EnvSource): R
   if (brand.id === DEFAULT_BRAND) return sharedSetting(key, env);
   const override = overrideOf(env, brand.id, key);
   if (override) return { value: override, stack: 'own', source: 'override' };
-  const own = brandOwnEnv(brand, key === 'provider' ? 'LLM_PROVIDER' : MODEL_ENV[key], env);
+  const own = brandOwnEnv(brand, envNameOf(key), env);
   if (own) return { value: own, stack: 'own', source: 'own' };
   const shared = sharedSetting(key, env);
   // For this brand the value is the shared stack's, whoever set it there.
@@ -348,6 +353,23 @@ export function configuredModels(brand: ProductBrand, env: EnvSource = process.e
       const filing = filings.find((f) => f.model === hop.model || f.model === fallback);
       out.push({ task: 'fallback', vendor: hop.vendor, model: hop.model, region: hop.region, filingNo: filing?.filingNo ?? null, source: setting.source });
     }
+  }
+  // The auto-fallback list: where a request goes when its provider's key fails.
+  const auto = resolveSetting(brand, 'autoFallback', env);
+  for (const id of auto ? auto.value.split(/[\s,]+/).filter(Boolean) : []) {
+    const entry = entryDisclosure(id, env);
+    const { vendor, model } =
+      entry ??
+      (auto!.stack === 'shared'
+        ? parseModelId(id, sharedProvider, 'global')
+        : parseModelId(id, ownProvider, brand.llmProfile === 'domestic_cn' ? 'domestic_cn' : 'global'));
+    const region = entry ? entry.region : VENDOR_COUNTRY[vendor] ?? null;
+    if (walled && auto!.stack === 'shared' && region !== 'CN') continue;
+    const key = `${vendor}/${model}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const filing = filings.find((f) => f.model === model || f.model === id);
+    out.push({ task: 'fallback', vendor, model, region, filingNo: filing?.filingNo ?? null, source: auto!.source });
   }
   // Models ops disclosed with a filing that are not in the task settings (e.g. used by the voice worker).
   for (const f of filings) {
