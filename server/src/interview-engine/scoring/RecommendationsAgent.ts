@@ -16,7 +16,7 @@
 // indistinguishable from "nothing to recommend", and the UI rendered praise.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
-import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
+import { getEvaluationModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
 import {
   toCanonicalDimKey,
   type Recommendation,
@@ -188,7 +188,7 @@ Write all prose in the interview language as instructed at the very top of this 
       langSource,
       options.requestId,
       options.locale,
-      getTaskModel('interview'),
+      getEvaluationModel(),
       options.signal,
     );
   }

@@ -25,6 +25,7 @@ import { openRouterBrandHeaders } from './OpenRouterProvider.js';
 import { resolveDeepSeekThinking, resolveReasoningHeadroomTokens } from './DeepSeekProvider.js';
 import { isK2Model } from './KimiProvider.js';
 import { LLM_SDK_MAX_RETRIES, resolveLlmRequestTimeoutMs } from './providerTuning.js';
+import { providerBaseType } from './providerPrefixes.js';
 import {
   isDomesticVendor,
   maxTokensWithThinking,
@@ -114,7 +115,8 @@ export const TOOL_STREAMING_PROVIDERS: ReadonlySet<string> = new Set([
 ]);
 
 export function supportsToolStreaming(providerType: string): boolean {
-  return TOOL_STREAMING_PROVIDERS.has((providerType || '').toLowerCase());
+  // A provider entry (`newapi@aigw`) streams tools when its type does.
+  return TOOL_STREAMING_PROVIDERS.has(providerBaseType(providerType || ''));
 }
 
 /* ── Message conversion ─────────────────────────────────────────────────── */
@@ -136,7 +138,7 @@ export function toOpenAIMessages(
   messages: readonly ToolChatMessage[],
   providerType = '',
 ): Array<Record<string, unknown>> {
-  const echoReasoning = REASONING_ECHO_PROVIDERS.has(providerType.toLowerCase());
+  const echoReasoning = REASONING_ECHO_PROVIDERS.has(providerBaseType(providerType));
   return messages.map((m) => {
     if (m.role === 'tool') {
       return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
@@ -220,7 +222,7 @@ const PROXY_HEADER_PROVIDERS = new Set(['minimax', 'ollama', 'newapi', 'openai']
 
 /** An OpenAI SDK client pointed at the provider's real endpoint. */
 export function createStreamingClient(providerType: string, cred: StreamingCredential): ChatCompletionsClient {
-  const provider = providerType.toLowerCase();
+  const provider = providerBaseType(providerType);
   const baseURL = effectiveLlmBaseUrl(provider, cred.baseUrl) ?? undefined;
   const headers: Record<string, string> = {};
   if (provider === 'openrouter') Object.assign(headers, openRouterBrandHeaders());
@@ -256,7 +258,7 @@ export interface BuildStreamParamsInput {
 
 /** The chat-completions body for one streamed round, with each vendor's quirks. */
 export function buildStreamParams(input: BuildStreamParamsInput): Record<string, unknown> {
-  const provider = input.providerType.toLowerCase();
+  const provider = providerBaseType(input.providerType);
   const params: Record<string, unknown> = {
     model: input.model,
     messages: toOpenAIMessages(input.messages, provider),

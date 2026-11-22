@@ -28,7 +28,7 @@ import {
 import { contextlessLlmBrand, llmCallBrand, requireLlmCallBrand } from '../../lib/llm/llmBrand.js';
 import { getTaskModel, getTaskModelOrDefault, type LlmTask } from '../../lib/llm/llmTaskSettings.js';
 import { isTransientLLMError } from './withRetry.js';
-import { normalizeProviderType, resolveSelectorRoute, splitSelectorPrefix, stripProviderPrefix } from './providerPrefixes.js';
+import { normalizeProviderType, providerBaseType, resolveSelectorRoute, splitSelectorPrefix, stripProviderPrefix } from './providerPrefixes.js';
 import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
 import { allowedBrands } from '../../platform/brand/runtime.js';
 import { LlmBrandPolicyError, llmDomesticOnlyApplies } from '../../platform/llm/brandPolicy.js';
@@ -210,7 +210,8 @@ type FallbackReason = CredentialFailureKind | 'circuit_open' | 'transient';
  * historically. Identity for everything else.
  */
 function llmProviderToByokProvider(providerType: string): ByokProvider | null {
-  const lower = providerType.toLowerCase();
+  // A provider entry (`openrouter@backup`) takes a personal key of its type.
+  const lower = providerBaseType(providerType);
   if (lower === 'kimi' || lower === 'moonshot') return 'moonshot';
   if (
     lower === 'openai' ||
@@ -541,7 +542,7 @@ export class LLMService {
       apiKey = '';
     }
     return {
-      hasKey: lower === 'ollama' || !!apiKey.trim(),
+      hasKey: providerBaseType(lower) === 'ollama' || !!apiKey.trim(),
       fingerprint: credentialFingerprint(apiKey),
     };
   }
@@ -828,7 +829,9 @@ export class LLMService {
   private buildExtra(tuning: ProviderTuning, baseUrl?: string): ProviderExtra {
     return {
       ...(baseUrl ? { baseUrl } : {}),
-      ...(tuning.proxyKey ? { proxyKey: tuning.proxyKey } : {}),
+      // '' is kept: it tells a provider client NOT to fall back to LLM_PROXY_KEY
+      // (a provider entry of the LLM gateway never receives the proxy secret).
+      ...(tuning.proxyKey !== undefined ? { proxyKey: tuning.proxyKey } : {}),
       ...(tuning.timeoutMs !== undefined ? { timeoutMs: tuning.timeoutMs } : {}),
       ...(tuning.thinkingMode ? { thinkingMode: tuning.thinkingMode } : {}),
       ...(tuning.reasoningEffort ? { reasoningEffort: tuning.reasoningEffort } : {}),
@@ -841,8 +844,11 @@ export class LLMService {
    * tier sits ABOVE this in chat(). A fresh instance is built per call (cheap SDK
    * client) so admin key/model changes apply without restart — never cached.
    */
-  private createProvider(providerType: string, selectedModel?: string): LLMProvider {
-    const cred = resolveProviderCredential(providerType);
+  private createProvider(providerRef: string, selectedModel?: string): LLMProvider {
+    // `<type>@<entry>` (a provider entry of the LLM gateway): the entry's own
+    // key and base URL (resolveProviderCredential), the client of its type.
+    const cred = resolveProviderCredential(providerRef);
+    const providerType = providerBaseType(providerRef);
     const model = selectedModel || this.resolveDefaults().model;
     if (!model) {
       throw new Error(
@@ -862,7 +868,7 @@ export class LLMService {
       // Flagged so chat() can treat it as a credential failure and reroute.
       throw Object.assign(
         new Error(
-          `No API key resolved for LLM provider "${providerType}" ` +
+          `No API key resolved for LLM provider "${providerRef}" ` +
             `(system DB key absent or undecryptable — check FIELD_ENCRYPTION_KEY — ` +
             `and the provider's env fallback key is unset). ` +
             `Re-save the key in admin LLM settings or set the env var.`,
@@ -1590,7 +1596,7 @@ export class LLMService {
     const platformHop = (providerType: string, model: string, source: Hop['source']): Hop | null => {
       try {
         const cred = resolveProviderCredential(providerType);
-        if (!cred.apiKey?.trim() && providerType !== 'ollama') return null;
+        if (!cred.apiKey?.trim() && providerBaseType(providerType) !== 'ollama') return null;
         return { providerType, model, apiKey: cred.apiKey, baseUrl: cred.baseUrl ?? null, byok: false, source };
       } catch {
         return null;
