@@ -4004,6 +4004,10 @@
         "system": {
           "sub": "Sources d’offres, tâches de fond, e-mails, Assistant et coûts, comptés en direct.",
           "title": "Système"
+        },
+        "llm": {
+          "title": "Passerelle LLM",
+          "sub": "Les fournisseurs d’IA, leurs modèles et le modèle utilisé pour chaque type de tâche."
         }
       },
       "overrides": {
@@ -4513,6 +4517,215 @@
           "off": "Non connectée",
           "rapidapi": "Service de recherche",
           "syndication": "Lue depuis son flux d’offres"
+        }
+      },
+      "llm": {
+        "eyebrow": "Admin",
+        "title": "Passerelle LLM",
+        "sub": "Enregistre une fois tes fournisseurs d’IA, puis choisis le fournisseur et le modèle de chaque type de tâche. Un changement s’applique aux nouvelles requêtes en 30 secondes environ.",
+        "loading": "Chargement…",
+        "refresh": "Actualiser",
+        "refreshing": "Actualisation…",
+        "cancel": "Annuler",
+        "environment": {
+          "production": "Réglages de production",
+          "development": "Réglages de développement"
+        },
+        "dbDisabled": "Les réglages enregistrés sont désactivés sur ce serveur (LLM_SETTINGS_DB_DISABLED). Tu peux toujours les modifier, mais toutes les requêtes utilisent les variables d’environnement tant que ce n’est pas réactivé.",
+        "encryptionMissing": "Ce serveur n’a pas de FIELD_ENCRYPTION_KEY, donc aucune clé API ne peut être stockée. Définis-la avant d’ajouter un fournisseur.",
+        "types": {
+          "newapi": "Compatible OpenAI"
+        },
+        "providers": {
+          "title": "Fournisseurs",
+          "sub": "Chaque fournisseur correspond à un point d’accès et à une clé API. Ajoute deux fois le même service pour utiliser deux comptes ou deux passerelles.",
+          "add": "Ajouter un fournisseur",
+          "empty": "Aucun fournisseur pour l’instant. Ajoutes-en un, puis assigne-le à un domaine ci-dessous.",
+          "full": "Tu as atteint le maximum de {max} fournisseurs. Retires-en un pour en ajouter un autre.",
+          "noUrl": "Aucune URL",
+          "off": "Désactivé",
+          "ready": "Prêt",
+          "keyUnreadable": "Clé illisible",
+          "keyUnreadableHelp": "La clé enregistrée a été chiffrée avec une autre FIELD_ENCRYPTION_KEY et ne peut pas être lue ici. Les domaines assignés à ce fournisseur utilisent leur modèle hérité tant que tu n’as pas saisi la clé de nouveau.",
+          "key": "Clé API",
+          "noKey": "Aucune",
+          "models": "Modèles",
+          "modelCount": "{count, plural, one {{n} modèle} other {{n} modèles}}",
+          "modelsNever": "Pas encore récupérés",
+          "fetchedAt": "Liste récupérée",
+          "edit": "Modifier",
+          "fetchModels": "Récupérer les modèles",
+          "refreshModels": "Actualiser les modèles",
+          "fetching": "Récupération…",
+          "showModels": "Afficher les modèles",
+          "hideModels": "Masquer les modèles",
+          "turnOff": "Désactiver",
+          "turnOn": "Activer",
+          "remove": "Retirer",
+          "removeConfirm": "Retirer {name}"
+        },
+        "form": {
+          "addTitle": "Ajouter un fournisseur",
+          "editTitle": "Modifier le fournisseur",
+          "name": "Nom",
+          "nameHint": "Affiché dans les listes des domaines, par exemple « OpenRouter (principal) ».",
+          "type": "Type",
+          "typeHint": "L’API que parle le point d’accès. Choisis Compatible OpenAI pour une passerelle ou un proxy.",
+          "typeHintNoTools": "Ce type ne peut pas diffuser d’appels d’outils ici, donc il ne peut pas servir le domaine Assistant.",
+          "baseUrl": "URL de base de l’API",
+          "baseUrlRequired": "Obligatoire. Inclus le chemin de version, par exemple https://gateway.example.com/v1, et aucun point d’accès comme /chat/completions.",
+          "baseUrlOptional": "Laisse vide pour utiliser {url}.",
+          "apiKey": "Clé API",
+          "apiKeyHint": "Stockée chiffrée. Elle ne s’affiche plus jamais après l’enregistrement.",
+          "apiKeyKeep": "Laisse vide pour garder la clé enregistrée. Si tu changes l’URL vers un autre hôte, la clé est à saisir de nouveau.",
+          "notes": "Notes (facultatif)",
+          "enabled": "Utiliser ce fournisseur",
+          "save": "Enregistrer le fournisseur",
+          "saving": "Enregistrement…",
+          "test": "Tester sans enregistrer",
+          "testing": "Test en cours…",
+          "saveHint": "L’enregistrement récupère aussi la liste des modèles du fournisseur avec cette clé."
+        },
+        "modelList": {
+          "ok": "{count, plural, one {Le fournisseur liste {n} modèle.} other {Le fournisseur liste {n} modèles.}}",
+          "okTruncated": "Le fournisseur liste plus de {n} modèles ; les {n} premiers sont conservés. Saisis à la main tout autre ID de modèle.",
+          "invalid_base_url": "Cette URL de base est inutilisable. Vérifie l’adresse ; seul un type auto-hébergé peut pointer vers un hôte privé.",
+          "key_required": "Saisis une clé API pour demander ses modèles au fournisseur.",
+          "auth_rejected": "Le fournisseur a rejeté la clé API.",
+          "not_supported": "Ce point d’accès n’a pas de liste de modèles. Vérifie l’URL de base, ou saisis les ID de modèle à la main.",
+          "rate_limited": "Le fournisseur limite les requêtes. Réessaie dans une minute.",
+          "timeout": "Le fournisseur n’a pas répondu en 8 secondes.",
+          "unreachable": "Le fournisseur est injoignable. Vérifie l’URL de base.",
+          "invalid_response": "Le fournisseur a répondu, mais pas avec une liste de modèles.",
+          "response_too_large": "La liste de modèles du fournisseur est trop volumineuse pour être lue.",
+          "provider_error": "Le fournisseur a renvoyé une erreur."
+        },
+        "areas": {
+          "title": "Domaines fonctionnels",
+          "sub": "Assigne un fournisseur et un modèle à un domaine, ou laisse-le hériter. Un domaine que tu ne touches pas continue de fonctionner exactement comme aujourd’hui.",
+          "brand": "Site",
+          "goapplyNote": "{site} utilise l’assignation de {shared} pour tout domaine qu’il n’assigne pas lui-même.",
+          "noProviders": "Ajoute un fournisseur ci-dessus pour assigner un domaine.",
+          "assigned": "Assigné",
+          "notInEffect": "Sans effet",
+          "inherits": "Hérite",
+          "provider": "Fournisseur",
+          "inheritOption": "Non assigné (hérite)",
+          "providerOff": "{name} (désactivé)",
+          "model": "Modèle",
+          "save": "Enregistrer",
+          "clear": "Effacer l’assignation",
+          "modelHint": "Choisis un modèle dans la liste du fournisseur, ou saisis un ID de modèle qu’elle ne contient pas.",
+          "noModelList": "Ce fournisseur n’a pas encore de liste de modèles. Récupère ses modèles ci-dessus, ou saisis un ID de modèle.",
+          "needsTools": "Ce domaine appelle des outils, donc le modèle doit prendre en charge les appels d’outils.",
+          "needsImages": "Ce domaine lit des images, donc le modèle doit accepter les images en entrée.",
+          "toolsBlocked": "Ce type de fournisseur ne peut pas diffuser d’appels d’outils ici. Choisis un fournisseur Compatible OpenAI pour ce domaine.",
+          "modelNotListed": "Ce modèle ne figure pas dans la liste récupérée du fournisseur. Il est utilisé tel que saisi.",
+          "now": "Ce que les requêtes utilisent maintenant",
+          "colSetting": "Utilisé pour",
+          "colModel": "Modèle",
+          "colSource": "Provient de"
+        },
+        "routeStatus": {
+          "provider_missing": "Le fournisseur assigné a été retiré, donc ce domaine utilise son modèle hérité.",
+          "provider_disabled": "Le fournisseur assigné est désactivé, donc ce domaine utilise son modèle hérité.",
+          "provider_key_missing": "Le fournisseur assigné n’a pas de clé API, donc ce domaine utilise son modèle hérité.",
+          "provider_key_unreadable": "La clé du fournisseur assigné est illisible sur ce serveur, donc ce domaine utilise son modèle hérité."
+        },
+        "area": {
+          "default": {
+            "title": "Par défaut",
+            "sub": "Toute tâche qui n’a pas de modèle propre."
+          },
+          "matchResume": {
+            "title": "Correspondance CV",
+            "sub": "Évaluer dans quelle mesure un CV correspond à une offre."
+          },
+          "parseResume": {
+            "title": "Analyse de CV",
+            "sub": "Transformer le texte d’un CV en informations structurées."
+          },
+          "visual": {
+            "title": "Visuel",
+            "sub": "Lecture d’images et de pages numérisées (OCR)."
+          },
+          "evaluation": {
+            "title": "Évaluation",
+            "sub": "Noter un entretien d’entraînement terminé et rédiger son rapport."
+          },
+          "insights": {
+            "title": "Analyses",
+            "sub": "Le résumé de carrière hebdomadaire et les résumés de recherche."
+          },
+          "writing": {
+            "title": "Rédaction",
+            "sub": "Lettres de motivation, messages d’approche et réécritures de CV."
+          },
+          "assistant": {
+            "title": "Assistant",
+            "sub": "Le chat de l’Assistant, l’accueil et la compréhension de ce que demande une personne."
+          },
+          "jobs": {
+            "title": "Détails des offres",
+            "sub": "Ajout de détails et de tags aux annonces."
+          }
+        },
+        "setting": {
+          "defaultModel": "Modèle par défaut",
+          "matching": "Score d’adéquation",
+          "matchResume": "Rapport de correspondance",
+          "matchScreen": "Présélection des correspondances",
+          "prematchFilter": "Filtre de pré-correspondance",
+          "extract": "Texte du CV",
+          "resumeTag": "Tags de CV",
+          "vision": "Images et numérisations",
+          "evaluation": "Rapport d’entretien",
+          "insights": "Analyses",
+          "writing": "Rédaction longue",
+          "rewrite": "Réécriture de CV",
+          "copilot": "Chat de l’Assistant",
+          "onboarding": "Accueil",
+          "intentParser": "Intention de recherche",
+          "enrich": "Enrichissement des offres",
+          "jobTag": "Tags d’offre",
+          "quickJob": "Lecture rapide d’offre"
+        },
+        "source": {
+          "assigned": "L’assignation de ce domaine",
+          "override": "Une surcharge enregistrée pour ce réglage",
+          "shared": "Le réglage de {shared}",
+          "env": "Variable d’environnement {name}",
+          "noneDefault": "Rien n’est configuré",
+          "noDefault": "aucun configuré",
+          "fallback": {
+            "default": "Rien n’est configuré",
+            "matchResume": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "parseResume": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "visual": "Pas de modèle propre ; utilise le modèle d’Analyse de CV",
+            "evaluation": "Pas de modèle propre ; utilise le modèle d’entretien",
+            "insights": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "writing": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "assistant": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "jobs": "Pas de modèle propre ; utilise le modèle par défaut ({model})"
+          }
+        },
+        "errors": {
+          "generic": "Ça n’a pas fonctionné. Réessaie.",
+          "invalid_name": "Saisis un nom de 60 caractères au maximum.",
+          "duplicate_name": "Un autre fournisseur porte déjà ce nom.",
+          "invalid_type": "Choisis un type de fournisseur.",
+          "invalid_base_url": "Cette URL de base est inutilisable. Saisis l’URL de base de l’API sans point d’accès comme /chat/completions ; seul un type auto-hébergé peut pointer vers un hôte privé.",
+          "key_required": "Saisis une clé API.",
+          "key_required_for_new_url": "Le point d’accès a changé. Saisis de nouveau la clé API, pour que la clé enregistrée ne soit pas envoyée à un autre hôte.",
+          "too_many_providers": "Le nombre maximum de fournisseurs est enregistré. Retires-en un d’abord.",
+          "not_found": "Ce fournisseur n’existe plus. Actualise la page.",
+          "invalid_notes": "Les notes peuvent contenir 2 000 caractères au maximum.",
+          "encryption_unavailable": "Ce serveur ne peut pas stocker de clés API : FIELD_ENCRYPTION_KEY n’est pas définie.",
+          "invalid_area": "Ce domaine est inconnu. Actualise la page.",
+          "invalid_route": "Choisis un fournisseur et un modèle.",
+          "unknown_provider": "Ce fournisseur n’existe plus. Actualise la page.",
+          "tools_unsupported": "Ce type de fournisseur ne peut pas diffuser d’appels d’outils, dont ce domaine a besoin.",
+          "provider_in_use": "Un domaine est encore assigné à ce fournisseur. Réassigne ou efface d’abord ce domaine."
         }
       }
     }

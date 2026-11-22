@@ -4004,6 +4004,10 @@
         "system": {
           "sub": "Fontes de vagas, tarefas em segundo plano, e-mails, Assistente e custos, contados em tempo real.",
           "title": "Sistema"
+        },
+        "llm": {
+          "title": "Gateway de LLM",
+          "sub": "Provedores de IA, seus modelos e qual modelo cada tipo de trabalho usa."
         }
       },
       "overrides": {
@@ -4513,6 +4517,215 @@
           "off": "Não conectada",
           "rapidapi": "Serviço de busca",
           "syndication": "Lida do feed de vagas dela"
+        }
+      },
+      "llm": {
+        "eyebrow": "Admin",
+        "title": "Gateway de LLM",
+        "sub": "Salve os provedores de IA uma vez e escolha o provedor e o modelo de cada tipo de trabalho. Uma mudança vale para novas requisições em cerca de 30 segundos.",
+        "loading": "Carregando…",
+        "refresh": "Atualizar",
+        "refreshing": "Atualizando…",
+        "cancel": "Cancelar",
+        "environment": {
+          "production": "Configurações de produção",
+          "development": "Configurações de desenvolvimento"
+        },
+        "dbDisabled": "As configurações salvas estão desligadas neste servidor (LLM_SETTINGS_DB_DISABLED). Você ainda pode editá-las, mas todas as requisições usam as variáveis de ambiente até que isso seja desligado.",
+        "encryptionMissing": "Este servidor não tem FIELD_ENCRYPTION_KEY, então não é possível guardar uma chave de API. Defina-a antes de adicionar um provedor.",
+        "types": {
+          "newapi": "Compatível com OpenAI"
+        },
+        "providers": {
+          "title": "Provedores",
+          "sub": "Cada provedor é um endpoint e uma chave de API. Adicione o mesmo serviço duas vezes para usar duas contas ou dois gateways.",
+          "add": "Adicionar provedor",
+          "empty": "Nenhum provedor ainda. Adicione um e atribua-o a uma área abaixo.",
+          "full": "Você atingiu o máximo de {max} provedores. Remova um para adicionar outro.",
+          "noUrl": "Sem URL",
+          "off": "Desativado",
+          "ready": "Pronto",
+          "keyUnreadable": "Chave ilegível",
+          "keyUnreadableHelp": "A chave salva foi criptografada com outra FIELD_ENCRYPTION_KEY e não pode ser lida aqui. As áreas atribuídas a este provedor usam o modelo herdado até você informar a chave de novo.",
+          "key": "Chave de API",
+          "noKey": "Nenhuma",
+          "models": "Modelos",
+          "modelCount": "{count, plural, one {{n} modelo} other {{n} modelos}}",
+          "modelsNever": "Ainda não buscados",
+          "fetchedAt": "Lista buscada",
+          "edit": "Editar",
+          "fetchModels": "Buscar modelos",
+          "refreshModels": "Atualizar modelos",
+          "fetching": "Buscando…",
+          "showModels": "Mostrar modelos",
+          "hideModels": "Ocultar modelos",
+          "turnOff": "Desativar",
+          "turnOn": "Ativar",
+          "remove": "Remover",
+          "removeConfirm": "Remover {name}"
+        },
+        "form": {
+          "addTitle": "Adicionar um provedor",
+          "editTitle": "Editar provedor",
+          "name": "Nome",
+          "nameHint": "Aparece nas listas das áreas, por exemplo \"OpenRouter (principal)\".",
+          "type": "Tipo",
+          "typeHint": "A API que o endpoint usa. Escolha Compatível com OpenAI para um gateway ou proxy.",
+          "typeHintNoTools": "Este tipo não consegue transmitir chamadas de ferramentas aqui, então não pode atender a área Assistente.",
+          "baseUrl": "URL base da API",
+          "baseUrlRequired": "Obrigatório. Inclua o caminho da versão, por exemplo https://gateway.example.com/v1, e nenhum endpoint como /chat/completions.",
+          "baseUrlOptional": "Deixe vazio para usar {url}.",
+          "apiKey": "Chave de API",
+          "apiKeyHint": "Guardada criptografada. Não é mostrada de novo depois de salvar.",
+          "apiKeyKeep": "Deixe vazio para manter a chave salva. Trocar a URL por outro host exige a chave de novo.",
+          "notes": "Notas (opcional)",
+          "enabled": "Usar este provedor",
+          "save": "Salvar provedor",
+          "saving": "Salvando…",
+          "test": "Testar sem salvar",
+          "testing": "Testando…",
+          "saveHint": "Ao salvar, a lista de modelos do provedor também é buscada com esta chave."
+        },
+        "modelList": {
+          "ok": "{count, plural, one {O provedor lista {n} modelo.} other {O provedor lista {n} modelos.}}",
+          "okTruncated": "O provedor lista mais de {n} modelos; os primeiros {n} foram mantidos. Digite à mão o ID de qualquer outro modelo.",
+          "invalid_base_url": "Esta URL base não pode ser usada. Confira o endereço; só um tipo hospedado por você pode apontar para um host privado.",
+          "key_required": "Informe uma chave de API para pedir os modelos ao provedor.",
+          "auth_rejected": "O provedor rejeitou a chave de API.",
+          "not_supported": "Este endpoint não tem lista de modelos. Confira a URL base ou digite os IDs dos modelos à mão.",
+          "rate_limited": "O provedor está limitando as requisições. Tente de novo em um minuto.",
+          "timeout": "O provedor não respondeu em 8 segundos.",
+          "unreachable": "Não foi possível acessar o provedor. Confira a URL base.",
+          "invalid_response": "O provedor respondeu, mas não com uma lista de modelos.",
+          "response_too_large": "A lista de modelos do provedor é grande demais para ser lida.",
+          "provider_error": "O provedor retornou um erro."
+        },
+        "areas": {
+          "title": "Áreas de funcionalidade",
+          "sub": "Atribua um provedor e um modelo a uma área, ou deixe que ela herde. Uma área que você não mexer continua funcionando exatamente como agora.",
+          "brand": "Site",
+          "goapplyNote": "O {site} usa a atribuição do {shared} para qualquer área que ele não atribua por conta própria.",
+          "noProviders": "Adicione um provedor acima para atribuir uma área.",
+          "assigned": "Atribuída",
+          "notInEffect": "Sem efeito",
+          "inherits": "Herda",
+          "provider": "Provedor",
+          "inheritOption": "Não atribuída (herdar)",
+          "providerOff": "{name} (desativado)",
+          "model": "Modelo",
+          "save": "Salvar",
+          "clear": "Limpar atribuição",
+          "modelHint": "Escolha um modelo da lista do provedor ou digite o ID de um modelo que ele não liste.",
+          "noModelList": "Este provedor ainda não tem lista de modelos. Busque os modelos dele acima ou digite um ID de modelo.",
+          "needsTools": "Esta área chama ferramentas, então o modelo precisa aceitar chamadas de ferramentas.",
+          "needsImages": "Esta área lê imagens, então o modelo precisa aceitar imagens como entrada.",
+          "toolsBlocked": "Este tipo de provedor não consegue transmitir chamadas de ferramentas aqui. Escolha um provedor Compatível com OpenAI para esta área.",
+          "modelNotListed": "Este modelo não está na lista buscada do provedor. Ele será usado como digitado.",
+          "now": "O que as requisições usam agora",
+          "colSetting": "Usado para",
+          "colModel": "Modelo",
+          "colSource": "Vem de"
+        },
+        "routeStatus": {
+          "provider_missing": "O provedor atribuído foi removido, então esta área usa o modelo herdado.",
+          "provider_disabled": "O provedor atribuído está desativado, então esta área usa o modelo herdado.",
+          "provider_key_missing": "O provedor atribuído não tem chave de API, então esta área usa o modelo herdado.",
+          "provider_key_unreadable": "A chave do provedor atribuído não pode ser lida neste servidor, então esta área usa o modelo herdado."
+        },
+        "area": {
+          "default": {
+            "title": "Padrão",
+            "sub": "Todo tipo de trabalho que não tem um modelo próprio."
+          },
+          "matchResume": {
+            "title": "Comparar currículo",
+            "sub": "Pontuar o quanto um currículo combina com uma vaga."
+          },
+          "parseResume": {
+            "title": "Ler currículo",
+            "sub": "Transformar o texto de um currículo em dados estruturados."
+          },
+          "visual": {
+            "title": "Visual",
+            "sub": "Ler imagens e páginas escaneadas (OCR)."
+          },
+          "evaluation": {
+            "title": "Avaliação",
+            "sub": "Pontuar uma entrevista de treino concluída e escrever o relatório dela."
+          },
+          "insights": {
+            "title": "Insights",
+            "sub": "O resumo semanal de carreira e os resumos de busca."
+          },
+          "writing": {
+            "title": "Redação",
+            "sub": "Cartas de apresentação, mensagens de contato e reescritas de currículo."
+          },
+          "assistant": {
+            "title": "Assistente",
+            "sub": "O chat do Assistente, a integração inicial e a leitura do que a pessoa pede."
+          },
+          "jobs": {
+            "title": "Detalhes da vaga",
+            "sub": "Adicionar detalhes e tags aos anúncios de vagas."
+          }
+        },
+        "setting": {
+          "defaultModel": "Modelo padrão",
+          "matching": "Nota de compatibilidade",
+          "matchResume": "Relatório de compatibilidade",
+          "matchScreen": "Triagem de compatibilidade",
+          "prematchFilter": "Filtro pré-compatibilidade",
+          "extract": "Texto do currículo",
+          "resumeTag": "Tags do currículo",
+          "vision": "Imagens e escaneados",
+          "evaluation": "Relatório da entrevista",
+          "insights": "Insights",
+          "writing": "Textos longos",
+          "rewrite": "Reescrita do currículo",
+          "copilot": "Chat do Assistente",
+          "onboarding": "Integração inicial",
+          "intentParser": "Intenção da busca",
+          "enrich": "Enriquecimento de vagas",
+          "jobTag": "Tags de vagas",
+          "quickJob": "Leitura rápida de vaga"
+        },
+        "source": {
+          "assigned": "A atribuição desta área",
+          "override": "Uma substituição salva por configuração",
+          "shared": "A configuração do {shared}",
+          "env": "Variável de ambiente {name}",
+          "noneDefault": "Nada está configurado",
+          "noDefault": "nada configurado",
+          "fallback": {
+            "default": "Nada está configurado",
+            "matchResume": "Sem modelo próprio; usa o modelo padrão ({model})",
+            "parseResume": "Sem modelo próprio; usa o modelo padrão ({model})",
+            "visual": "Sem modelo próprio; usa o modelo de Ler currículo",
+            "evaluation": "Sem modelo próprio; usa o modelo da entrevista",
+            "insights": "Sem modelo próprio; usa o modelo padrão ({model})",
+            "writing": "Sem modelo próprio; usa o modelo padrão ({model})",
+            "assistant": "Sem modelo próprio; usa o modelo padrão ({model})",
+            "jobs": "Sem modelo próprio; usa o modelo padrão ({model})"
+          }
+        },
+        "errors": {
+          "generic": "Isso não funcionou. Tente de novo.",
+          "invalid_name": "Informe um nome de até 60 caracteres.",
+          "duplicate_name": "Outro provedor já tem este nome.",
+          "invalid_type": "Escolha um tipo de provedor.",
+          "invalid_base_url": "Esta URL base não pode ser usada. Informe a URL base da API sem um endpoint como /chat/completions; só um tipo hospedado por você pode apontar para um host privado.",
+          "key_required": "Informe uma chave de API.",
+          "key_required_for_new_url": "O endpoint mudou. Informe a chave de API de novo, para que a chave salva não seja enviada a outro host.",
+          "too_many_providers": "O número máximo de provedores já está salvo. Remova um primeiro.",
+          "not_found": "Este provedor não existe mais. Atualize a página.",
+          "invalid_notes": "As notas podem ter no máximo 2.000 caracteres.",
+          "encryption_unavailable": "Este servidor não consegue guardar chaves de API: FIELD_ENCRYPTION_KEY não está definida.",
+          "invalid_area": "Esta área é desconhecida. Atualize a página.",
+          "invalid_route": "Escolha um provedor e um modelo.",
+          "unknown_provider": "Este provedor não existe mais. Atualize a página.",
+          "tools_unsupported": "Este tipo de provedor não consegue transmitir chamadas de ferramentas, que esta área exige.",
+          "provider_in_use": "Ainda há uma área atribuída a este provedor. Reatribua ou limpe essa área primeiro."
         }
       }
     }
