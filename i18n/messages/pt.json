@@ -4606,29 +4606,45 @@
         },
         "areas": {
           "title": "Áreas de funcionalidade",
-          "sub": "Atribua um provedor e um modelo a uma área, ou deixe que ela herde. Uma área que você não mexer continua funcionando exatamente como agora.",
+          "sub": "Atribua a uma área um provedor, um modelo e um esforço de raciocínio, com modelos de reserva se quiser. Uma área não atribuída usa a atribuição de Padrão; se Padrão também não estiver atribuída, ela mantém a configuração que tem agora.",
           "brand": "Site",
-          "goapplyNote": "O {site} usa a atribuição do {shared} para qualquer área que ele não atribua por conta própria.",
+          "goapplyNote": "O {site} lê primeiro as próprias áreas e o próprio Padrão. Onde não tem nenhum dos dois, usa os do {shared}.",
           "noProviders": "Adicione um provedor acima para atribuir uma área.",
           "assigned": "Atribuída",
           "notInEffect": "Sem efeito",
           "inherits": "Herda",
           "provider": "Provedor",
-          "inheritOption": "Não atribuída (herdar)",
+          "inheritOption": "Não atribuída (usar Padrão)",
           "providerOff": "{name} (desativado)",
           "model": "Modelo",
           "save": "Salvar",
           "clear": "Limpar atribuição",
           "modelHint": "Escolha um modelo da lista do provedor ou digite o ID de um modelo que ele não liste.",
           "noModelList": "Este provedor ainda não tem lista de modelos. Busque os modelos dele acima ou digite um ID de modelo.",
-          "needsTools": "Esta área chama ferramentas, então o modelo precisa aceitar chamadas de ferramentas.",
+          "needsTools": "Esta área chama ferramentas, então o modelo e cada modelo de reserva precisam aceitar chamadas de ferramentas.",
           "needsImages": "Esta área lê imagens, então o modelo precisa aceitar imagens como entrada.",
-          "toolsBlocked": "Este tipo de provedor não consegue transmitir chamadas de ferramentas aqui. Escolha um provedor Compatível com OpenAI para esta área.",
+          "toolsBlocked": "Um tipo de provedor escolhido aqui não consegue transmitir chamadas de ferramentas. Escolha provedores Compatíveis com OpenAI para o modelo e as reservas desta área.",
           "modelNotListed": "Este modelo não está na lista buscada do provedor. Ele será usado como digitado.",
           "now": "O que as requisições usam agora",
           "colSetting": "Usado para",
           "colModel": "Modelo",
-          "colSource": "Vem de"
+          "colSource": "Vem de",
+          "inheritOptionDefault": "Não atribuída (usar o ambiente)",
+          "usesDefault": "Usa Padrão",
+          "chooseProvider": "Escolha um provedor",
+          "effort": "Esforço de raciocínio",
+          "effortHint": "O esforço de raciocínio vai junto com cada solicitação a esse modelo, ajustado ao nível mais próximo que o provedor aceita. Padrão do provedor não envia nenhum, então vale o esforço do ambiente ou o do próprio provedor.",
+          "fallbacks": "Modelos de reserva",
+          "fallbacksHint": "Testados em ordem quando o modelo acima falha: uma chave recusada ou sem crédito, uma queda ou um limite de uso, ou um modelo que o endpoint não oferece. Até {max}. Depois deles, a configuração do modelo de reserva (LLM_FALLBACK_MODEL) continua sendo testada.",
+          "fallbackN": "Reserva {n}",
+          "addFallback": "Adicionar modelo de reserva",
+          "fallbacksFull": "Esta área já tem o máximo de modelos de reserva ({max}).",
+          "moveUp": "Subir",
+          "moveDown": "Descer",
+          "removeFallback": "Remover",
+          "moveUpLabel": "Subir a reserva {n}",
+          "moveDownLabel": "Descer a reserva {n}",
+          "removeFallbackLabel": "Remover a reserva {n}"
         },
         "routeStatus": {
           "provider_missing": "O provedor atribuído foi removido, então esta área usa o modelo herdado.",
@@ -4639,7 +4655,7 @@
         "area": {
           "default": {
             "title": "Padrão",
-            "sub": "Todo tipo de trabalho que não tem um modelo próprio."
+            "sub": "Toda área que você não atribuir usa este modelo, os modelos de reserva dele e o esforço dele."
           },
           "matchResume": {
             "title": "Comparar currículo",
@@ -4705,13 +4721,16 @@
             "default": "Nada está configurado",
             "matchResume": "Sem modelo próprio; usa o modelo padrão ({model})",
             "parseResume": "Sem modelo próprio; usa o modelo padrão ({model})",
-            "visual": "Sem modelo próprio; usa o modelo de Ler currículo",
-            "evaluation": "Sem modelo próprio; usa o modelo da entrevista",
+            "visual": "Sem modelo próprio; usa o modelo padrão ({model})",
+            "evaluation": "Sem modelo próprio; usa o modelo padrão ({model})",
             "insights": "Sem modelo próprio; usa o modelo padrão ({model})",
             "writing": "Sem modelo próprio; usa o modelo padrão ({model})",
             "assistant": "Sem modelo próprio; usa o modelo padrão ({model})",
             "jobs": "Sem modelo próprio; usa o modelo padrão ({model})"
-          }
+          },
+          "default": "A atribuição da área Padrão",
+          "sharedArea": "A atribuição do {shared} para esta área",
+          "sharedDefault": "A área Padrão do {shared}"
         },
         "errors": {
           "generic": "Isso não funcionou. Tente de novo.",
@@ -4729,7 +4748,19 @@
           "invalid_route": "Escolha um provedor e um modelo.",
           "unknown_provider": "Este provedor não existe mais. Atualize a página.",
           "tools_unsupported": "Este tipo de provedor não consegue transmitir chamadas de ferramentas, que esta área exige.",
-          "provider_in_use": "Ainda há uma área atribuída a este provedor. Reatribua ou limpe essa área primeiro."
+          "provider_in_use": "Uma área ainda usa este provedor, no modelo ou em uma reserva. Altere ou limpe essa área primeiro.",
+          "invalid_effort": "Escolha um esforço de raciocínio.",
+          "invalid_fallback": "Escolha um provedor e um modelo para cada modelo de reserva.",
+          "duplicate_fallback": "Cada modelo pode aparecer só uma vez em uma área.",
+          "too_many_fallbacks": "Uma área aceita no máximo {max} modelos de reserva."
+        },
+        "effort": {
+          "provider": "Padrão do provedor",
+          "minimal": "Mínimo",
+          "low": "Baixo",
+          "medium": "Médio",
+          "high": "Alto",
+          "max": "Máximo"
         }
       },
       "visitors": {
