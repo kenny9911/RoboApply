@@ -199,5 +199,5 @@ The low effort is Alice's own request. When an admin assigns the area a call run
 
 ### Open
 
-- SCHEMA-10 on each database (production at the owner's word).
+- SCHEMA-10 is on production since 2026-11-23 (`ep-empty-snow-a6mdqwbe`; the diffs read before and after are `docs/jobright-clone/schema-diffs/production-2026-11-23-before.sql` and `-after.sql`). Any other database (a Neon branch, the mainland one) still needs it before Alice answers there.
 - Matches depend on the job index: a database with few jobs shows the honest empty state.

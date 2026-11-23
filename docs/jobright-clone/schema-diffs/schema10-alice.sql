@@ -9,9 +9,14 @@
 --   database the diff of server/prisma/sql/README.md step 3 is the one that counts.
 --
 -- APPLIED
---   Not yet on any shared database. Checked on a throwaway local Postgres 17 (the full schema
---   loaded, 250 tables) with an end-to-end run of Alice: threads, messages and a saved job
---   profile written and read back. Production only at the owner's word.
+--   production (ep-empty-snow-a6mdqwbe), 2026-11-23, at the owner's word: the nine statements
+--   below in one transaction with `prisma db execute` (and SET LOCAL lock_timeout = '5s', so the
+--   foreign keys to "User" could not queue writes behind a busy lock). The diffs read from that
+--   database before and after are production-2026-11-23-before.sql (these statements and the
+--   KNOWN_DRIFT.md pair) and -after.sql (the pair alone). No other database has it yet.
+--   Before that it was checked on a throwaway local Postgres 17 (the full schema loaded, 250
+--   tables) with an end-to-end run of Alice: threads, messages and a saved job profile written
+--   and read back.
 --
 -- HOW IT IS APPLIED (the owner, or someone the owner told to, on each database)
 --   1. Read the database-to-schema diff and check it:
