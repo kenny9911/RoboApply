@@ -22,7 +22,7 @@
      animations — and the reduced-motion block that existed to suppress them
      — are gone.
 
-   Sizes: the 8-token scale, 12px floor. Text-entry controls (input, textarea,
+   Sizes: the 8-token scale, 13px floor. Text-entry controls (input, textarea,
    select, chip field) sit at --fs-body rather than the --fs-meta their old
    13.5px would map to: typed text is read text.
 ═══════════════════════════════════════════════════════════════════ */
@@ -574,9 +574,7 @@
   display: flex; gap: var(--sp-4); align-items: center;
   margin-bottom: var(--sp-2);
 }
-/* The avatar carries initials, i.e. text — so it can never be painted in
- * --brand-mark (identity never carries a glyph: ruling R3). Flat action fill;
- * the accent→violet gradient and its coloured drop-halo are both gone. */
+/* The avatar carries initials: white on the flat action fill. */
 .pref-avatar {
   width: 72px; height: 72px;
   border-radius: 50%;
@@ -1219,30 +1217,33 @@
  * had a rule here a phone user could not reach any of them. Cancelling a
  * subscription must work on the device the subscription was bought on. */
 @media (max-width: 760px) {
+  /* The row runs edge to edge on the ground, sticks under the top bar (64px
+   * here) and reads as a row of pills, like the app's segmented controls. */
   .pref-rail {
     display: flex; flex-direction: column;
-    background: var(--surface);
+    background: var(--bg);
     border-bottom: 1px solid var(--rule);
-    padding: var(--sp-4) 0 0;
+    margin-inline: -20px;
+    padding: var(--sp-3) 0 0;
     gap: var(--sp-3);
     position: sticky;
-    top: 0;
+    top: calc(var(--view-as-h, 0px) + 64px);
     z-index: 2;
   }
-  .pref-rail-head { padding: 0; }
+  .pref-rail-head { padding: 0 20px; }
   /* The section row scrolls inside itself and never widens the page. Its
    * width is tied to the viewport (minus .main-inner's side padding at this
    * breakpoint), not only to its parent: when something else on the page was
    * wider than the screen, a 100%-wide row grew with it and its last items
    * could only be reached by scrolling the whole page sideways. */
-  .pref-rail { min-width: 0; max-width: calc(100vw - 2 * var(--sp-5)); }
+  .pref-rail { min-width: 0; max-width: 100vw; }
   .pref-nav {
     min-width: 0;
     max-width: 100%;
     flex-direction: row;
     gap: var(--sp-1);
     overflow-x: auto;
-    padding: 0 0 var(--sp-3);
+    padding: 0 20px var(--sp-3);
     /* Momentum scrolling without a visible scrollbar eating a row of pixels. */
     scrollbar-width: none;
   }
@@ -1251,7 +1252,11 @@
     white-space: nowrap;
     /* 44px is the tap-target floor; the vertical rail's height was 36px. */
     min-height: 44px;
+    border-radius: var(--r-pill);
   }
+  /* The current section is a white pill on the ground, like the app rail's
+   * current page, in place of the vertical rail's inset bar. */
+  .pref-nav-item.active { background: var(--surface); box-shadow: var(--e1); color: var(--text); font-weight: 600; }
   /* The danger entry's top margin separated it from the list vertically; in a
    * row it would push the item out of line instead. */
   .pref-nav-item.danger { margin-top: 0; }
@@ -1272,3 +1277,10 @@
  * the mood orb they shared it with is deleted. The one remaining animation
  * is the save bar's one-shot entrance, which app/globals.css already
  * neutralises under the OS preference. */
+
+/* Narrow phones: .main-inner's gutters are 14px (styles/workspace.css). */
+@media (max-width: 380px) {
+  .pref-rail { margin-inline: -14px; }
+  .pref-rail-head,
+  .pref-nav { padding-inline: 14px; }
+}

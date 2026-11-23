@@ -32,6 +32,7 @@ import {
   type LlmPolicyDecision,
 } from './brandPolicy.js';
 import { OPENROUTER_DEFAULT_BASE_URL, openRouterBaseUrlFromEnv } from './openRouterBaseUrl.js';
+import { providerBaseType } from '../../services/llm/providerPrefixes.js';
 
 /**
  * Built-in base URL of each provider client when neither the credential nor
@@ -91,7 +92,9 @@ export function effectiveLlmBaseUrl(
 ): string | null {
   const explicit = (credentialBaseUrl || '').trim();
   if (explicit) return explicit;
-  const p = (provider || '').trim().toLowerCase();
+  // A provider entry (`<type>@<entry>`) arrives with its own base URL as the
+  // credential's; without one it is judged as its type.
+  const p = providerBaseType(provider || '');
   const envName = PROVIDER_BASE_URL_ENV[p];
   const fromEnv = p === 'openrouter' ? openRouterBaseUrlFromEnv(env) ?? '' : envName ? (env[envName] || '').trim() : '';
   if (fromEnv) return fromEnv;

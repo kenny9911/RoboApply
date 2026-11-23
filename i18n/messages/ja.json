@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, other {未確認 #件}}",
       "ready_open": "準備できたものを見る",
       "upgrade": "アップグレード"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -4005,6 +4006,10 @@
           "sub": "求人ソース、バックグラウンド処理、メール、アシスタント、コストをリアルタイムで集計。",
           "title": "システム"
         },
+        "llm": {
+          "title": "LLMゲートウェイ",
+          "sub": "AIプロバイダー、そのモデル、作業ごとに使うモデル。"
+        },
         "visitors": {
           "title": "訪問者と登録",
           "sub": "誰が訪れ、どこから来て、何人がアカウントを作成したか。"
@@ -4517,6 +4522,246 @@
           "off": "未接続",
           "rapidapi": "検索サービス",
           "syndication": "求人フィードから読み取り"
+        }
+      },
+      "llm": {
+        "eyebrow": "管理",
+        "title": "LLMゲートウェイ",
+        "sub": "AIプロバイダーを一度保存し、作業ごとにプロバイダーとモデルを選びます。変更は約30秒以内に新しいリクエストへ反映されます。",
+        "loading": "読み込み中…",
+        "refresh": "更新",
+        "refreshing": "更新中…",
+        "cancel": "キャンセル",
+        "environment": {
+          "production": "本番環境の設定",
+          "development": "開発環境の設定"
+        },
+        "dbDisabled": "このサーバーでは保存済みの設定がオフになっています（LLM_SETTINGS_DB_DISABLED）。編集はできますが、オフを解除するまで、すべてのリクエストは環境変数を使います。",
+        "encryptionMissing": "このサーバーにはFIELD_ENCRYPTION_KEYがないため、APIキーを保存できません。プロバイダーを追加する前に設定してください。",
+        "types": {
+          "newapi": "OpenAI 互換"
+        },
+        "providers": {
+          "title": "プロバイダー",
+          "sub": "プロバイダーは、1つのエンドポイントと1つのAPIキーです。2つのアカウントや2つのゲートウェイを使うには、同じサービスを2回追加します。",
+          "add": "プロバイダーを追加",
+          "empty": "プロバイダーはまだありません。追加してから、下の領域に割り当ててください。",
+          "full": "プロバイダーの上限{max}件に達しています。追加するには、どれかを削除してください。",
+          "noUrl": "URLなし",
+          "off": "オフ",
+          "ready": "利用可能",
+          "keyUnreadable": "キーを読み取れません",
+          "keyUnreadableHelp": "保存済みのキーは別のFIELD_ENCRYPTION_KEYで暗号化されているため、ここでは読み取れません。キーを入力し直すまで、このプロバイダーを割り当てた領域は、継承したモデルを使います。",
+          "key": "APIキー",
+          "noKey": "なし",
+          "models": "モデル",
+          "modelCount": "{count, plural, one {{n}件のモデル} other {{n}件のモデル}}",
+          "modelsNever": "未取得",
+          "fetchedAt": "一覧の取得日時",
+          "edit": "編集",
+          "fetchModels": "モデルを取得",
+          "refreshModels": "モデルを更新",
+          "fetching": "取得中…",
+          "showModels": "モデルを表示",
+          "hideModels": "モデルを非表示",
+          "turnOff": "オフにする",
+          "turnOn": "オンにする",
+          "remove": "削除",
+          "removeConfirm": "{name}を削除"
+        },
+        "form": {
+          "addTitle": "プロバイダーを追加",
+          "editTitle": "プロバイダーを編集",
+          "name": "名前",
+          "nameHint": "領域の一覧に表示されます。例：「OpenRouter（メイン）」。",
+          "type": "種類",
+          "typeHint": "エンドポイントが使うAPIです。ゲートウェイやプロキシにはOpenAI 互換を選びます。",
+          "typeHintNoTools": "この種類では、ここでツール呼び出しをストリーミングできないため、アシスタント領域には使えません。",
+          "baseUrl": "APIベースURL",
+          "baseUrlRequired": "必須です。バージョンのパスを含め、/chat/completionsのようなエンドポイントは含めないでください。例：https://gateway.example.com/v1",
+          "baseUrlOptional": "空欄の場合は{url}を使います。",
+          "apiKey": "APIキー",
+          "apiKeyHint": "暗号化して保存します。保存後は二度と表示されません。",
+          "apiKeyKeep": "空欄のままにすると、保存済みのキーを保持します。URLを別のホストに変更した場合は、キーの再入力が必要です。",
+          "notes": "メモ（任意）",
+          "enabled": "このプロバイダーを使う",
+          "save": "プロバイダーを保存",
+          "saving": "保存中…",
+          "test": "保存せずにテスト",
+          "testing": "テスト中…",
+          "saveHint": "保存時に、このキーでプロバイダーのモデル一覧も取得します。"
+        },
+        "modelList": {
+          "ok": "{count, plural, one {プロバイダーのモデルは{n}件です。} other {プロバイダーのモデルは{n}件です。}}",
+          "okTruncated": "プロバイダーのモデルが{n}件を超えているため、最初の{n}件のみ保持します。ほかのモデルIDは手入力してください。",
+          "invalid_base_url": "このベースURLは使えません。アドレスを確認してください。プライベートホストを指定できるのは、セルフホスト型のみです。",
+          "key_required": "プロバイダーにモデルを問い合わせるには、APIキーを入力してください。",
+          "auth_rejected": "プロバイダーがAPIキーを拒否しました。",
+          "not_supported": "このエンドポイントにはモデル一覧がありません。ベースURLを確認するか、モデルIDを手入力してください。",
+          "rate_limited": "プロバイダーがリクエストを制限しています。1分後にもう一度試してください。",
+          "timeout": "プロバイダーが8秒以内に応答しませんでした。",
+          "unreachable": "プロバイダーに接続できませんでした。ベースURLを確認してください。",
+          "invalid_response": "プロバイダーは応答しましたが、モデル一覧ではありませんでした。",
+          "response_too_large": "プロバイダーのモデル一覧が大きすぎて読み取れません。",
+          "provider_error": "プロバイダーがエラーを返しました。"
+        },
+        "areas": {
+          "title": "機能領域",
+          "sub": "領域にプロバイダー、モデル、推論の強度を割り当てます。必要ならフォールバックモデルも追加できます。割り当てていない領域はデフォルトの割り当てを使います。デフォルトも未割り当ての場合は、今の設定のまま動作します。",
+          "brand": "サイト",
+          "goapplyNote": "{site}は、まず自分の領域と自分のデフォルトを読みます。どちらもない場合は、{shared}のものを使います。",
+          "noProviders": "領域を割り当てるには、上でプロバイダーを追加してください。",
+          "assigned": "割り当て済み",
+          "notInEffect": "未反映",
+          "inherits": "継承",
+          "provider": "プロバイダー",
+          "inheritOption": "未割り当て（デフォルトを使う）",
+          "providerOff": "{name}（オフ）",
+          "model": "モデル",
+          "save": "保存",
+          "clear": "割り当てを解除",
+          "modelHint": "プロバイダーの一覧からモデルを選ぶか、一覧にないモデルIDを入力してください。",
+          "noModelList": "このプロバイダーにはまだモデル一覧がありません。上でモデルを取得するか、モデルIDを入力してください。",
+          "needsTools": "この領域はツールを呼び出すため、モデルとすべてのフォールバックモデルがツール呼び出しに対応している必要があります。",
+          "needsImages": "この領域は画像を読み取るため、画像入力に対応したモデルが必要です。",
+          "toolsBlocked": "ここで選んだプロバイダーの種類では、ツール呼び出しをストリーミングできません。この領域のモデルとフォールバックには、OpenAI 互換のプロバイダーを選んでください。",
+          "modelNotListed": "このモデルは、取得したプロバイダーの一覧にありません。入力したとおりに使います。",
+          "now": "現在リクエストが使うもの",
+          "colSetting": "用途",
+          "colModel": "モデル",
+          "colSource": "設定元",
+          "inheritOptionDefault": "未割り当て（環境変数を使う）",
+          "usesDefault": "デフォルトを使用",
+          "chooseProvider": "プロバイダーを選択",
+          "effort": "推論の強度",
+          "effortHint": "推論の強度は、そのモデルへのすべてのリクエストに付けて送られ、プロバイダーが受け付ける最も近いレベルに合わせられます。「プロバイダーの既定」は何も送らないため、環境変数の値かプロバイダー自身の既定が使われます。",
+          "fallbacks": "フォールバックモデル",
+          "fallbacksHint": "上のモデルが失敗したときに順番に試します。失敗とは、キーが拒否された・残高がない、障害やレート制限、エンドポイントがそのモデルを提供していない場合です。最大{max}件。その後も、フォールバックモデルの設定（LLM_FALLBACK_MODEL）は引き続き試されます。",
+          "fallbackN": "フォールバック {n}",
+          "addFallback": "フォールバックモデルを追加",
+          "fallbacksFull": "この領域のフォールバックモデルは上限（{max}件）に達しています。",
+          "moveUp": "上へ",
+          "moveDown": "下へ",
+          "removeFallback": "削除",
+          "moveUpLabel": "フォールバック {n} を上へ移動",
+          "moveDownLabel": "フォールバック {n} を下へ移動",
+          "removeFallbackLabel": "フォールバック {n} を削除"
+        },
+        "routeStatus": {
+          "provider_missing": "割り当てたプロバイダーが削除されたため、この領域は継承したモデルを使います。",
+          "provider_disabled": "割り当てたプロバイダーがオフのため、この領域は継承したモデルを使います。",
+          "provider_key_missing": "割り当てたプロバイダーにAPIキーがないため、この領域は継承したモデルを使います。",
+          "provider_key_unreadable": "割り当てたプロバイダーのキーをこのサーバーで読み取れないため、この領域は継承したモデルを使います。"
+        },
+        "area": {
+          "default": {
+            "title": "デフォルト",
+            "sub": "割り当てていないすべての領域が、このモデルとそのフォールバック、推論の強度を使います。"
+          },
+          "matchResume": {
+            "title": "履歴書のマッチング",
+            "sub": "履歴書が求人にどれだけ合うかのスコアリング。"
+          },
+          "parseResume": {
+            "title": "履歴書の解析",
+            "sub": "履歴書のテキストを構造化された情報として読み取る処理。"
+          },
+          "visual": {
+            "title": "ビジュアル",
+            "sub": "画像やスキャンしたページの読み取り（OCR）。"
+          },
+          "evaluation": {
+            "title": "評価",
+            "sub": "終了した面接練習のスコアリングとレポート作成。"
+          },
+          "insights": {
+            "title": "インサイト",
+            "sub": "毎週のキャリアサマリーと検索のサマリー。"
+          },
+          "writing": {
+            "title": "文章作成",
+            "sub": "カバーレター、アウトリーチのメッセージ、履歴書の書き直し。"
+          },
+          "assistant": {
+            "title": "アシスタント",
+            "sub": "チャットのアシスタント、オンボーディング、ユーザーの依頼内容の把握。"
+          },
+          "jobs": {
+            "title": "求人の詳細",
+            "sub": "求人への詳細情報とタグの付与。"
+          }
+        },
+        "setting": {
+          "defaultModel": "デフォルトのモデル",
+          "matching": "適合スコア",
+          "matchResume": "マッチングレポート",
+          "matchScreen": "マッチングの簡易判定",
+          "prematchFilter": "マッチング前のフィルター",
+          "extract": "履歴書のテキスト",
+          "resumeTag": "履歴書のタグ",
+          "vision": "画像とスキャン",
+          "evaluation": "面接レポート",
+          "insights": "インサイト",
+          "writing": "長文の作成",
+          "rewrite": "履歴書の書き直し",
+          "copilot": "アシスタントのチャット",
+          "onboarding": "オンボーディング",
+          "intentParser": "検索意図",
+          "enrich": "求人の情報補完",
+          "jobTag": "求人のタグ",
+          "quickJob": "求人の簡易読み取り"
+        },
+        "source": {
+          "assigned": "この領域の割り当て",
+          "override": "保存済みの個別設定による上書き",
+          "shared": "{shared}の設定",
+          "env": "環境変数{name}",
+          "noneDefault": "何も設定されていません",
+          "noDefault": "未設定",
+          "fallback": {
+            "default": "何も設定されていません",
+            "matchResume": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "parseResume": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "visual": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "evaluation": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "insights": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "writing": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "assistant": "専用のモデルはなく、デフォルトのモデル（{model}）を使います",
+            "jobs": "専用のモデルはなく、デフォルトのモデル（{model}）を使います"
+          },
+          "default": "デフォルト領域の割り当て",
+          "sharedArea": "{shared}のこの領域の割り当て",
+          "sharedDefault": "{shared}のデフォルト領域"
+        },
+        "errors": {
+          "generic": "うまくいきませんでした。もう一度試してください。",
+          "invalid_name": "名前は60文字以内で入力してください。",
+          "duplicate_name": "この名前のプロバイダーがすでにあります。",
+          "invalid_type": "プロバイダーの種類を選んでください。",
+          "invalid_base_url": "このベースURLは使えません。/chat/completionsのようなエンドポイントを含めずに、APIベースURLを入力してください。プライベートホストを指定できるのは、セルフホスト型のみです。",
+          "key_required": "APIキーを入力してください。",
+          "key_required_for_new_url": "エンドポイントが変更されました。保存済みのキーが別のホストに送られないよう、APIキーを再入力してください。",
+          "too_many_providers": "プロバイダーの保存数が上限に達しています。先にどれかを削除してください。",
+          "not_found": "このプロバイダーはすでに存在しません。ページを更新してください。",
+          "invalid_notes": "メモは2,000文字以内で入力してください。",
+          "encryption_unavailable": "このサーバーにはAPIキーを保存できません。FIELD_ENCRYPTION_KEYが設定されていません。",
+          "invalid_area": "この領域は不明です。ページを更新してください。",
+          "invalid_route": "プロバイダーとモデルを選んでください。",
+          "unknown_provider": "このプロバイダーはすでに存在しません。ページを更新してください。",
+          "tools_unsupported": "このプロバイダーの種類は、この領域に必要なツール呼び出しのストリーミングに対応していません。",
+          "provider_in_use": "このプロバイダーは、まだ領域のモデルかフォールバックに使われています。先にその領域を変更または解除してください。",
+          "invalid_effort": "推論の強度を選んでください。",
+          "invalid_fallback": "フォールバックモデルごとに、プロバイダーとモデルを選んでください。",
+          "duplicate_fallback": "1つの領域で同じモデルは1回しか使えません。",
+          "too_many_fallbacks": "1つの領域に設定できるフォールバックモデルは最大{max}件です。"
+        },
+        "effort": {
+          "provider": "プロバイダーの既定",
+          "minimal": "最小",
+          "low": "低",
+          "medium": "中",
+          "high": "高",
+          "max": "最大"
         }
       },
       "visitors": {
@@ -5683,6 +5928,348 @@
     },
     "jobList": {
       "title": "この回答で触れた求人"
+    }
+  },
+  "alice": {
+    "tag": "AIエージェント",
+    "restart": "最初からやり直す",
+    "restartConfirm": "新しい会話を始めますか？保存した仕事プロフィールはそのまま残ります。",
+    "cancel": "キャンセル",
+    "status": {
+      "working": "Aliceが作業しています",
+      "intake": "希望の仕事についてお聞きしています · {total}項目中{done}項目",
+      "choosing": "比較できる仕事プロフィールが2つあります",
+      "refining": "仕事プロフィールのバージョン{version}",
+      "saved": "仕事プロフィールが求人検索に使われています",
+      "savedNeeds": "{count, plural, one {対応が必要なことが#件あります} other {対応が必要なことが#件あります}}"
+    },
+    "tabs": {
+      "aria": "Aliceの画面",
+      "chat": "チャット",
+      "profile": "プロフィール",
+      "jobs": "求人",
+      "applications": "応募"
+    },
+    "greeting": {
+      "hello": "こんにちは、Aliceです。仕事探しと応募をお手伝いするAIエージェントです。",
+      "plan": "まず、次の仕事に求めることをお聞きします。そのうえで仕事プロフィールを2つ作成しますので、見比べてください。近いほうを選んで変えたい点を教えていただければ、納得のいくものになるまで修正します。",
+      "d1": "応募はすべて、ご自身で送信していただきます。私は、合う求人を探し、応募状況を管理して、次にやることをお知らせします。",
+      "withResume": "履歴書「{name}」をもとに始められます。",
+      "withoutResume": "履歴書をお持ちでしたら、追加してください。それをもとに始めます。"
+    },
+    "resume": {
+      "use": "「{name}」を使う",
+      "other": "別の履歴書を選ぶ",
+      "pickLabel": "あなたの履歴書",
+      "upload": "履歴書をアップロード",
+      "skip": "履歴書なしで続ける",
+      "hint": "PDF、Word、テキスト。15 MBまで。",
+      "hintNoPdf": "Wordまたはテキスト。15 MBまで。",
+      "uploading": "{name}を読み込んでいます…",
+      "errors": {
+        "unreadable": "このファイルには読み取れるテキストがありません。別のファイルを試してください。",
+        "tooLarge": "このファイルは15 MBを超えています。",
+        "wrongType": "PDF、Word、またはテキストファイルを使ってください。",
+        "dailyLimit": "今日追加できる履歴書の数の上限に達しました。明日もう一度試すか、履歴書なしで続けてください。",
+        "failed": "うまくいきませんでした。もう一度試してください。",
+        "pdfNeedsConsent": "オフにした読み取り方法を使わないと、PDFファイルは読み取れません。Wordまたはテキストファイルをアップロードしてください。",
+        "consentUnknown": "ファイルの読み取り方法を確認できませんでした。少ししてからもう一度試してください。",
+        "consentUnanswered": "ファイルの読み取り方法に関する下の質問に答えてから、アップロードしてください。"
+      }
+    },
+    "action": {
+      "resume": "履歴書「{label}」を使ってください",
+      "skip_resume": "履歴書なしで進めてください",
+      "draft_now": "プロフィールを2つ見せてください",
+      "choose": "こちらのほうが近いです：{label}",
+      "regenerate": "どちらも合いません",
+      "restore": "バージョン{version}に戻してください",
+      "save": "「{label}」を保存してください",
+      "find_jobs": "このプロフィールに合う求人を探してください",
+      "report": "応募はどんな状況ですか？",
+      "edit_profile": "「{label}」を編集してください"
+    },
+    "blocks": {
+      "resumeRead": "「{name}」を読みました。",
+      "resumeRoles": "{roles}としての経験が書かれています。",
+      "resumeRolesYears": "{roles}として、約{years}年の経験が書かれています。",
+      "learned": "メモしました：{topics}。",
+      "profiles": "仕事プロフィールが2つできました：「{a}」と「{b}」。",
+      "compare": "見比べる",
+      "revisionFirst": "これがバージョン1です。変えたい点を教えてください。このままでよければ、保存してください。",
+      "revision": "バージョン{version}ができました。変更した項目：{fields}。",
+      "seeVersion": "このバージョンを見る",
+      "restored": "バージョン{version}を、最新のバージョンとして戻しました。",
+      "saved": "「{name}」を保存しました。",
+      "saved_created": "保存した検索条件「{search}」として登録しました。求人検索でこの条件が使われます。",
+      "saved_updated": "保存した検索条件「{search}」を、このプロフィールに合わせて更新しました。",
+      "saved_replaced": "保存した検索条件「{search}」が、このプロフィールを使うようになりました。以前のフィルターは残してあるので、「プロフィール」タブで元に戻せます。",
+      "saved_kept": "保存した検索条件は変更していません。",
+      "matches": "{count, plural, =0 {今のところ、このプロフィールに合う募集中の求人はありません。条件を広げることもできます。勤務地を増やす、別の役職レベルにする、職種名を増やす、などとお伝えください。} one {このプロフィールに合う募集中の求人が#件あります。} other {このプロフィールに合う募集中の求人が#件あります。}}",
+      "seeJobs": "求人を見る",
+      "reportFacts": "進行中 {active}件 · 返信待ち {waiting}件 · 面談・面接中 {interviewing}件 · 内定 {offers}件",
+      "seeApplications": "応募状況を見る",
+      "reminder": "{date}に、{what}についてお知らせします。",
+      "reminderCleared": "{what}のリマインダーを削除しました。",
+      "thisApplication": "この応募",
+      "saved_updated_main": "これに合わせてメインの検索条件を更新しました。",
+      "saved_replaced_main": "メインの検索条件がこれを使うようになりました。以前の条件は残してあるので、プロフィールから元に戻せます。"
+    },
+    "notice": {
+      "agent_failed": "最後まで処理できませんでした。お伝えいただいた内容は消えていません。もう一度試してください。",
+      "nothing_changed": "プロフィールは変わりませんでした。どこをどう変えたいか、もう少し詳しく教えてください。",
+      "search_full": "これ以上、検索条件を保存できません。このプロフィールを今の検索条件に使うかどうかを、保存カードで選んでください。",
+      "resume_unreadable": "その履歴書からは文字を読み取れませんでした。履歴書なしで進めることも、別の履歴書を追加することもできます。",
+      "turn_limit": "この会話はかなり長くなりました。続けるには、最初からやり直してください。保存したプロフィールはそのまま残ります。",
+      "draft_limit": "今日は新しいプロフィールのご依頼が多くなっています。しばらくしてからもう一度試してください。",
+      "enough_questions": "仕事プロフィールを2つ作成するのに十分な情報が集まりました。少々お待ちください。",
+      "no_applications": "まだ応募はありません。求人を保存するか応募を準備していただければ、私がその状況を管理します。",
+      "no_profile": "先に仕事プロフィールを保存してください。そうすれば、私がそれに合う求人を探せます。",
+      "reminder_ambiguous": "当てはまる応募が複数あります。どの応募のことか選んでください。",
+      "reminder_unknown": "どの応募について、どの日にお知らせするかを教えてください。たとえば「金曜日にFigmaに連絡」のように入力してください。"
+    },
+    "steps": {
+      "reading_resume": "履歴書を読んでいます",
+      "thinking": "考えています",
+      "reading_goals": "ご希望を読み取っています",
+      "writing_profiles": "仕事プロフィールを2つ作成しています",
+      "revising": "プロフィールを修正しています",
+      "saving": "プロフィールを保存しています",
+      "finding_jobs": "合う求人を探しています",
+      "checking_applications": "応募状況を確認しています"
+    },
+    "composer": {
+      "label": "Aliceへのメッセージ",
+      "placeholder_intake": "回答を入力してください",
+      "placeholder_choosing": "どちらが近いですか？",
+      "placeholder_refining": "何を変えますか？",
+      "placeholder_saved": "Aliceに何でも質問してください",
+      "send": "送信",
+      "attach": "履歴書を追加",
+      "replies": "回答の候補",
+      "sendPicked": "{count, plural, one {#件の回答を送信} other {#件の回答を送信}}",
+      "showProfiles": "プロフィールを2つ見る"
+    },
+    "errors": {
+      "not_ready": "このサイトでは、Aliceはまだ有効になっていません。",
+      "ai_off": "Aliceを使うには、AIによる処理への同意が必要です。「設定」でオンにできます。",
+      "busy": "Aliceはまだ前のメッセージに回答しています。",
+      "rate_limited": "送信したメッセージが多くなっています。数分後にもう一度試してください。",
+      "agent_failed": "Aliceは最後まで処理できませんでした。もう一度試してください。",
+      "wrong_stage": "この段階では使えません。",
+      "profile_limit": "Aliceが保管できる仕事プロフィールの上限に達しています。先に1つ削除してください。",
+      "search_full": "これ以上、検索条件を保存できません。どうするかを保存カードで選んでください。",
+      "interrupted": "接続が切れました。会話は保存されています。再読み込みすると、最新の状態が表示されます。",
+      "generic": "問題が発生しました。もう一度試してください。",
+      "retry": "もう一度試す"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "このサイトでは、Aliceはまだ有効になっていません",
+        "body": "このサイトでは、Aliceを使うための初回設定がまだ済んでいません。そのほかの機能は通常どおり使えます。"
+      },
+      "aiOff": {
+        "title": "Aliceを使うにはAIが必要です",
+        "body": "現在、このアカウントではAIを利用できません。オフにした場合は、「設定」でオンにできます。"
+      },
+      "loadFailed": {
+        "title": "Aliceとの会話を読み込めませんでした",
+        "body": "接続を確認して、もう一度試してください。"
+      }
+    },
+    "brief": {
+      "title": "Aliceがこれまでに把握したこと",
+      "intro": "ここにある内容はすべて、あなたの回答にもとづいています。プロフィールを選ぶまでは、何も確定しません。",
+      "progress": "{total}項目中{done}項目",
+      "skipped": "スキップ",
+      "not": "{value}は除く",
+      "fromResume": "Aliceは履歴書「{name}」も参考にしています。",
+      "ready": "仕事プロフィールを2つ作成するのに十分な情報があります。さらに回答することも、今すぐ見ることもできます。",
+      "notReady": "あといくつか回答すると、Aliceが仕事プロフィールを2つ作成できます。",
+      "topics": {
+        "roles": "仕事の種類",
+        "level": "役職レベル",
+        "workSetting": "働き方",
+        "places": "勤務地",
+        "pay": "給与の下限",
+        "industries": "業界",
+        "companyKind": "企業の種類",
+        "companySize": "企業規模",
+        "companies": "憧れの企業",
+        "dreamJob": "理想の仕事",
+        "values": "いちばん大切なこと",
+        "dealbreakers": "受けない条件",
+        "timing": "希望時期",
+        "sponsorship": "ビザサポート"
+      }
+    },
+    "fields": {
+      "label": "名前",
+      "headline": "ひとことで",
+      "summary": "概要",
+      "titles": "職種名",
+      "levels": "役職レベル",
+      "workModels": "働き方",
+      "places": "勤務地",
+      "pay": "給与の下限",
+      "industries": "業界",
+      "companyKinds": "企業の種類",
+      "companySizes": "企業規模",
+      "companies": "企業",
+      "skills": "スキル",
+      "mustHaves": "必須条件",
+      "niceToHaves": "あればうれしい条件",
+      "dealbreakers": "受けない条件",
+      "whyItFits": "あなたに合う理由",
+      "tradeoff": "あきらめること",
+      "jobTypes": "雇用形態"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "インターン・新卒",
+        "entry": "エントリーレベル",
+        "mid": "中堅レベル",
+        "senior": "シニア",
+        "lead_staff": "リード・スタッフクラス",
+        "director_exec": "ディレクター以上"
+      },
+      "workModels": {
+        "remote": "リモート",
+        "hybrid": "ハイブリッド",
+        "onsite": "出社"
+      },
+      "companyKinds": {
+        "startup": "スタートアップ",
+        "scaleup": "急成長中の企業",
+        "enterprise": "大企業",
+        "public_sector": "公共部門",
+        "nonprofit": "非営利団体"
+      },
+      "jobTypes": {
+        "full_time": "フルタイム",
+        "contract": "契約・業務委託",
+        "part_time": "パートタイム",
+        "internship": "インターンシップ"
+      },
+      "timing": {
+        "now": "できるだけ早く",
+        "soon": "数か月以内",
+        "exploring": "まずは情報収集"
+      },
+      "sponsorship": {
+        "yes": "ビザサポートが必要",
+        "no": "ビザサポートは不要"
+      },
+      "payPer": {
+        "year": "年収 {amount}",
+        "month": "月給 {amount}",
+        "hour": "時給 {amount}"
+      },
+      "companySize": "{size}人",
+      "companyYou": "あなたが挙げた企業",
+      "companyAlice": "Aliceが挙げた例"
+    },
+    "compare": {
+      "title": "どちらが希望に近いですか？",
+      "intro": "あなたの回答からは、2つの方向が考えられます。近いほうを選んでください。",
+      "differsHint": "点の印は、2つのプロフィールで異なる項目を示します。",
+      "differs": "違いあり",
+      "choose": "こちらのほうが近い",
+      "commentLabel": "変えたい点をAliceに伝える",
+      "commentPlaceholder": "例：1つ目がいいですが、リモートで出張なしにしてください",
+      "commentHint": "ここに書いてから、プロフィールを選んでください。選んだほうをAliceが修正します。どちらも合わない場合は、その理由をAliceに伝えてください。",
+      "neither": "どちらも合わない"
+    },
+    "profile": {
+      "version": "バージョン{version}",
+      "yourComment": "あなたのコメント：「{comment}」",
+      "aliceNotes": "Aliceが変えた点",
+      "changed": "変更あり",
+      "was": "変更前：{value}",
+      "history": "バージョン履歴",
+      "historyPick": "「{label}」を選択",
+      "historyEdit": "「{comment}」",
+      "historyRestore": "バージョン{version}を復元",
+      "historySaved": "保存したプロフィール",
+      "restore": "復元する",
+      "current": "現在",
+      "commentLabel": "何を変えますか？",
+      "commentPlaceholder": "例：ベルリンでのハイブリッド勤務を追加して、人材紹介会社は除外",
+      "send": "修正する",
+      "newPair": "新しいプロフィール2つから始める"
+    },
+    "save": {
+      "title": "この内容でよろしいですか？",
+      "name": "プロフィール名",
+      "create": "保存して求人検索に使う",
+      "createHint": "Aliceがこれを検索条件として保存し、オンにします。ほかの検索条件はそのまま残ります。",
+      "update": "保存して「{search}」を更新",
+      "updateHint": "このプロフィールを使っている検索条件も、合わせて変わります。",
+      "replace": "検索条件「{search}」に使う",
+      "replaceHint": "これ以上、検索条件を保存できません。今のフィルターは残しておくので、あとで元に戻せます。",
+      "none": "検索条件は変えずに保存",
+      "replaceMain": "メインの検索条件に使う",
+      "updateMain": "保存してメインの検索条件を更新"
+    },
+    "saved": {
+      "drives": "保存した検索条件「{search}」に使われています",
+      "drivesNone": "保存した検索条件には使われていません",
+      "findJobs": "合う求人を見る",
+      "edit": "Aliceと一緒に編集",
+      "undo": "検索条件の変更を元に戻す",
+      "undone": "検索条件が以前のフィルターに戻りました。",
+      "others": "ほかの仕事プロフィール",
+      "drivesMain": "メインの検索条件に使われています"
+    },
+    "jobs": {
+      "title": "「{name}」に合う求人",
+      "titleEmpty": "プロフィールに合う求人",
+      "honesty": "適合度は、求人と履歴書を比べたものです。採用される確率ではありません。",
+      "missing": "足りない点：{gap}",
+      "meets": "一致する項目：{fields}",
+      "named": "あなたが挙げた企業",
+      "view": "求人を見る",
+      "empty": "今のところ、このプロフィールに合う募集中の求人はありません。",
+      "widen": "Aliceに条件を広げてもらう",
+      "noProfile": "仕事プロフィールを保存すると、Aliceがそれに合う求人を探します。",
+      "loading": "求人を探しています…",
+      "error": "求人を読み込めませんでした。",
+      "retry": "もう一度試す",
+      "seeAll": "すべての求人を見る",
+      "tier": {
+        "great": "とても合う",
+        "good": "よく合う",
+        "possible": "可能性あり",
+        "unlikely": "合いにくい"
+      }
+    },
+    "apps": {
+      "title": "応募状況",
+      "stages": "段階別の応募",
+      "needs": "対応が必要なこと",
+      "needsEmpty": "今日、対応が必要なことはありません。",
+      "kind": {
+        "interview_tomorrow": "明日は面接",
+        "deadline_soon": "{days, plural, =0 {今日が締切} one {締切まであと#日} other {締切まであと#日}}",
+        "follow_up_due": "連絡する時期です",
+        "no_reply_10d": "{days}日間返信なし",
+        "ready_to_check": "確認できる状態です"
+      },
+      "open": "開く",
+      "check": "確認して開く",
+      "reminders": "リマインダー",
+      "remindersEmpty": "設定したリマインダーはありません。",
+      "due": "連絡する時期です",
+      "done": "完了",
+      "set": "リマインダーを設定",
+      "pick": "応募を選択",
+      "date": "日付",
+      "save": "リマインダーを保存",
+      "saveError": "リマインダーを保存できませんでした。もう一度試してください。",
+      "all": "「応募」を開く",
+      "empty": "まだ応募はありません。求人を保存するか応募を準備すると、Aliceが状況を管理します。",
+      "error": "応募状況を読み込めませんでした。",
+      "retry": "もう一度試す"
     }
   },
   "brand": {

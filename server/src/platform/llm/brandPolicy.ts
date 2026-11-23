@@ -32,6 +32,7 @@
 // DeepSeek API (api.deepseek.com) is not.
 
 import { cnLlmDomesticOnly } from '../brand/brandEnv.js';
+import { providerBaseType } from '../../services/llm/providerPrefixes.js';
 import { BRANDS } from '../brand/registry.js';
 import type { ProductBrand } from '../brand/registry.js';
 
@@ -214,7 +215,9 @@ export function llmDomesticOnlyApplies(brand: LlmPolicyInput['brand'], env: EnvL
 /** Decide whether one route (primary or fallback) is allowed for the brand. */
 export function checkLlmRoute(input: LlmPolicyInput): LlmPolicyDecision {
   const env = input.env ?? process.env;
-  const provider = (input.provider || '').trim().toLowerCase();
+  // `<type>@<entry>` (a provider entry of the LLM gateway) is judged as its
+  // type, on the entry's base URL, which the caller passes.
+  const provider = providerBaseType(input.provider || '');
   const host = provider ? routeHost({ ...input, provider }) : hostOf(input.baseUrl ?? null);
 
   if (isDomesticBrand(input.brand)) {

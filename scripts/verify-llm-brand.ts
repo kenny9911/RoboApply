@@ -67,7 +67,7 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'ERROR';
 const { BRAND_IDS, getBrand, isBrandId } = await import('../server/src/platform/brand/registry.js');
 const { runWithBrand } = await import('../server/src/lib/requestContext.js');
 const { LLM_TASKS } = await import('../server/src/lib/llm/llmTaskSettings.js');
-const { ALL_BRAND_MODEL_ENV_VARS, MODEL_ENV, appConfigKeyFor, getActiveEnvironment } = await import('../server/src/lib/llm/llmStackConfigSchema.js');
+const { ALL_BRAND_MODEL_ENV_VARS, AUTO_FALLBACK_ENV, MODEL_ENV, appConfigKeyFor, getActiveEnvironment } = await import('../server/src/lib/llm/llmStackConfigSchema.js');
 const { getLlmRoutingDefaults, resolveModelKey, resolveProviderSetting } = await import('../server/src/lib/llm/llmModels.js');
 const { getLlmStack, getLlmStackCacheState } = await import('../server/src/lib/llm/llmStackConfigResolver.js');
 const { brandEnvName } = await import('../server/src/platform/brand/brandEnv.js');
@@ -240,13 +240,19 @@ for (const brandId of brands) {
 
 /** Configured selectors (both brands, every purpose) with no cost-table row. */
 const unpriced: Array<{ envName: string; selector: string }> = [];
-for (const envName of ALL_BRAND_MODEL_ENV_VARS) {
-  const selector = (process.env[envName] ?? '').trim();
-  if (!selector) continue;
+const checkPriced = (envName: string, selector: string) => {
   // Peel routing prefixes the way LLMService does before billing.
   const segments = selector.split('/');
   const candidates = segments.map((_, i) => segments.slice(i).join('/'));
   if (!candidates.some((id) => lookupModelRate(id) !== null)) unpriced.push({ envName, selector });
+};
+for (const envName of ALL_BRAND_MODEL_ENV_VARS) {
+  const selector = (process.env[envName] ?? '').trim();
+  if (selector) checkPriced(envName, selector);
+}
+// The auto-fallback list holds several selectors: each must be priced.
+for (const envName of [AUTO_FALLBACK_ENV, `CN_${AUTO_FALLBACK_ENV}`]) {
+  for (const selector of (process.env[envName] ?? '').split(/[\s,]+/).filter(Boolean)) checkPriced(envName, selector);
 }
 if (flag('--require-priced')) violations += unpriced.length;
 

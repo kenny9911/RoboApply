@@ -97,7 +97,7 @@ export function Modal({
             </h2>
           ) : null}
           {description ? (
-            <p className="mt-2 text-sm text-ink-500">{description}</p>
+            <p className="mt-2 text-[length:var(--fs-body)] text-ink-500">{description}</p>
           ) : null}
           <div className={cn(title || description ? 'mt-6' : '')}>{children}</div>
         </div>

@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, one {# noch nicht geöffnet} other {# noch nicht geöffnet}}",
       "ready_open": "Ansehen, was bereit ist",
       "upgrade": "Upgrade"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -4005,6 +4006,10 @@
           "sub": "Jobquellen, Hintergrundaufgaben, E-Mails, Assistent und Kosten, live gezählt.",
           "title": "System"
         },
+        "llm": {
+          "title": "LLM-Gateway",
+          "sub": "KI-Anbieter, ihre Modelle und welches Modell für welche Aufgabe genutzt wird."
+        },
         "visitors": {
           "title": "Besucher und Registrierungen",
           "sub": "Wer kam, woher, und wie viele ein Konto erstellt haben."
@@ -4517,6 +4522,246 @@
           "off": "Nicht verbunden",
           "rapidapi": "Suchdienst",
           "syndication": "Aus dem Stellen-Feed der Quelle gelesen"
+        }
+      },
+      "llm": {
+        "eyebrow": "Admin",
+        "title": "LLM-Gateway",
+        "sub": "Speichere KI-Anbieter einmal und wähle dann Anbieter und Modell für jede Aufgabe. Eine Änderung gilt nach etwa 30 Sekunden für neue Anfragen.",
+        "loading": "Wird geladen…",
+        "refresh": "Aktualisieren",
+        "refreshing": "Wird aktualisiert…",
+        "cancel": "Abbrechen",
+        "environment": {
+          "production": "Einstellungen für Produktion",
+          "development": "Einstellungen für Entwicklung"
+        },
+        "dbDisabled": "Gespeicherte Einstellungen sind auf diesem Server ausgeschaltet (LLM_SETTINGS_DB_DISABLED). Du kannst sie weiter bearbeiten, aber jede Anfrage nutzt die Umgebungsvariablen, bis das wieder eingeschaltet ist.",
+        "encryptionMissing": "Auf diesem Server fehlt FIELD_ENCRYPTION_KEY, daher kann kein API-Schlüssel gespeichert werden. Setz ihn, bevor du einen Anbieter hinzufügst.",
+        "types": {
+          "newapi": "OpenAI-kompatibel"
+        },
+        "providers": {
+          "title": "Anbieter",
+          "sub": "Jeder Anbieter ist ein Endpunkt mit einem API-Schlüssel. Füg denselben Dienst zweimal hinzu, um zwei Konten oder zwei Gateways zu nutzen.",
+          "add": "Anbieter hinzufügen",
+          "empty": "Noch kein Anbieter. Füg einen hinzu und weise ihn dann unten einem Bereich zu.",
+          "full": "Du hast die Höchstzahl von {max} Anbietern erreicht. Entferne einen, um einen weiteren hinzuzufügen.",
+          "noUrl": "Keine URL",
+          "off": "Aus",
+          "ready": "Bereit",
+          "keyUnreadable": "Schlüssel nicht lesbar",
+          "keyUnreadableHelp": "Der gespeicherte Schlüssel wurde mit einem anderen FIELD_ENCRYPTION_KEY verschlüsselt und kann hier nicht gelesen werden. Bereiche, die diesem Anbieter zugewiesen sind, nutzen ihr geerbtes Modell, bis du den Schlüssel erneut eingibst.",
+          "key": "API-Schlüssel",
+          "noKey": "Keiner",
+          "models": "Modelle",
+          "modelCount": "{count, plural, one {{n} Modell} other {{n} Modelle}}",
+          "modelsNever": "Noch nicht abgerufen",
+          "fetchedAt": "Liste abgerufen",
+          "edit": "Bearbeiten",
+          "fetchModels": "Modelle abrufen",
+          "refreshModels": "Modelle aktualisieren",
+          "fetching": "Wird abgerufen…",
+          "showModels": "Modelle anzeigen",
+          "hideModels": "Modelle ausblenden",
+          "turnOff": "Ausschalten",
+          "turnOn": "Einschalten",
+          "remove": "Entfernen",
+          "removeConfirm": "{name} entfernen"
+        },
+        "form": {
+          "addTitle": "Anbieter hinzufügen",
+          "editTitle": "Anbieter bearbeiten",
+          "name": "Name",
+          "nameHint": "Wird in den Bereichslisten angezeigt, zum Beispiel „OpenRouter (Haupt)“.",
+          "type": "Typ",
+          "typeHint": "Die API, die der Endpunkt spricht. Wähl OpenAI-kompatibel für ein Gateway oder einen Proxy.",
+          "typeHintNoTools": "Dieser Typ kann hier keine Tool-Aufrufe streamen und deshalb den Bereich Assistent nicht bedienen.",
+          "baseUrl": "API-Basis-URL",
+          "baseUrlRequired": "Pflichtfeld. Gib den Versionspfad an, zum Beispiel https://gateway.example.com/v1, aber keinen Endpunkt wie /chat/completions.",
+          "baseUrlOptional": "Leer lassen, um {url} zu verwenden.",
+          "apiKey": "API-Schlüssel",
+          "apiKeyHint": "Wird verschlüsselt gespeichert. Nach dem Speichern wird er nie wieder angezeigt.",
+          "apiKeyKeep": "Leer lassen, um den gespeicherten Schlüssel zu behalten. Bei einer URL auf einem anderen Host brauchst du den Schlüssel erneut.",
+          "notes": "Notizen (optional)",
+          "enabled": "Diesen Anbieter verwenden",
+          "save": "Anbieter speichern",
+          "saving": "Wird gespeichert…",
+          "test": "Ohne Speichern testen",
+          "testing": "Wird getestet…",
+          "saveHint": "Beim Speichern wird mit diesem Schlüssel auch die Modellliste des Anbieters abgerufen."
+        },
+        "modelList": {
+          "ok": "{count, plural, one {Der Anbieter listet {n} Modell.} other {Der Anbieter listet {n} Modelle.}}",
+          "okTruncated": "Der Anbieter listet mehr als {n} Modelle; die ersten {n} werden behalten. Gib jede andere Modell-ID von Hand ein.",
+          "invalid_base_url": "Diese Basis-URL kann nicht verwendet werden. Prüf die Adresse; nur ein selbst gehosteter Typ darf auf einen privaten Host zeigen.",
+          "key_required": "Gib einen API-Schlüssel ein, um die Modelle beim Anbieter abzufragen.",
+          "auth_rejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
+          "not_supported": "Dieser Endpunkt hat keine Modellliste. Prüf die Basis-URL oder gib Modell-IDs von Hand ein.",
+          "rate_limited": "Der Anbieter begrenzt die Anfragen. Versuch es in einer Minute erneut.",
+          "timeout": "Der Anbieter hat nicht innerhalb von 8 Sekunden geantwortet.",
+          "unreachable": "Der Anbieter war nicht erreichbar. Prüf die Basis-URL.",
+          "invalid_response": "Der Anbieter hat geantwortet, aber nicht mit einer Modellliste.",
+          "response_too_large": "Die Modellliste des Anbieters ist zu groß zum Lesen.",
+          "provider_error": "Der Anbieter hat einen Fehler zurückgegeben."
+        },
+        "areas": {
+          "title": "Funktionsbereiche",
+          "sub": "Weise einem Bereich einen Anbieter, ein Modell und einen Denkaufwand zu, auf Wunsch mit Fallback-Modellen. Ein nicht zugewiesener Bereich nutzt die Zuweisung von „Standard“; ist auch „Standard“ nicht zugewiesen, behält er seine bisherige Einstellung.",
+          "brand": "Website",
+          "goapplyNote": "{site} liest zuerst seine eigenen Bereiche und sein eigenes „Standard“. Wo es beides nicht hat, nutzt es die Zuweisung von {shared}.",
+          "noProviders": "Füg oben einen Anbieter hinzu, um einen Bereich zuzuweisen.",
+          "assigned": "Zugewiesen",
+          "notInEffect": "Nicht wirksam",
+          "inherits": "Erbt",
+          "provider": "Anbieter",
+          "inheritOption": "Nicht zugewiesen („Standard“ nutzen)",
+          "providerOff": "{name} (aus)",
+          "model": "Modell",
+          "save": "Speichern",
+          "clear": "Zuweisung löschen",
+          "modelHint": "Wähl ein Modell aus der Liste des Anbieters oder gib eine Modell-ID ein, die er nicht listet.",
+          "noModelList": "Dieser Anbieter hat noch keine Modellliste. Ruf oben seine Modelle ab oder gib eine Modell-ID ein.",
+          "needsTools": "Dieser Bereich ruft Tools auf, daher müssen sein Modell und jedes Fallback-Modell Tool-Aufrufe unterstützen.",
+          "needsImages": "Dieser Bereich liest Bilder, daher muss das Modell Bildeingaben akzeptieren.",
+          "toolsBlocked": "Ein hier gewählter Anbietertyp kann keine Tool-Aufrufe streamen. Wähl für das Modell und die Fallback-Modelle dieses Bereichs OpenAI-kompatible Anbieter.",
+          "modelNotListed": "Dieses Modell steht nicht in der abgerufenen Liste des Anbieters. Es wird so verwendet, wie du es eingegeben hast.",
+          "now": "Was Anfragen jetzt nutzen",
+          "colSetting": "Verwendet für",
+          "colModel": "Modell",
+          "colSource": "Stammt von",
+          "inheritOptionDefault": "Nicht zugewiesen (Umgebung nutzen)",
+          "usesDefault": "Nutzt „Standard“",
+          "chooseProvider": "Anbieter wählen",
+          "effort": "Denkaufwand",
+          "effortHint": "Der Denkaufwand wird mit jeder Anfrage an dieses Modell gesendet, angepasst an die nächstliegende Stufe, die sein Anbieter kennt. „Anbieter-Standard“ sendet keinen, dann gilt der Wert aus der Umgebung oder der des Anbieters.",
+          "fallbacks": "Fallback-Modelle",
+          "fallbacksHint": "Werden der Reihe nach versucht, wenn das Modell oben scheitert: ein abgelehnter oder aufgebrauchter Schlüssel, ein Ausfall oder ein Ratenlimit oder ein Modell, das der Endpunkt nicht anbietet. Bis zu {max}. Danach wird weiterhin die Fallback-Modell-Einstellung (LLM_FALLBACK_MODEL) versucht.",
+          "fallbackN": "Fallback {n}",
+          "addFallback": "Fallback-Modell hinzufügen",
+          "fallbacksFull": "Dieser Bereich hat die höchste Zahl an Fallback-Modellen ({max}).",
+          "moveUp": "Nach oben",
+          "moveDown": "Nach unten",
+          "removeFallback": "Entfernen",
+          "moveUpLabel": "Fallback {n} nach oben verschieben",
+          "moveDownLabel": "Fallback {n} nach unten verschieben",
+          "removeFallbackLabel": "Fallback {n} entfernen"
+        },
+        "routeStatus": {
+          "provider_missing": "Der zugewiesene Anbieter wurde entfernt, daher nutzt dieser Bereich sein geerbtes Modell.",
+          "provider_disabled": "Der zugewiesene Anbieter ist ausgeschaltet, daher nutzt dieser Bereich sein geerbtes Modell.",
+          "provider_key_missing": "Der zugewiesene Anbieter hat keinen API-Schlüssel, daher nutzt dieser Bereich sein geerbtes Modell.",
+          "provider_key_unreadable": "Der Schlüssel des zugewiesenen Anbieters kann auf diesem Server nicht gelesen werden, daher nutzt dieser Bereich sein geerbtes Modell."
+        },
+        "area": {
+          "default": {
+            "title": "Standard",
+            "sub": "Jeder nicht zugewiesene Bereich nutzt dieses Modell, seine Fallback-Modelle und seinen Denkaufwand."
+          },
+          "matchResume": {
+            "title": "Lebenslauf abgleichen",
+            "sub": "Bewerten, wie gut ein Lebenslauf zu einem Job passt."
+          },
+          "parseResume": {
+            "title": "Lebenslauf auslesen",
+            "sub": "Den Text eines Lebenslaufs in strukturierte Angaben umwandeln."
+          },
+          "visual": {
+            "title": "Visuell",
+            "sub": "Bilder und gescannte Seiten lesen (OCR)."
+          },
+          "evaluation": {
+            "title": "Auswertung",
+            "sub": "Ein abgeschlossenes Übungsinterview bewerten und den Bericht dazu schreiben."
+          },
+          "insights": {
+            "title": "Einblicke",
+            "sub": "Die wöchentliche Karrierezusammenfassung und Suchzusammenfassungen."
+          },
+          "writing": {
+            "title": "Schreiben",
+            "sub": "Anschreiben, Kontaktnachrichten und Überarbeitungen von Lebensläufen."
+          },
+          "assistant": {
+            "title": "Assistent",
+            "sub": "Der Chat-Assistent, das Onboarding und das Erkennen, was jemand möchte."
+          },
+          "jobs": {
+            "title": "Jobdetails",
+            "sub": "Details und Tags zu Stellenanzeigen ergänzen."
+          }
+        },
+        "setting": {
+          "defaultModel": "Standardmodell",
+          "matching": "Passungswert",
+          "matchResume": "Abgleichbericht",
+          "matchScreen": "Abgleich-Vorauswahl",
+          "prematchFilter": "Vorfilter für den Abgleich",
+          "extract": "Lebenslauftext",
+          "resumeTag": "Lebenslauf-Tags",
+          "vision": "Bilder und Scans",
+          "evaluation": "Interviewbericht",
+          "insights": "Einblicke",
+          "writing": "Längere Texte",
+          "rewrite": "Lebenslauf überarbeiten",
+          "copilot": "Assistent-Chat",
+          "onboarding": "Onboarding",
+          "intentParser": "Suchabsicht",
+          "enrich": "Jobanreicherung",
+          "jobTag": "Job-Tags",
+          "quickJob": "Schnelles Job-Lesen"
+        },
+        "source": {
+          "assigned": "Zuweisung dieses Bereichs",
+          "override": "Eine gespeicherte Überschreibung pro Einstellung",
+          "shared": "Einstellung von {shared}",
+          "env": "Umgebungsvariable {name}",
+          "noneDefault": "Nichts ist konfiguriert",
+          "noDefault": "nichts konfiguriert",
+          "fallback": {
+            "default": "Nichts ist konfiguriert",
+            "matchResume": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "parseResume": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "visual": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "evaluation": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "insights": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "writing": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "assistant": "Kein eigenes Modell; nutzt das Standardmodell ({model})",
+            "jobs": "Kein eigenes Modell; nutzt das Standardmodell ({model})"
+          },
+          "default": "Zuweisung des Bereichs „Standard“",
+          "sharedArea": "Zuweisung von {shared} für diesen Bereich",
+          "sharedDefault": "Bereich „Standard“ von {shared}"
+        },
+        "errors": {
+          "generic": "Das hat nicht geklappt. Versuch es erneut.",
+          "invalid_name": "Gib einen Namen mit höchstens 60 Zeichen ein.",
+          "duplicate_name": "Ein anderer Anbieter hat bereits diesen Namen.",
+          "invalid_type": "Wähl einen Anbietertyp.",
+          "invalid_base_url": "Diese Basis-URL kann nicht verwendet werden. Gib die API-Basis-URL ohne Endpunkt wie /chat/completions ein; nur ein selbst gehosteter Typ darf auf einen privaten Host zeigen.",
+          "key_required": "Gib einen API-Schlüssel ein.",
+          "key_required_for_new_url": "Der Endpunkt hat sich geändert. Gib den API-Schlüssel erneut ein, damit der gespeicherte Schlüssel nicht an einen anderen Host gesendet wird.",
+          "too_many_providers": "Die Höchstzahl an Anbietern ist gespeichert. Entferne zuerst einen.",
+          "not_found": "Dieser Anbieter existiert nicht mehr. Lad die Seite neu.",
+          "invalid_notes": "Notizen dürfen höchstens 2.000 Zeichen lang sein.",
+          "encryption_unavailable": "Dieser Server kann keine API-Schlüssel speichern: FIELD_ENCRYPTION_KEY ist nicht gesetzt.",
+          "invalid_area": "Dieser Bereich ist unbekannt. Lad die Seite neu.",
+          "invalid_route": "Wähl einen Anbieter und ein Modell.",
+          "unknown_provider": "Dieser Anbieter existiert nicht mehr. Lad die Seite neu.",
+          "tools_unsupported": "Dieser Anbietertyp kann keine Tool-Aufrufe streamen, die dieser Bereich braucht.",
+          "provider_in_use": "Ein Bereich nutzt diesen Anbieter noch, für sein Modell oder ein Fallback-Modell. Ändere oder lösche diesen Bereich zuerst.",
+          "invalid_effort": "Wähl einen Denkaufwand.",
+          "invalid_fallback": "Wähl für jedes Fallback-Modell einen Anbieter und ein Modell.",
+          "duplicate_fallback": "Jedes Modell kann in einem Bereich nur einmal vorkommen.",
+          "too_many_fallbacks": "Ein Bereich nimmt höchstens {max} Fallback-Modelle."
+        },
+        "effort": {
+          "provider": "Anbieter-Standard",
+          "minimal": "Minimal",
+          "low": "Niedrig",
+          "medium": "Mittel",
+          "high": "Hoch",
+          "max": "Maximal"
         }
       },
       "visitors": {
@@ -5683,6 +5928,348 @@
     },
     "jobList": {
       "title": "In dieser Antwort erwähnte Jobs"
+    }
+  },
+  "alice": {
+    "tag": "KI-Agent",
+    "restart": "Neu anfangen",
+    "restartConfirm": "Einen neuen Chat beginnen? Deine gespeicherten Jobprofile bleiben erhalten.",
+    "cancel": "Abbrechen",
+    "status": {
+      "working": "Alice arbeitet daran",
+      "intake": "Deinen Wunschjob kennenlernen · {done} von {total} Themen",
+      "choosing": "Zwei Jobprofile sind bereit zum Vergleichen",
+      "refining": "Version {version} deines Jobprofils",
+      "saved": "Dein Jobprofil steuert deine Jobsuche",
+      "savedNeeds": "{count, plural, one {# Aufgabe wartet auf dich} other {# Aufgaben warten auf dich}}"
+    },
+    "tabs": {
+      "aria": "Ansichten von Alice",
+      "chat": "Chat",
+      "profile": "Profil",
+      "jobs": "Jobs",
+      "applications": "Bewerbungen"
+    },
+    "greeting": {
+      "hello": "Hallo, ich bin Alice, ein KI-Agent für deine Jobsuche und deine Bewerbungen.",
+      "plan": "Ich frage dich, was du dir von deinem nächsten Job wünschst, und schreibe dann zwei Jobprofile, die du vergleichen kannst. Wähl das passendere, sag mir, was ich ändern soll, und ich überarbeite es, bis es stimmt.",
+      "d1": "Jede Bewerbung sendest du selbst ab. Ich finde passende Jobs, behalte deine Bewerbungen im Blick und erinnere dich an die nächsten Schritte.",
+      "withResume": "Ich kann mit deinem Lebenslauf „{name}“ anfangen.",
+      "withoutResume": "Wenn du einen Lebenslauf hast, füg ihn hinzu, dann fange ich damit an."
+    },
+    "resume": {
+      "use": "„{name}“ verwenden",
+      "other": "Anderen Lebenslauf wählen",
+      "pickLabel": "Deine Lebensläufe",
+      "upload": "Lebenslauf hochladen",
+      "skip": "Ohne Lebenslauf weiter",
+      "hint": "PDF, Word oder Text, bis 15 MB.",
+      "hintNoPdf": "Word oder Text, bis 15 MB.",
+      "uploading": "{name} wird gelesen…",
+      "errors": {
+        "unreadable": "Diese Datei enthält keinen lesbaren Text. Probier eine andere Datei.",
+        "tooLarge": "Diese Datei ist größer als 15 MB.",
+        "wrongType": "Nimm eine PDF-, Word- oder Textdatei.",
+        "dailyLimit": "Du hast heute schon die maximale Zahl an Lebensläufen hinzugefügt. Versuch es morgen wieder oder mach ohne Lebenslauf weiter.",
+        "failed": "Das hat nicht geklappt. Versuch es erneut.",
+        "pdfNeedsConsent": "PDF-Dateien können ohne die Leseoption, die du ausgeschaltet hast, nicht gelesen werden. Lade stattdessen eine Word- oder Textdatei hoch.",
+        "consentUnknown": "Wir konnten nicht prüfen, wie deine Datei gelesen würde. Versuch es gleich noch einmal.",
+        "consentUnanswered": "Beantworte unten die Frage dazu, wie deine Datei gelesen wird, und lade sie dann hoch."
+      }
+    },
+    "action": {
+      "resume": "Nimm meinen Lebenslauf „{label}“",
+      "skip_resume": "Weiter ohne Lebenslauf",
+      "draft_now": "Zeig mir zwei Profile",
+      "choose": "Das hier passt besser: {label}",
+      "regenerate": "Keins passt",
+      "restore": "Hol Version {version} zurück",
+      "save": "Speichere „{label}“",
+      "find_jobs": "Finde Jobs für dieses Profil",
+      "report": "Wie laufen meine Bewerbungen?",
+      "edit_profile": "Lass uns „{label}“ bearbeiten"
+    },
+    "blocks": {
+      "resumeRead": "Ich habe „{name}“ gelesen.",
+      "resumeRoles": "Darin sehe ich Erfahrung als {roles}.",
+      "resumeRolesYears": "Darin sehe ich rund {years} Jahre Erfahrung als {roles}.",
+      "learned": "Notiert: {topics}.",
+      "profiles": "Zwei Jobprofile sind fertig: {a} und {b}.",
+      "compare": "Vergleichen",
+      "revisionFirst": "Das ist Version 1. Sag mir, was ich ändern soll, oder speichere sie, wenn sie passt.",
+      "revision": "Version {version} ist fertig. Geändert habe ich: {fields}.",
+      "seeVersion": "Diese Version ansehen",
+      "restored": "Version {version} ist wieder da, als neueste Version.",
+      "saved": "Ich habe „{name}“ gespeichert.",
+      "saved_created": "Es ist jetzt deine gespeicherte Suche „{search}“, und deine Jobsuche nutzt sie.",
+      "saved_updated": "Ich habe deine gespeicherte Suche „{search}“ daran angepasst.",
+      "saved_replaced": "Deine gespeicherte Suche „{search}“ nutzt es jetzt. Die alten Filter der Suche bleiben erhalten, du kannst das also unter „Profil“ rückgängig machen.",
+      "saved_kept": "Deine gespeicherten Suchen bleiben unverändert.",
+      "matches": "{count, plural, =0 {Gerade passen keine offenen Jobs zu diesem Profil. Bitte mich, es zu erweitern: mehr Orte, eine andere Ebene oder mehr Jobbezeichnungen.} one {# offener Job passt zu diesem Profil.} other {# offene Jobs passen zu diesem Profil.}}",
+      "seeJobs": "Jobs ansehen",
+      "reportFacts": "{active} offen · {waiting} noch ohne Antwort · {interviewing} im Gespräch · {offers} mit Angebot",
+      "seeApplications": "Deine Bewerbungen ansehen",
+      "reminder": "Ich erinnere dich am {date} an {what}.",
+      "reminderCleared": "Ich habe die Erinnerung für {what} entfernt.",
+      "thisApplication": "diese Bewerbung",
+      "saved_updated_main": "Ich habe deine Hauptsuche daran angepasst.",
+      "saved_replaced_main": "Deine Hauptsuche verwendet es jetzt. Die alten Filter sind gespeichert, du kannst das im Profil rückgängig machen."
+    },
+    "notice": {
+      "agent_failed": "Das konnte ich nicht abschließen. Nichts von dem, was du gesagt hast, ist verloren. Versuch es erneut.",
+      "nothing_changed": "Am Profil hat sich dadurch nichts geändert. Erzähl mir mehr darüber, was anders sein soll.",
+      "search_full": "Für eine weitere gespeicherte Suche ist kein Platz mehr. Wähl auf der Karte zum Speichern, ob dieses Profil deine aktuelle Suche übernehmen soll.",
+      "resume_unreadable": "Ich konnte in diesem Lebenslauf keinen Text lesen. Wir können ohne ihn weitermachen, oder du fügst einen anderen hinzu.",
+      "turn_limit": "Dieser Chat ist sehr lang geworden. Fang neu an, um weiterzumachen; deine gespeicherten Profile bleiben erhalten.",
+      "draft_limit": "Du hast heute schon viele neue Profile angefragt. Versuch es später erneut.",
+      "enough_questions": "Das reicht mir für zwei Jobprofile. Einen Moment.",
+      "no_applications": "Du hast noch keine Bewerbungen. Merk dir einen Job oder bereite eine Bewerbung vor, dann behalte ich sie im Blick.",
+      "no_profile": "Speichere zuerst ein Jobprofil, dann kann ich passende Jobs dafür finden.",
+      "reminder_ambiguous": "Mehrere Bewerbungen passen. Wähl die, die du meinst.",
+      "reminder_unknown": "Sag mir, welche Bewerbung und welchen Tag, zum Beispiel „bei Figma am Freitag nachfassen“."
+    },
+    "steps": {
+      "reading_resume": "Dein Lebenslauf wird gelesen",
+      "thinking": "Nachdenken",
+      "reading_goals": "Deine Wünsche werden gelesen",
+      "writing_profiles": "Zwei Jobprofile werden geschrieben",
+      "revising": "Dein Profil wird überarbeitet",
+      "saving": "Dein Profil wird gespeichert",
+      "finding_jobs": "Passende Jobs werden gesucht",
+      "checking_applications": "Deine Bewerbungen werden geprüft"
+    },
+    "composer": {
+      "label": "Nachricht an Alice",
+      "placeholder_intake": "Deine Antwort",
+      "placeholder_choosing": "Welches passt besser?",
+      "placeholder_refining": "Was soll sich ändern?",
+      "placeholder_saved": "Frag Alice, was du willst",
+      "send": "Senden",
+      "attach": "Lebenslauf hinzufügen",
+      "replies": "Schnellantworten",
+      "sendPicked": "{count, plural, one {# Antwort senden} other {# Antworten senden}}",
+      "showProfiles": "Zeig mir zwei Profile"
+    },
+    "errors": {
+      "not_ready": "Alice ist hier noch nicht aktiviert.",
+      "ai_off": "Alice braucht deine Einwilligung in die KI-Verarbeitung. Du kannst sie in den Einstellungen einschalten.",
+      "busy": "Alice beantwortet gerade noch deine letzte Nachricht.",
+      "rate_limited": "Du hast sehr viele Nachrichten gesendet. Versuch es in ein paar Minuten erneut.",
+      "agent_failed": "Alice konnte das nicht abschließen. Versuch es erneut.",
+      "wrong_stage": "Das ist in diesem Schritt nicht verfügbar.",
+      "profile_limit": "Du hast so viele Jobprofile gespeichert, wie Alice aufbewahren kann. Lösch zuerst eins.",
+      "search_full": "Für eine weitere gespeicherte Suche ist kein Platz mehr. Wähl auf der Karte zum Speichern, was passieren soll.",
+      "interrupted": "Die Verbindung ist abgebrochen. Dein Chat ist gespeichert; lade die Seite neu, um den neuesten Stand zu sehen.",
+      "generic": "Etwas ist schiefgelaufen. Versuch es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "Alice ist hier noch nicht aktiviert",
+        "body": "Alice muss auf dieser Website einmalig eingerichtet werden. Alles andere funktioniert wie gewohnt."
+      },
+      "aiOff": {
+        "title": "Alice braucht KI, um zu funktionieren",
+        "body": "KI ist für dein Konto gerade nicht verfügbar. Wenn du sie ausgeschaltet hast, kannst du sie in den Einstellungen wieder einschalten."
+      },
+      "loadFailed": {
+        "title": "Dein Chat mit Alice konnte nicht geladen werden",
+        "body": "Prüf deine Verbindung und versuch es erneut."
+      }
+    },
+    "brief": {
+      "title": "Was Alice bisher weiß",
+      "intro": "Alles hier stammt aus deinen Antworten. Nichts ist festgelegt, bis du ein Profil wählst.",
+      "progress": "{done} von {total} Themen",
+      "skipped": "Übersprungen",
+      "not": "Ohne {value}",
+      "fromResume": "Alice liest auch deinen Lebenslauf „{name}“.",
+      "ready": "Das reicht für zwei Jobprofile. Du kannst weitere Fragen beantworten oder sie dir jetzt ansehen.",
+      "notReady": "Noch ein paar Antworten, dann kann Alice zwei Jobprofile schreiben.",
+      "topics": {
+        "roles": "Art des Jobs",
+        "level": "Ebene",
+        "workSetting": "Arbeitsmodell",
+        "places": "Orte",
+        "pay": "Mindestgehalt",
+        "industries": "Branchen",
+        "companyKind": "Art des Unternehmens",
+        "companySize": "Unternehmensgröße",
+        "companies": "Unternehmen, die du schätzt",
+        "dreamJob": "Traumjob",
+        "values": "Was dir am wichtigsten ist",
+        "dealbreakers": "No-Gos",
+        "timing": "Zeitrahmen",
+        "sponsorship": "Visa-Sponsoring"
+      }
+    },
+    "fields": {
+      "label": "Name",
+      "headline": "In einem Satz",
+      "summary": "Zusammenfassung",
+      "titles": "Jobbezeichnungen",
+      "levels": "Ebene",
+      "workModels": "Arbeitsmodell",
+      "places": "Orte",
+      "pay": "Mindestgehalt",
+      "industries": "Branchen",
+      "companyKinds": "Art des Unternehmens",
+      "companySizes": "Unternehmensgröße",
+      "companies": "Unternehmen",
+      "skills": "Fähigkeiten",
+      "mustHaves": "Muss dabei sein",
+      "niceToHaves": "Wäre schön",
+      "dealbreakers": "No-Gos",
+      "whyItFits": "Warum es zu dir passt",
+      "tradeoff": "Worauf du verzichtest",
+      "jobTypes": "Anstellungsart"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "Praktikum oder frisch von der Hochschule",
+        "entry": "Berufseinstieg",
+        "mid": "Mittlere Ebene",
+        "senior": "Senior",
+        "lead_staff": "Lead oder Staff",
+        "director_exec": "Director-Ebene und höher"
+      },
+      "workModels": {
+        "remote": "Remote",
+        "hybrid": "Hybrid",
+        "onsite": "Vor Ort"
+      },
+      "companyKinds": {
+        "startup": "Start-up",
+        "scaleup": "Scale-up",
+        "enterprise": "Großunternehmen",
+        "public_sector": "Öffentlicher Dienst",
+        "nonprofit": "Gemeinnützige Organisation"
+      },
+      "jobTypes": {
+        "full_time": "Vollzeit",
+        "contract": "Auf Vertragsbasis",
+        "part_time": "Teilzeit",
+        "internship": "Praktikum"
+      },
+      "timing": {
+        "now": "So bald wie möglich",
+        "soon": "In den nächsten Monaten",
+        "exploring": "Ich schaue mich nur um"
+      },
+      "sponsorship": {
+        "yes": "Braucht Visa-Sponsoring",
+        "no": "Kein Sponsoring nötig"
+      },
+      "payPer": {
+        "year": "{amount} pro Jahr",
+        "month": "{amount} pro Monat",
+        "hour": "{amount} pro Stunde"
+      },
+      "companySize": "{size} Mitarbeitende",
+      "companyYou": "Von dir genannt",
+      "companyAlice": "Beispiel von Alice"
+    },
+    "compare": {
+      "title": "Welches passt besser zu dem, was du willst?",
+      "intro": "Zwei Richtungen, die deine Antworten offenlassen. Wähl die passendere.",
+      "differsHint": "Ein Punkt markiert, wo sich die beiden unterscheiden.",
+      "differs": "unterschiedlich",
+      "choose": "Dieses passt besser",
+      "commentLabel": "Sag Alice, was sie ändern soll",
+      "commentPlaceholder": "Zum Beispiel: das erste, aber remote und ohne Reisen",
+      "commentHint": "Schreib es hier hinein und wähl dann ein Profil: Alice überarbeitet das, das du wählst. Oder sag ihr, warum keins passt.",
+      "neither": "Keins passt"
+    },
+    "profile": {
+      "version": "Version {version}",
+      "yourComment": "Du hast gesagt: „{comment}“",
+      "aliceNotes": "Was Alice geändert hat",
+      "changed": "Geändert",
+      "was": "Vorher: {value}",
+      "history": "Versionen",
+      "historyPick": "Du hast „{label}“ gewählt",
+      "historyEdit": "„{comment}“",
+      "historyRestore": "Version {version} zurückgeholt",
+      "historySaved": "Dein gespeichertes Profil",
+      "restore": "Wiederherstellen",
+      "current": "Aktuell",
+      "commentLabel": "Was soll sich ändern?",
+      "commentPlaceholder": "Zum Beispiel: hybrides Arbeiten in Berlin dazu, und keine Personalvermittler",
+      "send": "Überarbeiten",
+      "newPair": "Mit zwei neuen Profilen neu starten"
+    },
+    "save": {
+      "title": "Passt es so?",
+      "name": "Profilname",
+      "create": "Speichern und für meine Jobsuche nutzen",
+      "createHint": "Alice legt daraus eine gespeicherte Suche an und schaltet sie ein. Deine anderen Suchen bleiben erhalten.",
+      "update": "Speichern und „{search}“ aktualisieren",
+      "updateHint": "Die gespeicherte Suche, die es steuert, wird entsprechend angepasst.",
+      "replace": "Für meine Suche „{search}“ nutzen",
+      "replaceHint": "Für eine weitere gespeicherte Suche ist kein Platz mehr. Deine aktuellen Filter bleiben erhalten, du kannst das also rückgängig machen.",
+      "none": "Speichern, ohne meine Suche zu ändern",
+      "replaceMain": "Für meine Hauptsuche verwenden",
+      "updateMain": "Speichern und Hauptsuche aktualisieren"
+    },
+    "saved": {
+      "drives": "Steuert deine gespeicherte Suche „{search}“",
+      "drivesNone": "Wird von keiner gespeicherten Suche genutzt",
+      "findJobs": "Passende Jobs ansehen",
+      "edit": "Mit Alice bearbeiten",
+      "undo": "Suchänderung rückgängig machen",
+      "undone": "Die alten Filter deiner Suche sind wieder da.",
+      "others": "Deine anderen Jobprofile",
+      "drivesMain": "Wird von deiner Hauptsuche verwendet"
+    },
+    "jobs": {
+      "title": "Jobs, die zu „{name}“ passen",
+      "titleEmpty": "Jobs, die zu deinem Profil passen",
+      "honesty": "Die Passung vergleicht einen Job mit deinem Lebenslauf. Das ist nicht deine Chance, eingestellt zu werden.",
+      "missing": "Fehlt: {gap}",
+      "meets": "Passt bei: {fields}",
+      "named": "Ein Unternehmen, das du genannt hast",
+      "view": "Job ansehen",
+      "empty": "Gerade passen keine offenen Jobs zu diesem Profil.",
+      "widen": "Alice bitten, es zu erweitern",
+      "noProfile": "Speichere ein Jobprofil, dann findet Alice die Jobs, die dazu passen.",
+      "loading": "Jobs werden gesucht…",
+      "error": "Die Jobs konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "seeAll": "Alle Jobs ansehen",
+      "tier": {
+        "great": "Passt sehr gut",
+        "good": "Passt gut",
+        "possible": "Möglich",
+        "unlikely": "Unwahrscheinlich"
+      }
+    },
+    "apps": {
+      "title": "Deine Bewerbungen",
+      "stages": "Bewerbungen nach Phase",
+      "needs": "Wartet auf dich",
+      "needsEmpty": "Heute wartet nichts auf dich.",
+      "kind": {
+        "interview_tomorrow": "Vorstellungsgespräch morgen",
+        "deadline_soon": "{days, plural, =0 {Frist endet heute} one {Frist endet in # Tag} other {Frist endet in # Tagen}}",
+        "follow_up_due": "Nachfassen ist fällig",
+        "no_reply_10d": "Seit {days} Tagen keine Antwort",
+        "ready_to_check": "Bereit für deine Prüfung"
+      },
+      "open": "Öffnen",
+      "check": "Prüfen und öffnen",
+      "reminders": "Erinnerungen",
+      "remindersEmpty": "Keine Erinnerungen eingestellt.",
+      "due": "Fällig",
+      "done": "Erledigt",
+      "set": "Erinnerung einstellen",
+      "pick": "Bewerbung auswählen",
+      "date": "Tag",
+      "save": "Erinnerung speichern",
+      "saveError": "Die Erinnerung konnte nicht gespeichert werden. Versuch es erneut.",
+      "all": "Bewerbungen öffnen",
+      "empty": "Noch keine Bewerbungen. Merk dir einen Job oder bereite eine Bewerbung vor, dann behält Alice sie im Blick.",
+      "error": "Deine Bewerbungen konnten nicht geladen werden.",
+      "retry": "Erneut versuchen"
     }
   },
   "brand": {

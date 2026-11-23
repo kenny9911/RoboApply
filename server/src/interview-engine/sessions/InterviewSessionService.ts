@@ -99,7 +99,7 @@ import {
   writeMockInterviewLedger,
   type LiveModelUsageItem,
 } from '../billing/sessionCost.js';
-import { getTaskModel } from '../../lib/llm/llmTaskSettings.js';
+import { getEvaluationModel } from '../../lib/llm/llmTaskSettings.js';
 import { gateMockInterview } from '../../lib/mockCreditService.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import type {
@@ -133,6 +133,7 @@ import {
   drainParleySession,
   getParleyConnection,
   isParleySession,
+  ParleyUnavailableError,
   pullParleyTranscript,
   stopParleySession,
   type ParleyJoin,
@@ -751,8 +752,17 @@ export class InterviewSessionService {
       readStoredPrep(session.blueprint)?.interviewer.voiceGender ??
         (session.personaId ? findPersona(session.personaId)?.voiceGender : undefined),
     );
-    // Parley pilot: no room, dispatch or worker — the browser joins Parley.
-    if (isParleySession(session)) return getParleyConnection(session, voice);
+    // Parley pilot: no room, dispatch or worker — the browser joins Parley. A
+    // session Parley could not start has moved to LiveKit (null): connect the
+    // fresh row there like any other session.
+    if (isParleySession(session)) {
+      const parley = await getParleyConnection(session, voice);
+      if (parley) return parley;
+      const moved = await prisma.interviewSession.findUnique({ where: { id: session.id } });
+      if (!moved) throw new InterviewNotFoundError();
+      if (isParleySession(moved)) throw new ParleyUnavailableError('Parley is unavailable; retry.');
+      return this.connectLoaded(moved, params, seam);
+    }
     const provider = voiceProviderFor(seam);
     if (!provider.isConfigured()) {
       throw new InterviewEngineConfigError('LiveKit is not configured; cannot start a live interview.');
@@ -1663,7 +1673,7 @@ export class InterviewSessionService {
       // recommendations all run under reqId). Best-effort.
       await recordEvaluationCost(
         sessionId,
-        tokenCostFromSnapshot(logger.getRequestSnapshot(reqId), getTaskModel('interview')),
+        tokenCostFromSnapshot(logger.getRequestSnapshot(reqId), getEvaluationModel()),
       );
 
       // Refresh the R2 report sidecar with the rich version (best-effort).

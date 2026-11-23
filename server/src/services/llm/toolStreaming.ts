@@ -25,6 +25,8 @@ import { openRouterBrandHeaders } from './OpenRouterProvider.js';
 import { resolveDeepSeekThinking, resolveReasoningHeadroomTokens } from './DeepSeekProvider.js';
 import { isK2Model } from './KimiProvider.js';
 import { LLM_SDK_MAX_RETRIES, resolveLlmRequestTimeoutMs } from './providerTuning.js';
+import { TOOL_STREAMING_PROVIDER_TYPES, providerBaseType, providerStreamsTools } from './providerPrefixes.js';
+import { modelSupportsReasoningEffort } from './reasoningEffort.js';
 import {
   isDomesticVendor,
   maxTokensWithThinking,
@@ -98,23 +100,12 @@ export interface StreamRoundResult {
 
 /* ── Provider capability ────────────────────────────────────────────────── */
 
-/** Provider types whose tool calls stream over the OpenAI protocol. */
-export const TOOL_STREAMING_PROVIDERS: ReadonlySet<string> = new Set([
-  'openrouter',
-  'openai',
-  'deepseek',
-  'kimi',
-  'moonshot',
-  'minimax',
-  'ollama',
-  'newapi',
-  'qwen',
-  'glm',
-  'doubao',
-]);
+/** Provider types whose tool calls stream over the OpenAI protocol (the set lives in providerPrefixes.ts). */
+export const TOOL_STREAMING_PROVIDERS: ReadonlySet<string> = TOOL_STREAMING_PROVIDER_TYPES;
 
 export function supportsToolStreaming(providerType: string): boolean {
-  return TOOL_STREAMING_PROVIDERS.has((providerType || '').toLowerCase());
+  // A provider entry (`newapi@aigw`) streams tools when its type does.
+  return providerStreamsTools(providerType);
 }
 
 /* ── Message conversion ─────────────────────────────────────────────────── */
@@ -131,12 +122,15 @@ function contentForWire(content: MessageContent): unknown {
  */
 const REASONING_ECHO_PROVIDERS: ReadonlySet<string> = new Set(['deepseek', 'kimi', 'moonshot']);
 
+/** OpenAI-compatible endpoints that take `reasoning_effort` as sent (the LLM gateway's own entries, local Ollama, MiniMax). */
+const OPENAI_COMPATIBLE_EFFORT_PROVIDERS: ReadonlySet<string> = new Set(['newapi', 'ollama', 'minimax']);
+
 /** Our message shapes → OpenAI chat-completions messages for `providerType`. */
 export function toOpenAIMessages(
   messages: readonly ToolChatMessage[],
   providerType = '',
 ): Array<Record<string, unknown>> {
-  const echoReasoning = REASONING_ECHO_PROVIDERS.has(providerType.toLowerCase());
+  const echoReasoning = REASONING_ECHO_PROVIDERS.has(providerBaseType(providerType));
   return messages.map((m) => {
     if (m.role === 'tool') {
       return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
@@ -220,7 +214,7 @@ const PROXY_HEADER_PROVIDERS = new Set(['minimax', 'ollama', 'newapi', 'openai']
 
 /** An OpenAI SDK client pointed at the provider's real endpoint. */
 export function createStreamingClient(providerType: string, cred: StreamingCredential): ChatCompletionsClient {
-  const provider = providerType.toLowerCase();
+  const provider = providerBaseType(providerType);
   const baseURL = effectiveLlmBaseUrl(provider, cred.baseUrl) ?? undefined;
   const headers: Record<string, string> = {};
   if (provider === 'openrouter') Object.assign(headers, openRouterBrandHeaders());
@@ -256,7 +250,7 @@ export interface BuildStreamParamsInput {
 
 /** The chat-completions body for one streamed round, with each vendor's quirks. */
 export function buildStreamParams(input: BuildStreamParamsInput): Record<string, unknown> {
-  const provider = input.providerType.toLowerCase();
+  const provider = providerBaseType(input.providerType);
   const params: Record<string, unknown> = {
     model: input.model,
     messages: toOpenAIMessages(input.messages, provider),
@@ -298,7 +292,13 @@ export function buildStreamParams(input: BuildStreamParamsInput): Record<string,
 
   if (input.reasoningEffort) {
     if (provider === 'openrouter') params.reasoning = { effort: input.reasoningEffort };
-    else if (provider === 'openai') params.reasoning_effort = input.reasoningEffort;
+    // OpenAI 400s when the field reaches a model without reasoning (gpt-4o).
+    else if (provider === 'openai') {
+      if (modelSupportsReasoningEffort(input.model)) params.reasoning_effort = input.reasoningEffort;
+    }
+    // OpenAI-compatible gateways take the standard field. LLMService retries
+    // once without it when a gateway's model rejects it.
+    else if (OPENAI_COMPATIBLE_EFFORT_PROVIDERS.has(provider)) params.reasoning_effort = input.reasoningEffort;
   }
   if (typeof maxTokens === 'number' && Number.isFinite(maxTokens)) params.max_tokens = maxTokens;
   if (typeof temperature === 'number' && Number.isFinite(temperature)) params.temperature = temperature;

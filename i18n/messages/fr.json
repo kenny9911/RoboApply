@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, one {# pas encore ouverte} other {# pas encore ouvertes}}",
       "ready_open": "Voir ce qui est prêt",
       "upgrade": "Mettre à niveau"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -4005,6 +4006,10 @@
           "sub": "Sources d’offres, tâches de fond, e-mails, Assistant et coûts, comptés en direct.",
           "title": "Système"
         },
+        "llm": {
+          "title": "Passerelle LLM",
+          "sub": "Les fournisseurs d’IA, leurs modèles et le modèle utilisé pour chaque type de tâche."
+        },
         "visitors": {
           "title": "Visiteurs et inscriptions",
           "sub": "Qui est venu, d’où, et combien ont créé un compte."
@@ -4517,6 +4522,246 @@
           "off": "Non connectée",
           "rapidapi": "Service de recherche",
           "syndication": "Lue depuis son flux d’offres"
+        }
+      },
+      "llm": {
+        "eyebrow": "Admin",
+        "title": "Passerelle LLM",
+        "sub": "Enregistre une fois tes fournisseurs d’IA, puis choisis le fournisseur et le modèle de chaque type de tâche. Un changement s’applique aux nouvelles requêtes en 30 secondes environ.",
+        "loading": "Chargement…",
+        "refresh": "Actualiser",
+        "refreshing": "Actualisation…",
+        "cancel": "Annuler",
+        "environment": {
+          "production": "Réglages de production",
+          "development": "Réglages de développement"
+        },
+        "dbDisabled": "Les réglages enregistrés sont désactivés sur ce serveur (LLM_SETTINGS_DB_DISABLED). Tu peux toujours les modifier, mais toutes les requêtes utilisent les variables d’environnement tant que ce n’est pas réactivé.",
+        "encryptionMissing": "Ce serveur n’a pas de FIELD_ENCRYPTION_KEY, donc aucune clé API ne peut être stockée. Définis-la avant d’ajouter un fournisseur.",
+        "types": {
+          "newapi": "Compatible OpenAI"
+        },
+        "providers": {
+          "title": "Fournisseurs",
+          "sub": "Chaque fournisseur correspond à un point d’accès et à une clé API. Ajoute deux fois le même service pour utiliser deux comptes ou deux passerelles.",
+          "add": "Ajouter un fournisseur",
+          "empty": "Aucun fournisseur pour l’instant. Ajoutes-en un, puis assigne-le à un domaine ci-dessous.",
+          "full": "Tu as atteint le maximum de {max} fournisseurs. Retires-en un pour en ajouter un autre.",
+          "noUrl": "Aucune URL",
+          "off": "Désactivé",
+          "ready": "Prêt",
+          "keyUnreadable": "Clé illisible",
+          "keyUnreadableHelp": "La clé enregistrée a été chiffrée avec une autre FIELD_ENCRYPTION_KEY et ne peut pas être lue ici. Les domaines assignés à ce fournisseur utilisent leur modèle hérité tant que tu n’as pas saisi la clé de nouveau.",
+          "key": "Clé API",
+          "noKey": "Aucune",
+          "models": "Modèles",
+          "modelCount": "{count, plural, one {{n} modèle} other {{n} modèles}}",
+          "modelsNever": "Pas encore récupérés",
+          "fetchedAt": "Liste récupérée",
+          "edit": "Modifier",
+          "fetchModels": "Récupérer les modèles",
+          "refreshModels": "Actualiser les modèles",
+          "fetching": "Récupération…",
+          "showModels": "Afficher les modèles",
+          "hideModels": "Masquer les modèles",
+          "turnOff": "Désactiver",
+          "turnOn": "Activer",
+          "remove": "Retirer",
+          "removeConfirm": "Retirer {name}"
+        },
+        "form": {
+          "addTitle": "Ajouter un fournisseur",
+          "editTitle": "Modifier le fournisseur",
+          "name": "Nom",
+          "nameHint": "Affiché dans les listes des domaines, par exemple « OpenRouter (principal) ».",
+          "type": "Type",
+          "typeHint": "L’API que parle le point d’accès. Choisis Compatible OpenAI pour une passerelle ou un proxy.",
+          "typeHintNoTools": "Ce type ne peut pas diffuser d’appels d’outils ici, donc il ne peut pas servir le domaine Assistant.",
+          "baseUrl": "URL de base de l’API",
+          "baseUrlRequired": "Obligatoire. Inclus le chemin de version, par exemple https://gateway.example.com/v1, et aucun point d’accès comme /chat/completions.",
+          "baseUrlOptional": "Laisse vide pour utiliser {url}.",
+          "apiKey": "Clé API",
+          "apiKeyHint": "Stockée chiffrée. Elle ne s’affiche plus jamais après l’enregistrement.",
+          "apiKeyKeep": "Laisse vide pour garder la clé enregistrée. Si tu changes l’URL vers un autre hôte, la clé est à saisir de nouveau.",
+          "notes": "Notes (facultatif)",
+          "enabled": "Utiliser ce fournisseur",
+          "save": "Enregistrer le fournisseur",
+          "saving": "Enregistrement…",
+          "test": "Tester sans enregistrer",
+          "testing": "Test en cours…",
+          "saveHint": "L’enregistrement récupère aussi la liste des modèles du fournisseur avec cette clé."
+        },
+        "modelList": {
+          "ok": "{count, plural, one {Le fournisseur liste {n} modèle.} other {Le fournisseur liste {n} modèles.}}",
+          "okTruncated": "Le fournisseur liste plus de {n} modèles ; les {n} premiers sont conservés. Saisis à la main tout autre ID de modèle.",
+          "invalid_base_url": "Cette URL de base est inutilisable. Vérifie l’adresse ; seul un type auto-hébergé peut pointer vers un hôte privé.",
+          "key_required": "Saisis une clé API pour demander ses modèles au fournisseur.",
+          "auth_rejected": "Le fournisseur a rejeté la clé API.",
+          "not_supported": "Ce point d’accès n’a pas de liste de modèles. Vérifie l’URL de base, ou saisis les ID de modèle à la main.",
+          "rate_limited": "Le fournisseur limite les requêtes. Réessaie dans une minute.",
+          "timeout": "Le fournisseur n’a pas répondu en 8 secondes.",
+          "unreachable": "Le fournisseur est injoignable. Vérifie l’URL de base.",
+          "invalid_response": "Le fournisseur a répondu, mais pas avec une liste de modèles.",
+          "response_too_large": "La liste de modèles du fournisseur est trop volumineuse pour être lue.",
+          "provider_error": "Le fournisseur a renvoyé une erreur."
+        },
+        "areas": {
+          "title": "Domaines fonctionnels",
+          "sub": "Assigne à un domaine un fournisseur, un modèle et un effort de raisonnement, avec des modèles de secours si tu veux. Un domaine non assigné utilise l’assignation de Par défaut ; si Par défaut n’est pas assigné non plus, il garde son réglage actuel.",
+          "brand": "Site",
+          "goapplyNote": "{site} lit d’abord ses propres domaines et son propre Par défaut. Là où il n’a ni l’un ni l’autre, il utilise ceux de {shared}.",
+          "noProviders": "Ajoute un fournisseur ci-dessus pour assigner un domaine.",
+          "assigned": "Assigné",
+          "notInEffect": "Sans effet",
+          "inherits": "Hérite",
+          "provider": "Fournisseur",
+          "inheritOption": "Non assigné (utiliser Par défaut)",
+          "providerOff": "{name} (désactivé)",
+          "model": "Modèle",
+          "save": "Enregistrer",
+          "clear": "Effacer l’assignation",
+          "modelHint": "Choisis un modèle dans la liste du fournisseur, ou saisis un ID de modèle qu’elle ne contient pas.",
+          "noModelList": "Ce fournisseur n’a pas encore de liste de modèles. Récupère ses modèles ci-dessus, ou saisis un ID de modèle.",
+          "needsTools": "Ce domaine appelle des outils, donc son modèle et chaque modèle de secours doivent prendre en charge les appels d’outils.",
+          "needsImages": "Ce domaine lit des images, donc le modèle doit accepter les images en entrée.",
+          "toolsBlocked": "Un type de fournisseur choisi ici ne peut pas diffuser d’appels d’outils. Choisis des fournisseurs Compatible OpenAI pour le modèle et les secours de ce domaine.",
+          "modelNotListed": "Ce modèle ne figure pas dans la liste récupérée du fournisseur. Il est utilisé tel que saisi.",
+          "now": "Ce que les requêtes utilisent maintenant",
+          "colSetting": "Utilisé pour",
+          "colModel": "Modèle",
+          "colSource": "Provient de",
+          "inheritOptionDefault": "Non assigné (utiliser l’environnement)",
+          "usesDefault": "Utilise Par défaut",
+          "chooseProvider": "Choisis un fournisseur",
+          "effort": "Effort de raisonnement",
+          "effortHint": "L’effort de raisonnement est envoyé avec chaque requête à ce modèle, ramené au niveau le plus proche que son fournisseur accepte. Par défaut du fournisseur n’en envoie aucun : l’effort de l’environnement ou celui du fournisseur s’applique alors.",
+          "fallbacks": "Modèles de secours",
+          "fallbacksHint": "Essayés dans l’ordre quand le modèle ci-dessus échoue : une clé refusée ou sans crédit, une panne ou une limite de débit, ou un modèle que le point d’accès ne sert pas. Jusqu’à {max}. Ensuite, le réglage du modèle de secours (LLM_FALLBACK_MODEL) est toujours essayé.",
+          "fallbackN": "Secours {n}",
+          "addFallback": "Ajouter un modèle de secours",
+          "fallbacksFull": "Ce domaine a déjà le maximum de modèles de secours ({max}).",
+          "moveUp": "Monter",
+          "moveDown": "Descendre",
+          "removeFallback": "Retirer",
+          "moveUpLabel": "Monter le secours {n}",
+          "moveDownLabel": "Descendre le secours {n}",
+          "removeFallbackLabel": "Retirer le secours {n}"
+        },
+        "routeStatus": {
+          "provider_missing": "Le fournisseur assigné a été retiré, donc ce domaine utilise son modèle hérité.",
+          "provider_disabled": "Le fournisseur assigné est désactivé, donc ce domaine utilise son modèle hérité.",
+          "provider_key_missing": "Le fournisseur assigné n’a pas de clé API, donc ce domaine utilise son modèle hérité.",
+          "provider_key_unreadable": "La clé du fournisseur assigné est illisible sur ce serveur, donc ce domaine utilise son modèle hérité."
+        },
+        "area": {
+          "default": {
+            "title": "Par défaut",
+            "sub": "Chaque domaine que tu n’assignes pas utilise ce modèle, ses modèles de secours et son effort."
+          },
+          "matchResume": {
+            "title": "Correspondance CV",
+            "sub": "Évaluer dans quelle mesure un CV correspond à une offre."
+          },
+          "parseResume": {
+            "title": "Analyse de CV",
+            "sub": "Transformer le texte d’un CV en informations structurées."
+          },
+          "visual": {
+            "title": "Visuel",
+            "sub": "Lecture d’images et de pages numérisées (OCR)."
+          },
+          "evaluation": {
+            "title": "Évaluation",
+            "sub": "Noter un entretien d’entraînement terminé et rédiger son rapport."
+          },
+          "insights": {
+            "title": "Analyses",
+            "sub": "Le résumé de carrière hebdomadaire et les résumés de recherche."
+          },
+          "writing": {
+            "title": "Rédaction",
+            "sub": "Lettres de motivation, messages d’approche et réécritures de CV."
+          },
+          "assistant": {
+            "title": "Assistant",
+            "sub": "Le chat de l’Assistant, l’accueil et la compréhension de ce que demande une personne."
+          },
+          "jobs": {
+            "title": "Détails des offres",
+            "sub": "Ajout de détails et de tags aux annonces."
+          }
+        },
+        "setting": {
+          "defaultModel": "Modèle par défaut",
+          "matching": "Score d’adéquation",
+          "matchResume": "Rapport de correspondance",
+          "matchScreen": "Présélection des correspondances",
+          "prematchFilter": "Filtre de pré-correspondance",
+          "extract": "Texte du CV",
+          "resumeTag": "Tags de CV",
+          "vision": "Images et numérisations",
+          "evaluation": "Rapport d’entretien",
+          "insights": "Analyses",
+          "writing": "Rédaction longue",
+          "rewrite": "Réécriture de CV",
+          "copilot": "Chat de l’Assistant",
+          "onboarding": "Accueil",
+          "intentParser": "Intention de recherche",
+          "enrich": "Enrichissement des offres",
+          "jobTag": "Tags d’offre",
+          "quickJob": "Lecture rapide d’offre"
+        },
+        "source": {
+          "assigned": "L’assignation de ce domaine",
+          "override": "Une surcharge enregistrée pour ce réglage",
+          "shared": "Le réglage de {shared}",
+          "env": "Variable d’environnement {name}",
+          "noneDefault": "Rien n’est configuré",
+          "noDefault": "aucun configuré",
+          "fallback": {
+            "default": "Rien n’est configuré",
+            "matchResume": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "parseResume": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "visual": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "evaluation": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "insights": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "writing": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "assistant": "Pas de modèle propre ; utilise le modèle par défaut ({model})",
+            "jobs": "Pas de modèle propre ; utilise le modèle par défaut ({model})"
+          },
+          "default": "L’assignation du domaine Par défaut",
+          "sharedArea": "L’assignation de {shared} pour ce domaine",
+          "sharedDefault": "Le domaine Par défaut de {shared}"
+        },
+        "errors": {
+          "generic": "Ça n’a pas fonctionné. Réessaie.",
+          "invalid_name": "Saisis un nom de 60 caractères au maximum.",
+          "duplicate_name": "Un autre fournisseur porte déjà ce nom.",
+          "invalid_type": "Choisis un type de fournisseur.",
+          "invalid_base_url": "Cette URL de base est inutilisable. Saisis l’URL de base de l’API sans point d’accès comme /chat/completions ; seul un type auto-hébergé peut pointer vers un hôte privé.",
+          "key_required": "Saisis une clé API.",
+          "key_required_for_new_url": "Le point d’accès a changé. Saisis de nouveau la clé API, pour que la clé enregistrée ne soit pas envoyée à un autre hôte.",
+          "too_many_providers": "Le nombre maximum de fournisseurs est enregistré. Retires-en un d’abord.",
+          "not_found": "Ce fournisseur n’existe plus. Actualise la page.",
+          "invalid_notes": "Les notes peuvent contenir 2 000 caractères au maximum.",
+          "encryption_unavailable": "Ce serveur ne peut pas stocker de clés API : FIELD_ENCRYPTION_KEY n’est pas définie.",
+          "invalid_area": "Ce domaine est inconnu. Actualise la page.",
+          "invalid_route": "Choisis un fournisseur et un modèle.",
+          "unknown_provider": "Ce fournisseur n’existe plus. Actualise la page.",
+          "tools_unsupported": "Ce type de fournisseur ne peut pas diffuser d’appels d’outils, dont ce domaine a besoin.",
+          "provider_in_use": "Un domaine utilise encore ce fournisseur, pour son modèle ou un secours. Modifie ou efface d’abord ce domaine.",
+          "invalid_effort": "Choisis un effort de raisonnement.",
+          "invalid_fallback": "Choisis un fournisseur et un modèle pour chaque modèle de secours.",
+          "duplicate_fallback": "Chaque modèle ne peut figurer qu’une fois dans un domaine.",
+          "too_many_fallbacks": "Un domaine accepte au plus {max} modèles de secours."
+        },
+        "effort": {
+          "provider": "Par défaut du fournisseur",
+          "minimal": "Minimal",
+          "low": "Faible",
+          "medium": "Moyen",
+          "high": "Élevé",
+          "max": "Maximal"
         }
       },
       "visitors": {
@@ -5683,6 +5928,348 @@
     },
     "jobList": {
       "title": "Offres mentionnées dans cette réponse"
+    }
+  },
+  "alice": {
+    "tag": "Agent IA",
+    "restart": "Recommencer",
+    "restartConfirm": "Commencer une nouvelle conversation ? Tes profils de poste enregistrés sont conservés.",
+    "cancel": "Annuler",
+    "status": {
+      "working": "Alice s’en occupe",
+      "intake": "Découverte du poste que tu veux · {done} sujets sur {total}",
+      "choosing": "Deux profils de poste sont prêts à être comparés",
+      "refining": "Version {version} de ton profil de poste",
+      "saved": "Ton profil de poste guide ta recherche d’emploi",
+      "savedNeeds": "{count, plural, one {# point demande ton attention} other {# points demandent ton attention}}"
+    },
+    "tabs": {
+      "aria": "Vues d’Alice",
+      "chat": "Discussion",
+      "profile": "Profil",
+      "jobs": "Offres",
+      "applications": "Candidatures"
+    },
+    "greeting": {
+      "hello": "Bonjour, je suis Alice, un agent IA dédié à ta recherche d’emploi et à tes candidatures.",
+      "plan": "Je vais te demander ce que tu attends de ton prochain poste, puis rédiger deux profils de poste à comparer. Choisis le plus proche, dis-moi ce qu’il faut changer, et je le retravaillerai jusqu’à ce qu’il te convienne.",
+      "d1": "Tu envoies chaque candidature toi-même. Je trouve les offres qui te correspondent, je fais le suivi de tes candidatures et je te rappelle les prochaines étapes.",
+      "withResume": "Je peux partir de ton CV « {name} ».",
+      "withoutResume": "Si tu as un CV, ajoute-le et je partirai de là."
+    },
+    "resume": {
+      "use": "Utiliser « {name} »",
+      "other": "Choisir un autre CV",
+      "pickLabel": "Tes CV",
+      "upload": "Importer un CV",
+      "skip": "Continuer sans CV",
+      "hint": "PDF, Word ou texte, 15 Mo maximum.",
+      "hintNoPdf": "Word ou texte, 15 Mo maximum.",
+      "uploading": "Lecture de {name}…",
+      "errors": {
+        "unreadable": "Ce fichier ne contient aucun texte lisible. Essaie un autre fichier.",
+        "tooLarge": "Ce fichier dépasse 15 Mo.",
+        "wrongType": "Utilise un fichier PDF, Word ou texte.",
+        "dailyLimit": "Tu as ajouté le nombre maximum de CV pour aujourd’hui. Réessaie demain, ou continue sans CV.",
+        "failed": "Ça n’a pas marché. Réessaie.",
+        "pdfNeedsConsent": "Les fichiers PDF ne peuvent pas être lus sans l’option de lecture que tu as désactivée. Importe plutôt un fichier Word ou texte.",
+        "consentUnknown": "Nous n’avons pas pu vérifier comment ton fichier serait lu. Réessaie dans un instant.",
+        "consentUnanswered": "Réponds à la question ci-dessous sur la façon dont ton fichier est lu, puis importe-le."
+      }
+    },
+    "action": {
+      "resume": "Utilise mon CV « {label} »",
+      "skip_resume": "Continuons sans CV",
+      "draft_now": "Montre-moi deux profils",
+      "choose": "Celui-ci est plus proche : {label}",
+      "regenerate": "Aucun ne convient",
+      "restore": "Reviens à la version {version}",
+      "save": "Enregistre « {label} »",
+      "find_jobs": "Trouve des offres pour ce profil",
+      "report": "Où en sont mes candidatures ?",
+      "edit_profile": "Modifions « {label} »"
+    },
+    "blocks": {
+      "resumeRead": "J’ai lu « {name} ».",
+      "resumeRoles": "On y voit de l’expérience comme {roles}.",
+      "resumeRolesYears": "On y voit de l’expérience comme {roles}, sur environ {years} ans.",
+      "learned": "C’est noté : {topics}.",
+      "profiles": "Deux profils de poste sont prêts : {a} et {b}.",
+      "compare": "Les comparer",
+      "revisionFirst": "Voici la version 1. Dis-moi ce qu’il faut changer, ou enregistre-la quand elle te convient.",
+      "revision": "La version {version} est prête. J’ai modifié : {fields}.",
+      "seeVersion": "Voir cette version",
+      "restored": "La version {version} est de retour, en tant que version la plus récente.",
+      "saved": "J’ai enregistré « {name} ».",
+      "saved_created": "C’est désormais ta recherche enregistrée « {search} », et ta recherche d’emploi l’utilise.",
+      "saved_updated": "J’ai mis à jour ta recherche enregistrée « {search} » pour qu’elle lui corresponde.",
+      "saved_replaced": "Ta recherche enregistrée « {search} » l’utilise désormais. Ses anciens filtres sont conservés : tu peux annuler ce changement dans Profil.",
+      "saved_kept": "Tes recherches enregistrées n’ont pas changé.",
+      "matches": "{count, plural, =0 {Aucune offre ouverte ne correspond à ce profil pour l’instant. Demande-moi de l’élargir : plus de lieux, un autre niveau ou plus d’intitulés.} one {# offre ouverte correspond à ce profil.} other {# offres ouvertes correspondent à ce profil.}}",
+      "seeJobs": "Voir les offres",
+      "reportFacts": "{active} en cours · {waiting} en attente de réponse · {interviewing} en entretien · {offers} avec une proposition",
+      "seeApplications": "Voir tes candidatures",
+      "reminder": "Le {date}, je te ferai un rappel pour {what}.",
+      "reminderCleared": "J’ai supprimé le rappel pour {what}.",
+      "thisApplication": "cette candidature",
+      "saved_updated_main": "J’ai mis à jour ta recherche principale pour qu’elle corresponde.",
+      "saved_replaced_main": "Ta recherche principale l’utilise maintenant. Ses anciens filtres sont gardés, tu peux annuler dans Profil."
+    },
+    "notice": {
+      "agent_failed": "Je n’ai pas pu terminer. Rien de ce que tu as dit n’est perdu. Réessaie.",
+      "nothing_changed": "Ça n’a rien changé au profil. Dis-m’en plus sur ce que tu voudrais de différent.",
+      "search_full": "Tu n’as plus de place pour une autre recherche enregistrée. Choisis sur la carte d’enregistrement si ce profil doit remplacer ta recherche actuelle.",
+      "resume_unreadable": "Je n’ai pu lire aucun texte dans ce CV. On peut continuer sans, ou tu peux en ajouter un autre.",
+      "turn_limit": "Cette conversation est devenue très longue. Recommence pour continuer ; tes profils enregistrés sont conservés.",
+      "draft_limit": "Tu as demandé beaucoup de nouveaux profils aujourd’hui. Réessaie plus tard.",
+      "enough_questions": "J’en sais assez pour rédiger deux profils de poste. Un instant.",
+      "no_applications": "Tu n’as pas encore de candidature. Garde une offre ou prépare une candidature, et j’en ferai le suivi.",
+      "no_profile": "Enregistre d’abord un profil de poste, puis je pourrai trouver les offres qui y correspondent.",
+      "reminder_ambiguous": "Plusieurs candidatures correspondent. Choisis celle dont tu parles.",
+      "reminder_unknown": "Dis-moi quelle candidature et quel jour, par exemple « relancer Figma vendredi »."
+    },
+    "steps": {
+      "reading_resume": "Lecture de ton CV",
+      "thinking": "Réflexion",
+      "reading_goals": "Lecture de ce que tu veux",
+      "writing_profiles": "Rédaction de deux profils de poste",
+      "revising": "Révision de ton profil",
+      "saving": "Enregistrement de ton profil",
+      "finding_jobs": "Recherche d’offres qui te correspondent",
+      "checking_applications": "Vérification de tes candidatures"
+    },
+    "composer": {
+      "label": "Message à Alice",
+      "placeholder_intake": "Écris ta réponse",
+      "placeholder_choosing": "Lequel est le plus proche ?",
+      "placeholder_refining": "Que faut-il changer ?",
+      "placeholder_saved": "Demande ce que tu veux à Alice",
+      "send": "Envoyer",
+      "attach": "Ajouter un CV",
+      "replies": "Réponses rapides",
+      "sendPicked": "{count, plural, one {Envoyer # réponse} other {Envoyer # réponses}}",
+      "showProfiles": "Montre-moi deux profils"
+    },
+    "errors": {
+      "not_ready": "Alice n’est pas encore activée ici.",
+      "ai_off": "Alice a besoin de ton consentement au traitement par IA. Tu peux l’activer dans les Réglages.",
+      "busy": "Alice est encore en train de répondre à ton dernier message.",
+      "rate_limited": "Tu as envoyé beaucoup de messages. Réessaie dans quelques minutes.",
+      "agent_failed": "Alice n’a pas pu terminer. Réessaie.",
+      "wrong_stage": "Ce n’est pas disponible à cette étape.",
+      "profile_limit": "Tu as enregistré autant de profils de poste qu’Alice peut en garder. Supprimes-en un d’abord.",
+      "search_full": "Tu n’as plus de place pour une autre recherche enregistrée. Choisis sur la carte d’enregistrement ce que tu veux faire.",
+      "interrupted": "La connexion a été coupée. Ta conversation est enregistrée ; recharge la page pour voir les derniers messages.",
+      "generic": "Un problème est survenu. Réessaie.",
+      "retry": "Réessayer"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "Alice n’est pas encore activée ici",
+        "body": "Alice doit être configurée une fois sur ce site. Tout le reste fonctionne comme d’habitude."
+      },
+      "aiOff": {
+        "title": "Alice a besoin de l’IA pour fonctionner",
+        "body": "L’IA n’est pas disponible pour ton compte en ce moment. Si tu l’as désactivée, tu peux la réactiver dans les Réglages."
+      },
+      "loadFailed": {
+        "title": "Impossible de charger ta conversation avec Alice",
+        "body": "Vérifie ta connexion et réessaie."
+      }
+    },
+    "brief": {
+      "title": "Ce qu’Alice sait déjà",
+      "intro": "Tout ce qui figure ici vient de tes réponses. Rien n’est figé tant que tu n’as pas choisi de profil.",
+      "progress": "{done} sujets sur {total}",
+      "skipped": "Passé",
+      "not": "Sauf {value}",
+      "fromResume": "Alice lit aussi ton CV « {name} ».",
+      "ready": "C’est assez pour rédiger deux profils de poste. Tu peux répondre à d’autres questions, ou les voir maintenant.",
+      "notReady": "Encore quelques réponses et Alice pourra rédiger deux profils de poste.",
+      "topics": {
+        "roles": "Type de poste",
+        "level": "Niveau",
+        "workSetting": "Mode de travail",
+        "places": "Lieux",
+        "pay": "Salaire minimum",
+        "industries": "Secteurs",
+        "companyKind": "Type d’entreprise",
+        "companySize": "Taille de l’entreprise",
+        "companies": "Entreprises que tu admires",
+        "dreamJob": "Poste de rêve",
+        "values": "Ce qui compte le plus",
+        "dealbreakers": "Critères éliminatoires",
+        "timing": "Délai",
+        "sponsorship": "Parrainage de visa"
+      }
+    },
+    "fields": {
+      "label": "Nom",
+      "headline": "En une phrase",
+      "summary": "Résumé",
+      "titles": "Intitulés de poste",
+      "levels": "Niveau",
+      "workModels": "Mode de travail",
+      "places": "Lieux",
+      "pay": "Salaire minimum",
+      "industries": "Secteurs",
+      "companyKinds": "Type d’entreprise",
+      "companySizes": "Taille de l’entreprise",
+      "companies": "Entreprises",
+      "skills": "Compétences",
+      "mustHaves": "Indispensable",
+      "niceToHaves": "Un plus",
+      "dealbreakers": "Critères éliminatoires",
+      "whyItFits": "Pourquoi ça te correspond",
+      "tradeoff": "Ce à quoi tu renonces",
+      "jobTypes": "Type de contrat"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "Stagiaire ou jeune diplômé",
+        "entry": "Débutant",
+        "mid": "Confirmé",
+        "senior": "Senior",
+        "lead_staff": "Lead ou staff",
+        "director_exec": "Direction et au-delà"
+      },
+      "workModels": {
+        "remote": "Télétravail",
+        "hybrid": "Hybride",
+        "onsite": "Sur site"
+      },
+      "companyKinds": {
+        "startup": "Start-up",
+        "scaleup": "Scale-up",
+        "enterprise": "Grande entreprise",
+        "public_sector": "Secteur public",
+        "nonprofit": "Association ou ONG"
+      },
+      "jobTypes": {
+        "full_time": "Temps plein",
+        "contract": "Contrat temporaire",
+        "part_time": "Temps partiel",
+        "internship": "Stage"
+      },
+      "timing": {
+        "now": "Dès que possible",
+        "soon": "Dans les prochains mois",
+        "exploring": "Je regarde simplement"
+      },
+      "sponsorship": {
+        "yes": "Besoin d’un parrainage de visa",
+        "no": "Pas besoin de parrainage"
+      },
+      "payPer": {
+        "year": "{amount} par an",
+        "month": "{amount} par mois",
+        "hour": "{amount} par heure"
+      },
+      "companySize": "{size} personnes",
+      "companyYou": "Tu l’as citée",
+      "companyAlice": "Exemple d’Alice"
+    },
+    "compare": {
+      "title": "Lequel se rapproche le plus de ce que tu veux ?",
+      "intro": "Deux pistes que tes réponses laissent ouvertes. Choisis la plus proche.",
+      "differsHint": "Un point indique où les deux diffèrent.",
+      "differs": "diffère",
+      "choose": "Celui-ci est plus proche",
+      "commentLabel": "Dis à Alice ce qu’il faut changer",
+      "commentPlaceholder": "Par exemple : le premier, mais en télétravail et sans déplacements",
+      "commentHint": "Écris-le ici, puis choisis un profil : Alice retravaille celui que tu choisis. Ou dis-lui pourquoi aucun ne convient.",
+      "neither": "Aucun ne convient"
+    },
+    "profile": {
+      "version": "Version {version}",
+      "yourComment": "Tu as dit : « {comment} »",
+      "aliceNotes": "Ce qu’Alice a modifié",
+      "changed": "Modifié",
+      "was": "Avant : {value}",
+      "history": "Versions",
+      "historyPick": "Tu as choisi « {label} »",
+      "historyEdit": "« {comment} »",
+      "historyRestore": "Retour à la version {version}",
+      "historySaved": "Ton profil enregistré",
+      "restore": "Restaurer",
+      "current": "Actuelle",
+      "commentLabel": "Qu’est-ce qui doit changer ?",
+      "commentPlaceholder": "Par exemple : ajoute le travail hybride à Paris, et pas d’agences de recrutement",
+      "send": "Retravailler",
+      "newPair": "Repartir de deux nouveaux profils"
+    },
+    "save": {
+      "title": "Ça te convient ?",
+      "name": "Nom du profil",
+      "create": "Enregistrer et l’utiliser pour ma recherche d’emploi",
+      "createHint": "Alice l’ajoute comme recherche enregistrée et l’active. Tes autres recherches restent en place.",
+      "update": "Enregistrer et mettre à jour « {search} »",
+      "updateHint": "La recherche enregistrée qu’il guide est mise à jour pour lui correspondre.",
+      "replace": "L’utiliser pour ma recherche « {search} »",
+      "replaceHint": "Tu n’as plus de place pour une autre recherche enregistrée. Tes filtres actuels sont conservés : tu pourras annuler ce changement.",
+      "none": "Enregistrer sans modifier ma recherche",
+      "replaceMain": "L’utiliser pour ma recherche principale",
+      "updateMain": "Enregistrer et mettre à jour ma recherche principale"
+    },
+    "saved": {
+      "drives": "Guide ta recherche enregistrée « {search} »",
+      "drivesNone": "Aucune recherche enregistrée ne l’utilise",
+      "findJobs": "Voir les offres qui correspondent",
+      "edit": "Modifier avec Alice",
+      "undo": "Annuler le changement de recherche",
+      "undone": "Les anciens filtres de ta recherche sont rétablis.",
+      "others": "Tes autres profils de poste",
+      "drivesMain": "Utilisé par ta recherche principale"
+    },
+    "jobs": {
+      "title": "Offres qui correspondent à « {name} »",
+      "titleEmpty": "Offres qui correspondent à ton profil",
+      "honesty": "L’adéquation compare une offre à ton CV. Ce n’est pas ta probabilité d’être recruté.",
+      "missing": "Il manque : {gap}",
+      "meets": "Correspond : {fields}",
+      "named": "Une entreprise que tu as citée",
+      "view": "Voir l’offre",
+      "empty": "Aucune offre ouverte ne correspond à ce profil pour l’instant.",
+      "widen": "Demander à Alice de l’élargir",
+      "noProfile": "Enregistre un profil de poste et Alice trouvera les offres qui y correspondent.",
+      "loading": "Recherche d’offres…",
+      "error": "Impossible de charger les offres.",
+      "retry": "Réessayer",
+      "seeAll": "Voir toutes les offres",
+      "tier": {
+        "great": "Très adapté",
+        "good": "Bien adapté",
+        "possible": "Possible",
+        "unlikely": "Peu probable"
+      }
+    },
+    "apps": {
+      "title": "Tes candidatures",
+      "stages": "Candidatures par étape",
+      "needs": "Demande ton attention",
+      "needsEmpty": "Rien ne demande ton attention aujourd’hui.",
+      "kind": {
+        "interview_tomorrow": "Entretien demain",
+        "deadline_soon": "{days, plural, =0 {Date limite aujourd’hui} one {Date limite dans # jour} other {Date limite dans # jours}}",
+        "follow_up_due": "Relance à faire",
+        "no_reply_10d": "Pas de réponse depuis {days} jours",
+        "ready_to_check": "Prête pour ta vérification"
+      },
+      "open": "Ouvrir",
+      "check": "Vérifier et ouvrir",
+      "reminders": "Rappels",
+      "remindersEmpty": "Aucun rappel prévu.",
+      "due": "À faire",
+      "done": "Fait",
+      "set": "Programmer un rappel",
+      "pick": "Choisir une candidature",
+      "date": "Jour",
+      "save": "Enregistrer le rappel",
+      "saveError": "Impossible d’enregistrer le rappel. Réessaie.",
+      "all": "Ouvrir les candidatures",
+      "empty": "Pas encore de candidature. Garde une offre ou prépare une candidature, et Alice en fera le suivi.",
+      "error": "Impossible de charger tes candidatures.",
+      "retry": "Réessayer"
     }
   },
   "brand": {

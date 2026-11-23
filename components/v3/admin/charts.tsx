@@ -273,13 +273,13 @@ export function CostRevenueArea({
         <circle cx={x(lastIdx)} cy={y(points[lastIdx].costUsd)} r="4" fill="var(--action)" />
       </svg>
       <svg viewBox={`0 0 ${W} 16`} width="100%" height="16" style={{ display: 'block', marginTop: 4 }}>
-        <text x="0" y="12" fontSize="12" fill="var(--text-muted)">
+        <text x="0" y="12" style={{ fontSize: 'var(--fs-label)' }} fill="var(--text-muted)">
           {labelAt(0)}
         </text>
-        <text x={W / 2} y="12" textAnchor="middle" fontSize="12" fill="var(--text-muted)">
+        <text x={W / 2} y="12" textAnchor="middle" style={{ fontSize: 'var(--fs-label)' }} fill="var(--text-muted)">
           {labelAt(midIdx)}
         </text>
-        <text x={W} y="12" textAnchor="end" fontSize="12" fill="var(--text-muted)">
+        <text x={W} y="12" textAnchor="end" style={{ fontSize: 'var(--fs-label)' }} fill="var(--text-muted)">
           {labelAt(lastIdx)}
         </text>
       </svg>

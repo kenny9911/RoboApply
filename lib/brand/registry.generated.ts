@@ -49,6 +49,8 @@ export type HiringContactsMode = 'off' | 'deeplinks_only' | 'on';
 export interface BrandFlags {
   copilot: boolean;
   agent: boolean;
+  /** Alice, the application agent (docs/alice/ALICE.md). AI-dependent, like copilot and agent. */
+  alice: boolean;
   extension: boolean;
   /** Coaching roster (also needs a non-empty roster to show in nav). */
   coaching: boolean;
@@ -144,6 +146,8 @@ export interface ProductBrand {
     replyTo: string;
     /** The PREFERRED transport, used when its credentials are set. GoApply falls back to the shared Resend account (CN_EMAIL_TRANSPORT picks; `none` turns email off). */
     transport: 'resend' | 'aliyun_dm';
+    /** The brand's action colour in email (buttons, the wordmark, links): white type on it at 4.5:1 or more. */
+    accent: string;
   };
   assets: { mark: string; logo: string; og: string; favicon: string; appleTouch: string };
   theme: { themeColorLight: string; themeColorDark: string };
@@ -194,21 +198,23 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
       fromAddress: 'noreply@roboapply.io',
       replyTo: 'support@roboapply.io',
       transport: 'resend',
+      accent: '#2B4DFF',
     },
     assets: {
       mark: '/roboapply-mark.svg',
-      logo: '/roboapply-logo.png',
-      og: '/og.png',
+      logo: '/roboapply-wordmark.png',
+      og: '/og-pulse.png',
       favicon: '/roboapply-mark.svg',
-      appleTouch: '/roboapply-logo.png',
+      appleTouch: '/roboapply-touch.png',
     },
-    theme: { themeColorLight: '#F4F1E9', themeColorDark: '#121313' },
+    theme: { themeColorLight: '#F4F6FB', themeColorDark: '#07080F' },
     seo: { titleSuffix: 'RoboApply', sameAs: [], searchEngines: ['google', 'bing'] },
     legal: { termsPath: '/legal/terms', privacyPath: '/legal/privacy' },
     otherBrand: 'goapply',
     flags: {
       copilot: true,
       agent: true,
+      alice: true,
       extension: true,
       coaching: true,
       interviewBank: true,
@@ -266,6 +272,7 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
       fromAddress: 'noreply@goapply.top',
       replyTo: 'support@goapply.top',
       transport: 'aliyun_dm',
+      accent: '#0E4A3E',
     },
     // Planned asset paths; the brand presentation WP (WP-12) adds the files.
     assets: {
@@ -275,13 +282,14 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
       favicon: '/brands/goapply/favicon.svg',
       appleTouch: '/brands/goapply/apple-touch.png',
     },
-    theme: { themeColorLight: '#F4F1E9', themeColorDark: '#121313' },
+    theme: { themeColorLight: '#F4F6FB', themeColorDark: '#07080F' },
     seo: { titleSuffix: 'GoApply', sameAs: [], searchEngines: ['baidu', 'bing'] },
     legal: { termsPath: '/legal/terms', privacyPath: '/legal/privacy', aiModelDisclosure: true },
     otherBrand: 'roboapply',
     flags: {
       copilot: true,
       agent: true,
+      alice: true,
       extension: true,
       coaching: true,
       interviewBank: true,

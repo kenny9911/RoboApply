@@ -1,8 +1,8 @@
-/* components/features/pay — the pay check (/pay). Desk tokens only: white
-   cards at rest on --e1, 12 px corners, 4 px controls, one blue action. The
-   range bar is decorative blue (--accent-track band, --accent-line median):
-   it carries no text, the figures are written out beside it. Touch targets
-   are at least 44 px; the form stacks below 640 px. */
+/* components/features/pay — the pay check (/pay). Pulse tokens only: flat
+   white tiles on the cool-white ground, 16 px corners, pill controls, one
+   blue action. The range bar is an --accent-line band on a --surface-3 track
+   with an ink median tick: it carries no text, the figures are written out
+   beside it. Touch targets are at least 44 px; the form stacks below 640 px. */
 
 .page {
   display: flex;
@@ -228,9 +228,9 @@
   left: var(--band-start, 25%);
   width: max(4px, calc(var(--band-end, 75%) - var(--band-start, 25%)));
   box-sizing: border-box;
-  border: 1px solid var(--accent-line);
+  border: 0;
   border-radius: 999px;
-  background: var(--accent-track);
+  background: var(--accent-line);
 }
 
 .medianMark {
@@ -241,7 +241,7 @@
   width: 3px;
   margin-left: -1.5px;
   border-radius: 2px;
-  background: var(--action);
+  background: var(--text);
 }
 
 .figures {

@@ -40,17 +40,31 @@ import { Providers } from './providers';
 // never covered by these latin fonts (subsets:['latin']) — they fall back to
 // system fonts as before.
 
-// The interface uses the self-hosted Inter variable font (weights 100–900)
-// throughout — the Desk system, docs/design-system.md, which follows
-// resume.io's neutral sans (its own face is proprietary). Inter is also the
-// default face of the user's resume document templates. Bricolage Grotesque
-// (the October Paper system's face) stays declared for anything that still
-// names --font-bricolage, but is no longer preloaded.
+// The interface is set in two self-hosted variable faces (the Pulse system,
+// docs/design-system.md): DM Sans (weights 100–1000, with its optical-size
+// axis) for everything that is read, and Space Grotesk (300–700) for
+// headlines. Inter (Desk) and Bricolage Grotesque (Paper) stay declared for
+// anything that still names their variables, but are no longer preloaded.
+const dmSans = localFont({
+  src: './fonts/dm-sans-100-1000.woff2',
+  weight: '100 1000',
+  display: 'swap',
+  variable: '--font-dm-sans',
+});
+
+const spaceGrotesk = localFont({
+  src: './fonts/space-grotesk-300-700.woff2',
+  weight: '300 700',
+  display: 'swap',
+  variable: '--font-space-grotesk',
+});
+
 const inter = localFont({
   src: './fonts/inter-100-900.woff2',
   weight: '100 900',
   display: 'swap',
   variable: '--font-inter',
+  preload: false,
 });
 
 const bricolage = localFont({
@@ -144,7 +158,7 @@ export default async function RootLayout({
       // warning about that pre-hydration mutation of the <html> attributes.
       data-theme="light"
       suppressHydrationWarning
-      className={`${inter.variable} ${bricolage.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable} ${sourceHanSC.variable} ${sourceHanTW.variable}`}
+      className={`${dmSans.variable} ${spaceGrotesk.variable} ${inter.variable} ${bricolage.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable} ${sourceHanSC.variable} ${sourceHanTW.variable}`}
     >
       <head>
         {/* No-flash theme bootstrap — must run render-blocking before paint.

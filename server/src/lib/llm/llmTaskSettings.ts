@@ -52,6 +52,34 @@ export function getTaskModelOrDefault(task: LlmTask, brand?: LlmBrandArg, env: E
   return getTaskModel(task, brand, env) ?? getDefaultModel(brand, env);
 }
 
+/**
+ * The model that scores a finished interview (scorecard, per-question review,
+ * recommendations): the Evaluation area (else the Default area), its saved
+ * override or `LLM_EVALUATION`, else the default model. Like every area it
+ * no longer borrows another task's model when nothing is set.
+ */
+export function getEvaluationModel(brand?: LlmBrandArg, env: EnvSource = process.env): string | undefined {
+  return getModelSetting('evaluation', brand, env) ?? getDefaultModel(brand, env);
+}
+
+/**
+ * The model that reads images and scanned pages (OCR): the Visual area (else
+ * the Default area), its saved override or `LLM_VISION_MODEL`, else the
+ * default model.
+ */
+export function getVisionModel(brand?: LlmBrandArg, env: EnvSource = process.env): string | undefined {
+  return getModelSetting('vision', brand, env) ?? getDefaultModel(brand, env);
+}
+
+/**
+ * The model that writes insights (the weekly career summary, the cross-bank
+ * search summary): the Insights area or `RA_V2_CAREER_INSIGHT_MODEL`.
+ * Undefined → the caller uses the default model.
+ */
+export function getInsightsModel(brand?: LlmBrandArg, env: EnvSource = process.env): string | undefined {
+  return getModelSetting('insights', brand, env);
+}
+
 /** Read and validate a task effort at call time so env reloads take effect. */
 export function getTaskReasoningEffort(task: LlmTask): ReasoningEffort | undefined {
   return parseReasoningEffort(process.env[EFFORT_ENV[task]]);

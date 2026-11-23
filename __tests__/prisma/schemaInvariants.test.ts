@@ -107,6 +107,10 @@ const PLACEMENT: Record<string, string> = {
   RAAgentQueueItem: 'ra-agent.prisma',
   RAAgentKitEvent: 'ra-agent.prisma',
   RAAnswerBankItem: 'ra-agent.prisma',
+  // ra-alice (SCHEMA-10; docs/alice/ALICE.md)
+  RAAliceThread: 'ra-alice.prisma',
+  RAAliceMessage: 'ra-alice.prisma',
+  RAJobProfile: 'ra-alice.prisma',
   // ra-extension
   RAExtensionDevice: 'ra-extension.prisma',
   RAAutofillRun: 'ra-extension.prisma',
@@ -259,6 +263,9 @@ const SCOPE: Record<string, Scope> = {
   RAAgentQueueItem: 'user',
   RAAgentKitEvent: 'user',
   RAAnswerBankItem: 'user',
+  RAAliceThread: 'brand', // SCHEMA-10
+  RAAliceMessage: 'global', // child of RAAliceThread (brand)
+  RAJobProfile: 'user', // SCHEMA-10
   RAExtensionDevice: 'brand',
   RAAutofillRun: 'user',
   RASiteRequest: 'user',

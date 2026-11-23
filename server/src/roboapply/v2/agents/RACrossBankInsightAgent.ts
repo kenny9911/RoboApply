@@ -11,6 +11,7 @@
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { llmService } from '../../../services/llm/LLMService.js';
+import { resolveModelKey } from '../../../lib/llm/llmModels.js';
 import type { CrossBankInsightInput, CrossBankInsight } from '../types/crossBank.js';
 import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
@@ -20,7 +21,11 @@ const ENV_MODEL = 'RA_V2_CROSSBANK_INSIGHT_MODEL';
 const SCORE_PATTERN = /\b\d{1,3}\s*(?:\/\s*100\b|%|\spoints?\b|\spts?\b)/gi;
 
 export function pickCrossBankInsightModel(): string {
-  return process.env[ENV_MODEL]?.trim() || llmService.getModel();
+  // An assigned Insights area (LLM gateway) wins, like any admin override;
+  // then this agent's own variable, the shared insights setting, the default.
+  const insights = resolveModelKey('insights');
+  if (insights.source === 'override' && insights.effective) return insights.effective;
+  return process.env[ENV_MODEL]?.trim() || insights.effective || llmService.getModel();
 }
 
 function scrubProse(s: string): string {

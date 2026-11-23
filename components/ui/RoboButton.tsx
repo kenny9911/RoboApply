@@ -16,8 +16,8 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const SIZING: Record<NonNullable<Props['size']>, string> = {
-  sm: 'h-9 px-4 text-[13px]',
-  md: 'h-12 px-6 text-sm',
+  sm: 'h-9 px-4 text-[length:var(--fs-meta)]',
+  md: 'h-12 px-6 text-[length:var(--fs-body)]',
   lg: 'h-14 px-7 text-base',
 };
 

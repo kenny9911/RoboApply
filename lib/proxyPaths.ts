@@ -73,6 +73,8 @@ export const PROTECTED_PREFIXES = [
   '/referrals',
   // The pay check (lower nav group): what job posts state about pay for a title.
   '/pay',
+  // Alice, the application agent (docs/alice/ALICE.md).
+  '/alice',
 ] as const;
 
 /** True when `pathname` is exactly a protected prefix or nested under one. */

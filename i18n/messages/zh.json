@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, other {# 份未打开}}",
       "ready_open": "查看已备好的申请",
       "upgrade": "升级"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -4096,6 +4097,10 @@
           "sub": "职位来源、后台任务、邮件、求职助手和成本，实时统计。",
           "title": "系统"
         },
+        "llm": {
+          "title": "LLM 网关",
+          "sub": "AI 服务商、它们的模型，以及每类工作使用哪个模型。"
+        },
         "visitors": {
           "title": "访客与注册",
           "sub": "谁来过、从哪里来、有多少人创建了账号。"
@@ -4608,6 +4613,246 @@
             "invalid": "请检查页面标识和企业名称。",
             "generic": "操作未成功，请重试。"
           }
+        }
+      },
+      "llm": {
+        "eyebrow": "管理后台",
+        "title": "LLM 网关",
+        "sub": "先保存一次 AI 服务商，再为每类工作选择服务商和模型。修改会在约 30 秒内对新请求生效。",
+        "loading": "加载中…",
+        "refresh": "刷新",
+        "refreshing": "刷新中…",
+        "cancel": "取消",
+        "environment": {
+          "production": "生产环境设置",
+          "development": "开发环境设置"
+        },
+        "dbDisabled": "本服务器已关闭已保存的设置（LLM_SETTINGS_DB_DISABLED）。你仍可编辑，但在重新开启之前，所有请求都使用环境变量。",
+        "encryptionMissing": "本服务器没有设置 FIELD_ENCRYPTION_KEY，无法存储 API 密钥。请先设置，再添加服务商。",
+        "types": {
+          "newapi": "OpenAI 兼容"
+        },
+        "providers": {
+          "title": "服务商",
+          "sub": "每个服务商对应一个接口地址和一个 API 密钥。同一服务添加两次，即可使用两个账号或两个网关。",
+          "add": "添加服务商",
+          "empty": "还没有服务商。请先添加，再在下方分配给功能区域。",
+          "full": "服务商已达上限 {max} 个。请先移除一个再添加。",
+          "noUrl": "无 URL",
+          "off": "已关闭",
+          "ready": "可用",
+          "keyUnreadable": "密钥无法读取",
+          "keyUnreadableHelp": "已保存的密钥用另一个 FIELD_ENCRYPTION_KEY 加密，在这里无法读取。重新输入密钥之前，分配给该服务商的区域会使用其继承的模型。",
+          "key": "API 密钥",
+          "noKey": "无",
+          "models": "模型",
+          "modelCount": "{count, plural, one {{n} 个模型} other {{n} 个模型}}",
+          "modelsNever": "尚未获取",
+          "fetchedAt": "列表获取时间",
+          "edit": "编辑",
+          "fetchModels": "获取模型",
+          "refreshModels": "刷新模型",
+          "fetching": "获取中…",
+          "showModels": "显示模型",
+          "hideModels": "隐藏模型",
+          "turnOff": "关闭",
+          "turnOn": "开启",
+          "remove": "移除",
+          "removeConfirm": "移除 {name}"
+        },
+        "form": {
+          "addTitle": "添加服务商",
+          "editTitle": "编辑服务商",
+          "name": "名称",
+          "nameHint": "显示在各区域的列表中，例如“OpenRouter（主）”。",
+          "type": "类型",
+          "typeHint": "该接口使用的 API。网关或代理请选择 OpenAI 兼容。",
+          "typeHintNoTools": "这里该类型无法流式返回工具调用，因此不能用于“助手”区域。",
+          "baseUrl": "API 基础 URL",
+          "baseUrlRequired": "必填。请包含版本路径，例如 https://gateway.example.com/v1，不要带 /chat/completions 这样的接口路径。",
+          "baseUrlOptional": "留空则使用 {url}。",
+          "apiKey": "API 密钥",
+          "apiKeyHint": "加密存储，保存后不会再显示。",
+          "apiKeyKeep": "留空则保留已保存的密钥。把 URL 改成另一个主机时，需要重新输入密钥。",
+          "notes": "备注（可选）",
+          "enabled": "使用该服务商",
+          "save": "保存服务商",
+          "saving": "保存中…",
+          "test": "不保存，先测试",
+          "testing": "测试中…",
+          "saveHint": "保存时也会用此密钥获取该服务商的模型列表。"
+        },
+        "modelList": {
+          "ok": "{count, plural, one {该服务商列出 {n} 个模型。} other {该服务商列出 {n} 个模型。}}",
+          "okTruncated": "该服务商列出的模型超过 {n} 个，只保留前 {n} 个。其他模型请手动输入模型 ID。",
+          "invalid_base_url": "无法使用此基础 URL。请检查地址；只有自托管类型才能指向私有主机。",
+          "key_required": "请输入 API 密钥，才能向该服务商获取模型。",
+          "auth_rejected": "该服务商拒绝了此 API 密钥。",
+          "not_supported": "此接口没有模型列表。请检查基础 URL，或手动输入模型 ID。",
+          "rate_limited": "该服务商正在限制请求。请一分钟后再试。",
+          "timeout": "该服务商在 8 秒内没有响应。",
+          "unreachable": "无法连接该服务商。请检查基础 URL。",
+          "invalid_response": "该服务商有响应，但返回的不是模型列表。",
+          "response_too_large": "该服务商的模型列表过大，无法读取。",
+          "provider_error": "该服务商返回了错误。"
+        },
+        "areas": {
+          "title": "功能区域",
+          "sub": "为区域分配服务商、模型和推理强度，需要时再加上备用模型。未分配的区域使用“默认”区域的分配；“默认”也未分配时，区域保持现在的设置。",
+          "brand": "站点",
+          "goapplyNote": "{site} 先读取自己的区域和自己的“默认”。两者都没有时，使用 {shared} 的。",
+          "noProviders": "请先在上方添加服务商，再分配区域。",
+          "assigned": "已分配",
+          "notInEffect": "未生效",
+          "inherits": "继承",
+          "provider": "服务商",
+          "inheritOption": "未分配（使用默认）",
+          "providerOff": "{name}（已关闭）",
+          "model": "模型",
+          "save": "保存",
+          "clear": "清除分配",
+          "modelHint": "从该服务商的列表中选择模型，或输入列表里没有的模型 ID。",
+          "noModelList": "该服务商还没有模型列表。请先在上方获取模型，或输入模型 ID。",
+          "needsTools": "该区域会调用工具，所以它的模型和每个备用模型都必须支持工具调用。",
+          "needsImages": "该区域会读取图片，所以模型必须支持图片输入。",
+          "toolsBlocked": "这里选择的某个服务商类型无法流式返回工具调用。请为此区域的模型和备用模型选择 OpenAI 兼容的服务商。",
+          "modelNotListed": "该模型不在已获取的服务商列表中，将按输入的内容使用。",
+          "now": "当前请求使用的设置",
+          "colSetting": "用于",
+          "colModel": "模型",
+          "colSource": "来源",
+          "inheritOptionDefault": "未分配（使用环境变量）",
+          "usesDefault": "使用默认",
+          "chooseProvider": "选择服务商",
+          "effort": "推理强度",
+          "effortHint": "推理强度会随每个发往该模型的请求一起发送，并换算成服务商支持的最接近档位。“服务商默认”不发送任何值，此时使用环境变量中的强度或服务商自己的默认值。",
+          "fallbacks": "备用模型",
+          "fallbacksHint": "上面的模型失败时按顺序尝试：密钥被拒或额度用完、服务中断或触发限流、接口不提供该模型。最多 {max} 个。之后仍会尝试备用模型设置（LLM_FALLBACK_MODEL）。",
+          "fallbackN": "备用 {n}",
+          "addFallback": "添加备用模型",
+          "fallbacksFull": "此区域的备用模型已达上限（{max} 个）。",
+          "moveUp": "上移",
+          "moveDown": "下移",
+          "removeFallback": "移除",
+          "moveUpLabel": "上移备用 {n}",
+          "moveDownLabel": "下移备用 {n}",
+          "removeFallbackLabel": "移除备用 {n}"
+        },
+        "routeStatus": {
+          "provider_missing": "已分配的服务商已被移除，所以该区域使用其继承的模型。",
+          "provider_disabled": "已分配的服务商已关闭，所以该区域使用其继承的模型。",
+          "provider_key_missing": "已分配的服务商没有 API 密钥，所以该区域使用其继承的模型。",
+          "provider_key_unreadable": "本服务器无法读取已分配服务商的密钥，所以该区域使用其继承的模型。"
+        },
+        "area": {
+          "default": {
+            "title": "默认",
+            "sub": "所有未分配的区域都使用这个模型、它的备用模型和推理强度。"
+          },
+          "matchResume": {
+            "title": "简历匹配",
+            "sub": "评估简历与职位的匹配程度。"
+          },
+          "parseResume": {
+            "title": "简历解析",
+            "sub": "把简历文字读取为结构化信息。"
+          },
+          "visual": {
+            "title": "视觉",
+            "sub": "读取图片和扫描页面（OCR）。"
+          },
+          "evaluation": {
+            "title": "评估",
+            "sub": "为已完成的模拟面试评分并撰写报告。"
+          },
+          "insights": {
+            "title": "洞察",
+            "sub": "每周求职总结和搜索总结。"
+          },
+          "writing": {
+            "title": "写作",
+            "sub": "求职信、联系消息和简历改写。"
+          },
+          "assistant": {
+            "title": "助手",
+            "sub": "聊天助手、新手引导，以及理解用户的请求。"
+          },
+          "jobs": {
+            "title": "职位详情",
+            "sub": "为职位发布补充详情和标签。"
+          }
+        },
+        "setting": {
+          "defaultModel": "默认模型",
+          "matching": "匹配分数",
+          "matchResume": "匹配报告",
+          "matchScreen": "匹配初筛",
+          "prematchFilter": "匹配前筛选",
+          "extract": "简历文字",
+          "resumeTag": "简历标签",
+          "vision": "图片和扫描件",
+          "evaluation": "面试报告",
+          "insights": "洞察",
+          "writing": "长文写作",
+          "rewrite": "简历改写",
+          "copilot": "助手聊天",
+          "onboarding": "新手引导",
+          "intentParser": "搜索意图",
+          "enrich": "职位补充信息",
+          "jobTag": "职位标签",
+          "quickJob": "职位快速读取"
+        },
+        "source": {
+          "assigned": "该区域的分配",
+          "override": "已保存的单项覆盖设置",
+          "shared": "{shared} 的设置",
+          "env": "环境变量 {name}",
+          "noneDefault": "尚未配置",
+          "noDefault": "未配置",
+          "fallback": {
+            "default": "尚未配置",
+            "matchResume": "没有专属模型，使用默认模型（{model}）",
+            "parseResume": "没有专属模型，使用默认模型（{model}）",
+            "visual": "没有专属模型，使用默认模型（{model}）",
+            "evaluation": "没有专属模型，使用默认模型（{model}）",
+            "insights": "没有专属模型，使用默认模型（{model}）",
+            "writing": "没有专属模型，使用默认模型（{model}）",
+            "assistant": "没有专属模型，使用默认模型（{model}）",
+            "jobs": "没有专属模型，使用默认模型（{model}）"
+          },
+          "default": "“默认”区域的分配",
+          "sharedArea": "{shared} 为此区域的分配",
+          "sharedDefault": "{shared} 的“默认”区域"
+        },
+        "errors": {
+          "generic": "操作未成功，请重试。",
+          "invalid_name": "请输入不超过 60 个字符的名称。",
+          "duplicate_name": "已有另一个服务商使用此名称。",
+          "invalid_type": "请选择服务商类型。",
+          "invalid_base_url": "无法使用此基础 URL。请填写不带 /chat/completions 这类接口路径的 API 基础 URL；只有自托管类型才能指向私有主机。",
+          "key_required": "请输入 API 密钥。",
+          "key_required_for_new_url": "接口地址已更改。请重新输入 API 密钥，以免把已保存的密钥发送到另一个主机。",
+          "too_many_providers": "服务商数量已达上限。请先移除一个。",
+          "not_found": "该服务商已不存在。请刷新页面。",
+          "invalid_notes": "备注最多 2,000 个字符。",
+          "encryption_unavailable": "本服务器无法存储 API 密钥：未设置 FIELD_ENCRYPTION_KEY。",
+          "invalid_area": "无法识别该区域。请刷新页面。",
+          "invalid_route": "请选择服务商和模型。",
+          "unknown_provider": "该服务商已不存在。请刷新页面。",
+          "tools_unsupported": "该服务商类型无法流式返回工具调用，而此区域需要这一能力。",
+          "provider_in_use": "仍有区域在模型或备用模型中使用该服务商。请先修改或清除该区域。",
+          "invalid_effort": "请选择推理强度。",
+          "invalid_fallback": "请为每个备用模型选择服务商和模型。",
+          "duplicate_fallback": "同一区域中每个模型只能出现一次。",
+          "too_many_fallbacks": "一个区域最多可设置 {max} 个备用模型。"
+        },
+        "effort": {
+          "provider": "服务商默认",
+          "minimal": "最低",
+          "low": "低",
+          "medium": "中",
+          "high": "高",
+          "max": "最高"
         }
       },
       "visitors": {
@@ -8093,6 +8338,348 @@
     },
     "jobList": {
       "title": "这条回答提到的职位"
+    }
+  },
+  "alice": {
+    "tag": "AI 智能体",
+    "restart": "重新开始",
+    "restartConfirm": "要开始新的对话吗？你保存的求职方向会保留。",
+    "cancel": "取消",
+    "status": {
+      "working": "Alice 正在处理",
+      "intake": "正在了解你想要的工作 · {done}/{total} 个话题",
+      "choosing": "两个求职方向已写好，可以对比了",
+      "refining": "你的求职方向第 {version} 版",
+      "saved": "职位搜索会按你的求职方向进行",
+      "savedNeeds": "{count, plural, one {有 # 件事需要你处理} other {有 # 件事需要你处理}}"
+    },
+    "tabs": {
+      "aria": "Alice 的标签页",
+      "chat": "对话",
+      "profile": "求职方向",
+      "jobs": "职位",
+      "applications": "申请记录"
+    },
+    "greeting": {
+      "hello": "你好，我是 Alice，一个帮你找工作、管理申请的 AI 智能体。",
+      "plan": "我会先问问你对下一份工作有什么期望，再写出两个求职方向给你对比。选出更接近的那个，告诉我要改什么，我会一直修改，直到合适为止。",
+      "d1": "每份申请都由你自己提交。我会找出合适的职位，跟踪你的申请，并提醒你下一步该做什么。",
+      "withResume": "我可以从你的简历“{name}”入手。",
+      "withoutResume": "如果你有简历，可以添加进来，我会从它入手。"
+    },
+    "resume": {
+      "use": "使用“{name}”",
+      "other": "选择其他简历",
+      "pickLabel": "你的简历",
+      "upload": "上传简历",
+      "skip": "不用简历，直接继续",
+      "hint": "PDF、Word 或文本文件，不超过 15 MB。",
+      "hintNoPdf": "Word 或文本文件，不超过 15 MB。",
+      "uploading": "正在读取 {name}…",
+      "errors": {
+        "unreadable": "这个文件里没有能读取的文字。请换一个文件试试。",
+        "tooLarge": "这个文件超过了 15 MB。",
+        "wrongType": "请使用 PDF、Word 或文本文件。",
+        "dailyLimit": "你今天添加的简历已达上限。请明天再试，或者不用简历直接继续。",
+        "failed": "没有成功。请重试。",
+        "pdfNeedsConsent": "你关闭了读取选项，所以无法读取 PDF 文件。请改为上传 Word 或文本文件。",
+        "consentUnknown": "我们没能确认你的文件会以什么方式读取。请稍后再试。",
+        "consentUnanswered": "请先回答下面关于文件读取方式的问题，然后再上传。"
+      }
+    },
+    "action": {
+      "resume": "使用我的简历“{label}”",
+      "skip_resume": "不用简历，直接继续",
+      "draft_now": "给我看两个求职方向",
+      "choose": "这个更接近：{label}",
+      "regenerate": "两个都不合适",
+      "restore": "恢复第 {version} 版",
+      "save": "保存“{label}”",
+      "find_jobs": "按这个求职方向找职位",
+      "report": "我的申请进展如何？",
+      "edit_profile": "修改“{label}”"
+    },
+    "blocks": {
+      "resumeRead": "我读完了“{name}”。",
+      "resumeRoles": "简历显示你有 {roles} 的经验。",
+      "resumeRolesYears": "简历显示你有 {roles} 的经验，累计约 {years} 年。",
+      "learned": "记下了：{topics}。",
+      "profiles": "两个求职方向写好了：{a} 和 {b}。",
+      "compare": "对比一下",
+      "revisionFirst": "这是第 1 版。告诉我要改什么，或者觉得合适了就保存。",
+      "revision": "第 {version} 版好了。我改了：{fields}。",
+      "seeVersion": "查看这一版",
+      "restored": "第 {version} 版已恢复，现在是最新版本。",
+      "saved": "已保存“{name}”。",
+      "saved_created": "现在它是你的订阅搜索“{search}”，你的职位搜索会使用它。",
+      "saved_updated": "我已更新你的订阅搜索“{search}”，让它和这个求职方向一致。",
+      "saved_replaced": "你的订阅搜索“{search}”现在改用它。原来的筛选条件已保留，你可以在“求职方向”里撤销。",
+      "saved_kept": "你的订阅搜索没有改动。",
+      "matches": "{count, plural, =0 {目前没有符合这个求职方向的在招职位。你可以让我放宽条件：多加几个地点、换个级别，或多加几个职位名称。} one {有 # 个在招职位符合这个求职方向。} other {有 # 个在招职位符合这个求职方向。}}",
+      "seeJobs": "查看职位",
+      "reportFacts": "进行中 {active} · 等待回复 {waiting} · 通话或面试中 {interviewing} · 录用 {offers}",
+      "seeApplications": "查看你的申请记录",
+      "reminder": "我会在 {date} 提醒你跟进 {what}。",
+      "reminderCleared": "我已移除 {what} 的提醒。",
+      "thisApplication": "这份申请",
+      "saved_updated_main": "我已按它更新了你的主搜索。",
+      "saved_replaced_main": "你的主搜索现在使用它。原来的筛选条件已保留，你可以在“求职方向”中撤销。"
+    },
+    "notice": {
+      "agent_failed": "这一步我没能完成。你说的内容都还在，请重试。",
+      "nothing_changed": "这次没有改动求职方向。再多说说，你希望哪里不一样？",
+      "search_full": "你的订阅搜索数量已达上限。请在保存卡片上选择：是否让这个求职方向接管你现在的搜索。",
+      "resume_unreadable": "这份简历里我读不到任何文字。我们可以不用它继续，你也可以再添加一份。",
+      "turn_limit": "这段对话已经很长了。请重新开始才能继续；你保存的求职方向会保留。",
+      "draft_limit": "你今天已经要求了很多次新的求职方向。请稍后再试。",
+      "enough_questions": "这些已经够写出两个求职方向了。请稍等。",
+      "no_applications": "你还没有申请记录。保存一个职位或准备一份申请材料，我就会帮你跟踪。",
+      "no_profile": "先保存一个求职方向，我才能找到符合它的职位。",
+      "reminder_ambiguous": "有不止一份申请符合。请选出你指的那份。",
+      "reminder_unknown": "告诉我是哪份申请、哪一天，比如“周五跟进 Figma”。"
+    },
+    "steps": {
+      "reading_resume": "读取你的简历",
+      "thinking": "思考",
+      "reading_goals": "理解你想要的工作",
+      "writing_profiles": "撰写两个求职方向",
+      "revising": "修改你的求职方向",
+      "saving": "保存你的求职方向",
+      "finding_jobs": "查找合适的职位",
+      "checking_applications": "查看你的申请记录"
+    },
+    "composer": {
+      "label": "给 Alice 发消息",
+      "placeholder_intake": "输入你的回答",
+      "placeholder_choosing": "哪个更接近？",
+      "placeholder_refining": "要改什么？",
+      "placeholder_saved": "问 Alice 任何事",
+      "send": "发送",
+      "attach": "添加简历",
+      "replies": "快捷回答",
+      "sendPicked": "{count, plural, one {发送 # 个回答} other {发送 # 个回答}}",
+      "showProfiles": "给我看两个求职方向"
+    },
+    "errors": {
+      "not_ready": "Alice 在这里还没有开启。",
+      "ai_off": "Alice 需要你同意使用 AI。你可以在设置中开启。",
+      "busy": "Alice 还在回复你的上一条消息。",
+      "rate_limited": "你发的消息有点多。请过几分钟再试。",
+      "agent_failed": "Alice 没能完成这一步。请重试。",
+      "wrong_stage": "当前这一步不能这样操作。",
+      "profile_limit": "你保存的求职方向已达到 Alice 能保留的上限。请先删除一个。",
+      "search_full": "你的订阅搜索数量已达上限。请在保存卡片上选择怎么处理。",
+      "interrupted": "连接断开了。你的对话已保存，刷新页面就能看到最新内容。",
+      "generic": "出了点问题。请重试。",
+      "retry": "重试"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "Alice 在这里还没有开启",
+        "body": "Alice 需要在本站完成一次性设置。其他功能照常可用。"
+      },
+      "aiOff": {
+        "title": "Alice 需要 AI 才能工作",
+        "body": "你的账号目前无法使用 AI。如果是你自己关闭的，可以在设置中重新开启。"
+      },
+      "loadFailed": {
+        "title": "无法加载你和 Alice 的对话",
+        "body": "请检查网络连接后重试。"
+      }
+    },
+    "brief": {
+      "title": "Alice 目前了解到的",
+      "intro": "这里的内容都来自你的回答。在你选定求职方向之前，一切都还可以改。",
+      "progress": "{done}/{total} 个话题",
+      "skipped": "已跳过",
+      "not": "不要 {value}",
+      "fromResume": "Alice 也在参考你的简历“{name}”。",
+      "ready": "这些已经够写出两个求职方向了。你可以继续回答，也可以现在就看。",
+      "notReady": "再回答几个问题，Alice 就能写出两个求职方向。",
+      "topics": {
+        "roles": "想做的工作",
+        "level": "级别",
+        "workSetting": "工作方式",
+        "places": "工作地点",
+        "pay": "最低薪资",
+        "industries": "行业",
+        "companyKind": "公司类型",
+        "companySize": "公司规模",
+        "companies": "欣赏的公司",
+        "dreamJob": "理想工作",
+        "values": "最看重的事",
+        "dealbreakers": "不能接受的条件",
+        "timing": "时间安排",
+        "sponsorship": "签证担保"
+      }
+    },
+    "fields": {
+      "label": "名称",
+      "headline": "一句话概括",
+      "summary": "概述",
+      "titles": "职位名称",
+      "levels": "级别",
+      "workModels": "工作方式",
+      "places": "工作地点",
+      "pay": "最低薪资",
+      "industries": "行业",
+      "companyKinds": "公司类型",
+      "companySizes": "公司规模",
+      "companies": "目标公司",
+      "skills": "技能",
+      "mustHaves": "必备",
+      "niceToHaves": "加分项",
+      "dealbreakers": "不能接受的条件",
+      "whyItFits": "为什么适合你",
+      "tradeoff": "需要放弃什么",
+      "jobTypes": "工作性质"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "实习生或应届生",
+        "entry": "初级",
+        "mid": "中级",
+        "senior": "高级",
+        "lead_staff": "团队负责人或专家",
+        "director_exec": "总监及以上"
+      },
+      "workModels": {
+        "remote": "远程",
+        "hybrid": "混合办公",
+        "onsite": "现场办公"
+      },
+      "companyKinds": {
+        "startup": "初创公司",
+        "scaleup": "成长期公司",
+        "enterprise": "大公司",
+        "public_sector": "公共部门",
+        "nonprofit": "非营利组织"
+      },
+      "jobTypes": {
+        "full_time": "全职",
+        "contract": "合同制",
+        "part_time": "兼职",
+        "internship": "实习"
+      },
+      "timing": {
+        "now": "越快越好",
+        "soon": "未来几个月内",
+        "exploring": "只是看看机会"
+      },
+      "sponsorship": {
+        "yes": "需要签证担保",
+        "no": "不需要签证担保"
+      },
+      "payPer": {
+        "year": "{amount}/年",
+        "month": "{amount}/月",
+        "hour": "{amount}/小时"
+      },
+      "companySize": "{size} 人",
+      "companyYou": "你提到的",
+      "companyAlice": "Alice 举的例子"
+    },
+    "compare": {
+      "title": "哪个更接近你想要的？",
+      "intro": "你的回答留下了两个可能的方向。选出更接近的那个。",
+      "differsHint": "圆点标出两者不同的地方。",
+      "differs": "不同",
+      "choose": "这个更接近",
+      "commentLabel": "告诉 Alice 要改什么",
+      "commentPlaceholder": "例如：第一个，但要远程、不出差",
+      "commentHint": "先写在这里，再选一个求职方向：Alice 会修改你选的那个。也可以告诉她为什么两个都不合适。",
+      "neither": "两个都不合适"
+    },
+    "profile": {
+      "version": "第 {version} 版",
+      "yourComment": "你说：“{comment}”",
+      "aliceNotes": "Alice 改了什么",
+      "changed": "已修改",
+      "was": "原来：{value}",
+      "history": "版本记录",
+      "historyPick": "你选了“{label}”",
+      "historyEdit": "“{comment}”",
+      "historyRestore": "恢复了第 {version} 版",
+      "historySaved": "你保存的求职方向",
+      "restore": "恢复",
+      "current": "当前版本",
+      "commentLabel": "要改哪里？",
+      "commentPlaceholder": "例如：加上柏林的混合办公，不要人力资源公司",
+      "send": "修改",
+      "newPair": "重新写两个求职方向"
+    },
+    "save": {
+      "title": "满意了吗？",
+      "name": "求职方向名称",
+      "create": "保存并用于我的职位搜索",
+      "createHint": "Alice 会把它添加为订阅搜索并启用。你的其他搜索都会保留。",
+      "update": "保存并更新“{search}”",
+      "updateHint": "它对应的订阅搜索会随之更新。",
+      "replace": "用于我的搜索“{search}”",
+      "replaceHint": "你的订阅搜索数量已达上限。当前的筛选条件会保留，你可以撤销这次更改。",
+      "none": "保存，但不改动我的搜索",
+      "replaceMain": "用于我的主搜索",
+      "updateMain": "保存并更新我的主搜索"
+    },
+    "saved": {
+      "drives": "已用于你的订阅搜索“{search}”",
+      "drivesNone": "没有用于任何订阅搜索",
+      "findJobs": "查看合适的职位",
+      "edit": "和 Alice 一起修改",
+      "undo": "撤销对搜索的更改",
+      "undone": "搜索已恢复原来的筛选条件。",
+      "others": "你的其他求职方向",
+      "drivesMain": "用于你的主搜索"
+    },
+    "jobs": {
+      "title": "符合“{name}”的职位",
+      "titleEmpty": "符合你求职方向的职位",
+      "honesty": "匹配度是把职位和你的简历做对比的结果。这不是你被录用的概率。",
+      "missing": "缺少：{gap}",
+      "meets": "符合：{fields}",
+      "named": "你提到的公司",
+      "view": "查看职位",
+      "empty": "目前没有符合这个求职方向的在招职位。",
+      "widen": "让 Alice 放宽条件",
+      "noProfile": "保存一个求职方向后，Alice 会找出符合它的职位。",
+      "loading": "正在查找职位…",
+      "error": "职位没有加载出来。",
+      "retry": "重试",
+      "seeAll": "查看全部职位",
+      "tier": {
+        "great": "很合适",
+        "good": "较合适",
+        "possible": "可能合适",
+        "unlikely": "不太合适"
+      }
+    },
+    "apps": {
+      "title": "你的申请记录",
+      "stages": "各阶段的申请数量",
+      "needs": "需要你处理",
+      "needsEmpty": "今天没有需要你处理的事。",
+      "kind": {
+        "interview_tomorrow": "明天有面试",
+        "deadline_soon": "{days, plural, =0 {今天截止} one {还有 # 天截止} other {还有 # 天截止}}",
+        "follow_up_due": "该跟进了",
+        "no_reply_10d": "已 {days} 天没有回复",
+        "ready_to_check": "已备好，等你检查"
+      },
+      "open": "打开",
+      "check": "检查并打开",
+      "reminders": "提醒",
+      "remindersEmpty": "还没有设置提醒。",
+      "due": "已到期",
+      "done": "完成",
+      "set": "设置提醒",
+      "pick": "选择一份申请",
+      "date": "日期",
+      "save": "保存提醒",
+      "saveError": "提醒没有保存成功。请重试。",
+      "all": "打开申请记录",
+      "empty": "还没有申请记录。保存一个职位或准备一份申请材料，Alice 就会帮你跟踪。",
+      "error": "申请记录没有加载出来。",
+      "retry": "重试"
     }
   },
   "brand": {

@@ -7,6 +7,7 @@ import type { FeedItem, FeedQueryResponse, FitTier, NewCountResponse, SkillsChec
 import type { JobDetailResponse, ScoreJobResponse } from '../../lib/api/contracts/jobs/detail';
 import type { SearchProfileListWire } from '../../lib/api/contracts/search';
 import type { ResolvedFlags } from '../../lib/flags';
+import { aliceGetFixtures, aliceThread, aliceTurn } from './alice';
 
 const base = '/api/v1/roboapply';
 const credits = { balance: 120, periodAllotment: 180, tier: 'starter', currentPeriodEnd: '2026-10-01T00:00:00.000Z', creditMinutes: 1 };
@@ -173,7 +174,7 @@ const brand = {
   id: 'roboapply', market: 'intl', name: 'RoboApply', canonicalOrigin: 'https://www.roboapply.io',
   locales: ['en', 'zh', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'pt', 'de'], defaultLocale: 'en',
   currency: 'USD', defaultCountry: 'US', authMethods: ['email_password', 'google'], paymentRails: [],
-  flags: { hiringContacts: 'off', 'jobs.feed': true, 'ai.text': true, copilot: true, ...(todayAgent ? { agent: true } : {}) },
+  flags: { hiringContacts: 'off', 'jobs.feed': true, 'ai.text': true, copilot: true, alice: true, ...(todayAgent || window.location.pathname === '/alice' ? { agent: true } : {}) },
   otherBrand: { id: 'goapply', name: 'GoApply', canonicalOrigin: 'https://www.goapply.top' },
 } satisfies Omit<PublicBrand, 'flags'> & { flags: Partial<ResolvedFlags> };
 
@@ -435,6 +436,7 @@ const fixtures: Record<string, unknown> = {
   [`${base}/feed/new-count`]: newCount,
   ...Object.fromEntries(feedJobs.map((job) => [`${base}/jobs/${job.jobId}`, jobDetail(job)])),
   ...todayFixtures,
+  ...aliceGetFixtures(base, feedJobs),
 };
 
 // The live room and the jobs feed are the preview surfaces that POST before they can render.
@@ -497,6 +499,13 @@ window.fetch = async (input, init) => {
   const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
   // A confirmation spends credits for real: never answered from a fixture.
   const confirming = typeof init?.body === 'string' && /"confirm"\s*:\s*true/.test(init.body);
+  // Alice: the thread is live preview state, and a turn answers as a stream (scripts/design-preview/alice.ts).
+  if (url.origin === window.location.origin && url.pathname === `${base}/alice/thread` && method === 'GET') {
+    return new Response(JSON.stringify({ success: true, data: aliceThread() }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+  if (url.origin === window.location.origin && url.pathname === `${base}/alice/turn` && method === 'POST') {
+    return aliceTurn(typeof init?.body === 'string' ? JSON.parse(init.body) : {});
+  }
   const table = method === 'GET' ? fixtures : method === 'POST' && !confirming ? postFixtures : undefined;
   const data = url.origin === window.location.origin && table ? table[url.pathname] : undefined;
   if (data !== undefined) return new Response(JSON.stringify({ success: true, data }), { status: 200, headers: { 'Content-Type': 'application/json' } });

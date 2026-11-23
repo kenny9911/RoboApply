@@ -136,6 +136,8 @@ beforeEach(() => {
   process.env.LLM_PROVIDER = 'openrouter';
   process.env.LLM_MODEL = 'openrouter/openai/gpt-6-luna';
   process.env.LLM_FALLBACK_MODEL = 'openrouter/google/gemini-3.8-flash';
+  // The auto-fallback routes are configuration (no model is named in code).
+  process.env.LLM_AUTO_FALLBACK_MODELS = 'google/gemini-3.8-flash, anthropic/claude-sonnet-4-6, deepseek/deepseek-v4-flash, openai/gpt-6-luna';
   state.calls.length = 0;
   state.compatArgs.length = 0;
   state.keys = { openrouter: 'or', google: 'g', anthropic: 'a', openai: 'o', deepseek: 'd', qwen: 'q', glm: 'z', doubao: 'ark', newapi: 'n', kimi: 'k' };

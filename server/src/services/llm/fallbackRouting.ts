@@ -12,6 +12,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { providerBaseType, providerEntryRef } from './providerPrefixes.js';
 
 /** A credential-class failure: retrying the same key cannot succeed. */
 export type CredentialFailureKind = 'auth' | 'billing' | 'missing_key';
@@ -20,24 +21,24 @@ export type CredentialFailureKind = 'auth' | 'billing' | 'missing_key';
 export const CIRCUIT_OPEN_MS = 10 * 60 * 1000;
 
 /**
- * The ordered auto-fallback preference list. When neither LLM_FALLBACK_MODEL
- * nor the admin DB override is set, a credential failure on the primary falls
- * through to the first entry whose provider (a) is not the failed provider,
- * (b) has a key (system DB key or env), and (c) is not circuit-open.
- *
- * Every entry is a DIRECT provider (never openrouter, so OpenRouter can't
- * "fall back" to itself) and has a row in server/src/lib/modelCostTable.ts,
- * so fallback spend is priced correctly. Probed against the live direct APIs
- * on 2026-10-09: gemini-3.8-flash and deepseek-v4-flash answered JSON-mode
- * prompts in under 4s. The Anthropic key was out of credit at the time, so its
- * entry was unverified; the circuit breaker skips it after a billing failure.
+ * The extra routes a CREDENTIAL failure (dead key, no credit, no key) may move
+ * to, after the area's own fallbacks and the configured fallback model. No
+ * model is named in code: the list is the saved setting `autoFallbackModels`
+ * (the LLM stack row), else this variable (comma-separated selectors, `CN_`
+ * override for GoApply), then the brand's default model (llmModels.ts
+ * getAutoFallbackSetting). A route is skipped when its provider is the one
+ * that failed, has no key, has an open circuit, or is refused by the brand
+ * policy. Price every selector set there in server/src/lib/modelCostTable.ts.
  */
-export const AUTO_FALLBACK_PREFERENCE: readonly string[] = [
-  'google/gemini-3.8-flash',
-  'anthropic/claude-sonnet-4-6',
-  'deepseek/deepseek-v4-flash',
-  'openai/gpt-6-luna',
-];
+export { AUTO_FALLBACK_ENV } from '../../lib/llm/llmStackConfigSchema.js';
+
+/** `a, b c` → ['a', 'b', 'c']: a selector list from one variable. */
+export function parseFallbackList(raw: string | null | undefined): string[] {
+  return (raw || '')
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 /** LLM_FALLBACK_AUTO=false|0|off|no disables auto-selection (configured fallback still works). */
 export function isAutoFallbackEnabled(): boolean {
@@ -165,6 +166,66 @@ export function isCredentialFailure(error: unknown): boolean {
   return classifyCredentialFailure(error) !== null;
 }
 
+/**
+ * The endpoint does not serve this model: a 404, or a 400/422 that says so
+ * (an unknown model id, OpenRouter's "no endpoints found", a new-api gateway's
+ * "no available channel"). Another model may answer, so an area's fallback
+ * models are tried; the same request is never retried against this one.
+ */
+export function isModelRejection(error: unknown): boolean {
+  const status = errorHttpStatus(error);
+  const text = errorText(error);
+  if (status === 404) return true;
+  if (status !== 400 && status !== 422) return false;
+  return (
+    /\bmodel\b[^.]{0,80}\b(not found|does not exist|not exist|not available|unavailable|not supported|unsupported|invalid|unknown)\b/.test(text) ||
+    /\b(no such model|unknown model|invalid model|model_not_found|no endpoints found|no available channel)\b/.test(text)
+  );
+}
+
+/**
+ * The provider refused the reasoning-effort field itself (the model has no
+ * reasoning control, or not that level): a 400/422 naming the parameter. The
+ * LLM gateway then sends the call again once without its effort.
+ */
+export function isReasoningEffortRejection(error: unknown): boolean {
+  const status = errorHttpStatus(error);
+  if (status !== 400 && status !== 422) return false;
+  const text = errorText(error);
+  return (
+    /reasoning|effort|thinking|output_config/.test(text) &&
+    /(unsupported|not supported|does not support|unrecognized|unknown|invalid|not allowed|not permitted|extra inputs|is not available)/.test(text)
+  );
+}
+
+/** How long a route stays "sends no gateway effort" after its model refused the field. */
+export const EFFORT_REJECTION_MS = 6 * 60 * 60 * 1000;
+
+const effortRejections = new Map<string, number>();
+
+function effortKey(providerType: string, model: string): string {
+  return `${providerEntryRef(providerType)}::${model}`;
+}
+
+/** Remember that this entry's model refused the effort field. True the first time (to log once). */
+export function noteEffortRejected(providerType: string, model: string, now: number = Date.now()): boolean {
+  const key = effortKey(providerType, model);
+  const fresh = (effortRejections.get(key) ?? 0) <= now;
+  effortRejections.set(key, now + EFFORT_REJECTION_MS);
+  return fresh;
+}
+
+/** The model refused the effort field recently: the gateway sends none to it. */
+export function isEffortRejected(providerType: string, model: string, now: number = Date.now()): boolean {
+  const until = effortRejections.get(effortKey(providerType, model));
+  if (until === undefined) return false;
+  if (until <= now) {
+    effortRejections.delete(effortKey(providerType, model));
+    return false;
+  }
+  return true;
+}
+
 /* ── Error thrown when no route is left ─────────────────────────────────── */
 
 /**
@@ -243,7 +304,8 @@ export function credentialFingerprint(apiKey: string | undefined | null): string
 }
 
 function normProvider(provider: string): string {
-  const p = provider.toLowerCase();
+  // `newapi@aigw:visual` and `newapi@aigw` are one entry, with one key.
+  const p = providerEntryRef(provider);
   return p === 'moonshot' ? 'kimi' : p;
 }
 
@@ -300,6 +362,7 @@ export function closeCircuit(provider: string): void {
 /** Test seam + admin diagnostics. */
 export function resetCircuits(): void {
   circuits.clear();
+  effortRejections.clear();
   lastAnnouncedAutoFallback = null;
 }
 
@@ -329,7 +392,8 @@ export function fallbackMaxTokens(
   reasoningMaxTokens: number | undefined,
 ): number | undefined {
   if (typeof maxTokens !== 'number' || !Number.isFinite(maxTokens) || maxTokens <= 0) return maxTokens;
-  const p = providerType.toLowerCase();
+  // A provider entry (`google@backup`) counts thinking against the cap like its type.
+  const p = providerBaseType(providerType);
   if (p !== 'google' && p !== 'anthropic') return maxTokens;
   const headroom =
     typeof reasoningMaxTokens === 'number' && Number.isFinite(reasoningMaxTokens) && reasoningMaxTokens > 0

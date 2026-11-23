@@ -30,183 +30,209 @@
   }
 }
 
-/* RoboApply — Desk design system (November 2026).
- * Cloned from resume.io's app on 2026-11-12 (docs/resume-io/TEARDOWN.md;
- * values measured from its shipped token module, docs/design-system.md).
- * White canvas, cool grey recesses, navy ink, one blue for every action,
- * a light-blue wash for "you are here", 12px corners, navy-tinted
- * hairline shadows and a neutral sans (Inter; resume.io's own face is
- * proprietary). It replaces Paper (skillry.dev, October 2026) and keeps
- * its token names, so every screen restyles without a markup rewrite.
- * All legacy aliases below resolve to this source of truth.
+/* RoboApply — Pulse design system (November 2026).
+ * A brand of its own (docs/design-system.md), drawn on 2026-11-19 with the
+ * design-taste-frontend and ui-ux-pro-max skills: a blue-black ink, a white
+ * and cool-white canvas, an electric blue, a cobalt field and a sunny yellow
+ * highlight (bright by request, 2026-11-20: the first plum and pink
+ * palette read as dark red), flat filled tiles that fit edge to
+ * edge, pill controls, Space Grotesk headlines over DM Sans. It replaces
+ * Desk (the resume.io clone) and keeps its token names, so every screen
+ * restyles without a markup rewrite. All legacy aliases below resolve to
+ * this source of truth.
  *
  * Colour roles:
- *   ink       --text                  titles and copy (navy)
- *   action    --action                every primary button, link and focus
- *             (resume.io's Blue60; its lighter Blue50 is 3.31:1 on white,
- *             so it never carries text — see --accent-line below)
- *   canvas    --bg / --surface / -2/-3 white page and cards, cool recesses
- *   highlight --brand-mark on which --brand-plane is the ink: plan and
- *             example chips, text selection, the brand tile. A fill, never
- *             a text colour on its own.
+ *   ink       --text                  titles and copy (blue-black)
+ *   action    --action                the primary button, links and focus:
+ *             electric blue in light, a lighter blue in dark (yellow never
+ *             carries text on its own)
+ *   canvas    --bg                    the cool-white ground; --surface is
+ *             the white tile on it; -2/-3 are recesses and pressed fills
+ *   highlight --brand-mark on which --brand-plane is the ink: the sunny yellow
+ *             fill of the strongest tile, plan and example chips, text
+ *             selection, the Great-fit meter on cobalt (ordinary progress
+ *             is --accent-line). A fill, never a text colour on its own.
+ * Flat by rule: no gradient (the --grad-* tokens keep their names for the
+ * components that paint with them, and are now single colours), no glow,
+ * and no shadow on anything at rest — a tile is separated from the
+ * ground by its tone and a 1px ring. Only what floats casts a shadow.
  * Every ratio below is computed sRGB-linearised (__tests__/brand).
  */
 :root {
-  --bg: #FFFFFF;
+  --bg: #F4F6FB;
   --surface: #FFFFFF;
-  --surface-2: #F7F9FC;
-  --surface-3: #EFF2F9;
-  --rule: #E7EAF4;
-  --rule-strong: #D9DEEB;
-  --text: #1E2532;
-  --text-2: #495163;
-  --text-muted: #5E6679;
-  --disabled: #9FA6BB;
-  --action: #1170CD;
-  --action-hover: #10529B;
+  --surface-2: #ECEFF7;
+  --surface-3: #E1E5F0;
+  --rule: #E0E4EE;
+  --rule-strong: #C8CEDD;
+  --text: #0B0D1A;
+  --text-2: #3A3F54;
+  --text-muted: #596079;
+  --disabled: #9AA1B5;
+  --action: #2B4DFF;
+  --action-hover: #1F3AD6;
   --action-ink: #FFFFFF;
-  --action-subtle: #EAF6FF;
-  --brand-mark: #92CDFC;
-  --brand-plane: #0F3871;
-  /* Decorative blue for lines and fills that carry no text: progress bars,
-   * the selected row's edge, rings. resume.io's Blue40/Blue20. */
-  --accent-line: #54AFF8;
-  --accent-track: #C3E5FE;
-  /* The paid-plan call to action (resume.io's "Upgrade Now" indigo). */
-  --upgrade: #282B8F;
+  --action-subtle: #E4E9FF;
+  --brand-mark: #FFD43B;
+  --brand-plane: #1D32D8;
+  /* Lines and fills that carry no text (progress bars, the selected row's
+   * edge, the profile ring) take the action colour on its subtle track, so
+   * GoApply's follow its jade. Line against track: 4.8:1 light, 5.5:1 dark. */
+  --accent-line: var(--action);
+  --accent-track: var(--action-subtle);
+  /* The paid-plan button (the shell's Upgrade): the brand plane, white type
+   * on it in both themes (8.4:1 on RoboApply's cobalt). */
+  --upgrade: var(--brand-plane);
   --upgrade-ink: #FFFFFF;
-  --ok: #217D47;
-  --ok-subtle: #E7F4ED;
-  --warn: #A85A0E;
-  --warn-subtle: #FFF2CC;
-  --danger: #DA0C22;
-  --danger-subtle: #FFEAEC;
-  /* Translucent white: secondary buttons, unselected stat cards, segmented
-   * tracks. Reads as a lighter sheet on any of the grey recesses. */
+  --ok: #1F7A46;
+  --ok-subtle: #E2F3E9;
+  --warn: #8A5A00;
+  --warn-subtle: #FFF0C7;
+  --danger: #BF3310;
+  --danger-subtle: #FFE9E0;
+  /* A lighter sheet on any recess: secondary buttons, segmented tracks. */
   --surface-glass: rgba(255, 255, 255, 0.72);
-  /* Illustration tiles (icon squares on feature cards, empty states, create
-   * cards): resume.io's pastel steps. Navy line icons sit on them in both
-   * themes — they are stickers, not surfaces, so they do not flip. */
-  --tile-sage: #C6E4D2;
-  --tile-clay: #FDD2C0;
-  --tile-sky: #C3E5FE;
-  --tile-blush: #FFD0D5;
-  --tile-mint: #D5EBDE;
-  --tile-lilac: #DBDEFF;
-  --tile-camel: #FDDB8C;
-  --tile-ink: #1E2532;
-  /* The marketing hero headline's offset "print" shadow. */
-  --print-ink: #92CDFC;
-  --font-ui: var(--font-inter), -apple-system, BlinkMacSystemFont,
+  /* Sticker tiles (icon squares on empty states and create cards): bright
+   * pastels of the scene's hues. Ink icons sit on them in both themes. */
+  --tile-sage: #D9F7EA;
+  --tile-clay: #FFE0CC;
+  --tile-sky: #DCE8FF;
+  --tile-blush: #FFE9A8;
+  --tile-mint: #D4F5F0;
+  --tile-lilac: #E3E0FF;
+  --tile-camel: #FFF3C4;
+  --tile-ink: #0B0D1A;
+  /* Kept for sheets that still name it; the hero no longer prints a shadow. */
+  --print-ink: #FFD43B;
+  --font-ui: var(--font-dm-sans), -apple-system, BlinkMacSystemFont,
     'Segoe UI', system-ui, 'Hiragino Sans', 'Yu Gothic', 'PingFang SC',
     'PingFang TC', 'Microsoft YaHei', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-  --font-display: var(--font-inter), var(--font-ui);
+  --font-display: var(--font-space-grotesk), var(--font-ui);
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
-  --fs-hero: clamp(40px, 5.6vw, 72px);
-  --fs-display: clamp(28px, 2.6vw, 34px);
-  --fs-stat: 28px;
+  --fs-hero: clamp(36px, 6.4vw, 96px);
+  --fs-display: clamp(26px, 2.3vw, 32px);
+  --fs-stat: 30px;
   --fs-title: 20px;
   --fs-subtitle: 17px;
   --fs-body: 15px;
-  --fs-meta: 13px;
-  --fs-label: 12px;
-  --lh-hero: 1.04;
-  --lh-display: 1.12;
+  /* Detail sizes, raised 1px on 2026-11-23 (were 13 and 12): the small
+   * print was hard to read. --fs-label is the floor. */
+  --fs-meta: 14px;
+  --fs-label: 13px;
+  --lh-hero: 0.98;
+  --lh-display: 1.08;
   --lh-title: 1.25;
   --lh-subtitle: 1.4;
   --lh-body: 1.55;
   --lh-meta: 1.5;
-  --ls-hero: -0.03em;
-  --ls-display: -0.02em;
-  --ls-title: -0.012em;
-  --ls-subtitle: -0.006em;
+  --ls-hero: -0.045em;
+  --ls-display: -0.035em;
+  --ls-title: -0.02em;
+  --ls-subtitle: -0.01em;
   --ls-body: 0;
   --ls-meta: 0;
-  --ls-label: 0.01em;
+  --ls-label: 0.005em;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
   --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 24px;
   --r-pill: 999px;
-  /* resume.io's buttons and fields: nearly square. */
-  --r-control: 4px;
+  /* Buttons, fields in a toolbar and chips are pills. */
+  --r-control: 999px;
   --control-sm: 36px;
   --control-md: 40px;
   --control-lg: 44px;
   --page-max: 1280px;
   --prose-max: 68ch;
-  /* resume.io's navy-tinted elevation: a 1px hairline built into the low
-   * and float steps, so cards need no separate border. */
-  --e1: 0 0 1px rgba(15, 56, 113, 0.32), 0 1px 2px rgba(15, 56, 113, 0.12), 0 2px 4px rgba(15, 56, 113, 0.08);
-  --e2: 0 2px 4px -1px rgba(15, 56, 113, 0.08), 0 8px 20px -4px rgba(15, 56, 113, 0.12);
-  --e3: 0 6px 8px -2px rgba(15, 56, 113, 0.02), 0 16px 64px -8px rgba(15, 56, 113, 0.18);
-  /* A floating sheet (sticky panels, menus, the ask bar). */
-  --e-float: 0 0 1px rgba(15, 56, 113, 0.32), 0 2px 4px -1px rgba(15, 56, 113, 0.08), 0 8px 20px -4px rgba(15, 56, 113, 0.12);
-  /* Hard offset block behind a showcase panel — print, not glow. */
-  --e-print: 8px 10px 0 rgba(15, 56, 113, 0.08);
+  /* Elevation. A tile at rest is flat: --e1 is a 1px ring, not a shadow.
+   * --e2 is the hover step (a firmer ring and a short drop). --e-float and
+   * --e3 are the only real shadows, for what sits above the page. */
+  --e1: 0 0 0 1px rgba(11, 13, 26, 0.07);
+  --e2: 0 0 0 1px rgba(11, 13, 26, 0.16), 0 6px 16px -8px rgba(11, 13, 26, 0.18);
+  --e3: 0 0 0 1px rgba(11, 13, 26, 0.08), 0 24px 64px -16px rgba(11, 13, 26, 0.28);
+  --e-float: 0 0 0 1px rgba(11, 13, 26, 0.1), 0 12px 32px -12px rgba(11, 13, 26, 0.24);
+  /* The hard offset block of the old showcase panel is gone. */
+  --e-print: 0 0 0 1px rgba(11, 13, 26, 0.07);
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--action);
-  --scrim: rgba(15, 20, 30, 0.4);
+  --scrim: rgba(11, 13, 26, 0.48);
   --dur-hover: 120ms;
-  --dur-enter: 180ms;
+  --dur-enter: 200ms;
   --dur-exit: 140ms;
-  --dur-modal: 240ms;
-  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --dur-modal: 260ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
-  /* Flat blue, as resume.io's buttons are; the hover is one step darker. */
-  --grad-brand: linear-gradient(180deg, #1170CD, #1170CD);
-  --grad-brand-hover: linear-gradient(180deg, #10529B, #10529B);
-  /* Light-blue washes: the dashboard hero, introductions, supporting
-   * panels. Dense work stays on solid surfaces. */
-  --grad-soft: linear-gradient(135deg, #F5FAFF, #EAF6FF 58%, #F1F2FF);
-  --grad-panel: linear-gradient(140deg, #EAF6FF, #E3F1FE 48%, #EDEFFF);
+  /* The marketing site (components/features/marketing): a white page with
+   * tinted tiles on an 8px gap, and the ink for type on the brand plane.
+   * --mkt-card is a sheet inside a tile (plan cards, the Example's lines): a
+   * step above the tile in both themes. */
+  --mkt-page: var(--surface);
+  --mkt-tile: var(--surface-2);
+  --mkt-tile-2: var(--surface-3);
+  --mkt-card: var(--surface);
+  --mkt-gap: 8px;
+  --on-plane: #FFFFFF;
+  --on-plane-2: rgba(255, 255, 255, 0.8);
+  /* The home page's 3D scene (heroSceneRuntime.ts reads these at runtime,
+   * with --scene-ink, which .scene sets to the action colour): the cards it
+   * sorts, in the brand's bright hues. */
+  --scene-1: #93A8FF;
+  --scene-2: #FFD43B;
+  --scene-3: #FF8A3D;
+  --scene-4: #2EE6A6;
+  --scene-5: #FFFFFF;
+  /* Single colours under their old names (see the note above). */
+  --grad-brand: #2B4DFF;
+  --grad-brand-hover: #1F3AD6;
+  --grad-soft: #EEF1FF;
+  --grad-panel: #E0E6FF;
   color-scheme: light;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * DARK — resume.io ships no dark theme; this one keeps its structure on
- * navy steps (its Neutral90–100 and Blue80–90) with the lighter blue as
- * the action, so links and buttons stay legible on the dark canvas.
+ * DARK — the same roles on blue-black. Elevation is lightness alone: each
+ * surface is one step lighter than the one under it. A lighter blue carries
+ * text here (7.5:1 on the ground, 7.0:1 on --surface), so it is the action.
  * ═══════════════════════════════════════════════════════════════════ */
 html[data-theme='dark'] {
-  --bg: #0F141E;
-  --surface: #161C28;
-  --surface-2: #1E2532;
-  --surface-3: #273041;
-  --rule: #303848;
-  --rule-strong: #495163;
-  --text: #F7F9FC;
-  --text-2: #D9DEEB;
-  --text-muted: #A3AABE;
-  --disabled: #656E83;
-  --action: #54AFF8;
-  --action-hover: #92CDFC;
-  --action-ink: #0F141E;
-  --action-subtle: #132D4B;
-  --brand-mark: #92CDFC;
-  --brand-plane: #0C264C;
-  --accent-line: #54AFF8;
-  --accent-track: #10529B;
-  --upgrade: #5660E8;
-  --upgrade-ink: #FFFFFF;
-  --ok: #96D0AD;
+  --bg: #07080F;
+  --surface: #10121C;
+  --surface-2: #191C2A;
+  --surface-3: #24283A;
+  --rule: #262A3C;
+  --rule-strong: #3D4259;
+  --text: #FFFFFF;
+  --text-2: #DADDEA;
+  --text-muted: #A4A9BF;
+  --disabled: #6A6F85;
+  --action: #8098FF;
+  --action-hover: #A3B5FF;
+  --action-ink: #05081F;
+  --action-subtle: #1B2452;
+  --brand-mark: #FFD43B;
+  --brand-plane: #1D32D8;
+  --ok: #8FD3AB;
   --ok-subtle: #10291C;
-  --warn: #F9BA44;
-  --warn-subtle: #3A2A0B;
-  --danger: #FE7D8B;
-  --danger-subtle: #3D1A1F;
-  --surface-glass: rgba(255, 255, 255, 0.04);
-  --print-ink: #10529B;
-  --e1: 0 0 1px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(15, 20, 30, 0.24), 0 2px 4px rgba(15, 20, 30, 0.16);
-  --e2: 0 2px 4px -1px rgba(15, 20, 30, 0.16), 0 8px 20px -4px rgba(15, 20, 30, 0.24);
-  --e3: 0 6px 8px -2px rgba(15, 20, 30, 0.08), 0 16px 64px -8px rgba(15, 20, 30, 0.32);
-  --e-float: 0 0 1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(15, 20, 30, 0.16), 0 8px 20px -4px rgba(15, 20, 30, 0.24);
-  --e-print: 8px 10px 0 rgba(0, 0, 0, 0.32);
-  --grad-brand: linear-gradient(180deg, #54AFF8, #54AFF8);
-  --grad-brand-hover: linear-gradient(180deg, #92CDFC, #92CDFC);
-  --grad-soft: linear-gradient(135deg, #121927, #13203A 58%, #161A30);
-  --grad-panel: linear-gradient(140deg, #13203A, #12253F 48%, #171B36);
-  --scrim: rgba(0, 0, 0, 0.62);
+  --warn: #F4C152;
+  --warn-subtle: #33260A;
+  --danger: #FF9A7A;
+  --danger-subtle: #3A1A10;
+  --surface-glass: rgba(255, 255, 255, 0.05);
+  --print-ink: #FFD43B;
+  --e1: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --e2: 0 0 0 1px rgba(255, 255, 255, 0.16);
+  --e3: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 24px 64px -16px rgba(0, 0, 0, 0.7);
+  --e-float: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 12px 32px -12px rgba(0, 0, 0, 0.7);
+  --e-print: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --mkt-page: var(--bg);
+  --mkt-tile: var(--surface);
+  --mkt-tile-2: var(--surface-2);
+  --mkt-card: var(--surface-2);
+  --grad-brand: #8098FF;
+  --grad-brand-hover: #A3B5FF;
+  --grad-soft: #11152B;
+  --grad-panel: #1A2250;
+  --scrim: rgba(0, 0, 0, 0.66);
   color-scheme: dark;
 }
 
@@ -216,7 +242,7 @@ html[data-theme='dark'] {
  * ~8,000 lines of stylesheet and 45 TSX files still name the old tokens.
  * These aliases keep every one of them rendering while the codemod runs,
  * and they are what actually kills the old look on contact:
- *   --serif and --mono both resolve to Inter, so the italic accent-word tic
+ *   --serif and --mono both resolve to the UI face, so the italic accent-word tic
  *   and the 137 mono label blocks stop rendering immediately;
  *   --accent-glow resolves to transparent, so all 46 neon halos go dark.
  *
@@ -301,7 +327,7 @@ body {
   /* Gradient accents belong to deliberate panels and controls. */
 }
 
-/* The highlighter: a dragged selection reads as a lime marker stroke. */
+/* A dragged selection is the yellow highlight, ink on it. */
 ::selection {
   background: var(--brand-mark);
   color: var(--brand-plane);
@@ -327,9 +353,8 @@ a {
   border-radius: var(--r-sm);
 }
 
-/* Headlines use the display token, applied to the WHOLE headline — never to a
- * word inside one. One family (Bricolage); h1/h2 differ from body text only
- * by weight and tighter tracking, and its optical sizes do the rest. */
+/* Headlines use the display token (Space Grotesk), applied to the WHOLE
+ * headline — never to a word inside one. Tight tracking, weight 600. */
 h1,
 h2 {
   font-family: var(--font-display);
@@ -339,7 +364,7 @@ h2 {
   line-height: var(--lh-display);
 }
 h3 {
-  font-family: var(--font-ui);
+  font-family: var(--font-display);
   color: var(--text);
   font-weight: 600;
   letter-spacing: var(--ls-title);
@@ -373,8 +398,8 @@ html[lang='ko'] :is(h1, h2, h3) {
 /* Source Han Sans (思源黑體) — self-hosted CJK faces (app/layout.tsx). Han
  * glyphs now resolve to the same face on every OS instead of whatever the
  * platform tail ('PingFang', 'Microsoft YaHei', …) happens to supply; that
- * tail stays as the emergency fallback. Latin still renders in Inter — it
- * sits first in the stack and Source Han only catches what Inter lacks.
+ * tail stays as the emergency fallback. Latin still renders in DM Sans — it
+ * sits first in the stack and Source Han only catches what DM Sans lacks.
  * --font-han is undefined outside these two locales, so no other locale ever
  * downloads the woff2 (display:swap + no preload in layout.tsx). */
 html[lang='zh'] {
@@ -387,7 +412,7 @@ html[lang='zh'],
 html[lang='zh-TW'] {
   /* --font-display needs no override: it ends in var(--font-ui). */
   --font-ui:
-    var(--font-inter), var(--font-han), -apple-system, BlinkMacSystemFont,
+    var(--font-dm-sans), var(--font-han), -apple-system, BlinkMacSystemFont,
     'Segoe UI', system-ui, 'PingFang SC', 'PingFang TC', 'Microsoft YaHei',
     sans-serif;
 }

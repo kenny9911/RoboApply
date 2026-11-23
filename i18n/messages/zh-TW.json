@@ -151,7 +151,8 @@
       "ready_count": "{count, plural, other {# 筆未開啟}}",
       "ready_open": "查看已準備好的應徵",
       "upgrade": "升級"
-    }
+    },
+    "alice": "Alice"
   },
   "jobs": {
     "fit": {
@@ -4005,6 +4006,10 @@
           "sub": "職缺來源、背景工作、電子郵件、助理和成本，即時統計。",
           "title": "系統"
         },
+        "llm": {
+          "title": "LLM 閘道",
+          "sub": "AI 供應商、它們的模型，以及每種工作使用哪個模型。"
+        },
         "visitors": {
           "title": "訪客與註冊",
           "sub": "誰來過、從哪裡來、有多少人建立了帳號。"
@@ -4517,6 +4522,246 @@
           "off": "未連線",
           "rapidapi": "搜尋服務",
           "syndication": "從它的職缺發布來源讀取"
+        }
+      },
+      "llm": {
+        "eyebrow": "管理台",
+        "title": "LLM 閘道",
+        "sub": "先儲存 AI 供應商，再為每種工作選擇供應商和模型。變更會在約 30 秒內套用到新的請求。",
+        "loading": "載入中…",
+        "refresh": "重新整理",
+        "refreshing": "重新整理中…",
+        "cancel": "取消",
+        "environment": {
+          "production": "正式環境設定",
+          "development": "開發環境設定"
+        },
+        "dbDisabled": "這台伺服器已關閉已儲存的設定（LLM_SETTINGS_DB_DISABLED）。你仍可編輯，但在重新開啟之前，所有請求都使用環境變數。",
+        "encryptionMissing": "這台伺服器沒有 FIELD_ENCRYPTION_KEY，因此無法儲存 API 金鑰。新增供應商前請先設定。",
+        "types": {
+          "newapi": "OpenAI 相容"
+        },
+        "providers": {
+          "title": "供應商",
+          "sub": "每個供應商是一個端點加一組 API 金鑰。同一項服務新增兩次，即可使用兩個帳號或兩個閘道。",
+          "add": "新增供應商",
+          "empty": "還沒有供應商。請新增一個，再指派給下方的區域。",
+          "full": "供應商已達上限 {max} 個。請先移除一個再新增。",
+          "noUrl": "沒有網址",
+          "off": "關閉",
+          "ready": "可用",
+          "keyUnreadable": "金鑰無法讀取",
+          "keyUnreadableHelp": "已儲存的金鑰是用不同的 FIELD_ENCRYPTION_KEY 加密的，這裡無法讀取。指派給此供應商的區域會改用繼承的模型，直到你重新輸入金鑰。",
+          "key": "API 金鑰",
+          "noKey": "無",
+          "models": "模型",
+          "modelCount": "{count, plural, one {{n} 個模型} other {{n} 個模型}}",
+          "modelsNever": "尚未取得",
+          "fetchedAt": "清單取得時間",
+          "edit": "編輯",
+          "fetchModels": "取得模型",
+          "refreshModels": "重新整理模型",
+          "fetching": "取得中…",
+          "showModels": "顯示模型",
+          "hideModels": "隱藏模型",
+          "turnOff": "關閉",
+          "turnOn": "開啟",
+          "remove": "移除",
+          "removeConfirm": "移除 {name}"
+        },
+        "form": {
+          "addTitle": "新增供應商",
+          "editTitle": "編輯供應商",
+          "name": "名稱",
+          "nameHint": "會顯示在區域清單中，例如「OpenRouter（主要）」。",
+          "type": "類型",
+          "typeHint": "端點所使用的 API。閘道或代理伺服器請選擇 OpenAI 相容。",
+          "typeHintNoTools": "這個類型在這裡無法串流工具呼叫，因此不能用於助理區域。",
+          "baseUrl": "API 基礎網址",
+          "baseUrlRequired": "必填。請包含版本路徑，例如 https://gateway.example.com/v1，不要加上 /chat/completions 這類端點。",
+          "baseUrlOptional": "留空則使用 {url}。",
+          "apiKey": "API 金鑰",
+          "apiKeyHint": "以加密方式儲存。儲存後不會再顯示。",
+          "apiKeyKeep": "留空會保留已儲存的金鑰。把網址改成另一個主機時，需要重新輸入金鑰。",
+          "notes": "備註（選填）",
+          "enabled": "使用這個供應商",
+          "save": "儲存供應商",
+          "saving": "儲存中…",
+          "test": "不儲存，直接測試",
+          "testing": "測試中…",
+          "saveHint": "儲存時也會用這組金鑰取得該供應商的模型清單。"
+        },
+        "modelList": {
+          "ok": "{count, plural, one {供應商列出 {n} 個模型。} other {供應商列出 {n} 個模型。}}",
+          "okTruncated": "供應商列出的模型超過 {n} 個，只保留前 {n} 個。其他模型請手動輸入模型 ID。",
+          "invalid_base_url": "無法使用這個基礎網址。請檢查位址；只有自行架設的類型才能指向私有主機。",
+          "key_required": "請輸入 API 金鑰，才能向供應商查詢模型。",
+          "auth_rejected": "供應商拒絕了這組 API 金鑰。",
+          "not_supported": "這個端點沒有模型清單。請檢查基礎網址，或手動輸入模型 ID。",
+          "rate_limited": "供應商正在限制請求。請一分鐘後再試。",
+          "timeout": "供應商在 8 秒內沒有回應。",
+          "unreachable": "無法連線到供應商。請檢查基礎網址。",
+          "invalid_response": "供應商有回應，但內容不是模型清單。",
+          "response_too_large": "供應商的模型清單太大，無法讀取。",
+          "provider_error": "供應商回傳了錯誤。"
+        },
+        "areas": {
+          "title": "功能區域",
+          "sub": "為區域指派供應商、模型和推理強度，需要時再加上備援模型。未指派的區域會使用「預設」區域的指派；「預設」也未指派時，區域維持現在的設定。",
+          "brand": "網站",
+          "goapplyNote": "{site} 會先讀取自己的區域和自己的「預設」。兩者都沒有時，會使用 {shared} 的。",
+          "noProviders": "請先在上方新增供應商，才能指派區域。",
+          "assigned": "已指派",
+          "notInEffect": "未生效",
+          "inherits": "繼承",
+          "provider": "供應商",
+          "inheritOption": "不指派（使用預設）",
+          "providerOff": "{name}（已關閉）",
+          "model": "模型",
+          "save": "儲存",
+          "clear": "清除指派",
+          "modelHint": "從供應商的清單中選一個模型，或輸入清單中沒有的模型 ID。",
+          "noModelList": "這個供應商還沒有模型清單。請先在上方取得模型，或輸入模型 ID。",
+          "needsTools": "這個區域會呼叫工具，所以它的模型和每個備援模型都必須支援工具呼叫。",
+          "needsImages": "這個區域會讀取圖片，所以模型必須接受圖片輸入。",
+          "toolsBlocked": "這裡選擇的某個供應商類型無法串流工具呼叫。這個區域的模型和備援模型請選擇 OpenAI 相容的供應商。",
+          "modelNotListed": "這個模型不在供應商取得的清單中，會照你輸入的使用。",
+          "now": "目前請求使用的設定",
+          "colSetting": "用於",
+          "colModel": "模型",
+          "colSource": "來源",
+          "inheritOptionDefault": "不指派（使用環境變數）",
+          "usesDefault": "使用預設",
+          "chooseProvider": "選擇供應商",
+          "effort": "推理強度",
+          "effortHint": "推理強度會隨每個送往該模型的請求一起送出，並換算成供應商支援的最接近等級。「供應商預設」不送出任何值，這時會使用環境變數的強度或供應商自己的預設值。",
+          "fallbacks": "備援模型",
+          "fallbacksHint": "上面的模型失敗時會依序嘗試：金鑰被拒或額度用完、服務中斷或觸發流量限制、端點不提供該模型。最多 {max} 個。之後仍會嘗試備援模型設定（LLM_FALLBACK_MODEL）。",
+          "fallbackN": "備援 {n}",
+          "addFallback": "新增備援模型",
+          "fallbacksFull": "這個區域的備援模型已達上限（{max} 個）。",
+          "moveUp": "上移",
+          "moveDown": "下移",
+          "removeFallback": "移除",
+          "moveUpLabel": "上移備援 {n}",
+          "moveDownLabel": "下移備援 {n}",
+          "removeFallbackLabel": "移除備援 {n}"
+        },
+        "routeStatus": {
+          "provider_missing": "已指派的供應商已被移除，所以這個區域使用繼承的模型。",
+          "provider_disabled": "已指派的供應商已關閉，所以這個區域使用繼承的模型。",
+          "provider_key_missing": "已指派的供應商沒有 API 金鑰，所以這個區域使用繼承的模型。",
+          "provider_key_unreadable": "這台伺服器無法讀取已指派供應商的金鑰，所以這個區域使用繼承的模型。"
+        },
+        "area": {
+          "default": {
+            "title": "預設",
+            "sub": "所有未指派的區域都會使用這個模型、它的備援模型和推理強度。"
+          },
+          "matchResume": {
+            "title": "履歷比對",
+            "sub": "評分履歷與職缺的符合程度。"
+          },
+          "parseResume": {
+            "title": "解析履歷",
+            "sub": "把履歷文字讀取成結構化的資料。"
+          },
+          "visual": {
+            "title": "影像",
+            "sub": "讀取圖片和掃描頁面（OCR）。"
+          },
+          "evaluation": {
+            "title": "評估",
+            "sub": "為完成的模擬面試評分並撰寫報告。"
+          },
+          "insights": {
+            "title": "洞察",
+            "sub": "每週求職摘要和搜尋摘要。"
+          },
+          "writing": {
+            "title": "寫作",
+            "sub": "求職信、聯絡訊息和履歷改寫。"
+          },
+          "assistant": {
+            "title": "助理",
+            "sub": "聊天助理、新手引導，以及理解使用者的需求。"
+          },
+          "jobs": {
+            "title": "職缺詳情",
+            "sub": "為職缺補充細節和標籤。"
+          }
+        },
+        "setting": {
+          "defaultModel": "預設模型",
+          "matching": "符合度分數",
+          "matchResume": "比對報告",
+          "matchScreen": "比對初篩",
+          "prematchFilter": "比對前篩選",
+          "extract": "履歷文字",
+          "resumeTag": "履歷標籤",
+          "vision": "圖片與掃描檔",
+          "evaluation": "面試報告",
+          "insights": "洞察",
+          "writing": "長篇寫作",
+          "rewrite": "履歷改寫",
+          "copilot": "助理聊天",
+          "onboarding": "新手引導",
+          "intentParser": "搜尋意圖",
+          "enrich": "職缺補充",
+          "jobTag": "職缺標籤",
+          "quickJob": "快速讀取職缺"
+        },
+        "source": {
+          "assigned": "這個區域的指派",
+          "override": "已儲存的個別設定覆寫",
+          "shared": "{shared} 的設定",
+          "env": "環境變數 {name}",
+          "noneDefault": "尚未設定任何項目",
+          "noDefault": "尚未設定",
+          "fallback": {
+            "default": "尚未設定任何項目",
+            "matchResume": "沒有自己的模型，使用預設模型（{model}）",
+            "parseResume": "沒有自己的模型，使用預設模型（{model}）",
+            "visual": "沒有自己的模型，使用預設模型（{model}）",
+            "evaluation": "沒有自己的模型，使用預設模型（{model}）",
+            "insights": "沒有自己的模型，使用預設模型（{model}）",
+            "writing": "沒有自己的模型，使用預設模型（{model}）",
+            "assistant": "沒有自己的模型，使用預設模型（{model}）",
+            "jobs": "沒有自己的模型，使用預設模型（{model}）"
+          },
+          "default": "「預設」區域的指派",
+          "sharedArea": "{shared} 為這個區域的指派",
+          "sharedDefault": "{shared} 的「預設」區域"
+        },
+        "errors": {
+          "generic": "沒有成功。請重試。",
+          "invalid_name": "請輸入不超過 60 個字元的名稱。",
+          "duplicate_name": "已有另一個供應商使用這個名稱。",
+          "invalid_type": "請選擇供應商類型。",
+          "invalid_base_url": "無法使用這個基礎網址。請輸入不含 /chat/completions 這類端點的 API 基礎網址；只有自行架設的類型才能指向私有主機。",
+          "key_required": "請輸入 API 金鑰。",
+          "key_required_for_new_url": "端點已變更。請重新輸入 API 金鑰，以免把已儲存的金鑰送到不同的主機。",
+          "too_many_providers": "已儲存的供應商數量達上限。請先移除一個。",
+          "not_found": "這個供應商已不存在。請重新整理頁面。",
+          "invalid_notes": "備註最多 2,000 個字元。",
+          "encryption_unavailable": "這台伺服器無法儲存 API 金鑰：未設定 FIELD_ENCRYPTION_KEY。",
+          "invalid_area": "不認得這個區域。請重新整理頁面。",
+          "invalid_route": "請選擇供應商和模型。",
+          "unknown_provider": "這個供應商已不存在。請重新整理頁面。",
+          "tools_unsupported": "這個供應商類型無法串流工具呼叫，而這個區域需要它。",
+          "provider_in_use": "仍有區域在模型或備援模型中使用這個供應商。請先修改或清除該區域。",
+          "invalid_effort": "請選擇推理強度。",
+          "invalid_fallback": "請為每個備援模型選擇供應商和模型。",
+          "duplicate_fallback": "同一個區域中，每個模型只能出現一次。",
+          "too_many_fallbacks": "一個區域最多可設定 {max} 個備援模型。"
+        },
+        "effort": {
+          "provider": "供應商預設",
+          "minimal": "最低",
+          "low": "低",
+          "medium": "中",
+          "high": "高",
+          "max": "最高"
         }
       },
       "visitors": {
@@ -5683,6 +5928,348 @@
     },
     "jobList": {
       "title": "這個回答提到的職缺"
+    }
+  },
+  "alice": {
+    "tag": "AI 代理",
+    "restart": "重新開始",
+    "restartConfirm": "要開始新的對話嗎？你儲存的求職方向會保留。",
+    "cancel": "取消",
+    "status": {
+      "working": "Alice 正在處理",
+      "intake": "正在了解你想找的工作 · {done}/{total} 個主題",
+      "choosing": "兩個求職方向已寫好，可以比較了",
+      "refining": "你的求職方向第 {version} 版",
+      "saved": "職缺搜尋會依照你的求職方向進行",
+      "savedNeeds": "{count, plural, one {有 # 件事需要你處理} other {有 # 件事需要你處理}}"
+    },
+    "tabs": {
+      "aria": "Alice 的分頁",
+      "chat": "對話",
+      "profile": "求職方向",
+      "jobs": "職缺",
+      "applications": "應徵紀錄"
+    },
+    "greeting": {
+      "hello": "嗨，我是 Alice，一個協助你找工作、管理應徵的 AI 代理。",
+      "plan": "我會先問問你對下一份工作有什麼期待，再寫出兩個求職方向讓你比較。選出比較接近的那個，告訴我要改什麼，我會持續修改，直到符合你的想法。",
+      "d1": "每一份應徵都由你自己送出。我會找出適合的職缺、追蹤你的應徵進度，並提醒你下一步要做什麼。",
+      "withResume": "我可以從你的履歷「{name}」著手。",
+      "withoutResume": "如果你有履歷，可以新增進來，我會從履歷著手。"
+    },
+    "resume": {
+      "use": "使用「{name}」",
+      "other": "選擇其他履歷",
+      "pickLabel": "你的履歷",
+      "upload": "上傳履歷",
+      "skip": "不使用履歷，直接繼續",
+      "hint": "PDF、Word 或純文字檔，最大 15 MB。",
+      "hintNoPdf": "Word 或純文字檔，最大 15 MB。",
+      "uploading": "正在讀取 {name}…",
+      "errors": {
+        "unreadable": "這個檔案裡沒有可以讀取的文字。請換一個檔案試試。",
+        "tooLarge": "這個檔案超過 15 MB。",
+        "wrongType": "請使用 PDF、Word 或純文字檔。",
+        "dailyLimit": "你今天新增的履歷已達上限。請明天再試，或不使用履歷直接繼續。",
+        "failed": "沒有成功。請重試。",
+        "pdfNeedsConsent": "少了你關閉的那個讀取選項，就無法讀取 PDF 檔案。請改為上傳 Word 或純文字檔。",
+        "consentUnknown": "我們無法確認你的檔案會以什麼方式讀取。請稍後再試。",
+        "consentUnanswered": "請先回答下方關於檔案讀取方式的問題，再上傳檔案。"
+      }
+    },
+    "action": {
+      "resume": "使用我的履歷「{label}」",
+      "skip_resume": "不使用履歷，直接繼續",
+      "draft_now": "讓我看看兩個求職方向",
+      "choose": "這個比較接近：{label}",
+      "regenerate": "兩個都不適合",
+      "restore": "恢復第 {version} 版",
+      "save": "儲存「{label}」",
+      "find_jobs": "依這個求職方向找職缺",
+      "report": "我的應徵進度如何？",
+      "edit_profile": "修改「{label}」"
+    },
+    "blocks": {
+      "resumeRead": "我讀完了「{name}」。",
+      "resumeRoles": "履歷顯示你有 {roles} 的經驗。",
+      "resumeRolesYears": "履歷顯示你有 {roles} 的經驗，累計約 {years} 年。",
+      "learned": "記下了：{topics}。",
+      "profiles": "兩個求職方向寫好了：{a} 和 {b}。",
+      "compare": "比較一下",
+      "revisionFirst": "這是第 1 版。告訴我要改什麼，或是覺得沒問題就儲存。",
+      "revision": "第 {version} 版好了。我修改了：{fields}。",
+      "seeVersion": "查看這一版",
+      "restored": "第 {version} 版已恢復，成為最新版本。",
+      "saved": "已儲存「{name}」。",
+      "saved_created": "現在它是你已儲存的搜尋「{search}」，你的職缺搜尋會使用它。",
+      "saved_updated": "我已更新你已儲存的搜尋「{search}」，讓它和這個求職方向一致。",
+      "saved_replaced": "你已儲存的搜尋「{search}」現在改用它。原本的篩選條件都有保留，你可以在「求職方向」撤銷這項變更。",
+      "saved_kept": "你已儲存的搜尋都沒有變更。",
+      "matches": "{count, plural, =0 {目前沒有符合這個求職方向的招募中職缺。你可以請我放寬條件：多加幾個地點、換個層級，或多加幾個職稱。} one {有 # 個招募中的職缺符合這個求職方向。} other {有 # 個招募中的職缺符合這個求職方向。}}",
+      "seeJobs": "查看職缺",
+      "reportFacts": "進行中 {active} · 等待回覆 {waiting} · 通話或面試中 {interviewing} · 錄取 {offers}",
+      "seeApplications": "查看你的應徵紀錄",
+      "reminder": "我會在 {date} 提醒你追蹤 {what}。",
+      "reminderCleared": "我已移除 {what} 的提醒。",
+      "thisApplication": "這筆應徵",
+      "saved_updated_main": "我已依照它更新了你的主要搜尋。",
+      "saved_replaced_main": "你的主要搜尋現在使用它。原本的篩選條件已保留，你可以在「求職方向」中復原。"
+    },
+    "notice": {
+      "agent_failed": "這一步我沒能完成。你說的內容都還在。請再試一次。",
+      "nothing_changed": "這次沒有改到求職方向。再多說一點，你希望哪裡不一樣？",
+      "search_full": "你已儲存的搜尋數量已達上限。請在儲存卡片上選擇：要不要讓這個求職方向接手你目前的搜尋。",
+      "resume_unreadable": "這份履歷裡我讀不到任何文字。我們可以不用它繼續，你也可以再新增一份。",
+      "turn_limit": "這段對話已經很長了。請重新開始才能繼續；你儲存的求職方向會保留。",
+      "draft_limit": "你今天已經要求了很多次新的求職方向。請稍後再試。",
+      "enough_questions": "這些已經足夠寫出兩個求職方向了。請稍等一下。",
+      "no_applications": "你還沒有應徵紀錄。儲存一個職缺或準備一份應徵資料，我就會幫你追蹤。",
+      "no_profile": "先儲存一個求職方向，我才能找出符合的職缺。",
+      "reminder_ambiguous": "有不只一筆應徵符合。請選出你指的那一筆。",
+      "reminder_unknown": "告訴我是哪一筆應徵、哪一天，例如「星期五追蹤 Figma」。"
+    },
+    "steps": {
+      "reading_resume": "讀取你的履歷",
+      "thinking": "思考",
+      "reading_goals": "理解你想找的工作",
+      "writing_profiles": "撰寫兩個求職方向",
+      "revising": "修改你的求職方向",
+      "saving": "儲存你的求職方向",
+      "finding_jobs": "尋找適合的職缺",
+      "checking_applications": "查看你的應徵紀錄"
+    },
+    "composer": {
+      "label": "傳訊息給 Alice",
+      "placeholder_intake": "輸入你的回答",
+      "placeholder_choosing": "哪一個比較接近？",
+      "placeholder_refining": "要改什麼？",
+      "placeholder_saved": "問 Alice 任何事",
+      "send": "送出",
+      "attach": "新增履歷",
+      "replies": "快速回答",
+      "sendPicked": "{count, plural, one {送出 # 個回答} other {送出 # 個回答}}",
+      "showProfiles": "讓我看看兩個求職方向"
+    },
+    "errors": {
+      "not_ready": "Alice 在這裡還沒有開啟。",
+      "ai_off": "Alice 需要你同意使用 AI。你可以到「設定」開啟。",
+      "busy": "Alice 還在回覆你的上一則訊息。",
+      "rate_limited": "你傳的訊息有點多。請過幾分鐘再試。",
+      "agent_failed": "Alice 沒能完成這一步。請重試。",
+      "wrong_stage": "目前這個步驟無法這樣操作。",
+      "profile_limit": "你儲存的求職方向已達 Alice 能保留的上限。請先刪除一個。",
+      "search_full": "你已儲存的搜尋數量已達上限。請在儲存卡片上選擇要怎麼做。",
+      "interrupted": "連線中斷了。你的對話已儲存；重新整理頁面就能看到最新內容。",
+      "generic": "出了點問題。請重試。",
+      "retry": "重試"
+    },
+    "unavailable": {
+      "notReady": {
+        "title": "Alice 在這裡還沒有開啟",
+        "body": "Alice 需要在這個網站完成一次性的設定。其他功能都照常運作。"
+      },
+      "aiOff": {
+        "title": "Alice 需要 AI 才能運作",
+        "body": "你的帳號目前無法使用 AI。如果是你自己關閉的，可以到「設定」重新開啟。"
+      },
+      "loadFailed": {
+        "title": "無法載入你和 Alice 的對話",
+        "body": "請檢查網路連線後再試一次。"
+      }
+    },
+    "brief": {
+      "title": "Alice 目前知道的",
+      "intro": "這裡的內容都來自你的回答。在你選定求職方向之前，一切都還可以改。",
+      "progress": "{done}/{total} 個主題",
+      "skipped": "已略過",
+      "not": "不要 {value}",
+      "fromResume": "Alice 也會參考你的履歷「{name}」。",
+      "ready": "這些已經足夠寫出兩個求職方向了。你可以繼續回答，也可以現在就看。",
+      "notReady": "再回答幾個問題，Alice 就能寫出兩個求職方向。",
+      "topics": {
+        "roles": "想做的工作",
+        "level": "層級",
+        "workSetting": "工作型態",
+        "places": "工作地點",
+        "pay": "最低薪資",
+        "industries": "產業",
+        "companyKind": "公司類型",
+        "companySize": "公司規模",
+        "companies": "欣賞的公司",
+        "dreamJob": "理想工作",
+        "values": "最重視的事",
+        "dealbreakers": "無法接受的條件",
+        "timing": "時間安排",
+        "sponsorship": "簽證贊助"
+      }
+    },
+    "fields": {
+      "label": "名稱",
+      "headline": "一句話說明",
+      "summary": "摘要",
+      "titles": "職稱",
+      "levels": "層級",
+      "workModels": "工作型態",
+      "places": "工作地點",
+      "pay": "最低薪資",
+      "industries": "產業",
+      "companyKinds": "公司類型",
+      "companySizes": "公司規模",
+      "companies": "目標公司",
+      "skills": "技能",
+      "mustHaves": "必備",
+      "niceToHaves": "加分條件",
+      "dealbreakers": "無法接受的條件",
+      "whyItFits": "為什麼適合你",
+      "tradeoff": "需要放棄什麼",
+      "jobTypes": "工作性質"
+    },
+    "values": {
+      "levels": {
+        "intern_newgrad": "實習生或應屆畢業生",
+        "entry": "初階",
+        "mid": "中階",
+        "senior": "資深",
+        "lead_staff": "組長或主任級",
+        "director_exec": "總監及以上"
+      },
+      "workModels": {
+        "remote": "遠端",
+        "hybrid": "混合辦公",
+        "onsite": "現場辦公"
+      },
+      "companyKinds": {
+        "startup": "新創公司",
+        "scaleup": "成長期公司",
+        "enterprise": "大公司",
+        "public_sector": "公部門",
+        "nonprofit": "非營利組織"
+      },
+      "jobTypes": {
+        "full_time": "全職",
+        "contract": "約聘／承攬",
+        "part_time": "兼職",
+        "internship": "實習"
+      },
+      "timing": {
+        "now": "越快越好",
+        "soon": "未來幾個月內",
+        "exploring": "只是先看看機會"
+      },
+      "sponsorship": {
+        "yes": "需要簽證贊助",
+        "no": "不需要簽證贊助"
+      },
+      "payPer": {
+        "year": "年薪 {amount}",
+        "month": "月薪 {amount}",
+        "hour": "時薪 {amount}"
+      },
+      "companySize": "{size} 人",
+      "companyYou": "你提到的",
+      "companyAlice": "Alice 舉的例子"
+    },
+    "compare": {
+      "title": "哪一個比較接近你想要的？",
+      "intro": "從你的回答來看，有兩個可能的方向。選出比較接近的那個。",
+      "differsHint": "圓點標出兩者不同的地方。",
+      "differs": "不同",
+      "choose": "這個比較接近",
+      "commentLabel": "告訴 Alice 要改什麼",
+      "commentPlaceholder": "例如：第一個，但要遠端、不用出差",
+      "commentHint": "先寫在這裡，再選一個求職方向：Alice 會修改你選的那個。也可以告訴她為什麼兩個都不適合。",
+      "neither": "兩個都不適合"
+    },
+    "profile": {
+      "version": "第 {version} 版",
+      "yourComment": "你說：「{comment}」",
+      "aliceNotes": "Alice 改了什麼",
+      "changed": "已修改",
+      "was": "原本：{value}",
+      "history": "版本紀錄",
+      "historyPick": "你選了「{label}」",
+      "historyEdit": "「{comment}」",
+      "historyRestore": "恢復了第 {version} 版",
+      "historySaved": "你儲存的求職方向",
+      "restore": "恢復",
+      "current": "目前版本",
+      "commentLabel": "要改哪裡？",
+      "commentPlaceholder": "例如：加上柏林的混合辦公，不要人力仲介公司",
+      "send": "修改",
+      "newPair": "重新寫兩個求職方向"
+    },
+    "save": {
+      "title": "滿意了嗎？",
+      "name": "求職方向名稱",
+      "create": "儲存並用在我的職缺搜尋",
+      "createHint": "Alice 會把它新增為已儲存的搜尋並開啟。你的其他搜尋都會保留。",
+      "update": "儲存並更新「{search}」",
+      "updateHint": "它對應的那個已儲存的搜尋也會跟著更新。",
+      "replace": "用在我的搜尋「{search}」",
+      "replaceHint": "你已儲存的搜尋數量已達上限。目前的篩選條件會保留，你可以撤銷這項變更。",
+      "none": "儲存，但不變更我的搜尋",
+      "replaceMain": "用於我的主要搜尋",
+      "updateMain": "儲存並更新我的主要搜尋"
+    },
+    "saved": {
+      "drives": "已套用到你已儲存的搜尋「{search}」",
+      "drivesNone": "沒有套用到任何已儲存的搜尋",
+      "findJobs": "查看適合的職缺",
+      "edit": "和 Alice 一起修改",
+      "undo": "撤銷搜尋的變更",
+      "undone": "搜尋已恢復原本的篩選條件。",
+      "others": "你的其他求職方向",
+      "drivesMain": "用於你的主要搜尋"
+    },
+    "jobs": {
+      "title": "符合「{name}」的職缺",
+      "titleEmpty": "符合你求職方向的職缺",
+      "honesty": "適合度是拿職缺和你的履歷比對的結果。這不是你被錄取的機率。",
+      "missing": "還缺：{gap}",
+      "meets": "符合：{fields}",
+      "named": "你提到的公司",
+      "view": "查看職缺",
+      "empty": "目前沒有符合這個求職方向的招募中職缺。",
+      "widen": "請 Alice 放寬條件",
+      "noProfile": "儲存一個求職方向後，Alice 會找出符合的職缺。",
+      "loading": "正在尋找職缺…",
+      "error": "職缺沒有載入成功。",
+      "retry": "重試",
+      "seeAll": "查看所有職缺",
+      "tier": {
+        "great": "很適合",
+        "good": "還算適合",
+        "possible": "可能適合",
+        "unlikely": "不太適合"
+      }
+    },
+    "apps": {
+      "title": "你的應徵紀錄",
+      "stages": "各階段的應徵數量",
+      "needs": "需要你處理",
+      "needsEmpty": "今天沒有需要你處理的事。",
+      "kind": {
+        "interview_tomorrow": "明天有面試",
+        "deadline_soon": "{days, plural, =0 {今天截止} one {# 天後截止} other {# 天後截止}}",
+        "follow_up_due": "該追蹤了",
+        "no_reply_10d": "已 {days} 天沒有回覆",
+        "ready_to_check": "已準備好，等你檢查"
+      },
+      "open": "開啟",
+      "check": "檢查並開啟",
+      "reminders": "提醒",
+      "remindersEmpty": "還沒有設定提醒。",
+      "due": "已到期",
+      "done": "完成",
+      "set": "設定提醒",
+      "pick": "選擇一筆應徵",
+      "date": "日期",
+      "save": "儲存提醒",
+      "saveError": "提醒沒有儲存成功。請重試。",
+      "all": "開啟應徵紀錄",
+      "empty": "還沒有應徵紀錄。儲存一個職缺或準備一份應徵資料，Alice 就會幫你追蹤。",
+      "error": "應徵紀錄沒有載入成功。",
+      "retry": "重試"
     }
   },
   "brand": {

@@ -35,3 +35,5 @@ export { UserOverridesPanel, RefundQuotePanel } from './UserAdminPanels';
 export { ViewAsButton } from './ViewAsButton';
 // Job sources per brand (PAR-7): the shared sources panel and GoApply's company job boards.
 export { SourcesConsole } from './SourcesConsole';
+// The LLM gateway: provider entries and the model each functionality area uses.
+export { LlmGatewayConsole } from './LlmGatewayConsole';
