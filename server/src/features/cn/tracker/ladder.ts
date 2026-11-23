@@ -31,7 +31,6 @@ export const CN_TRACKER_LADDER = [
 
 /** `stageDetail` values allowed while the entry is at `interviewing` (一面 / 二面 / HR面). */
 export const CN_INTERVIEW_ROUNDS = ['mianshi_1', 'mianshi_2', 'hr_mianshi'] as const;
-export type CnInterviewRound = (typeof CN_INTERVIEW_ROUNDS)[number];
 
 /** Days before a saved job's 网申截止 at which a reminder is due (PRODUCT F-NOTIF-08 cn). */
 export const CN_DEADLINE_REMINDER_DAYS = [3, 1] as const;

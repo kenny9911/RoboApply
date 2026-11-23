@@ -40,8 +40,6 @@ import {
   type ProviderSearchOptions,
 } from './raExternalJobTypes.js';
 
-export type { ExternalJobNormalized } from './raExternalJobTypes.js';
-
 const BASE_URL = 'https://jsearch.p.rapidapi.com';
 const RAPIDAPI_HOST = 'jsearch.p.rapidapi.com';
 const REQUEST_TIMEOUT_MS = 25_000;

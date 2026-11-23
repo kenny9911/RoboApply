@@ -41,8 +41,7 @@ import { grantFirstPracticeCredit as platformGrantFirstPracticeCredit, type Prac
 import { summarizeEntitlementsForMe, type EntitlementSummary } from '../../platform/credits/summary.js';
 import { createSeekerSession } from '../../roboapply/engine/lib/seekerSession.js';
 import { retentionDaysFor } from '../../roboapply/services/accountPurgeHelpers.js';
-import { SEEKER_CONSENT_TYPES } from '../../roboapply/engine/lib/seekerConsentTypes.js';
-import { buildOnboardingMe, firstValueRoute, homeRoute, nextStage, routeForStage, type OnboardingMe } from '../onboarding/contract.js';
+import { buildOnboardingMe, homeRoute, nextStage, routeForStage, type OnboardingMe } from '../onboarding/contract.js';
 import { growthService, normalizeReferralCode, touchesFromClient, type RawSignals, type Touch } from '../growth/index.js';
 import type { ConsentCatalogItem, RecordConsentResponse } from '../compliance/contract.js';
 import {
@@ -1254,9 +1253,6 @@ export function onboardingFor(
   }
   return me;
 }
-
-/** Every consent type the API accepts (re-exported for the client contract tests). */
-export const ACCEPTED_CONSENT_TYPES: readonly string[] = SEEKER_CONSENT_TYPES;
 
 /** The default instance (production dependencies). */
 export const authService = createAuthFeatureService();

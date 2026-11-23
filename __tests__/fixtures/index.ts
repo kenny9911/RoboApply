@@ -12,8 +12,6 @@ import { resumeRequests } from './resume';
 import { searchProfileRequests } from './search';
 import { uiStateRequests } from './uistate';
 
-export type { RequestFixture } from './types';
-
 export const REQUEST_FIXTURES: RequestFixture[] = [
   ...agentRequests,
   ...copilotRequests,

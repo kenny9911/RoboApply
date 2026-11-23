@@ -1,6 +1,6 @@
 # 10 · Status and roadmap
 
-As of 2026-11-03 (main @ b89d5256); updated 2026-11-21 for PRs #17, #18 and #15, and 2026-11-22 for Pulse, PRs #21 and #22 and the open branches (main @ 62eb63a1); 2026-11-23 for PRs #23 and #24 (gateway fallbacks and effort; the saved auto-fallback list).
+As of 2026-11-03 (main @ b89d5256); updated 2026-11-21 for PRs #17, #18 and #15, and 2026-11-22 for Pulse, PRs #21 and #22 and the open branches (main @ 62eb63a1); 2026-11-23 for PRs #23 and #24 (gateway fallbacks and effort; the saved auto-fallback list) and PR #19 (page weight).
 
 Where the project stands, what blocks a full launch, and what to work on next. "Verified" means checked against the code or git on 2026-11-03; "doc only" means taken from a plan or carry-over list and not re-checked; "last known (date)" means from the owner's earlier session notes.
 
@@ -9,7 +9,7 @@ Where the project stands, what blocks a full launch, and what to work on next. "
 - RoboApply (international, Taiwan included) is live at www.roboapply.io from `main`. `origin/main` is at `62eb63a1` (2026-11-22: Pulse, PRs #21 and #22); Vercel auto-deploys `main`. The owner's notes say PR #17 was deployed 2026-11-13; later deploys were not checked against Vercel here.
 - The jobright-style product (feed, job detail, fit scoring, tailoring, Assistant, tracker, practice, billing UI, admin console) is merged and deployed, but several capabilities are **dark in production for lack of configuration, not code**: crons never run (`CRON_SECRET` unset), Stripe cannot charge, web push is off, original resume files are not stored, mail goes out from a `robohire.io` sender, and voice practice depends on a worker with no production host.
 - GoApply (mainland) shares the codebase and has full feature parity but is **closed** in production (`ALLOWED_BRANDS=roboapply`) and has no mainland deployment; its launch waits on legal filings.
-- Apart from this handbook's own branch (`docs/handbook`, PR #12), one branch is open and unmerged on 2026-11-22: `perf/page-weight-dead-code` (section 3); every other branch is merged into `main` (checked with `git branch -r --no-merged origin/main`).
+- Apart from this handbook's own branch (`docs/handbook`, PR #12), one branch was open and unmerged on 2026-11-22: `perf/page-weight-dead-code`, merged on 2026-11-23 as PR #19; every other branch is merged into `main` (checked with `git branch -r --no-merged origin/main`).
 
 ## 2. What is shipped on main
 
@@ -35,6 +35,7 @@ Where the project stands, what blocks a full launch, and what to work on next. "
 | 2026-11-22 | **PR #20: Pulse**, RoboApply's own design system, replaces Desk (`feat/brand-pulse`). **PR #21**: `next` 16.4.5 for the 2026-11-03 security release (seven moderate advisories). **PR #22**: the LLM gateway, `/admin/llm` (named provider entries and a model per functionality area; see [06](06-ai-and-llm-stack.md)) | merges `f92c735e`, `35e39bb6`, `1780ea4c`, `62eb63a1` |
 | 2026-11-23 | **PR #23**: LLM gateway areas get up to three fallback models and a reasoning effort (Medium unless set); an unassigned area runs on the Default area; models resolve from the gateway first, then env, with no model chosen in code (the hard-coded auto-fallback list became `LLM_AUTO_FALLBACK_MODELS`). **PR #24**: that list is a saved setting too (`autoFallbackModels` in the `llm_stack` row, read before the env); production sets it to `openrouter/openai/gpt-6-luna` in the row and in the Vercel env | merge `8eed8eb7`; `feat/llm-auto-fallback-db` |
 | 2026-11-23 | **Alice, the application agent** (`/alice`; [`docs/alice/ALICE.md`](../alice/ALICE.md)): a named AI agent who interviews the person, writes two job profiles to choose between, revises the chosen one by comment until it is right, saves it as the search the job feed uses, and keeps the applications, their status and follow-up reminders in order. Six model subagents and six skills; capability `alice` (AI-dependent). Her schema, SCHEMA-10 (three new tables), was applied to production the same day; any other database needs it before she answers there (section 4) | merge `db200dd7` (PR #25) |
+| 2026-11-23 | **PR #19: page weight.** `package.json` declares `sideEffects` (stylesheets only), so the production build drops modules nothing uses instead of shipping whole feature folders through their `index.ts`; the signed-in frame (`components/v3/shell/AppShell.tsx`) and the Assistant thread load on demand; the message bundle is a cached script (`/i18n/<brand>.<locale>.<hash>.js`) instead of a prop serialized into every page; the stub API stays out of the browser bundle unless `NEXT_PUBLIC_USE_STUB_API=true`; unused code and four unused dependencies removed. First-load JavaScript went from 541 to 240 KB gzipped on average over 87 routes, and a signed-out page's HTML from 166 to 6 KB gzipped. Still slow from Asia: every page is rendered per request (`force-dynamic`) in Vercel's iad1 region | `perf/page-weight-dead-code` |
 
 PR numbers after #5 are not in the commit messages: the branches were merged locally with plain `git merge` and pushed, and GitHub then marked the PRs merged (all on 2026-10-31): #6 prep brief must-haves as a list, #7 `google/gemini-3.8-flash` with the Gemini thinking reserve (opened 2026-10-13), #8 admin view-as, #9 AI-first resume hub, #10 Paper design system, #11 Next 16.4.1 security. Checked with `gh pr list --state all` on 2026-11-03.
 
@@ -54,7 +55,6 @@ The product never submits an application for the user (D1); auto-apply was remov
 | Item | State |
 |---|---|
 | Leftover worktrees | Eight under `.claude/worktrees/`, all clean and merged. Remove only after checking each is clean and its commits are on `main` (an earlier blanket cleanup deleted uncommitted work). |
-| `perf/page-weight-dead-code` (6 commits ahead, 2026-11-18, not merged) | Page-weight and dead-code clean-up (unused re-exports). |
 | Stale session notes | Notes for the Paper redesign, resume hub and Next 16.4.1 called them unmerged; all three merged on 2026-10-31, and the resume.io clone on 2026-11-13. |
 
 ## 4. Owner and ops items still open

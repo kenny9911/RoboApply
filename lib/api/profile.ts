@@ -88,19 +88,3 @@ export function applySyncFromResume(body: In<typeof P.SyncFromResumeApplyBodySch
   return call<P.ProfileView>('POST', `/api/v1/roboapply/profile/sync-from-resume/apply`, { ...opts, body });
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const profileApi = {
-  getProfile,
-  patchProfile,
-  addEducation,
-  updateEducation,
-  deleteEducation,
-  addExperience,
-  updateExperience,
-  deleteExperience,
-  putSkills,
-  getSensitiveAnswers,
-  putSensitiveAnswers,
-  previewSyncFromResume,
-  applySyncFromResume,
-};

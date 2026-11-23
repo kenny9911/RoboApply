@@ -760,16 +760,6 @@ function stripControl(s: string): string {
   return s.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-// ─── mapRecruiterJobToRAJobUpsert (spec §6.1) — pure ───────────────────────
-export interface RAJobUpsertVerdict {
-  inviteBar: number;
-  barIsDefault: boolean;
-  alsoOnBank: BankId | null;
-  retrievedVia: BankJobRow['retrievedVia'];
-  missingRequiredTags: string[];
-  missingRequiredKeywords: string[];
-}
-
 /**
  * The RAJob upsert of one matched bank job, or NULL when the job has no apply
  * URL (its bank has no candidate-facing posting page): such a candidate is

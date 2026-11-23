@@ -167,7 +167,7 @@ describe('Topbar buttons: Ask and the message center', () => {
     expect(isStubSource(rail)).toBe(false);
     expect(rendersNullByDesign(rail, 'CopilotRail')).toBe(false);
     expect(readSource('app/(auth)/layout.tsx')).toMatch(/<CopilotRail \/>/);
-    expect(readSource('components/v3/shell/HybridShell.tsx')).toMatch(/<CopilotRail \/>/);
+    expect(readSource('components/v3/shell/AppShell.tsx')).toMatch(/<CopilotRail \/>/);
     expect(readSource('components/v3/shell/Topbar.tsx')).toMatch(/openAssistant\(\{ source: 'topbar' \}\)/);
     // "Open in full page" from the rail.
     expectLivePage('/assistant', 'Assistant full page');

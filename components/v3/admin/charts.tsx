@@ -70,41 +70,6 @@ const CAP_STYLE: CSSProperties = {
   fontWeight: 600,
 };
 
-export function ChartLegend({
-  items,
-}: {
-  items: { color: string; label: string }[];
-}) {
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        gap: 14,
-        alignItems: 'center',
-        fontSize: 'var(--fs-label)',
-        color: 'var(--text-2)',
-      }}
-    >
-      {items.map((it) => (
-        <span key={it.label}>
-          <i
-            style={{
-              display: 'inline-block',
-              width: 10,
-              height: 10,
-              borderRadius: 3,
-              marginRight: 6,
-              verticalAlign: -1,
-              background: it.color,
-            }}
-          />
-          {it.label}
-        </span>
-      ))}
-    </span>
-  );
-}
-
 // ── CostBreakdownBar ──────────────────────────────────────────────────────
 
 export interface BreakdownItem {

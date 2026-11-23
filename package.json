@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
+  "sideEffects": [
+    "*.css",
+    "**/*.css"
+  ],
   "description": "RoboApply — AI candidate-facing job-application app (Next.js frontend + Express API, deployed on Vercel).",
   "engines": {
     "node": "24.x"
@@ -47,9 +51,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",
     "@aws-sdk/client-s3": "^3.1148.0",
-    "@aws-sdk/client-sts": "^3.1148.0",
     "@aws-sdk/s3-request-presigner": "^3.1148.0",
-    "@google/genai": "^2.28.0",
     "@google/generative-ai": "^0.24.1",
     "@heroicons/react": "^2.2.0",
     "@livekit/components-react": "^2.9.24",
@@ -59,7 +61,6 @@
     "@prisma/client": "7.10.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/react-query": "^5.104.1",
-    "@tavily/core": "^0.7.14",
     "@types/node": "^24.19.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -74,7 +75,6 @@
     "express": "^5.2.1",
     "free-email-domains": "^1.12.23",
     "html-to-text": "^10.0.1",
-    "jsonrepair": "^3.15.0",
     "jsonwebtoken": "^9.0.3",
     "libphonenumber-js": "^1.13.15",
     "livekit-client": "^2.22.3",
@@ -129,7 +129,6 @@
     "esbuild@0.28.2": true,
     "free-email-domains@1.12.23": true,
     "prisma@7.10.0": true,
-    "@google/genai@2.28.0": true,
     "@prisma/engines@7.10.0": true,
     "@swc/core@1.16.13": true,
     "fsevents@2.3.3": true,

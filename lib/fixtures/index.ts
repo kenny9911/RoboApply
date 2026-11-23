@@ -24,7 +24,6 @@ export { FIXTURE_RESUMES } from './resumes';
 export {
   FIXTURE_MOCK_CATALOG,
   FIXTURE_MOCK_QUESTIONS,
-  type FixtureMockQuestion,
 } from './mockCatalog';
 export { FIXTURE_MOCK_SESSIONS, FIXTURE_MOCK_SCORE } from './mockSessions';
 export { FIXTURE_PREFERENCES, FIXTURE_PREFERENCE_OPTIONS } from './preferences';
@@ -34,5 +33,4 @@ export {
   FIXTURE_SKILL_SUGGESTIONS,
   FIXTURE_TAILOR_DIFF,
   FIXTURE_RESUME_COACH_TIPS,
-  type RewriteByAction,
 } from './resumeAI';

@@ -18,7 +18,6 @@ export type CnOnboardingStep = (typeof CN_ONBOARDING_STEPS)[number];
  * so "Step 3 of 8" on G3 and the shared "Step 6 of 8" on G6 are one sequence.
  */
 export const CN_ONBOARDING_SCREENS = ['consent', 'identity', 'education', 'intent', 'tags', 'resume', 'matching', 'confirm'] as const;
-export type CnOnboardingScreen = (typeof CN_ONBOARDING_SCREENS)[number];
 
 /** 1-based position of a screen and the number of screens; null for a stage that has no screen. */
 export function cnStepPosition(step: string): { current: number; total: number } | null {

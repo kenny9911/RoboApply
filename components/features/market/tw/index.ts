@@ -8,6 +8,6 @@
 // /admin/sources page.
 
 export { JobMetaTw } from './JobMetaTw';
-export { NegotiablePayNote, TW_PAY_LAW_URL, type NegotiablePayNoteProps } from './NegotiablePayNote';
+export { NegotiablePayNote, TW_PAY_LAW_URL } from './NegotiablePayNote';
 export { CareerSourcesPanel, boardReadUrl } from './CareerSourcesPanel';
 export { readTwMeta } from './meta';

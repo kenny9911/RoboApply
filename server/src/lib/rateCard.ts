@@ -224,14 +224,6 @@ export function invalidateRateCard(): void {
   cache = null;
 }
 
-export async function warmupRateCard(): Promise<void> {
-  try {
-    await getRateCard();
-  } catch {
-    /* best-effort */
-  }
-}
-
 /** Resolved card + source flag, for the admin rate-card panel. */
 export async function getRateCardWithSource(): Promise<{ card: RateCard; source: 'db' | 'env'; cacheAgeMs: number | null }> {
   const card = await getRateCard();
@@ -252,14 +244,6 @@ export async function saveRateCardOverride(blob: RateCardOverride, env = getActi
 
 // ─── Convenience getters (used by sessionCost + analytics) ────────────────────
 
-export function sttUsdPerMinuteFrom(card: RateCard, model: string): number {
-  const m = (model || '').toLowerCase();
-  for (const [sub, rate] of Object.entries(card.stt.byModelSubstring)) {
-    if (m.includes(sub)) return rate;
-  }
-  return card.stt.default;
-}
-
 export function tierPriceUsd(card: RateCard, tier: string): number {
   return card.tiers[(tier as RoboApplyTierKey)]?.priceUsdMonthly ?? 0;
 }
@@ -268,11 +252,3 @@ export function tierDailyCap(card: RateCard, tier: string): number {
   return card.tiers[(tier as RoboApplyTierKey)]?.dailyCap ?? TIER_DEFAULTS.free.dailyCap;
 }
 
-/** Reverse map a Stripe price id → tier key (for webhook reconciliation). */
-export function priceIdToTier(card: RateCard, priceId: string | null | undefined): RoboApplyTierKey | null {
-  if (!priceId) return null;
-  for (const t of ['free', 'premium', 'premium_plus', 'starter', 'growth'] as RoboApplyTierKey[]) {
-    if (card.tiers[t].stripePriceId === priceId) return t;
-  }
-  return null;
-}

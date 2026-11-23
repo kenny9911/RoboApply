@@ -5,15 +5,10 @@
 //   WP-51 (Assistant): FilterDiff for the proposal card
 //   WP-30/31 (onboarding), WP-53 (Ready to apply): FiltersDrawer, editors
 
-export { FilterBar, type FilterBarProps } from './FilterBar';
-export { FiltersDrawer, type FiltersDrawerProps } from './FiltersDrawer';
-export { QuickFilterBar, quickFilters, type QuickFilterBarProps, type QuickFilterId } from './QuickFilterBar';
-export { ActiveFilterChips, activeChips, useActiveChips, type ActiveChip, type ActiveFilterChipsProps } from './ActiveFilterChips';
-export { SearchSummary, summaryParts, SUMMARY_MAX_VALUES, type SearchSummaryProps } from './SearchSummary';
-export { FitTierFilter, type FitTierFilterProps } from './FitTierFilter';
-export { SearchTypeahead, type SearchTypeaheadProps } from './SearchTypeahead';
-export { SavedSearchSwitcher, SavedSearchNote, profileLabel, useProfileLabel, type ProfileLabels, type SavedSearchSwitcherProps } from './SavedSearchSwitcher';
-export { FilterDiff, type FilterDiffProps } from './FilterDiff';
-export { FilterSectionsView, sectionEditors, useEditorContext, type DrawerSection } from './FilterSections';
-export type { EditorContext, EditorProps } from './FilterEditors';
-export { useFilterLabels, type FilterLabels } from './useFilterLabels';
+export { FilterBar } from './FilterBar';
+export { FiltersDrawer } from './FiltersDrawer';
+export { activeChips } from './ActiveFilterChips';
+export { SavedSearchNote, useProfileLabel } from './SavedSearchSwitcher';
+export { FilterDiff } from './FilterDiff';
+export { FilterSectionsView, useEditorContext, type DrawerSection } from './FilterSections';
+export { useFilterLabels } from './useFilterLabels';

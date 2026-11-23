@@ -35,8 +35,6 @@ export type NavBadgeId = 'jobs' | 'ready' | 'applications' | 'profile';
 /** What a badge hook returns: a count, a dot, or nothing. */
 export type NavBadgeValue = { kind: 'count'; count: number } | { kind: 'dot' };
 
-export const NAV_BADGE_IDS: readonly NavBadgeId[] = ['jobs', 'ready', 'applications', 'profile'];
-
 /** Key in the `nav` namespace for the screen-reader sentence of each badge. */
 export const NAV_BADGE_LABEL_KEYS: Record<NavBadgeId, string> = {
   jobs: 'badge_new_jobs',

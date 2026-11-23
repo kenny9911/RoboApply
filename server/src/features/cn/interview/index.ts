@@ -29,7 +29,6 @@ export {
   storyQuestionCount,
   usesCnFormat,
 } from './format.js';
-export type { BuildCnScriptInput } from './format.js';
 export {
   FILLER_RULES,
   STAR_CUES,
@@ -44,4 +43,3 @@ export {
   summarizeStar,
 } from './rubric.js';
 export { buildCnPracticeReport, groupAnswers, normalizeCnTurns } from './report.js';
-export type { BuildCnReportInput } from './report.js';

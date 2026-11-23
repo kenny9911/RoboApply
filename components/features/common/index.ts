@@ -5,13 +5,8 @@ export {
   MIN_SAMPLE,
   SourceNote,
   SourcedValue,
-  isEstimate,
-  isPublishable,
   isSuppressed,
   sourceLabelKey,
-  type SourceNoteProps,
-  type SourcedLike,
-  type SourcedValueProps,
 } from './SourceNote';
-export { DEFAULT_MATCH_TIERS, FIT_TIERS, normalizeScore, tierForScore, type FitTierKey } from './fit';
-export { HONESTY_KEYS, HONESTY_KINDS, type HonestyKind } from './honesty';
+export { DEFAULT_MATCH_TIERS, normalizeScore, tierForScore, type FitTierKey } from './fit';
+export { HONESTY_KEYS, type HonestyKind } from './honesty';

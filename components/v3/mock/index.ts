@@ -12,11 +12,8 @@
 // LaunchBar) went with it.
 export {
   PracticeSetupFlow,
-  PracticeSetupSkeleton,
-  PracticeSetupError,
   JD_MIN_CHARS,
   DEFAULT_PRACTICE_MINUTES,
-  PRACTICE_DURATIONS,
   practiceDurationOptions,
   type RecentPractice,
   type RoleSourceMode,
@@ -27,7 +24,6 @@ export { PracticeTargetPicker, type PracticeTarget, type LoadState } from './Pra
 export { LiveBar } from './LiveBar';
 export { InterviewerTile, type AiState } from './InterviewerTile';
 export { YourTile } from './YourTile';
-export { MicViz } from './MicViz';
 export { LiveTranscript } from './LiveTranscript';
 // Live coach layer (conversational engine): hint + nudge + meters.
 export {
@@ -35,15 +31,9 @@ export {
   LiveQuestionCard,
   LiveCoachNudge,
   CoachMeters,
-  type CoachMetrics,
   type LiveTurn,
-  type UseLiveCoachResult,
 } from './LiveCoach';
-// Pre-join device check (mic level, mirrored camera preview, per-device fix).
-export { DeviceCheck, deviceFix, deviceStateLabel, type DeviceCheckResult } from './DeviceCheck';
 
 // Report (Route 7)
 export { QuestionBreakdownSection } from './QuestionBreakdownSection';
-export { QuestionBreakdownItem } from './QuestionBreakdownItem';
-export { RatingChip } from './RatingChip';
-export { TranscriptViewer, groupTranscript } from './TranscriptViewer';
+export { TranscriptViewer } from './TranscriptViewer';

@@ -23,24 +23,9 @@ const BASE = '/api/v1/roboapply/onboarding/cn';
  */
 export type CnMarketSnapshotParams = In<typeof OC.CnMarketSnapshotQuerySchema>;
 
-/** `onboardingCn.schools` — GET /api/v1/roboapply/onboarding/cn/schools */
-export function searchCnSchools(query: In<typeof OC.CnSchoolSearchQuerySchema>, opts?: CallOptions): Promise<OC.CnSchoolSearchResponse> {
-  return call<OC.CnSchoolSearchResponse>('GET', withQuery(`${BASE}/schools`, query), opts);
-}
-
-/** `onboardingCn.provinces` — GET /api/v1/roboapply/onboarding/cn/provinces */
-export function getCnProvinces(opts?: CallOptions): Promise<OC.CnProvincesResponse> {
-  return call<OC.CnProvincesResponse>('GET', `${BASE}/provinces`, opts);
-}
-
 /** `onboardingCn.marketSnapshot` — GET /api/v1/roboapply/onboarding/cn/market-snapshot */
 export function getCnMarketSnapshot(query?: CnMarketSnapshotParams, opts?: CallOptions): Promise<OC.CnMarketSnapshotResponse> {
   return call<OC.CnMarketSnapshotResponse>('GET', withQuery(`${BASE}/market-snapshot`, query), opts);
-}
-
-/** `onboardingCn.defaults` — GET /api/v1/roboapply/onboarding/cn/defaults */
-export function getCnOnboardingDefaults(opts?: CallOptions): Promise<OC.CnOnboardingDefaultsResponse> {
-  return call<OC.CnOnboardingDefaultsResponse>('GET', `${BASE}/defaults`, opts);
 }
 
 /**
@@ -73,10 +58,3 @@ export function cnSnapshotQuery(input: { roles: ReadonlyArray<{ taxonomyId?: str
   };
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const onboardingCnApi = {
-  searchCnSchools,
-  getCnProvinces,
-  getCnMarketSnapshot,
-  getCnOnboardingDefaults,
-};

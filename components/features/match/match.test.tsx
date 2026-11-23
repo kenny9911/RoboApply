@@ -8,7 +8,6 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({
-  getFitAnalysis: vi.fn(),
   getKeywordCheck: vi.fn(),
   scoreJob: vi.fn(),
   getCredits: vi.fn(),
@@ -17,15 +16,15 @@ const api = vi.hoisted(() => ({
 vi.mock('../market', () => ({
   AiGeneratedBadge: ({ kind }: { kind?: string }) => <span data-testid="ai-badge">AI-{kind}</span>,
 }));
-vi.mock('../../../lib/api/match', () => ({ getFitAnalysis: api.getFitAnalysis, getKeywordCheck: api.getKeywordCheck }));
+vi.mock('../../../lib/api/match', () => ({ getKeywordCheck: api.getKeywordCheck }));
 vi.mock('../../../lib/api/jobs', () => ({ scoreJob: api.scoreJob }));
 vi.mock('../../../lib/api/credits', () => ({ getCredits: api.getCredits }));
 
 import { RoboApiError } from '../../../lib/api/client';
-import type { FitAnalysisCard as Card, KeywordItem, KeywordRow, MatchDimension, MatchFitView, RequirementCheck } from '../../../lib/api/contracts/match';
+import type { KeywordItem, KeywordRow, MatchDimension, MatchFitView, RequirementCheck } from '../../../lib/api/contracts/match';
 import { renderWithProviders } from '../../../__tests__/utils/renderWithProviders';
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
-import { DimensionList, FitAnalysisCard, FitAnalysisView, FitScore, JobFit, JobFitView, JobKeywordCheck, KeywordCheck, RequirementChecklist, WhatYoureMissing, WhyYouFit, keywordCounts, keywordState, listedRequirements, notComparedKey, skillCounts } from './index';
+import { DimensionList, FitScore, JobFit, JobFitView, JobKeywordCheck, KeywordCheck, RequirementChecklist, WhatYoureMissing, WhyYouFit, keywordCounts, keywordState, listedRequirements, notComparedKey, skillCounts } from './index';
 import { lowConfidenceReason } from './FitScore';
 import { uniq } from './JobFit';
 import { plainQuote } from './labels';
@@ -74,22 +73,6 @@ function fit(overrides: Partial<MatchFitView> = {}): MatchFitView {
     ...overrides,
   };
 }
-
-const CARD: Card = {
-  jobId: 'job1',
-  score: 74,
-  tier: 'good',
-  kind: 'ai',
-  dimensions: DIMS,
-  skills: { aligned: ['TypeScript'], missing: ['Kubernetes'], listed: 2 },
-  education: { required: 'master', yours: 'BSc Computer Science', meets: false },
-  highlights: ['Your payment APIs in Go'],
-  gaps: ['No Kubernetes work shown'],
-  summary: 'Your payments work lines up well.',
-  aiWritten: true,
-  estimateReason: null,
-  charged: true,
-};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -443,13 +426,6 @@ describe('MKT-4E: skills that were not compared are never called missing', () =>
     expect(screen.queryByTestId('fit-missing-unchecked')).not.toBeInTheDocument();
   });
 
-  it('the fit analysis card counts the same way', () => {
-    renderWithProviders(<FitAnalysisView card={{ ...CARD, kind: 'pre', highlights: [], gaps: [], skills: { aligned: [], missing: [], listed: 3 } }} />);
-    const view = screen.getByTestId('fit-analysis');
-    expect(within(view).queryByText(EVERY)).not.toBeInTheDocument();
-    expect(within(view).queryByText(NONE_SHOW)).not.toBeInTheDocument();
-    expect(within(view).getByTestId('fit-missing-unchecked')).toHaveTextContent('The 3 skills in this post are not checked against your resume yet.');
-  });
 });
 
 const REQUIREMENTS: RequirementCheck[] = [
@@ -527,14 +503,6 @@ describe('MKT-4E: the requirement checklist ("What the post asks for")', () => {
 
   it('a quick estimate never shows a checklist, even if an answer carries one (only an AI fit has checked lines)', () => {
     renderWithProviders(<JobFitView fit={fit({ kind: 'pre', summary: null, strengths: [], gaps: [], requirements: REQUIREMENTS })} />);
-    expect(screen.queryByTestId('fit-requirements')).not.toBeInTheDocument();
-  });
-
-  it('the fit analysis card shows the checklist when the card carries one', () => {
-    const withList = renderWithProviders(<FitAnalysisView card={{ ...CARD, requirements: REQUIREMENTS }} />);
-    expect(within(screen.getByTestId('fit-analysis')).getByTestId('fit-requirements')).toBeInTheDocument();
-    withList.unmount();
-    renderWithProviders(<FitAnalysisView card={CARD} />);
     expect(screen.queryByTestId('fit-requirements')).not.toBeInTheDocument();
   });
 
@@ -830,50 +798,6 @@ describe('FIX-3: GoApply names no visa in the fit breakdown', () => {
     cn.unmount();
     renderWithProviders(<DimensionList dimensions={dims} />);
     expect(screen.getByText('Location, pay, and visa')).toBeInTheDocument();
-  });
-});
-
-describe('FitAnalysisView', () => {
-  it('shows the card with the education comparison and the credit note', () => {
-    renderWithProviders(<FitAnalysisView card={CARD} />);
-    expect(screen.getByRole('heading', { name: 'Fit analysis' })).toBeInTheDocument();
-    expect(screen.getByText('Used 1 fit analysis.')).toBeInTheDocument();
-    expect(screen.getAllByText("They ask for: Master's degree")).toHaveLength(2); // education block + title part
-    expect(screen.getByText('You have: BSc Computer Science')).toBeInTheDocument();
-    expect(screen.getByText('This is below what they ask for.')).toBeInTheDocument();
-    expect(screen.getAllByText(LINE).length).toBeGreaterThan(0);
-  });
-
-  it('a free quick-estimate card has no AI text and no credit note', () => {
-    renderWithProviders(<FitAnalysisView card={{ ...CARD, kind: 'pre', summary: null, highlights: [], gaps: [], aiWritten: false, charged: false, estimateReason: 'no_resume' }} />);
-    expect(screen.getByText('Quick estimate')).toBeInTheDocument();
-    expect(screen.queryByTestId('ai-badge')).not.toBeInTheDocument();
-    expect(screen.queryByText('Used 1 fit analysis.')).not.toBeInTheDocument();
-  });
-});
-
-describe('FitAnalysisCard (connected)', () => {
-  it('runs through the credit gate with an idempotency key and shows the result', async () => {
-    api.getFitAnalysis.mockResolvedValue(CARD);
-    renderWithProviders(<FitAnalysisCard jobId="job1" />);
-    await waitFor(() => expect(screen.getByText(/Uses 1 of your 9 left/)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Get the full fit analysis' }));
-    await waitFor(() => expect(screen.getByTestId('fit-analysis')).toBeInTheDocument());
-    expect(api.getFitAnalysis).toHaveBeenCalledWith('job1', {}, { idempotencyKey: expect.any(String) });
-  });
-
-  it('says nothing was charged when the analysis is unavailable', async () => {
-    api.getFitAnalysis.mockRejectedValue(new RoboApiError('x', { status: 503, payload: { code: 'ai_unavailable' } }));
-    renderWithProviders(<FitAnalysisCard jobId="job1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Get the full fit analysis' }));
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Nothing was charged'));
-  });
-
-  it('opens the out-of-credits state on 402', async () => {
-    api.getFitAnalysis.mockRejectedValue(new RoboApiError('x', { status: 402, payload: { code: 'credits_exhausted', details: { bucket: 'fit_analysis', upgradable: true } } }));
-    renderWithProviders(<FitAnalysisCard jobId="job1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Get the full fit analysis' }));
-    await waitFor(() => expect(screen.getByText("You've used today's fit analyses.")).toBeInTheDocument());
   });
 });
 

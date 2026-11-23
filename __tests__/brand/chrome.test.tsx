@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest';
 
 import { BrandSymbol } from '../../components/chrome/BrandSymbol';
 import { BrandSettingsSection, BrandWordmark } from '../../components/features/brand';
-import { AppearanceSection } from '../../components/v3/preferences/sections/AppearanceSection';
 import { BrandLogo } from '../../components/v3/shell/BrandLogo';
 import { ThemeProvider } from '../../lib/theme';
 import { renderBranded } from './helpers';
@@ -84,19 +83,16 @@ describe('BrandWordmark', () => {
 });
 
 describe('appearance settings section', () => {
-  it('switches the theme through lib/theme (the legacy renderer shows the same section)', () => {
-    for (const Section of [() => <BrandSettingsSection section="appearance" />, () => <AppearanceSection />]) {
-      const { unmount } = renderBranded(
-        <ThemeProvider>
-          <Section />
-        </ThemeProvider>,
-      );
-      fireEvent.click(screen.getByRole('button', { name: 'Dark' }));
-      expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-      fireEvent.click(screen.getByRole('button', { name: 'Light' }));
-      expect(document.documentElement.getAttribute('data-theme')).toBe('light');
-      unmount();
-    }
+  it('switches the theme through lib/theme', () => {
+    renderBranded(
+      <ThemeProvider>
+        <BrandSettingsSection section="appearance" />
+      </ThemeProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Dark' }));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    fireEvent.click(screen.getByRole('button', { name: 'Light' }));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 });
 

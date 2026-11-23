@@ -4,6 +4,6 @@
 //   <SubscribeOnTap template="deadline_reminder" eventId={id} onAnswer={({ accepted }) => …}>…remind-me control…</SubscribeOnTap>
 //   <WechatShareCard title="…" description="…" path="/jobs/…" />   (job pages, inside WeChat)
 
-export { SubscribeOnTap, SETTINGS_HREF, type SubscribeAnswer, type SubscribeOnTapOptions, type SubscribeOnTapProps, type SubscribeTemplate } from './SubscribeOnTap';
-export { WechatShareCard, type WechatShareCardProps } from './WechatShareCard';
+export { SubscribeOnTap, SETTINGS_HREF, type SubscribeOnTapProps, type SubscribeTemplate } from './SubscribeOnTap';
+export { WechatShareCard } from './WechatShareCard';
 export { isWechatBrowser } from './wechatSdk';

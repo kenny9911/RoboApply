@@ -91,6 +91,13 @@ stack, features, deployment and current status. This file is the short version.
   `server/src/interview-engine/prep/`, `server/src/interview-engine/skills/` or
   the `/practice` setup. The two-brand build record, and the owner items still
   open, are in `docs/jobright-clone/HANDOFF.md` (its §2 predates the merge).
+- Page weight: `package.json` declares `sideEffects` (stylesheets only), so the
+  production build drops any module whose exports nothing uses — never rely on
+  importing a module for a registration or a global in the Next app. Never pass
+  the message bundle (or other large data) from a server component to a client
+  component as a prop: props are serialized into every page's HTML; the
+  messages reach the browser as `/i18n/<brand>.<locale>.<hash>.js`. Code that
+  only shows on demand (a drawer, a signed-in frame) loads with `lazy()`.
 
 ## Shipping
 

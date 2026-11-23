@@ -49,7 +49,6 @@ export const SCHOOL_TIERS = allOf<Item<'schoolTiers'>>()({ '985': true, '211': t
 export const POSTED_WITHIN_DAYS: ReadonlyArray<NonNullable<FilterSet['postedWithinDays']>> = [1, 3, 7, 30];
 export const RADIUS_KM: ReadonlyArray<FilterLocation['radiusKm']> = [0, 8, 40, 80, 160];
 export const PAY_PERIODS: ReadonlyArray<NonNullable<FilterSet['salaryMin']>['period']> = ['year', 'month', 'hour'];
-export const ROLE_TYPES: ReadonlyArray<NonNullable<FilterSet['roleType']>> = ['ic', 'manager'];
 export const FIT_TIERS: ReadonlyArray<NonNullable<FilterSet['fitTier']>> = ['great', 'good', 'all'];
 export const SALARY_MONTHS = [12, 13, 14, 15, 16, 18] as const;
 

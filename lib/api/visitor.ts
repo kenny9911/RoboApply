@@ -46,17 +46,3 @@ export function submitAnonAlertConfirm(body: In<typeof V.ConfirmAnonAlertBodySch
   return call<V.AnonAlertView>('POST', `/api/v1/public/alerts/confirm`, { ...opts, body });
 }
 
-/** `visitor.unsubscribeAlert` — POST /api/v1/public/alerts/unsubscribe */
-export function unsubscribeAnonAlert(body: In<typeof V.AnonAlertUnsubscribeBodySchema>, opts?: CallOptions): Promise<V.AnonAlertUnsubscribeResponse> {
-  return call<V.AnonAlertUnsubscribeResponse>('POST', `/api/v1/public/alerts/unsubscribe`, { ...opts, body });
-}
-
-/** Every wrapper of this area, for callers that prefer one import. */
-export const visitorApi = {
-  getPublicFeed,
-  sendVisitorTurn,
-  createAnonAlert,
-  confirmAnonAlert,
-  submitAnonAlertConfirm,
-  unsubscribeAnonAlert,
-};

@@ -22,7 +22,6 @@ import styles from './builder/Builder.module.css';
 import checkStyles from './ResumeCheck.module.css';
 
 export const RESUME_TOUR_STEPS = ['grade', 'filters', 'issues', 'recheck'] as const;
-export type ResumeTourStep = (typeof RESUME_TOUR_STEPS)[number];
 
 export interface ResumeTourProps {
   /** The report is on screen (the tour points at its parts). */

@@ -20,7 +20,7 @@ import { Btn } from '../../v3/primitives';
 import { useAnswerBank, useQuestionKeys, useSaveAnswers } from '../../../hooks/agent';
 import { useBrand } from '../../../lib/brand';
 import type { QuestionKeyView } from '../../../lib/api/agent';
-import { ANSWER_CURRENCIES, HINT_KEYS, MULTILINE_KEYS, currencyKey, currencyVariant, customQuestionKey, isCustomKey, questionsFor } from './questions';
+import { ANSWER_CURRENCIES, HINT_KEYS, MULTILINE_KEYS, currencyKey, currencyVariant, customQuestionKey, questionsFor } from './questions';
 import styles from './ready.module.css';
 
 interface OwnRow {

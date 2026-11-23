@@ -1,7 +1,8 @@
 // Root layout. Resolves the request's product brand (lib/server/brand.ts,
 // from the proxy's x-ra-brand), picks the locale (clamped to the brand's
-// locales) + loads the brand's messages on the server, then hands them to the
-// client `<Providers>` so next-intl works in both RSC and CSR.
+// locales) and the brand's message bundle, which reaches the client
+// `<Providers>` as a cached script of its own (lib/i18nBundle.ts) rather than
+// as a prop serialized into every page.
 //
 // Per brand (ARCHITECTURE.md §1.5): `<html data-brand>`, generateMetadata()
 // (metadataBase, title, icons, Baidu verification), generateViewport()
@@ -15,6 +16,7 @@
 
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
+import Script from 'next/script';
 import type { ReactNode } from 'react';
 import './globals.css';
 
@@ -23,8 +25,8 @@ import { AnalyticsConsent } from '../components/features/growth/AnalyticsConsent
 import { ThemeBootScript } from '../components/v3/shell/ThemeBootScript';
 import { publicBrand } from '../lib/brand/client';
 import { buildRootMetadata, buildRootViewport } from '../lib/brand/metadata';
-import { loadMessages } from '../lib/i18n';
 import { getRequestCountry, getServerBrand } from '../lib/server/brand';
+import { messagesBundle } from '../lib/server/messagesBundle';
 import { resolveLocale } from '../lib/serverLocale';
 import { Providers } from './providers';
 
@@ -139,7 +141,9 @@ export default async function RootLayout({
 }) {
   const brand = await getServerBrand();
   const locale = await resolveLocale(brand);
-  const messages = loadMessages(locale, brand.id);
+  // The messages travel as their own cached script, not inside this page's
+  // HTML (lib/i18nBundle.ts): about 500 KB less on every full page load.
+  const messages = messagesBundle(locale, brand.id);
   const country = await getRequestCountry();
 
   return (
@@ -165,9 +169,11 @@ export default async function RootLayout({
          * React reports (and never runs) a script it creates — see
          * components/v3/shell/ThemeBootScript.tsx. */}
         <ThemeBootScript />
+        {/* Next's bootstrap loads beforeInteractive scripts before it hydrates. */}
+        <Script src={messages.url} strategy="beforeInteractive" />
       </head>
       <body className="min-h-screen bg-bg-page text-ink-900">
-        <Providers locale={locale} messages={messages} brand={publicBrand(brand)}>
+        <Providers locale={locale} messagesKey={messages.key} messagesUrl={messages.url} brand={publicBrand(brand)}>
           <WrongBrandNudge country={country} locale={locale} />
           {children}
           <AnalyticsConsent country={country} />

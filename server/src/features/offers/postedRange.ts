@@ -26,9 +26,6 @@ import { createMarketStats, marketSalaryWhere, type MarketStatsDb } from '../fee
 import { bestTaxonomyMatch, getTaxonomyNode } from '../jobs/taxonomy/index.js';
 import type { PostedRange } from './contract.js';
 
-export const POSTED_LOOKBACK_DAYS = 365;
-export const POSTED_ROW_CAP = 3000;
-
 export interface PostedPayRow {
   salaryMin: number | null;
   salaryMax: number | null;

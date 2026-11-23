@@ -41,7 +41,6 @@ export const CSV_COLUMNS = [
   'link',
   'notes',
 ] as const;
-export type CsvColumn = (typeof CSV_COLUMNS)[number];
 
 /** The two key groups in the `tracker` email-i18n namespace. */
 export const CSV_GROUP = { shared: 'tracker.csv', goapply: 'tracker.csvCn' } as const;

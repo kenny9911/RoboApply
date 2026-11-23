@@ -231,7 +231,7 @@ Consequences, all applied by FND:
 **`app/layout.tsx`** (FND):
 - `<html lang={locale} data-brand={brand.id} data-theme=…>`.
 - `generateMetadata()` replaces the static `metadata` export: `metadataBase` = `brand.canonicalOrigin`, title template `%s · ${brand.name}`, icons from `brand.assets`, theme colors from `brand.theme`, plus Baidu verification meta when `brand.seo.searchEngines` includes `baidu` (`BAIDU_SITE_VERIFICATION` env).
-- `loadMessages(locale, brand.id)` (§1.7).
+- `loadMessages(locale, brand.id)` (§1.7), reaching the browser as its own script: `lib/server/messagesBundle.ts` serves it at `/i18n/<brand>.<locale>.<hash>.js` (`app/i18n/[file]/route.ts`, cached for a year; the hash changes with the copy), the layout loads it with `next/script` `beforeInteractive`, and `<Providers>` reads it (`lib/i18nBundle.ts`). Never pass the messages to a client component as a prop: React serializes props into the HTML of every page (≈500 KB before this rule).
 - `<Providers brand={publicBrand(brand)}>`. `publicBrand()` strips fields the client does not need.
 
 **Client:** `lib/brand/BrandProvider.tsx` (`'use client'`) exports `BrandProvider` and `useBrand()`. `app/providers.tsx` wraps children in it (FND).

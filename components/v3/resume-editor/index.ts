@@ -10,6 +10,5 @@ export { BulletRow } from './BulletRow';
 export { SkillsEditor } from './SkillsEditor';
 export { ResumePaper } from './ResumePaper';
 export { CoachPanel } from './CoachPanel';
-export { AnalyzerPanel } from './AnalyzerPanel';
 export { DownloadModal } from './DownloadModal';
-export { AI_ACTIONS, YOUNG_HELPERS, type AiAction } from './constants';
+export { YOUNG_HELPERS } from './constants';

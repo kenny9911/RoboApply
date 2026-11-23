@@ -81,9 +81,11 @@ function routes(extra: Record<string, Route> = {}): Record<string, Route> {
 
 const openRail = (req: Parameters<typeof openAssistantRail>[0] = {}) => act(() => openAssistantRail(req));
 const input = () => screen.getByTestId('assistant-input') as HTMLTextAreaElement;
+// The thread loads with the rail's first open (CopilotRail lazy-loads it), so wait for the box.
 async function ask(text: string) {
-  fireEvent.change(input(), { target: { value: text } });
-  fireEvent.keyDown(input(), { key: 'Enter' });
+  const box = (await screen.findByTestId('assistant-input')) as HTMLTextAreaElement;
+  fireEvent.change(box, { target: { value: text } });
+  fireEvent.keyDown(box, { key: 'Enter' });
 }
 
 beforeEach(() => {
@@ -177,7 +179,7 @@ describe('opening and closing', () => {
     renderUi(<CopilotRail />);
     fireEvent.click(await screen.findByTestId('assistant-fab'));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Hide the floating button' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Hide the floating button' }));
     await waitFor(() => expect(http.to('PATCH', '/api/v1/roboapply/ui-state').map((c) => c.body)).toContainEqual({ dismiss: ['assistant.fab'] }));
   });
 
@@ -216,7 +218,7 @@ describe('opening and closing', () => {
     // The drawer primitive goes edge to edge below 760px.
     const css = readFileSync(join(process.cwd(), 'components/v3/primitives/primitives.module.css'), 'utf8');
     expect(css).toMatch(/@media \(max-width: 760px\)\s*{\s*\.drawerRight,[\s\S]*?width: 100vw/);
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Practice for this job' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Practice for this job' }));
     expect(nav.push).toHaveBeenCalledWith('/practice?job=job_1&from=assistant');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });

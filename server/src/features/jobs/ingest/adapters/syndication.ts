@@ -219,9 +219,7 @@ export const SyndicationPageSchema = z.object({
   hasMore: z.boolean(),
 });
 
-export type SyndicatedCompany = z.infer<typeof SyndicatedCompanySchema>;
 export type SyndicatedJob = z.infer<typeof SyndicatedJobSchema>;
-export type SyndicationTombstone = z.infer<typeof SyndicationTombstoneSchema>;
 export type SyndicationPage = z.infer<typeof SyndicationPageSchema>;
 
 /** The field names of the contract, in schema order (the document and the probe script are checked against them). */

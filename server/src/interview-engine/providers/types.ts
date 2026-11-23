@@ -26,8 +26,6 @@ import type { WebhookEvent } from 'livekit-server-sdk';
 import type { BrandId } from '../../platform/brand/registry.js';
 import { InterviewEngineConfigError, type InterviewMediaPolicy, type VoiceProviderId, type VoiceStack } from '../config.js';
 
-export type { VoiceProviderId } from '../config.js';
-
 export interface ProviderJoinToken {
   token: string;
   url: string;

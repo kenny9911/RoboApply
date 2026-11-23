@@ -25,9 +25,6 @@
 import { call, type CallOptions, type In, seg, withQuery } from './contracts/wire';
 import type * as PR from './contracts/prep';
 
-export type PrepCompanyView = PR.PrepCompanyView;
-export type ContributionView = PR.ContributionView;
-
 const BANK = '/api/v1/roboapply/interview-bank';
 const ADMIN = '/api/v1/roboapply/admin/prep';
 
@@ -106,21 +103,3 @@ export function adminSetQuestionHidden(id: string, hidden: boolean, opts?: CallO
   return call<PR.QuestionView>('POST', `${ADMIN}/questions/${seg(id)}/${hidden ? 'hide' : 'restore'}`, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const prepApi = {
-  listPrepCompanies,
-  listCompanyQuestions,
-  listCuratedQuestions,
-  getQuestion,
-  generateQuestionGuide,
-  reportQuestion,
-  contributeQuestion,
-  getJobQuestions,
-  generateJobQuestions,
-  adminListContributions,
-  adminApproveContribution,
-  adminRejectContribution,
-  adminListQuestions,
-  adminCreateQuestion,
-  adminSetQuestionHidden,
-};

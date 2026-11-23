@@ -968,7 +968,6 @@ export async function renderResumePdfWithMeta(markdown: string, options: RenderO
   });
   if (options.aiLabel?.xmp) doc.appendXML(options.aiLabel.xmp);
 
-  type Weight = FontWeight;
   type TextOpts = RunTextOptions;
   const { draw, measure, fontName } = createRunDrawer(doc, {
     chain,

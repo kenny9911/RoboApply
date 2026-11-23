@@ -17,19 +17,14 @@
 //   DELETE /api/v1/roboapply/admin/career-sources/:id
 //   POST   /api/v1/roboapply/admin/career-sources/:id/run
 
-import { call, type CallOptions, type In, type Items, seg, withQuery } from './contracts/wire';
+import { call, type CallOptions, type In, seg, withQuery } from './contracts/wire';
 import type * as CS from './contracts/jobs/sources/atsPublic';
 
 export type {
   BoardAts,
-  CareerSourceListResult,
-  CareerSourceOrigin,
   CareerSourceRunResult,
-  CareerSourceState,
   CareerSourceView,
   ImportCareerSourcesResult,
-  ImportInvalidReason,
-  PublicAts,
   TwCardMeta,
   TwPermitTag,
   TwPermitTagView,
@@ -65,12 +60,3 @@ export function adminRunCareerSource(id: string, opts?: CallOptions): Promise<CS
   return call<CS.CareerSourceRunResult>('POST', `/api/v1/roboapply/admin/career-sources/${seg(id)}/run`, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const careerSourcesApi = {
-  adminListCareerSources,
-  adminCreateCareerSource,
-  adminImportCareerSources,
-  adminUpdateCareerSource,
-  adminDeleteCareerSource,
-  adminRunCareerSource,
-};

@@ -117,12 +117,3 @@ export function renderStrictnessSection(strictness?: MatchStrictness | null): st
   }
 }
 
-/**
- * Coerce arbitrary input (string from DB, undefined, garbage) into a valid
- * MatchStrictness. Falls back to `'standard'`. Use at boundaries where
- * the value comes in as a generic string column (e.g. `MatchingSession.strictness`).
- */
-export function normalizeStrictness(raw: unknown): MatchStrictness {
-  if (raw === 'relaxed' || raw === 'strict' || raw === 'standard') return raw;
-  return 'standard';
-}

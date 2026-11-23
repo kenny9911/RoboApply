@@ -19,7 +19,7 @@
  */
 
 import { prisma } from '../prisma.js';
-import { encryptField, decryptField } from '../crypto.js';
+import { decryptField } from '../crypto.js';
 import { logger } from '../../services/LoggerService.js';
 import { isDbConfigDisabled } from './llmStackConfigSchema.js';
 import { parseReasoningEffort, type ReasoningEffort } from '../../services/llm/reasoningEffort.js';
@@ -30,9 +30,6 @@ import {
   BYOK_PROVIDERS,
   baseUrlRequirement,
   isByokProvider,
-  previewFor,
-  validateBaseUrl,
-  validateByok,
   type ByokProvider,
 } from '../byokService.js';
 
@@ -248,14 +245,6 @@ export function invalidateSystemCredentials(): void {
   decryptWarnedProviders.clear();
 }
 
-export async function warmupSystemCredentials(): Promise<void> {
-  try {
-    await refreshCredCache();
-  } catch {
-    /* sync readers degrade to env */
-  }
-}
-
 /* ── The 3-tier resolver entry point (system → env) ─────────────────────────
  * NOTE: user BYOK sits ABOVE this, in LLMService.chat()'s existing swap. */
 
@@ -301,180 +290,5 @@ export function resolveProviderCredential(providerType: string): ResolvedProvide
 }
 
 /* ── Admin CRUD + status (mirrors byokService for UserLLMKey) ────────────────── */
-
-export interface SystemKeySummary {
-  provider: ByokProvider;
-  label: string | null;
-  baseUrl: string | null;
-  isActive: boolean;
-  keyPreview: string; // never the plaintext
-  hasKey: boolean;
-  tuning: ProviderTuning;
-  lastTestedAt: string | null;
-  lastTestStatus: string | null;
-  lastTestError: string | null;
-  lastUsedAt: string | null;
-  updatedAt: string;
-}
-
-export async function listSystemKeys(): Promise<SystemKeySummary[]> {
-  const rows = await prisma.systemLLMKey.findMany({ orderBy: { provider: 'asc' } });
-  return rows.map((row) => {
-    let preview = '';
-    let hasKey = false;
-    try {
-      const plain = row.encryptedKey ? decryptField(row.encryptedKey) : '';
-      hasKey = !!plain;
-      preview = plain ? previewFor(plain) : '';
-    } catch {
-      preview = '••••';
-      hasKey = true; // a row exists; just undecryptable
-    }
-    return {
-      provider: row.provider as ByokProvider,
-      label: row.label,
-      baseUrl: row.baseUrl,
-      isActive: row.isActive,
-      keyPreview: preview,
-      hasKey,
-      tuning: tuningFromRow(row.tuning),
-      lastTestedAt: row.lastTestedAt?.toISOString() ?? null,
-      lastTestStatus: row.lastTestStatus,
-      lastTestError: row.lastTestError,
-      lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
-      updatedAt: row.updatedAt.toISOString(),
-    };
-  });
-}
-
-/**
- * Per-provider resolution status for the UI: does this provider have a usable
- * credential, and from where? Drives the per-field "resolves to X (key ✓/✗)"
- * badges and the user-facing coverage indicator. NEVER returns key material.
- */
-export interface ProviderKeyStatus {
-  provider: ByokProvider;
-  hasSystemKey: boolean; // an active SystemLLMKey row with a non-empty key (or keyless ollama)
-  hasEnvKey: boolean; // env provides a key for this provider
-  source: 'system' | 'env' | 'none'; // what resolveProviderCredential would use
-  baseUrlRequirement: 'required' | 'optional' | 'forbidden';
-}
-
-export async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
-  const summaries = await listSystemKeys();
-  const byProvider = new Map(summaries.map((s) => [s.provider, s]));
-  return BYOK_PROVIDERS.map((provider) => {
-    const sum = byProvider.get(provider);
-    const env = envCredential(provider);
-    // ollama is legitimately keyless — treat its non-empty placeholder as "no real key needed"
-    const envHasKey = provider === 'ollama' ? true : !!env.apiKey;
-    const sysHasKey = !!sum && sum.isActive && (provider === 'ollama' ? true : sum.hasKey);
-    const source: ProviderKeyStatus['source'] = sysHasKey ? 'system' : envHasKey ? 'env' : 'none';
-    return {
-      provider,
-      hasSystemKey: sysHasKey,
-      hasEnvKey: envHasKey,
-      source,
-      baseUrlRequirement: baseUrlRequirement(provider),
-    };
-  });
-}
-
-export interface UpsertSystemKeyInput {
-  provider: ByokProvider;
-  plaintextKey: string;
-  baseUrl?: string | null;
-  label?: string | null;
-  isActive?: boolean;
-  tuning?: ProviderTuning;
-  adminId: string;
-  testResult?: { ok: boolean; error?: string };
-}
-
-export async function upsertSystemKey(input: UpsertSystemKeyInput): Promise<void> {
-  const baseValidation = validateBaseUrl(input.provider, input.baseUrl);
-  if (!baseValidation.ok) throw new Error(baseValidation.error);
-
-  const trimmedKey = (input.plaintextKey ?? '').trim();
-  // ollama may be keyless; everything else needs a key.
-  if (!trimmedKey && input.provider !== 'ollama') throw new Error('API key cannot be empty');
-  const encryptedKey = trimmedKey ? encryptField(trimmedKey) : '';
-
-  const cleanTuning = tuningFromRow(input.tuning); // strips unknown/secret fields
-  await prisma.systemLLMKey.upsert({
-    where: { provider: input.provider },
-    create: {
-      provider: input.provider,
-      label: input.label ?? null,
-      encryptedKey,
-      baseUrl: baseValidation.normalized ?? null,
-      isActive: input.isActive ?? true,
-      tuning: cleanTuning as object,
-      updatedBy: input.adminId,
-      lastTestedAt: input.testResult ? new Date() : null,
-      lastTestStatus: input.testResult ? (input.testResult.ok ? 'ok' : 'failed') : null,
-      lastTestError: input.testResult?.error ?? null,
-    },
-    update: {
-      label: input.label ?? null,
-      ...(trimmedKey ? { encryptedKey } : {}), // empty key in an UPDATE = keep existing
-      baseUrl: baseValidation.normalized ?? null,
-      ...(typeof input.isActive === 'boolean' ? { isActive: input.isActive } : {}),
-      tuning: cleanTuning as object,
-      updatedBy: input.adminId,
-      ...(input.testResult
-        ? {
-            lastTestedAt: new Date(),
-            lastTestStatus: input.testResult.ok ? 'ok' : 'failed',
-            lastTestError: input.testResult.error ?? null,
-          }
-        : {}),
-    },
-  });
-  invalidateSystemCredentials();
-}
-
-export async function deleteSystemKey(provider: ByokProvider): Promise<void> {
-  await prisma.systemLLMKey.deleteMany({ where: { provider } });
-  invalidateSystemCredentials();
-}
-
-export async function setSystemKeyActive(provider: ByokProvider, isActive: boolean, adminId: string): Promise<void> {
-  await prisma.systemLLMKey.updateMany({ where: { provider }, data: { isActive, updatedBy: adminId } });
-  invalidateSystemCredentials();
-}
-
-/** Re-run the validation probe for a stored (or override) system key. Persists status. */
-export async function testSystemKey(
-  provider: ByokProvider,
-  override?: { apiKey?: string; baseUrl?: string | null },
-): Promise<{ ok: boolean; error?: string }> {
-  let plaintextKey = override?.apiKey;
-  let resolvedBaseUrl = override?.baseUrl ?? null;
-
-  if (!plaintextKey) {
-    const existing = await prisma.systemLLMKey.findUnique({
-      where: { provider },
-      select: { encryptedKey: true, baseUrl: true },
-    });
-    if (!existing) return { ok: false, error: 'No system key configured for this provider' };
-    try {
-      plaintextKey = existing.encryptedKey ? decryptField(existing.encryptedKey) : (provider === 'ollama' ? 'ollama' : '');
-      resolvedBaseUrl = existing.baseUrl;
-    } catch {
-      return { ok: false, error: 'Stored key could not be decrypted (check FIELD_ENCRYPTION_KEY)' };
-    }
-  }
-
-  const result = await validateByok({ provider, plaintextKey: plaintextKey ?? '', baseUrl: resolvedBaseUrl });
-
-  await prisma.systemLLMKey
-    .updateMany({
-      where: { provider },
-      data: { lastTestedAt: new Date(), lastTestStatus: result.ok ? 'ok' : 'failed', lastTestError: result.error ?? null },
-    })
-    .catch(() => {});
-  return result;
-}
 
 export { BYOK_PROVIDERS, isByokProvider, baseUrlRequirement };

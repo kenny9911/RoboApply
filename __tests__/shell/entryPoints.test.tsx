@@ -137,7 +137,7 @@ describe('3. /practice → /practice/questions (flag interviewBank)', () => {
 
   it('/practice/questions is a real page that keeps the app shell (not the full-screen room)', async () => {
     expect(expectLivePage('/practice/questions')).toBe('app/(auth)/practice/questions/page.tsx');
-    const { isPracticeLivePath } = await import('../../components/v3/shell/HybridShell');
+    const { isPracticeLivePath } = await import('../../components/v3/shell/practiceLive');
     expect(isPracticeLivePath('/practice/questions')).toBe(false);
     expect(isPracticeLivePath('/practice/questions/acme')).toBe(false);
   });

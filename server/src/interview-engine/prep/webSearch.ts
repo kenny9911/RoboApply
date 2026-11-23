@@ -89,10 +89,6 @@ function hostOf(url: string): string | null {
   }
 }
 
-export function tavilyConfigured(env: EnvSource = process.env): boolean {
-  return !!env.TAVILY_API_KEY?.trim();
-}
-
 /** Pure: Tavily results → web results (drops unusable rows and denied hosts). */
 export function toWebResults(results: unknown, env: EnvSource = process.env): WebResult[] {
   if (!Array.isArray(results)) return [];

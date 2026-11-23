@@ -93,7 +93,8 @@ vi.mock('../../lib/ui/popupGate', async (orig) => {
 });
 
 import AuthLayout from '../../app/(auth)/layout';
-import { HybridShell, isPracticeLivePath, publicJobIdFromPath, signupHref } from '../../components/v3/shell/HybridShell';
+import { HybridShell, publicJobIdFromPath, signupHref } from '../../components/v3/shell/HybridShell';
+import { isPracticeLivePath } from '../../components/v3/shell/practiceLive';
 import { Topbar } from '../../components/v3/shell/Topbar';
 import {
   CommandPaletteProvider,
@@ -274,9 +275,9 @@ describe('Topbar Ask', () => {
 });
 
 describe('HybridShell', () => {
-  it('signed in: the app shell', () => {
+  it('signed in: the app shell (loaded once the session is known)', async () => {
     renderWithBrand(<HybridShell from="campus"><p>campus page</p></HybridShell>, { flags: {} });
-    expect(screen.getByText('campus page').closest('.main-inner')).not.toBeNull();
+    await waitFor(() => expect(screen.getByText('campus page').closest('.main-inner')).not.toBeNull());
     expect(document.querySelector('[data-shell="marketing"]')).toBeNull();
   });
 

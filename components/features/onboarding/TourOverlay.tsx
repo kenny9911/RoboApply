@@ -32,7 +32,7 @@ import { markToursSeen } from '../../../lib/api/uiState';
 import { UI_STATE_QUERY_KEY, usePopupGate } from '../../../lib/ui/popupGate';
 import { Btn } from '../../v3/primitives/Btn';
 import { Modal } from '../../v3/primitives/Modal';
-import { CnFirstValueScreen } from '../onboarding-cn';
+import { CnFirstValueScreen } from '../onboarding-cn/CnFirstValueScreen';
 import { OnboardingPromptDock } from './FirstVisitPrompts';
 import { UI_KEYS } from './options';
 import styles from './onboarding.module.css';

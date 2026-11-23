@@ -87,8 +87,6 @@ export const DEFAULT_DAILY_CALLS: Readonly<Partial<Record<IngestProvider, number
 
 /** Upsert batch size (ARCH §4.4: one statement per 100 rows). */
 export const UPSERT_BATCH = 100;
-/** A leased query is invisible to other ticks for this long (ARCH §4.4). */
-export const LEASE_MINUTES = 15;
 /** Days of inactivity after which a user's profile stops creating demand (ARCH §4.3). */
 export const ACTIVE_USER_DAYS = 14;
 /** Days a demand query may go unused before the planner disables it (ARCH §4.3). */

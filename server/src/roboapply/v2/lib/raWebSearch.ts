@@ -30,11 +30,6 @@ export interface RaWebSearchResponse {
   responseTimeMs: number;
 }
 
-/** Tavily is usable only when an API key is configured. */
-export function isRaWebSearchEnabled(): boolean {
-  return !!process.env.TAVILY_API_KEY?.trim();
-}
-
 /**
  * Run one Tavily search. Returns `null` (never throws) when the key is missing
  * or the call fails — callers treat `null` as "no web context available".

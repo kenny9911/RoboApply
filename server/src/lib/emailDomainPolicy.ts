@@ -111,11 +111,6 @@ export function classifyEmailDomain(email: string): EmailDomainVerdict {
   return { allowed: true, domain };
 }
 
-/** Convenience boolean — true when the email is acceptable as a work email. */
-export function isBusinessEmail(email: string): boolean {
-  return classifyEmailDomain(email).allowed;
-}
-
 /**
  * Throw a coded error when the gate is on and the email is not a business email.
  * No-op when BUSINESS_EMAIL_ONLY=false. The thrown error carries

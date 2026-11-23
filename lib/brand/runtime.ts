@@ -35,7 +35,6 @@ import {
   BRAND_IDS,
   DEFAULT_BRAND,
   brandIdFromHost,
-  getBrand,
   isDevOrPreviewHost,
   normalizeHost,
   parseBrandId,
@@ -239,11 +238,6 @@ function finishDefault(
   if (lock) return finish(lock, 'lock', cookieWrite);
   const allowed = allowedBrands(env);
   return finish(allowed.includes(DEFAULT_BRAND) ? DEFAULT_BRAND : allowed[0]!, 'default', cookieWrite);
-}
-
-/** Convenience: the brand object for a resolution input. */
-export function resolveWebBrandObject(input: WebBrandInput, env: EnvSource = process.env): ProductBrand {
-  return getBrand(resolveWebBrand(input, env).brandId);
 }
 
 /**

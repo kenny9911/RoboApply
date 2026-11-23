@@ -52,21 +52,6 @@ export function listContacts(query?: In<typeof N.ListContactsQuerySchema>, opts?
   return call<N.ListContactsResponse>('GET', withQuery(`/api/v1/roboapply/network/contacts`, query), opts);
 }
 
-/** `network.createContact` — POST /api/v1/roboapply/network/contacts */
-export function createContact(body: In<typeof N.CreateContactBodySchema>, opts?: CallOptions): Promise<N.ContactView> {
-  return call<N.ContactView>('POST', `/api/v1/roboapply/network/contacts`, { ...opts, body });
-}
-
-/** `network.deleteContact` — DELETE /api/v1/roboapply/network/contacts/:id */
-export function deleteContact(id: string, opts?: CallOptions): Promise<{ deleted: true }> {
-  return call<{ deleted: true }>('DELETE', `/api/v1/roboapply/network/contacts/${seg(id)}`, opts);
-}
-
-/** `network.lookupEmail` — POST /api/v1/roboapply/network/contacts/:id/lookup-email (501 provider_not_configured: no email finder) */
-export function lookupContactEmail(id: string, opts?: CallOptions): Promise<unknown> {
-  return call<unknown>('POST', `/api/v1/roboapply/network/contacts/${seg(id)}/lookup-email`, opts);
-}
-
 /** `network.listDrafts` — GET /api/v1/roboapply/network/outreach-drafts (query: jobId or trackerEntryId) */
 export function listOutreachDrafts(query: { jobId?: string; trackerEntryId?: string }, opts?: CallOptions): Promise<N.ListOutreachDraftsResponse> {
   return call<N.ListOutreachDraftsResponse>('GET', withQuery(`/api/v1/roboapply/network/outreach-drafts`, query), opts);
@@ -112,23 +97,3 @@ export function deleteReferralCode(id: string, opts?: CallOptions): Promise<{ de
   return call<{ deleted: true }>('DELETE', `/api/v1/roboapply/cn/referrals/${seg(id)}`, opts);
 }
 
-/** Every wrapper of this area, for callers that prefer one import. */
-export const networkApi = {
-  getConnectionsForJob,
-  getConnectionsImportStatus,
-  importLinkedInConnections,
-  deleteImportedConnections,
-  listContacts,
-  createContact,
-  deleteContact,
-  lookupContactEmail,
-  listOutreachDrafts,
-  createOutreachDraft,
-  patchOutreachDraft,
-  markDraftCopied,
-  markDraftSent,
-  listReferralCodes,
-  createReferralCode,
-  reportReferralCode,
-  deleteReferralCode,
-};

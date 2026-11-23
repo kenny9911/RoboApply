@@ -5,14 +5,8 @@
 export { agentKeys } from './keys';
 export * from './adapters';
 export {
-  PREPARING_POLL_MS,
-  aiInProposals,
   invalidateReady,
   isUnavailable,
-  kitsInProposals,
-  queueRefetchInterval,
-  shouldRetryAgent,
-  sumProposals,
   useAddToList,
   useAgentSettings,
   useAgentSetup,
@@ -36,4 +30,4 @@ export {
   type PrepareQuote,
   type PrepareRunResult,
 } from './useAgent';
-export { readyBadgeFrom, useReadyBadge } from './useReadyBadge';
+export { useReadyBadge } from './useReadyBadge';

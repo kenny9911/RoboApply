@@ -59,7 +59,6 @@ import {
   NOTIFICATION_CATEGORIES,
   NOTIFICATION_CHANNELS,
   NOTIFICATIONS_ERROR_CODES,
-  STORED_CATEGORY_MAP,
   categoryOf,
   tipsRemindersDefault,
   type NotificationCategory,
@@ -1112,5 +1111,3 @@ export class NotificationCenterService {
   }
 }
 
-/** Known stored category values (for producers writing rows directly). */
-export const STORED_CATEGORIES = Object.keys(STORED_CATEGORY_MAP);

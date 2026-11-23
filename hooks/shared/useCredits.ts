@@ -20,7 +20,6 @@ import type { CreditsResponse } from '../../lib/api/contracts/credits';
 
 export type EntitlementSummary = CreditsResponse['summary'];
 export type BucketSummary = EntitlementSummary['buckets'][keyof EntitlementSummary['buckets']];
-export type CreditBucket = keyof EntitlementSummary['buckets'];
 
 export const CREDITS_QUERY_KEY = ['credits', 'summary'] as const;
 /** Usage changes with every AI action; keep it fresh but avoid a request per render. */

@@ -977,13 +977,11 @@ export function createTwOpenDataAdapter(deps: TwOpenDataAdapterDeps = {}): JobSo
         const startedAt = clock();
         let calls = 0;
         let failed = false;
-        let cut = false;
 
         while (calls < config.requestsPerFetch) {
           const request = twSweepRequest(cursor, tables);
           if (!request) break;
           if (ctx.signal?.aborted) {
-            cut = true;
             break;
           }
           // The pause holds between any two requests of this adapter: inside a fetch, and between the last
@@ -992,7 +990,6 @@ export function createTwOpenDataAdapter(deps: TwOpenDataAdapterDeps = {}): JobSo
           // The caller's budget (the ingest tick): a request not started now is the next fetch's first. A fetch's
           // first request runs whatever the budget, unless it would have to wait: then nothing is asked.
           if (ctx.budgetMs !== undefined && (calls > 0 || wait > 0) && clock() - startedAt + wait + REQUEST_RESERVE_MS > ctx.budgetMs) {
-            cut = true;
             break;
           }
           if (wait > 0) await sleep(wait);
@@ -1002,7 +999,6 @@ export function createTwOpenDataAdapter(deps: TwOpenDataAdapterDeps = {}): JobSo
           if (!page.ok) {
             if (page.error === 'aborted') {
               // Our own cut, not the source's failure: no strike.
-              cut = true;
               break;
             }
             const before = cursor;

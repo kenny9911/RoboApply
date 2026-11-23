@@ -17,12 +17,6 @@
 
 // ─── Closed enums ──────────────────────────────────────────────────────
 
-export type RAOnboardingSessionStatus =
-  | 'active'
-  | 'completed'
-  | 'skipped'
-  | 'abandoned';
-
 export type OnboardingWorkMode = 'remote' | 'hybrid' | 'onsite';
 
 export type OnboardingEmploymentType =
@@ -55,9 +49,6 @@ export type OnboardingTopic =
   | 'employmentType'
   | 'location'
   | 'seniority';
-
-/** Which step the panel is showing — reported to `POST /onboarding/seen`. */
-export type OnboardingStep = 'resume' | 'confirm';
 
 // ─── Draft preferences (per-session, pre-persistence) ──────────────────
 
@@ -154,100 +145,7 @@ export interface IngestRow {
 
 // ─── Request / response DTOs ───────────────────────────────────────────
 
-export interface OnboardingBootstrapRequest {
-  resumeVariantId: string;
-}
-
-/**
- * Step 2's entire payload. Also the exact shape `GET /session` returns, so a
- * mid-step reload restores without a second code path.
- */
-export interface OnboardingSetupState {
-  sessionId: string;
-  returning: boolean;
-  resumeVariant: { id: string; name: string };
-  /** The IngestRecap rows — the evidence that earns the prefill. */
-  ingestRows: IngestRow[];
-  /** Seeded from the parsed resume. Editable; submitted whole on confirm. */
-  draft: OnboardingDraftPreferences;
-  /** Per-field provenance, keyed by OnboardingDraftPreferences field name. */
-  fieldMeta: Record<string, OnboardingSeedFieldMeta>;
-  /** Seeded but NOT selected — rendered as a tappable suggestion, never as an
-   *  applied value. `locations` lands here; roles never do. */
-  proposedFields: string[];
-  evidence: OnboardingSeedEvidence;
-  /** No roles could be derived — the client shows the thin-resume variant. */
-  thin: boolean;
-  /** The parallel LLM seed had not landed when this response was built. The
-   *  screen is already correct; re-fetching `GET /session` once picks up the
-   *  extra industries/roles if they arrived. Never blocks anything. */
-  enrichmentPending: boolean;
-}
-
-export type OnboardingBootstrapResponse = OnboardingSetupState;
-export type OnboardingSessionResponse = OnboardingSetupState;
-
-export interface OnboardingConfirmRequest {
-  sessionId: string;
-  /** COMPLETE post-edit state. Present keys REPLACE the seeded draft — an
-   *  empty array clears. Absent keys are left untouched. */
-  draft: OnboardingDraftPreferences;
-  /** The one optional free-text line. The only LLM call in the confirm path. */
-  freeText?: string;
-}
-
-export interface OnboardingConfirmResponse {
-  /** RACareerGoal view (routes/goal.ts shape). */
-  goal: Record<string, unknown>;
-  /** Full RAPreferences blob view (RAPreferencesService shape). */
-  preferences: Record<string, unknown>;
-  /** Draft field names the free-text line contributed, so the client can echo
-   *  what it understood. Empty when `freeText` was blank or the call failed. */
-  capturedFromNotes: string[];
-}
-
-export interface OnboardingSkipRequest {
-  /** Optional — a skip with no session yet still stamps skippedAt. */
-  sessionId?: string;
-}
-
-export interface OnboardingSkipResponse {
-  skipped: true;
-}
-
-export interface OnboardingSeenRequest {
-  step: OnboardingStep;
-}
-
-export interface OnboardingSeenResponse {
-  /** The stored count AFTER this open. The client stops auto-opening at 2. */
-  autoOpens: number;
-}
-
 // ─── Agent I/O schemas (backend-internal) ──────────────────────────────
-
-/** PrefExtract — one configured onboarding call for the step-2 free-text line. */
-export interface OnboardingExtractorInput {
-  /** Clipped 2000 chars. */
-  userMessage: string;
-  currentDraft: OnboardingDraftPreferences;
-  askedTopics: string[];
-}
-
-export interface OnboardingExtractorOutput {
-  /** Enum values normalized against the raOnboardingDraft.ts taxonomy
-   *  tables in parseOutput; unknown values dropped. */
-  updates: OnboardingDraftPreferences;
-  declinedTopics: OnboardingTopic[];
-  /** Per-field confidence (0–1), keyed by OnboardingDraftPreferences field
-   *  name. Only fields present in `updates` appear. */
-  fieldConfidence: Record<string, number>;
-  /** User explicitly asked to see jobs. Vestigial in the two-step flow —
-   *  the extractor's schema still emits it; nothing reads it. */
-  wantsJobsNow: boolean;
-  /** User pasted what looks like a resume into the notes line. */
-  pastedResumeDetected: boolean;
-}
 
 /** ResumeSeed (configured onboarding model, once at bootstrap, fire-and-forget). */
 export interface OnboardingResumeSeedInput {

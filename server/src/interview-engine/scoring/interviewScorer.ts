@@ -696,4 +696,3 @@ export function scoreTranscript(turns: TranscriptTurn[], difficulty = 3, locale?
   return { overall, breakdown, strengths: strengths.slice(0, 3), gaps: gaps.slice(0, 3), summary };
 }
 
-export const __test = { gatherSignals, isCjkDominant };

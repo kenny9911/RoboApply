@@ -30,10 +30,6 @@ const MIN_MS = 60_000;
 const DAY_MS = 86_400_000;
 const EPOCH = new Date(0);
 
-export interface LockState {
-  until: Date;
-}
-
 export interface FailureResult {
   consecutive: number;
   /** Set when this failure started a lock. */

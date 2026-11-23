@@ -266,4 +266,3 @@ export function serviceDeps(repo: FakeCampusRepo, over: Partial<CampusServiceDep
   };
 }
 
-export const slugOf = campusCompanySlug;
